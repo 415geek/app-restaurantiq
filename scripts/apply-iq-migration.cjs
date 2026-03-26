@@ -1,12 +1,21 @@
 /**
  * Runs supabase/migrations/0002_iq_location_reports.sql against Postgres.
- * Intended for Vercel build when DATABASE_URL is set (Supabase → Settings → Database → URI).
  *
- * If DATABASE_URL is missing, exits 0 and skips (so local `next build` still works).
+ * By default this script does NOTHING (exits 0). Vercel build machines often cannot
+ * reach Supabase reliably (IPv6 / pooler / SSL). Prefer `supabase db push` in CI or locally.
+ *
+ * To run migration during `npm run build:vercel`, set:
+ *   RUN_IQ_MIGRATION_ON_BUILD=true
+ * and a valid DATABASE_URL (Supabase → Settings → Database → URI).
  */
 const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');
+
+function migrationOnBuildEnabled() {
+  const v = String(process.env.RUN_IQ_MIGRATION_ON_BUILD || '').trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}
 
 function normalizeDatabaseUrl(raw) {
   const v = String(raw || '').trim();
@@ -25,13 +34,20 @@ function normalizeDatabaseUrl(raw) {
 }
 
 async function main() {
+  if (!migrationOnBuildEnabled()) {
+    console.warn(
+      '[apply-iq-migration] Skipping SQL migration (RUN_IQ_MIGRATION_ON_BUILD is not true). Use `supabase db push` or enable the flag + DATABASE_URL if you need build-time apply.',
+    );
+    process.exit(0);
+  }
+
   const url = normalizeDatabaseUrl(process.env.DATABASE_URL);
   if (!url) {
     console.warn(
-      '[apply-iq-migration] DATABASE_URL missing/invalid (or points to localhost) — skipping SQL migration.',
+      '[apply-iq-migration] RUN_IQ_MIGRATION_ON_BUILD is set but DATABASE_URL is missing/invalid (or points to localhost) — skipping SQL migration.',
     );
     console.warn(
-      '[apply-iq-migration] Fix Vercel env DATABASE_URL using Supabase: Project Settings → Database → Connection string → URI.',
+      '[apply-iq-migration] Set DATABASE_URL from Supabase: Project Settings → Database → Connection string → URI.',
     );
     process.exit(0);
   }
