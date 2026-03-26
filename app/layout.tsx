@@ -4,6 +4,7 @@ import './globals.css';
 import { ClerkProvider } from '@clerk/nextjs';
 import { Toaster } from 'sonner';
 import { TelemetryClient } from '@/components/telemetry/TelemetryClient';
+import { Analytics } from '@vercel/analytics/next';
 
 const inter = Inter({ subsets: ['latin'] });
 const isMockMode = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true';
@@ -25,6 +26,7 @@ export default function RootLayout({
         {children}
         <TelemetryClient />
         <Toaster richColors theme="dark" position="top-right" />
+        <Analytics />
       </body>
     </html>
   );
