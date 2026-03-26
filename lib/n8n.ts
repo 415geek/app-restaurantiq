@@ -61,10 +61,17 @@ async function postJson<T>(url: string, payload: unknown): Promise<T> {
     throw new Error(`n8n webhook failed (${res.status}): ${text.slice(0, 400)}`);
   }
 
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error(
+      'n8n webhook returned an empty body. Check the workflow "Respond to Webhook" node (e.g. response body should be ={{ $json }}).',
+    );
+  }
+
   try {
-    return JSON.parse(text) as T;
+    return JSON.parse(trimmed) as T;
   } catch {
-    throw new Error('n8n webhook returned non-JSON response');
+    throw new Error(`n8n webhook returned non-JSON response: ${trimmed.slice(0, 200)}`);
   }
 }
 

@@ -50,14 +50,25 @@ export async function POST(req: Request) {
       );
     }
 
-    const parsed = hasN8nWebhook
-      ? await analyzeWithN8n({
-          address: location,
-          industry: 'restaurant',
-          cuisine_type: businessType || undefined,
-          language,
-        })
-      : await runPartialAnalysis({ location, businessType, language });
+    let parsed: Awaited<ReturnType<typeof analyzeWithN8n>>;
+    try {
+      parsed = hasN8nWebhook
+        ? await analyzeWithN8n({
+            address: location,
+            industry: 'restaurant',
+            cuisine_type: businessType || undefined,
+            language,
+          })
+        : await runPartialAnalysis({ location, businessType, language });
+    } catch (n8nErr) {
+      // If n8n returns empty body / non-JSON or errors, fall back to OpenAI when configured.
+      if (hasN8nWebhook && hasOpenAiKey) {
+        console.warn('[funnel/analyze] n8n analyze failed, falling back to OpenAI:', n8nErr);
+        parsed = await runPartialAnalysis({ location, businessType, language });
+      } else {
+        throw n8nErr;
+      }
+    }
 
     const verdict = String(parsed.verdict ?? '').trim();
     const headline = String(parsed.headline ?? '').trim();
@@ -92,6 +103,13 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     console.error('[funnel/analyze]', e);
-    return NextResponse.json({ error: 'Failed to analyze location' }, { status: 500 });
+    const message = e instanceof Error ? e.message : String(e);
+    return NextResponse.json(
+      {
+        error: 'Failed to analyze location',
+        detail: message.slice(0, 500),
+      },
+      { status: 500 },
+    );
   }
 }

@@ -66,3 +66,7 @@ next-env.d.ts
 *.egg-info/
 .dyad/
 .gstack/
+
+# n8n-as-code AI helpers
+n8nac-skills
+n8nac-skills.cmd
