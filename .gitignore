@@ -70,3 +70,9 @@ next-env.d.ts
 # n8n-as-code AI helpers
 n8nac-skills
 n8nac-skills.cmd
+
+# Supabase CLI local cache (do not commit)
+supabase/.temp/
+
+# Optional: put n8n API key here and keep it local
+.vscode/settings.local.json

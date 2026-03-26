@@ -1,0 +1,132 @@
+{
+  "n8n-webhook": {
+    "prefix": "n8n-webhook",
+    "body": [
+      "{",
+      "  \"parameters\": {\"path\":\"webhook\",\"httpMethod\":\"POST\"},",
+      "  \"name\": \"Webhook\",",
+      "  \"type\": \"n8n-nodes-base.webhook\",",
+      "  \"typeVersion\": 1,",
+      "  \"position\": [0, 0]",
+      "}"
+    ],
+    "description": "⚡ Insert a Webhook node"
+  },
+  "n8n-code": {
+    "prefix": "n8n-code",
+    "body": [
+      "{",
+      "  \"parameters\": {\"jsCode\":\"// Access data with $('NodeName').item.json\\nreturn [{ json: { hello: 'world' } }];\"},",
+      "  \"name\": \"Code\",",
+      "  \"type\": \"n8n-nodes-base.code\",",
+      "  \"typeVersion\": 2,",
+      "  \"position\": [0, 0]",
+      "}"
+    ],
+    "description": "💻 Insert a Code node"
+  },
+  "n8n-http-request": {
+    "prefix": "n8n-http-request",
+    "body": [
+      "{",
+      "  \"parameters\": {\"url\":\"https://api.example.com\",\"method\":\"GET\"},",
+      "  \"name\": \"HTTP Request\",",
+      "  \"type\": \"n8n-nodes-base.httpRequest\",",
+      "  \"typeVersion\": 4,",
+      "  \"position\": [0, 0]",
+      "}"
+    ],
+    "description": "🌐 Insert a HTTP Request node"
+  },
+  "n8n-schedule-trigger": {
+    "prefix": "n8n-schedule-trigger",
+    "body": [
+      "{",
+      "  \"parameters\": {\"rule\":{\"interval\":[{\"field\":\"minutes\",\"minutesInterval\":15}]}},",
+      "  \"name\": \"Schedule Trigger\",",
+      "  \"type\": \"n8n-nodes-base.scheduleTrigger\",",
+      "  \"typeVersion\": 1,",
+      "  \"position\": [0, 0]",
+      "}"
+    ],
+    "description": "⏰ Insert a Schedule Trigger node"
+  },
+  "n8n-split-in-batches": {
+    "prefix": "n8n-split-in-batches",
+    "body": [
+      "{",
+      "  \"parameters\": {\"batchSize\":10},",
+      "  \"name\": \"Split In Batches\",",
+      "  \"type\": \"n8n-nodes-base.splitInBatches\",",
+      "  \"typeVersion\": 1,",
+      "  \"position\": [0, 0]",
+      "}"
+    ],
+    "description": "📦 Insert a Split In Batches node"
+  },
+  "n8n-switch": {
+    "prefix": "n8n-switch",
+    "body": [
+      "{",
+      "  \"parameters\": {\"datatypes\":\"string\",\"rules\":{\"rules\":[{\"operation\":\"equals\"}]}},",
+      "  \"name\": \"Switch\",",
+      "  \"type\": \"n8n-nodes-base.switch\",",
+      "  \"typeVersion\": 1,",
+      "  \"position\": [0, 0]",
+      "}"
+    ],
+    "description": "🔀 Insert a Switch node"
+  },
+  "n8n-merge": {
+    "prefix": "n8n-merge",
+    "body": [
+      "{",
+      "  \"parameters\": {\"mode\":\"append\"},",
+      "  \"name\": \"Merge\",",
+      "  \"type\": \"n8n-nodes-base.merge\",",
+      "  \"typeVersion\": 2,",
+      "  \"position\": [0, 0]",
+      "}"
+    ],
+    "description": "🔗 Insert a Merge node"
+  },
+  "n8n-google-sheets": {
+    "prefix": "n8n-google-sheets",
+    "body": [
+      "{",
+      "  \"parameters\": {\"operation\":\"append\",\"resource\":\"row\"},",
+      "  \"name\": \"Google Sheets\",",
+      "  \"type\": \"n8n-nodes-base.googleSheets\",",
+      "  \"typeVersion\": 3,",
+      "  \"position\": [0, 0]",
+      "}"
+    ],
+    "description": "📊 Insert a Google Sheets node"
+  },
+  "n8n-slack": {
+    "prefix": "n8n-slack",
+    "body": [
+      "{",
+      "  \"parameters\": {\"channel\":\"general\",\"text\":\"Hello form n8n\"},",
+      "  \"name\": \"Slack\",",
+      "  \"type\": \"n8n-nodes-base.slack\",",
+      "  \"typeVersion\": 2,",
+      "  \"position\": [0, 0]",
+      "}"
+    ],
+    "description": "💬 Insert a Slack node"
+  },
+  "n8n-postgres": {
+    "prefix": "n8n-postgres",
+    "body": [
+      "{",
+      "  \"parameters\": {\"operation\":\"executeQuery\",\"query\":\"SELECT * FROM users;\"},",
+      "  \"name\": \"Postgres\",",
+      "  \"type\": \"n8n-nodes-base.postgres\",",
+      "  \"typeVersion\": 1,",
+      "  \"position\": [0, 0]",
+      "}"
+    ],
+    "description": "🐘 Insert a Postgres node"
+  }
+}

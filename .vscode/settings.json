@@ -1,0 +1,8 @@
+{
+  "n8n.host": "https://n8n.c8geek.cloud",
+  "n8n.apiKey": "",
+  "n8n.syncFolder": "workflows",
+  "n8n.syncMode": "auto",
+  "n8n.projectId": "TetxDJaGPpRJbFV3",
+  "n8n.projectName": "Personal"
+}
