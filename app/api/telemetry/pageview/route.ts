@@ -38,9 +38,9 @@ export async function POST(req: NextRequest) {
   const sessionId = getOrCreateSessionId(req);
   const userKey = demoId ? demoUserKey(demoId) : (userId ?? null);
 
-  const sb = supabaseAdmin();
   // Telemetry is best-effort; failures must not break the demo.
   try {
+    const sb = supabaseAdmin();
     await sb.from('telemetry_pageviews').insert({
       session_id: sessionId,
       user_key: userKey,

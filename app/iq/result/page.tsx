@@ -28,6 +28,7 @@ const resultCopy: Record<
     unlockReport: string;
     footnote: string;
     checkoutFailed: string;
+    paymentUnavailable: string;
     fallbackLoadFailed: string;
     loadingPage: string;
   }
@@ -46,6 +47,7 @@ const resultCopy: Record<
     unlockReport: 'Unlock Full Report for $19',
     footnote: 'Avoid a costly mistake before you invest.',
     checkoutFailed: 'Checkout failed',
+    paymentUnavailable: 'Payment is temporarily unavailable for this analysis.',
     fallbackLoadFailed: 'Failed to load result.',
     loadingPage: 'Loading…',
   },
@@ -63,6 +65,7 @@ const resultCopy: Record<
     unlockReport: '支付 $19 解锁完整报告',
     footnote: '在投入资金前，先避免高成本决策失误。',
     checkoutFailed: '支付会话创建失败',
+    paymentUnavailable: '该次分析暂时无法支付，请稍后重试。',
     fallbackLoadFailed: '结果加载失败。',
     loadingPage: '加载中…',
   },
@@ -79,6 +82,7 @@ function ResultContent() {
   const [data, setData] = useState<AnalyzeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!location.trim()) {
@@ -108,6 +112,7 @@ function ResultContent() {
           throw new Error(json?.error || t.requestFailed);
         }
         if (!cancelled) {
+          setCheckoutError(null);
           setData({
             reportId: json?.reportId ?? '',
             verdict: json?.verdict ?? '',
@@ -131,8 +136,12 @@ function ResultContent() {
   }, [location, businessType, locale, t.missingLocation, t.requestFailed]);
 
   async function handleCheckout() {
-    if (!data?.reportId) return;
+    if (!data?.reportId) {
+      setCheckoutError(t.paymentUnavailable);
+      return;
+    }
     setCheckoutLoading(true);
+    setCheckoutError(null);
     try {
       const res = await fetch('/api/funnel/create-checkout-session', {
         method: 'POST',
@@ -144,9 +153,9 @@ function ResultContent() {
         window.location.href = json.url;
         return;
       }
-      setError(json.error || t.checkoutFailed);
+      setCheckoutError(json.error || t.checkoutFailed);
     } catch {
-      setError(t.checkoutFailed);
+      setCheckoutError(t.checkoutFailed);
     } finally {
       setCheckoutLoading(false);
     }
@@ -191,11 +200,12 @@ function ResultContent() {
           <button
             type="button"
             onClick={() => void handleCheckout()}
-            disabled={checkoutLoading || !data.reportId}
+            disabled={checkoutLoading}
             className="mt-8 w-full rounded-2xl bg-emerald-400 px-6 py-4 font-semibold text-black transition hover:bg-emerald-300 disabled:opacity-60"
           >
             {checkoutLoading ? t.redirecting : t.unlockReport}
           </button>
+          {checkoutError ? <p className="mt-3 text-center text-sm text-rose-300">{checkoutError}</p> : null}
           <p className="mt-4 text-center text-sm text-white/40">{t.footnote}</p>
         </div>
       </div>
