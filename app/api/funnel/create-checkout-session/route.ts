@@ -17,6 +17,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
+    if (!process.env.STRIPE_SECRET_KEY?.trim()) {
+      return NextResponse.json(
+        { error: 'Payment is not configured. Please try again later or contact support.' },
+        { status: 503 }
+      );
+    }
+
     const baseUrl = getPublicBaseUrl();
     const priceId = process.env.STRIPE_PRICE_ID?.trim();
     const amountUsd = Number(process.env.NEXT_PUBLIC_STRIPE_PRICE_USD || '19');

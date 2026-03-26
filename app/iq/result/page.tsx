@@ -148,7 +148,15 @@ function ResultContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reportId: data.reportId }),
       });
-      const json = (await res.json()) as { url?: string; error?: string };
+      const raw = await res.text();
+      let json: { url?: string; error?: string } = {};
+      if (raw) {
+        try {
+          json = JSON.parse(raw) as { url?: string; error?: string };
+        } catch {
+          /* non-JSON error body */
+        }
+      }
       if (json.url) {
         window.location.href = json.url;
         return;
