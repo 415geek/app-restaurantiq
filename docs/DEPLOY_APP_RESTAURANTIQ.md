@@ -4,6 +4,21 @@
 
 > **隔离**：请勿把本项目的 `SUPABASE_*` 指到正在生产运行的 `restaurantiq-amazon` 数据库，避免互相影响。
 
+## 0. Vercel 构建时自动跑 IQ 表迁移（可选但推荐）
+
+本仓库根目录 `vercel.json` 使用：
+
+- `buildCommand`: `npm run build:vercel`  
+  会先执行 `scripts/apply-iq-migration.cjs`（对 `0002_iq_location_reports.sql`），再 `next build`。
+
+在 Vercel **Environment Variables** 中增加：
+
+- `DATABASE_URL` = Supabase **Project Settings → Database → Connection string → URI**（需数据库密码）
+
+若未设置 `DATABASE_URL`，脚本会跳过迁移并继续构建（适合本地或未启用自动迁移的环境）；此时你仍需在 Supabase SQL Editor **手动执行** `supabase/migrations/0002_iq_location_reports.sql`。
+
+> 若 Vercel 项目里曾手动改过 **Build Command**，请改为与 `vercel.json` 一致，或删除 Dashboard 里的覆盖。
+
 ## 1. Supabase（新建项目）
 
 1. 登录 [Supabase Dashboard](https://supabase.com/dashboard)，**New project**（建议区域靠近用户）。
