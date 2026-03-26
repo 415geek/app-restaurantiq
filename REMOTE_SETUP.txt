@@ -1,0 +1,18 @@
+Repository isolation (read this before git push)
+================================================
+
+This tree is a SEPARATE product (app-restaurantiq). It was bootstrapped from
+restaurantiq-amazon for code reuse only.
+
+Remote name "upstream" points at github.com/415geek/restaurantiq-amazon — use
+only for occasional fetch/merge if you choose. Do NOT push feature work there;
+that would risk affecting the live amazon deployment.
+
+Before your first push, add YOUR new empty repo:
+
+  git remote add origin https://github.com/<you>/app-restaurantiq.git
+  git push -u origin main
+
+If you never need to sync from amazon again, you can remove upstream:
+
+  git remote remove upstream

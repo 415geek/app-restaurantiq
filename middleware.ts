@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { getAgentStudioHost, getRequestHost, isAgentStudioHost } from '@/lib/agent-studio-host';
+import { isFunnelDeploymentHost } from '@/lib/funnel-host';
 import { DEMO_COOKIE_NAME } from '@/lib/server/demo-session';
 
 const isProtectedRoute = createRouteMatcher([
@@ -54,6 +55,12 @@ const clerkHandler = clerkMiddleware(async (auth, req) => {
 export default function middleware(req: Request, event: Event) {
   const url = new URL(req.url);
   const host = getRequestHost(req.headers.get('host'));
+
+  // app.restaurantiq.ai (or NEXT_PUBLIC_FUNNEL_HOST): marketing home → IQ funnel landing
+  if (isFunnelDeploymentHost(req.headers.get('host')) && url.pathname === '/') {
+    return NextResponse.redirect(new URL('/iq', req.url));
+  }
+
   const agentStudioHost = getAgentStudioHost();
   const onAgentStudioHost = isAgentStudioHost(host);
   const isAgentStudioPath = url.pathname.startsWith('/agent-management');
