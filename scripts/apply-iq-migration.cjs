@@ -8,11 +8,30 @@ const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');
 
+function normalizeDatabaseUrl(raw) {
+  const v = String(raw || '').trim();
+  if (!v) return null;
+  try {
+    const u = new URL(v);
+    if (!u.hostname) return null;
+    const h = u.hostname.toLowerCase();
+    if (h === 'localhost' || h === '127.0.0.1' || h === '::1') {
+      return null;
+    }
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
-  const url = process.env.DATABASE_URL;
-  if (!url || !String(url).trim()) {
+  const url = normalizeDatabaseUrl(process.env.DATABASE_URL);
+  if (!url) {
     console.warn(
-      '[apply-iq-migration] DATABASE_URL not set — skipping SQL migration. Set it in Vercel to auto-apply on deploy.',
+      '[apply-iq-migration] DATABASE_URL missing/invalid (or points to localhost) — skipping SQL migration.',
+    );
+    console.warn(
+      '[apply-iq-migration] Fix Vercel env DATABASE_URL using Supabase: Project Settings → Database → Connection string → URI.',
     );
     process.exit(0);
   }

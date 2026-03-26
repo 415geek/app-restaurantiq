@@ -17,6 +17,10 @@
 
 若未设置 `DATABASE_URL`，脚本会跳过迁移并继续构建（适合本地或未启用自动迁移的环境）；此时你仍需在 Supabase SQL Editor **手动执行** `supabase/migrations/0002_iq_location_reports.sql`。
 
+常见坑：
+- **不要**使用 `localhost` / `127.0.0.1` / `::1` 之类的连接串（Vercel 构建环境无法连你本机）。
+- `DATABASE_URL` 若粘贴不完整（缺 host），也会被当成无效并跳过迁移。
+
 > 若 Vercel 项目里曾手动改过 **Build Command**，请改为与 `vercel.json` 一致，或删除 Dashboard 里的覆盖。
 
 ## 1. Supabase（新建项目）
