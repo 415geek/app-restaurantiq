@@ -55,9 +55,11 @@ const clerkHandler = clerkMiddleware(async (auth, req) => {
 export default function middleware(req: Request, event: Event) {
   const url = new URL(req.url);
   const host = getRequestHost(req.headers.get('host'));
+  const isDevLike = process.env.NODE_ENV !== 'production';
 
   // app.restaurantiq.ai (or NEXT_PUBLIC_FUNNEL_HOST): marketing home → IQ funnel landing
-  if (isFunnelDeploymentHost(req.headers.get('host')) && url.pathname === '/') {
+  // Dev parity: in non-production (localhost), also redirect / -> /iq so the funnel page is the default landing.
+  if ((isFunnelDeploymentHost(req.headers.get('host')) || isDevLike) && url.pathname === '/') {
     return NextResponse.redirect(new URL('/iq', req.url));
   }
 

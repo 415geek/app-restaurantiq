@@ -10,10 +10,71 @@ type AnalyzeResult = {
   reason: string;
 };
 
+type Locale = 'en' | 'zh';
+
+const resultCopy: Record<
+  Locale,
+  {
+    missingLocation: string;
+    requestFailed: string;
+    loading: [string, string, string];
+    aiVerdict: string;
+    lockedFullReport: string;
+    lockedRevenue: string;
+    lockedRisks: string;
+    lockedOpportunities: string;
+    lockedActionPlan: string;
+    redirecting: string;
+    unlockReport: string;
+    footnote: string;
+    checkoutFailed: string;
+    fallbackLoadFailed: string;
+    loadingPage: string;
+  }
+> = {
+  en: {
+    missingLocation: 'Missing location',
+    requestFailed: 'Request failed',
+    loading: ['Analyzing competitors…', 'Estimating revenue…', 'Detecting risks…'],
+    aiVerdict: 'AI Verdict',
+    lockedFullReport: 'Locked full report',
+    lockedRevenue: 'Revenue estimate: locked',
+    lockedRisks: 'Top risks: locked',
+    lockedOpportunities: 'Opportunities: locked',
+    lockedActionPlan: 'Action plan: locked',
+    redirecting: 'Redirecting…',
+    unlockReport: 'Unlock Full Report for $19',
+    footnote: 'Avoid a costly mistake before you invest.',
+    checkoutFailed: 'Checkout failed',
+    fallbackLoadFailed: 'Failed to load result.',
+    loadingPage: 'Loading…',
+  },
+  zh: {
+    missingLocation: '缺少地址信息',
+    requestFailed: '请求失败',
+    loading: ['正在分析竞争格局…', '正在估算收入…', '正在识别风险…'],
+    aiVerdict: 'AI 结论',
+    lockedFullReport: '完整报告（已锁定）',
+    lockedRevenue: '收入预估：已锁定',
+    lockedRisks: '主要风险：已锁定',
+    lockedOpportunities: '机会点：已锁定',
+    lockedActionPlan: '行动方案：已锁定',
+    redirecting: '正在跳转…',
+    unlockReport: '支付 $19 解锁完整报告',
+    footnote: '在投入资金前，先避免高成本决策失误。',
+    checkoutFailed: '支付会话创建失败',
+    fallbackLoadFailed: '结果加载失败。',
+    loadingPage: '加载中…',
+  },
+};
+
 function ResultContent() {
   const params = useSearchParams();
   const location = params.get('location') || '';
   const businessType = params.get('businessType') || '';
+  const langParam = (params.get('lang') || 'en').toLowerCase();
+  const locale: Locale = langParam === 'zh' ? 'zh' : 'en';
+  const t = resultCopy[locale];
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AnalyzeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +83,7 @@ function ResultContent() {
   useEffect(() => {
     if (!location.trim()) {
       setLoading(false);
-      setError('Missing location');
+      setError(t.missingLocation);
       return;
     }
 
@@ -33,22 +94,29 @@ function ResultContent() {
         const res = await fetch('/api/funnel/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ location, businessType }),
+          body: JSON.stringify({ location, businessType, language: locale }),
         });
-        const json = (await res.json()) as AnalyzeResult & { error?: string };
+        let json: (AnalyzeResult & { error?: string }) | null = null;
+        let rawText = '';
+        try {
+          rawText = await res.clone().text();
+          json = rawText ? (JSON.parse(rawText) as AnalyzeResult & { error?: string }) : null;
+        } catch {
+          json = null;
+        }
         if (!res.ok) {
-          throw new Error(json.error || 'Request failed');
+          throw new Error(json?.error || t.requestFailed);
         }
         if (!cancelled) {
           setData({
-            reportId: json.reportId,
-            verdict: json.verdict,
-            headline: json.headline,
-            reason: json.reason,
+            reportId: json?.reportId ?? '',
+            verdict: json?.verdict ?? '',
+            headline: json?.headline ?? '',
+            reason: json?.reason ?? '',
           });
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to analyze');
+        if (!cancelled) setError(e instanceof Error ? e.message : t.requestFailed);
       } finally {
         if (!cancelled) {
           setTimeout(() => setLoading(false), 1800);
@@ -60,7 +128,7 @@ function ResultContent() {
     return () => {
       cancelled = true;
     };
-  }, [location, businessType]);
+  }, [location, businessType, locale, t.missingLocation, t.requestFailed]);
 
   async function handleCheckout() {
     if (!data?.reportId) return;
@@ -76,9 +144,9 @@ function ResultContent() {
         window.location.href = json.url;
         return;
       }
-      setError(json.error || 'Checkout failed');
+      setError(json.error || t.checkoutFailed);
     } catch {
-      setError('Checkout failed');
+      setError(t.checkoutFailed);
     } finally {
       setCheckoutLoading(false);
     }
@@ -88,9 +156,9 @@ function ResultContent() {
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
         <div className="space-y-3 text-center">
-          <p className="text-lg">Analyzing competitors…</p>
-          <p className="text-lg">Estimating revenue…</p>
-          <p className="text-lg">Detecting risks…</p>
+          <p className="text-lg">{t.loading[0]}</p>
+          <p className="text-lg">{t.loading[1]}</p>
+          <p className="text-lg">{t.loading[2]}</p>
         </div>
       </main>
     );
@@ -99,7 +167,7 @@ function ResultContent() {
   if (error || !data) {
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
-        <p className="text-center text-white/80">{error || 'Failed to load result.'}</p>
+        <p className="text-center text-white/80">{error || t.fallbackLoadFailed}</p>
       </main>
     );
   }
@@ -108,27 +176,27 @@ function ResultContent() {
     <main className="flex min-h-screen items-center justify-center px-6 py-16">
       <div className="w-full max-w-2xl">
         <div className="rounded-3xl border border-red-500/20 bg-red-500/10 p-8 text-center shadow-2xl">
-          <div className="mb-4 text-sm uppercase tracking-[0.2em] text-red-300">AI Verdict</div>
+          <div className="mb-4 text-sm uppercase tracking-[0.2em] text-red-300">{t.aiVerdict}</div>
           <h1 className="mb-4 text-4xl font-bold text-red-300 md:text-5xl">{data.headline}</h1>
           <p className="mx-auto max-w-xl text-lg text-white/70">{data.reason}</p>
         </div>
         <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-8">
-          <h2 className="mb-6 text-xl font-semibold">Locked full report</h2>
+          <h2 className="mb-6 text-xl font-semibold">{t.lockedFullReport}</h2>
           <div className="space-y-4 text-white/60">
-            <div className="rounded-2xl border border-white/10 p-4">Revenue estimate: locked</div>
-            <div className="rounded-2xl border border-white/10 p-4">Top risks: locked</div>
-            <div className="rounded-2xl border border-white/10 p-4">Opportunities: locked</div>
-            <div className="rounded-2xl border border-white/10 p-4">Action plan: locked</div>
+            <div className="rounded-2xl border border-white/10 p-4">{t.lockedRevenue}</div>
+            <div className="rounded-2xl border border-white/10 p-4">{t.lockedRisks}</div>
+            <div className="rounded-2xl border border-white/10 p-4">{t.lockedOpportunities}</div>
+            <div className="rounded-2xl border border-white/10 p-4">{t.lockedActionPlan}</div>
           </div>
           <button
             type="button"
             onClick={() => void handleCheckout()}
-            disabled={checkoutLoading}
+            disabled={checkoutLoading || !data.reportId}
             className="mt-8 w-full rounded-2xl bg-emerald-400 px-6 py-4 font-semibold text-black transition hover:bg-emerald-300 disabled:opacity-60"
           >
-            {checkoutLoading ? 'Redirecting…' : 'Unlock Full Report for $19'}
+            {checkoutLoading ? t.redirecting : t.unlockReport}
           </button>
-          <p className="mt-4 text-center text-sm text-white/40">Avoid a costly mistake before you invest.</p>
+          <p className="mt-4 text-center text-sm text-white/40">{t.footnote}</p>
         </div>
       </div>
     </main>
@@ -140,7 +208,7 @@ export default function IqResultPage() {
     <Suspense
       fallback={
         <main className="flex min-h-screen items-center justify-center px-6">
-          <p className="text-lg">Loading…</p>
+          <p className="text-lg">{resultCopy.en.loadingPage}</p>
         </main>
       }
     >

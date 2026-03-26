@@ -45,16 +45,22 @@ async function postN8nJson<T>(url: string, body: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function runPartialAnalysis(input: { location: string; businessType: string }): Promise<{
+export async function runPartialAnalysis(input: {
+  location: string;
+  businessType: string;
+  language?: 'en' | 'zh';
+}): Promise<{
   verdict: string;
   headline: string;
   reason: string;
 }> {
+  const language = input.language === 'zh' ? 'zh' : 'en';
   const n8nUrl = process.env.N8N_IQ_ANALYZE_WEBHOOK_URL?.trim();
   if (n8nUrl) {
     const raw = await postN8nJson<unknown>(n8nUrl, {
       location: input.location,
       businessType: input.businessType || null,
+      language,
     });
     return partialSchema.parse(raw);
   }
@@ -63,6 +69,11 @@ export async function runPartialAnalysis(input: { location: string; businessType
   if (!client) {
     throw new Error('Neither N8N_IQ_ANALYZE_WEBHOOK_URL nor OPENAI_API_KEY is configured');
   }
+
+  const outputLanguageInstruction =
+    language === 'zh'
+      ? 'Output language MUST be Simplified Chinese. Keep verdict in Chinese too.'
+      : 'Output language MUST be English.';
 
   const prompt = `You are a brutally honest restaurant consultant.
 
@@ -74,6 +85,7 @@ Given a restaurant location and business type, decide:
 2. Give one short emotional headline.
 3. Give one concise reason.
 4. Be direct and conversion-oriented.
+5. ${outputLanguageInstruction}
 
 Location: ${input.location}
 Business type: ${input.businessType || 'Not specified'}

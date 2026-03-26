@@ -65,3 +65,4 @@ next-env.d.ts
 # python packaging artifacts
 *.egg-info/
 .dyad/
+.gstack/

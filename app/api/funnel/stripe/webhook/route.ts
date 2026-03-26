@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { getStripe } from '@/lib/funnel/stripe-server';
 import { iqGetReport, iqMarkPaidAndReport } from '@/lib/funnel/iq-repository';
 import { runFullReport } from '@/lib/funnel/iq-llm';
+import { generateFullReportWithN8n } from '@/lib/n8n';
 
 export const runtime = 'nodejs';
 
@@ -44,12 +45,22 @@ export async function POST(req: Request) {
       let fullJson = existing.full_report_json as Record<string, unknown> | null;
       if (!fullJson || Object.keys(fullJson).length === 0) {
         try {
-          fullJson = (await runFullReport({
-            location: existing.location,
-            businessType: existing.business_type,
-            headline: existing.headline,
-            reason: existing.reason,
-          })) as Record<string, unknown>;
+          const hasN8nWebhook = Boolean(
+            process.env.N8N_FULL_REPORT_WEBHOOK_URL?.trim() || process.env.N8N_IQ_FULL_REPORT_WEBHOOK_URL?.trim()
+          );
+          fullJson = hasN8nWebhook
+            ? ((await generateFullReportWithN8n({
+                analysis_id: existing.id,
+                address: existing.location,
+                industry: 'restaurant',
+                cuisine_type: existing.business_type ?? undefined,
+              })) as Record<string, unknown>)
+            : ((await runFullReport({
+                location: existing.location,
+                businessType: existing.business_type,
+                headline: existing.headline,
+                reason: existing.reason,
+              })) as Record<string, unknown>);
         } catch (genErr) {
           console.error('[funnel/stripe/webhook] full report generation failed', genErr);
           fullJson = null;

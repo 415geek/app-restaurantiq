@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { iqGetReport, iqSetFullReport } from '@/lib/funnel/iq-repository';
 import { runFullReport } from '@/lib/funnel/iq-llm';
+import { generateFullReportWithN8n } from '@/lib/n8n';
 
 export const runtime = 'nodejs';
 
@@ -27,15 +28,27 @@ export async function POST(req: Request) {
       return NextResponse.json(report.full_report_json);
     }
 
-    const full = await runFullReport({
-      location: report.location,
-      businessType: report.business_type,
-      headline: report.headline,
-      reason: report.reason,
-    });
+    const hasN8nWebhook = Boolean(
+      process.env.N8N_FULL_REPORT_WEBHOOK_URL?.trim() || process.env.N8N_IQ_FULL_REPORT_WEBHOOK_URL?.trim()
+    );
 
-    await iqSetFullReport(reportId, full);
-    return NextResponse.json(full);
+    const full = hasN8nWebhook
+      ? await generateFullReportWithN8n({
+          analysis_id: report.id,
+          address: report.location,
+          industry: 'restaurant',
+          cuisine_type: report.business_type ?? undefined,
+        })
+      : await runFullReport({
+          location: report.location,
+          businessType: report.business_type,
+          headline: report.headline,
+          reason: report.reason,
+        });
+
+    const fullJson = full as Record<string, unknown>;
+    await iqSetFullReport(reportId, fullJson);
+    return NextResponse.json(fullJson);
   } catch (e) {
     console.error('[funnel/full-report]', e);
     return NextResponse.json({ error: 'Failed to generate full report' }, { status: 500 });
