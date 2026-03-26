@@ -2,7 +2,8 @@
 
 import { motion } from 'framer-motion';
 import { CheckCircle, Zap, ArrowRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useState, type ButtonHTMLAttributes } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -316,11 +317,17 @@ const contentByLang = {
   },
 } as const;
 
+type ModalCopy = (typeof contentByLang)[Language]['modal'];
+
 const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => {
   return <div className={"bg-zinc-900 border border-zinc-800 rounded-2xl p-6 " + className}>{children}</div>;
 };
 
-const Button = ({ children, className = '', variant = 'primary', ...props }: any) => {
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'primary' | 'secondary';
+};
+
+const Button = ({ children, className = '', variant = 'primary', ...props }: ButtonProps) => {
   const base = 'inline-flex items-center justify-center rounded-lg text-sm font-semibold transition-colors h-12 px-8';
   const variantClass =
     variant === 'primary'
@@ -339,7 +346,7 @@ function BookDemoModal({
   onSubmit,
 }: {
   setIsOpen: (isOpen: boolean) => void;
-  copy: any;
+  copy: ModalCopy;
   onSubmit: (data: DemoRequestForm) => void;
 }) {
   const [isTermsOpen, setIsTermsOpen] = useState(false);
@@ -461,30 +468,42 @@ function BookDemoModal({
   );
 }
 
-export default function HomePage() {
-  const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
-  const [language, setLanguage] = useState<Language>('en');
-  const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
-  const copy = contentByLang[language];
-
+function HeroTypedTitle({ title }: { title: string }) {
   const [typedHeroText, setTypedHeroText] = useState('');
   const [heroTypingDone, setHeroTypingDone] = useState(false);
 
   useEffect(() => {
-    setTypedHeroText('');
-    setHeroTypingDone(false);
     let i = 0;
     const timer = setInterval(() => {
       i += 1;
-      setTypedHeroText(copy.hero.title.slice(0, i));
-      if (i >= copy.hero.title.length) {
+      setTypedHeroText(title.slice(0, i));
+      if (i >= title.length) {
         clearInterval(timer);
         setHeroTypingDone(true);
       }
     }, 95);
 
     return () => clearInterval(timer);
-  }, [copy.hero.title]);
+  }, [title]);
+
+  return (
+    <>
+      <span>{typedHeroText}</span>
+      {!heroTypingDone && (
+        <span
+          className="ml-1 inline-block h-[1em] w-[2px] bg-[#F26A36] align-[-0.1em] animate-pulse"
+          aria-hidden="true"
+        />
+      )}
+    </>
+  );
+}
+
+export default function HomePage() {
+  const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
+  const [language, setLanguage] = useState<Language>('en');
+  const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
+  const copy = contentByLang[language];
 
   useEffect(() => {
     if (!lightboxImage) return;
@@ -572,12 +591,15 @@ export default function HomePage() {
           >
             {copy.nav.toggle}
           </button>
-          <a href="/sign-in" className="text-xs sm:text-sm text-zinc-400 hover:text-white whitespace-nowrap">
+          <Link href="/sign-in" className="text-xs sm:text-sm text-zinc-400 hover:text-white whitespace-nowrap">
             {copy.nav.signIn}
-          </a>
-          <a href="/sign-up" className="text-xs sm:text-sm bg-white/10 hover:bg-white/20 px-3 sm:px-4 py-2 rounded-lg transition-colors whitespace-nowrap">
+          </Link>
+          <Link
+            href="/sign-up"
+            className="text-xs sm:text-sm bg-white/10 hover:bg-white/20 px-3 sm:px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+          >
             {copy.nav.getStarted}
-          </a>
+          </Link>
         </div>
       </nav>
 
@@ -598,13 +620,7 @@ export default function HomePage() {
           transition={{ delay: 0.1 }}
           className="text-5xl md:text-7xl font-bold tracking-tight mb-8 leading-tight"
         >
-          <span>{typedHeroText}</span>
-          {!heroTypingDone && (
-            <span
-              className="ml-1 inline-block h-[1em] w-[2px] bg-[#F26A36] align-[-0.1em] animate-pulse"
-              aria-hidden="true"
-            />
-          )}
+          <HeroTypedTitle key={copy.hero.title} title={copy.hero.title} />
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
@@ -620,12 +636,12 @@ export default function HomePage() {
           transition={{ delay: 0.3 }}
           className="flex flex-col sm:flex-row justify-center gap-4"
         >
-          <a
+          <Link
             href="/sign-up"
             className="inline-flex items-center justify-center rounded-lg text-sm font-semibold transition-colors h-12 px-8 bg-[#F26A36] text-white hover:bg-[#F26A36]/90"
           >
             {copy.hero.ctaPrimary}
-          </a>
+          </Link>
           <Button variant="secondary" onClick={() => setIsDemoModalOpen(true)}>
             {copy.hero.ctaSecondary}
           </Button>
@@ -745,12 +761,12 @@ export default function HomePage() {
       <section className="py-32 px-4 text-center bg-[#F26A36]/10 border-t border-[#F26A36]/20">
         <h2 className="text-4xl font-bold mb-6">{copy.finalCta.title}</h2>
         <p className="text-zinc-400 mb-8 max-w-2xl mx-auto">{copy.finalCta.subtitle}</p>
-        <a
+        <Link
           href="/sign-up"
           className="inline-flex items-center justify-center rounded-lg text-sm font-semibold transition-colors bg-[#F26A36] text-white hover:bg-[#F26A36]/90 shadow-xl shadow-[#F26A36]/20 h-14 px-10 text-lg"
         >
           {copy.finalCta.button} <ArrowRight className="ml-2 w-5 h-5" />
-        </a>
+        </Link>
       </section>
 
       <footer className="py-8 text-center text-zinc-500 text-sm border-t border-zinc-800">
