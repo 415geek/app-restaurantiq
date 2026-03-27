@@ -24,6 +24,7 @@ type N8nFullReportInput = {
   budget_range?: string;
   target_audience?: string;
   language?: 'en' | 'zh';
+  market_data?: Record<string, unknown>;
 };
 
 type N8nFullReportOutput = {

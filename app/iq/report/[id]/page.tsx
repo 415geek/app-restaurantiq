@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { iqGetReport, iqSetFullReport } from '@/lib/funnel/iq-repository';
 import { runFullReport } from '@/lib/funnel/iq-llm';
+import { ReportShareSection } from '@/components/share/ReportShareSection';
 
 type FullShape = {
   revenue_estimate?: string;
@@ -58,6 +59,15 @@ export default async function IqReportPage({ params }: Props) {
           <h1 className="mb-3 text-4xl font-bold">{report.headline}</h1>
           <p className="text-white/70">{report.reason}</p>
         </div>
+        
+        {/* Share Section */}
+        <ReportShareSection
+          reportId={id}
+          headline={report.headline}
+          location={report.location}
+          confidence={full?.confidence}
+        />
+        
         <div className="grid gap-6">
           <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
             <h2 className="mb-3 text-xl font-semibold">Revenue estimate</h2>

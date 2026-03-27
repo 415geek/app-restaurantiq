@@ -109,6 +109,7 @@ export async function runFullReport(input: {
   businessType: string | null;
   headline: string;
   reason: string;
+  marketData?: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
   const n8nUrl = process.env.N8N_IQ_FULL_REPORT_WEBHOOK_URL?.trim();
   if (n8nUrl) {
@@ -117,6 +118,7 @@ export async function runFullReport(input: {
       businessType: input.businessType,
       partialHeadline: input.headline,
       partialReason: input.reason,
+      market_data: input.marketData,
     });
     return fullSchema.parse(raw) as Record<string, unknown>;
   }
@@ -125,6 +127,10 @@ export async function runFullReport(input: {
   if (!client) {
     throw new Error('Neither N8N_IQ_FULL_REPORT_WEBHOOK_URL nor OPENAI_API_KEY is configured');
   }
+
+  const marketDataSection = input.marketData
+    ? `\n\nMARKET DATA (from Google Places + Yelp):\n${JSON.stringify(input.marketData, null, 2)}`
+    : '';
 
   const prompt = `You are a restaurant business expert.
 
@@ -135,7 +141,7 @@ Focus only on actionable business insights.
 Location: ${input.location}
 Business type: ${input.businessType || 'Not specified'}
 Partial verdict: ${input.headline}
-Reason: ${input.reason}
+Reason: ${input.reason}${marketDataSection}
 
 Return valid JSON only with keys:
 revenue_estimate (string),

@@ -2,6 +2,8 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { ShareButton } from '@/components/share/ShareButton';
+import { SocialProofStats, SocialProofBadge } from '@/components/social-proof/Stats';
 
 type AnalyzeResult = {
   reportId: string;
@@ -189,14 +191,39 @@ function ResultContent() {
     );
   }
 
+  const shareUrl = typeof window !== 'undefined' 
+    ? `${window.location.origin}/iq/result?location=${encodeURIComponent(location)}&businessType=${encodeURIComponent(businessType)}&lang=${locale}`
+    : '';
+
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-16">
       <div className="w-full max-w-2xl">
+        {/* Social Proof Badge */}
+        <div className="mb-6 text-center">
+          <SocialProofBadge locale={locale} />
+        </div>
+
+        {/* Main Result Card */}
         <div className="rounded-3xl border border-red-500/20 bg-red-500/10 p-8 text-center shadow-2xl">
           <div className="mb-4 text-sm uppercase tracking-[0.2em] text-red-300">{t.aiVerdict}</div>
           <h1 className="mb-4 text-4xl font-bold text-red-300 md:text-5xl">{data.headline}</h1>
           <p className="mx-auto max-w-xl text-lg text-white/70">{data.reason}</p>
+          
+          {/* Share Button */}
+          <div className="mt-6 flex justify-center">
+            <ShareButton
+              shareUrl={shareUrl}
+              title={data.headline}
+              description={data.reason}
+              reportId={data.reportId}
+              locale={locale}
+              variant="ghost"
+              size="md"
+            />
+          </div>
         </div>
+
+        {/* Locked Report Section */}
         <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-8">
           <h2 className="mb-6 text-xl font-semibold">{t.lockedFullReport}</h2>
           <div className="space-y-4 text-white/60">
@@ -215,6 +242,11 @@ function ResultContent() {
           </button>
           {checkoutError ? <p className="mt-3 text-center text-sm text-rose-300">{checkoutError}</p> : null}
           <p className="mt-4 text-center text-sm text-white/40">{t.footnote}</p>
+        </div>
+
+        {/* Social Proof Stats */}
+        <div className="mt-8">
+          <SocialProofStats locale={locale} variant="compact" />
         </div>
       </div>
     </main>

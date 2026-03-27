@@ -61,7 +61,34 @@ export class RestaurantiqFullReportWorkflow {
     Validateprompt = {
         mode: 'runOnceForEachItem',
         language: 'javaScript',
-        jsCode: 'const expected = $env.N8N_IQ_WEBHOOK_SECRET || \'\';\nconst headers = $json.headers || {};\nconst auth = headers.authorization || headers.Authorization || \'\';\nif (expected && auth !== (\'Bearer \' + expected)) { throw new Error(\'Unauthorized\'); }\nconst body = $json.body || {};\nconst address = String(body.address || \'\').trim();\nconst industry = String(body.industry || \'restaurant\').trim();\nconst cuisine_type = body.cuisine_type ? String(body.cuisine_type).trim() : \'\';\nconst language = String(body.language || \'en\').toLowerCase() === \'zh\' ? \'zh\' : \'en\';\nconst analysis_id = body.analysis_id ? String(body.analysis_id) : \'\';\nif (!address) throw new Error(\'Missing address\');\nconst system = language === \'zh\' ? \'你是资深餐饮选址与经营顾问。请严格输出 JSON，不要输出多余文本。\' : \'You are a senior restaurant location and operations analyst. Output STRICT JSON only.\';\nconst user = language === \'zh\'\n  ? (\'生成付费版完整报告（结构化 JSON）。\\n分析ID：\' + analysis_id + \'\\n地址：\' + address + \'\\n业态：\' + industry + (cuisine_type ? (\'\\n菜系/类型：\' + cuisine_type) : \'\') + \'\\n\\nJSON 结构：{\\n  "revenue_estimate": {"monthly_range": "", "assumptions": []},\\n  "top_3_risks": [""],\\n  "top_3_opportunities": [""],\\n  "action_plan": [""],\\n  "confidence": "low|medium|high",\\n  "share_preview": {"headline": "", "bullets": []}\\n}\')\n  : (\'Generate a paid full report as structured JSON.\\nanalysis_id: \' + analysis_id + \'\\nAddress: \' + address + \'\\nIndustry: \' + industry + (cuisine_type ? (\'\\nCuisine/type: \' + cuisine_type) : \'\') + \'\\n\\nReturn JSON: {\\n  "revenue_estimate": {"monthly_range": "", "assumptions": []},\\n  "top_3_risks": [""],\\n  "top_3_opportunities": [""],\\n  "action_plan": [""],\\n  "confidence": "low|medium|high",\\n  "share_preview": {"headline": "", "bullets": []}\\n}\');\nreturn [{ json: { system, user } }];',
+        jsCode: `const expected = $env.N8N_IQ_WEBHOOK_SECRET || '';
+const headers = $json.headers || {};
+const auth = headers.authorization || headers.Authorization || '';
+if (expected && auth !== ('Bearer ' + expected)) { throw new Error('Unauthorized'); }
+const body = $json.body || {};
+const address = String(body.address || '').trim();
+const industry = String(body.industry || 'restaurant').trim();
+const cuisine_type = body.cuisine_type ? String(body.cuisine_type).trim() : '';
+const language = String(body.language || 'en').toLowerCase() === 'zh' ? 'zh' : 'en';
+const analysis_id = body.analysis_id ? String(body.analysis_id) : '';
+const market_data = body.market_data || null;
+if (!address) throw new Error('Missing address');
+
+const system = language === 'zh' 
+  ? '你是资深餐饮选址与经营顾问。请严格输出 JSON，不要输出多余文本。使用提供的市场数据进行分析。' 
+  : 'You are a senior restaurant location and operations analyst. Output STRICT JSON only. Use the provided market data for your analysis.';
+
+let marketDataSection = '';
+if (market_data) {
+  marketDataSection = language === 'zh'
+    ? '\\n\\n【市场数据（来自 Google Places + Yelp）】\\n' + JSON.stringify(market_data, null, 2)
+    : '\\n\\nMARKET DATA (from Google Places + Yelp):\\n' + JSON.stringify(market_data, null, 2);
+}
+
+const user = language === 'zh'
+  ? ('生成付费版完整报告（结构化 JSON）。\\n分析ID：' + analysis_id + '\\n地址：' + address + '\\n业态：' + industry + (cuisine_type ? ('\\n菜系/类型：' + cuisine_type) : '') + marketDataSection + '\\n\\n基于以上数据，生成 JSON 结构：{\\n  "revenue_estimate": {"monthly_range": "", "assumptions": []},\\n  "top_3_risks": [""],\\n  "top_3_opportunities": [""],\\n  "action_plan": [""],\\n  "confidence": "low|medium|high",\\n  "share_preview": {"headline": "", "bullets": []}\\n}')
+  : ('Generate a paid full report as structured JSON.\\nanalysis_id: ' + analysis_id + '\\nAddress: ' + address + '\\nIndustry: ' + industry + (cuisine_type ? ('\\nCuisine/type: ' + cuisine_type) : '') + marketDataSection + '\\n\\nBased on the above data, return JSON: {\\n  "revenue_estimate": {"monthly_range": "", "assumptions": []},\\n  "top_3_risks": [""],\\n  "top_3_opportunities": [""],\\n  "action_plan": [""],\\n  "confidence": "low|medium|high",\\n  "share_preview": {"headline": "", "bullets": []}\\n}');
+return [{ json: { system, user } }];`,
     };
 
     @node({

@@ -48,18 +48,22 @@ export async function POST(req: Request) {
           const hasN8nWebhook = Boolean(
             process.env.N8N_FULL_REPORT_WEBHOOK_URL?.trim() || process.env.N8N_IQ_FULL_REPORT_WEBHOOK_URL?.trim()
           );
+          const marketData = existing.market_data_json as Record<string, unknown> | null;
+          
           fullJson = hasN8nWebhook
             ? ((await generateFullReportWithN8n({
                 analysis_id: existing.id,
                 address: existing.location,
                 industry: 'restaurant',
                 cuisine_type: existing.business_type ?? undefined,
+                market_data: marketData ?? undefined,
               })) as Record<string, unknown>)
             : ((await runFullReport({
                 location: existing.location,
                 businessType: existing.business_type,
                 headline: existing.headline,
                 reason: existing.reason,
+                marketData: marketData ?? undefined,
               })) as Record<string, unknown>);
         } catch (genErr) {
           console.error('[funnel/stripe/webhook] full report generation failed', genErr);

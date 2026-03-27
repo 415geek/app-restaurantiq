@@ -10,9 +10,14 @@ export type IqReportRow = {
   headline: string;
   reason: string;
   full_report_json: Record<string, unknown> | null;
+  market_data_json: Record<string, unknown> | null;
   paid: boolean;
   stripe_session_id: string | null;
   customer_email: string | null;
+  share_count: number;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
 };
 
 export async function iqInsertReport(input: {
@@ -21,6 +26,10 @@ export async function iqInsertReport(input: {
   verdict: string;
   headline: string;
   reason: string;
+  marketDataJson?: Record<string, unknown> | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
 }): Promise<string> {
   const sb = supabaseAdmin();
   const { data, error } = await sb
@@ -31,12 +40,35 @@ export async function iqInsertReport(input: {
       verdict: input.verdict,
       headline: input.headline,
       reason: input.reason,
+      market_data_json: input.marketDataJson ?? null,
+      utm_source: input.utmSource ?? null,
+      utm_medium: input.utmMedium ?? null,
+      utm_campaign: input.utmCampaign ?? null,
     })
     .select('id')
     .single();
 
   if (error) throw error;
   return data.id as string;
+}
+
+export async function iqIncrementShareCount(reportId: string): Promise<void> {
+  const sb = supabaseAdmin();
+  
+  const { data: current } = await sb
+    .from(TABLE)
+    .select('share_count')
+    .eq('id', reportId)
+    .single();
+  
+  const newCount = (current?.share_count ?? 0) + 1;
+  
+  const { error } = await sb
+    .from(TABLE)
+    .update({ share_count: newCount })
+    .eq('id', reportId);
+  
+  if (error) throw error;
 }
 
 export async function iqGetReport(id: string): Promise<IqReportRow | null> {
