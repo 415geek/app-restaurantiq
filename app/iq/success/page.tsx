@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { iqGetReport } from '@/lib/funnel/iq-repository';
+import { auth } from '@clerk/nextjs/server';
+import { iqGetReport, iqLinkReportToUser } from '@/lib/funnel/iq-repository';
 
 type Props = {
   searchParams?: Promise<{ session_id?: string }>;
@@ -61,26 +62,37 @@ export default async function IqSuccessPage({ searchParams }: Props) {
   }
 
   const report = await iqGetReport(reportId);
-  if (report?.paid) {
-    redirect(`/iq/report/${reportId}`);
+  
+  // Auto-link report to user if logged in
+  const { userId } = await auth();
+  if (userId && report && !report.user_id) {
+    try {
+      await iqLinkReportToUser(reportId, userId);
+    } catch (e) {
+      console.error('[success] Failed to auto-link report to user:', e);
+    }
   }
 
-  if (paymentStatus === 'paid') {
+  if (report?.paid || paymentStatus === 'paid') {
     redirect(`/iq/report/${reportId}`);
   }
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="max-w-md space-y-4 text-center">
-        <h1 className="text-3xl font-bold">Payment received</h1>
+        <div className="mb-4 text-5xl">✅</div>
+        <h1 className="text-3xl font-bold text-white">Payment Successful!</h1>
         <p className="text-white/70">
-          Your report is being generated. This usually takes a few seconds.
+          Your premium report is being generated. This usually takes a few seconds.
         </p>
+        <div className="animate-pulse">
+          <div className="mx-auto h-2 w-32 rounded-full bg-emerald-500/30" />
+        </div>
         <Link
           href={`/iq/report/${reportId}`}
-          className="inline-block rounded-xl bg-emerald-400 px-6 py-3 font-semibold text-black"
+          className="inline-block rounded-xl bg-emerald-500 px-6 py-3 font-semibold text-black transition hover:bg-emerald-400"
         >
-          View Full Report
+          View Full Report →
         </Link>
       </div>
     </main>

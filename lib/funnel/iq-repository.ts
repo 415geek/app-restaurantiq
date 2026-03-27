@@ -18,6 +18,8 @@ export type IqReportRow = {
   utm_source: string | null;
   utm_medium: string | null;
   utm_campaign: string | null;
+  user_id: string | null;
+  created_at?: string;
 };
 
 export async function iqInsertReport(input: {
@@ -111,4 +113,36 @@ export async function iqSetFullReport(reportId: string, fullReportJson: Record<s
     .update({ full_report_json: fullReportJson, updated_at: new Date().toISOString() })
     .eq('id', reportId);
   if (error) throw error;
+}
+
+export async function iqLinkReportToUser(reportId: string, userId: string): Promise<void> {
+  const sb = supabaseAdmin();
+  const { error } = await sb
+    .from(TABLE)
+    .update({ user_id: userId, updated_at: new Date().toISOString() })
+    .eq('id', reportId);
+  if (error) throw error;
+}
+
+export async function iqGetUserReports(userId: string): Promise<IqReportRow[]> {
+  const sb = supabaseAdmin();
+  const { data, error } = await sb
+    .from(TABLE)
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as IqReportRow[];
+}
+
+export async function iqGetUserPaidReports(userId: string): Promise<IqReportRow[]> {
+  const sb = supabaseAdmin();
+  const { data, error } = await sb
+    .from(TABLE)
+    .select('*')
+    .eq('user_id', userId)
+    .eq('paid', true)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as IqReportRow[];
 }
