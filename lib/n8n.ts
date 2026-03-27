@@ -11,7 +11,11 @@ type N8nAnalyzeOutput = {
   analysis_id?: string;
   verdict: string;
   headline: string;
-  reason: string;
+  subheadline?: string;
+  market_snapshot?: string[];
+  hidden_risk?: string;
+  paywall_teaser?: string;
+  reason?: string;
   tension_type?: string;
   preview?: Record<string, unknown>;
 };

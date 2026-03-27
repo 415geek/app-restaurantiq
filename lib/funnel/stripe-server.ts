@@ -8,7 +8,10 @@ export function getStripe(): Stripe {
     if (!key) {
       throw new Error('STRIPE_SECRET_KEY is not set');
     }
-    stripeSingleton = new Stripe(key);
+    stripeSingleton = new Stripe(key, {
+      maxNetworkRetries: 3,
+      timeout: 30000,
+    });
   }
   return stripeSingleton;
 }

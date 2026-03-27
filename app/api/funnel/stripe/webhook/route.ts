@@ -1,11 +1,44 @@
 import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
-import { getStripe } from '@/lib/funnel/stripe-server';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { iqGetReport, iqMarkPaidAndReport } from '@/lib/funnel/iq-repository';
 import { runFullReport } from '@/lib/funnel/iq-llm';
 import { generateFullReportWithN8n } from '@/lib/n8n';
 
 export const runtime = 'nodejs';
+
+type StripeEvent = {
+  id: string;
+  type: string;
+  data: {
+    object: {
+      id: string;
+      metadata?: { reportId?: string };
+      customer_details?: { email?: string };
+      customer_email?: string;
+    };
+  };
+};
+
+function verifyStripeSignature(payload: string, signature: string, secret: string): boolean {
+  const parts = signature.split(',').reduce((acc, part) => {
+    const [key, value] = part.split('=');
+    acc[key] = value;
+    return acc;
+  }, {} as Record<string, string>);
+
+  const timestamp = parts['t'];
+  const v1Signature = parts['v1'];
+  if (!timestamp || !v1Signature) return false;
+
+  const signedPayload = `${timestamp}.${payload}`;
+  const expectedSignature = createHmac('sha256', secret).update(signedPayload).digest('hex');
+
+  try {
+    return timingSafeEqual(Buffer.from(v1Signature), Buffer.from(expectedSignature));
+  } catch {
+    return false;
+  }
+}
 
 export async function POST(req: Request) {
   const signature = req.headers.get('stripe-signature');
@@ -19,19 +52,22 @@ export async function POST(req: Request) {
   }
 
   const body = await req.text();
-  let event: Stripe.Event;
 
-  try {
-    const stripe = getStripe();
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-  } catch (err) {
-    console.error('[funnel/stripe/webhook] signature failed', err);
+  if (!verifyStripeSignature(body, signature, webhookSecret)) {
+    console.error('[funnel/stripe/webhook] signature verification failed');
     return new NextResponse('Invalid signature', { status: 400 });
+  }
+
+  let event: StripeEvent;
+  try {
+    event = JSON.parse(body) as StripeEvent;
+  } catch {
+    return new NextResponse('Invalid JSON', { status: 400 });
   }
 
   try {
     if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session;
+      const session = event.data.object;
       const reportId = session.metadata?.reportId;
       if (!reportId) {
         return NextResponse.json({ received: true });

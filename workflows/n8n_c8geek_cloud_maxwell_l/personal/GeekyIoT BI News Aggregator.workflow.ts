@@ -55,7 +55,7 @@ export class GeekyiotBiNewsAggregatorWorkflow {
         position: [40, 20],
     })
     SyncGeneralFeeds = {
-        url: 'http://geekyiot-web:3000/api/sync?type=general&secret=__REPLACE_WITH_GEEKYIOT_SYNC_SECRET__',
+        url: 'http://geekyiot-web:3000/api/sync?type=general&secret=1f0e15371fb7b83c2b4626b15c811c5d803f9e0a3f0ec475',
         options: {},
     };
 

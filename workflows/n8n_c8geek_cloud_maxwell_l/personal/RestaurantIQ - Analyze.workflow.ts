@@ -32,7 +32,12 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
     id: 'a8d59350c9884d63',
     name: 'RestaurantIQ - Analyze',
     active: true,
-    settings: { executionOrder: 'v1', binaryMode: 'separate', availableInMCP: false },
+    settings: {
+        executionOrder: 'v1',
+        binaryMode: 'separate',
+        availableInMCP: false,
+        callerPolicy: 'workflowsFromSameOwner',
+    },
 })
 export class RestaurantiqAnalyzeWorkflow {
     // =====================================================================
@@ -102,7 +107,7 @@ export class RestaurantiqAnalyzeWorkflow {
     })
     Parsejson = {
         mode: 'runOnceForEachItem',
-        jsCode: "const raw = $json;\nconst choice = raw.choices && raw.choices[0];\nconst content = choice && choice.message && choice.message.content ? String(choice.message.content) : '';\n\nlet parsed;\ntry {\n  parsed = JSON.parse(content);\n} catch {\n  throw new Error('Model did not return valid JSON');\n}\n\nconst verdict = String(parsed.verdict || '').trim();\nconst headline = String(parsed.headline || '').trim();\nconst marketSnapshot = Array.isArray(parsed.market_snapshot)\n  ? parsed.market_snapshot.map((x) => String(x || '').trim()).filter(Boolean).slice(0, 4)\n  : [];\nconst risk = String(parsed.risk || '').trim();\nlet reason = String(parsed.reason || '').trim();\n\nif (!reason) {\n  const pieces = [];\n  if (marketSnapshot.length) pieces.push(marketSnapshot.slice(0, 2).join(' '));\n  if (risk) pieces.push('Biggest risk: ' + risk);\n  reason = pieces.join(' ');\n}\n\nif (!verdict || !headline || !reason) throw new Error('Missing fields in model JSON');\n\nreturn [{\n  json: {\n    analysis_id: $execution.id,\n    verdict,\n    headline,\n    reason,\n    market_snapshot: marketSnapshot,\n    risk,\n  }\n}];",
+        jsCode: "const raw = $json;\nconst choice = raw.choices && raw.choices[0];\nconst content = choice && choice.message && choice.message.content ? String(choice.message.content) : '';\n\nlet parsed;\ntry {\n  parsed = JSON.parse(content);\n} catch {\n  throw new Error('Model did not return valid JSON');\n}\n\nconst verdict = String(parsed.verdict || '').trim();\nconst headline = String(parsed.headline || '').trim();\nconst subheadline = String(parsed.subheadline || '').trim();\nconst marketSnapshot = Array.isArray(parsed.market_snapshot)\n  ? parsed.market_snapshot.map((x) => String(x || '').trim()).filter(Boolean).slice(0, 4)\n  : [];\nconst hiddenRisk = String(parsed.hidden_risk || '').trim();\nconst paywallTeaser = String(parsed.paywall_teaser || '').trim();\n\nif (!verdict || !headline) throw new Error('Missing required fields in model JSON');\n\nreturn [{\n  json: {\n    analysis_id: $execution.id,\n    verdict,\n    headline,\n    subheadline,\n    market_snapshot: marketSnapshot,\n    hidden_risk: hiddenRisk,\n    paywall_teaser: paywallTeaser,\n  }\n}];",
     };
 
     @node({
@@ -114,7 +119,7 @@ export class RestaurantiqAnalyzeWorkflow {
     Respond = {
         respondWith: 'json',
         responseBody:
-            '={{ { "analysis_id": $json.analysis_id, "verdict": $json.verdict, "headline": $json.headline, "reason": $json.reason, "market_snapshot": $json.market_snapshot, "risk": $json.risk } }}',
+            '={{ { "analysis_id": $json.analysis_id, "verdict": $json.verdict, "headline": $json.headline, "subheadline": $json.subheadline, "market_snapshot": $json.market_snapshot, "hidden_risk": $json.hidden_risk, "paywall_teaser": $json.paywall_teaser } }}',
         options: {
             responseCode: 200,
         },

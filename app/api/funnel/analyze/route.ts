@@ -29,16 +29,24 @@ export async function POST(req: Request) {
       const isDevLike = process.env.NODE_ENV !== 'production';
       const allowMock = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true';
       if (isDevLike || allowMock) {
-        const headline = language === 'zh' ? '谨慎推进' : 'Proceed with caution';
-        const reason =
-          language === 'zh'
-            ? '当前服务器尚未配置分析服务，此结果为本地开发环境的模拟输出。请配置 N8N_IQ_ANALYZE_WEBHOOK_URL 或 OPENAI_API_KEY 以启用真实分析。'
-            : 'Analysis provider is not configured on this server, so this is a mock result for local development only. Configure N8N_IQ_ANALYZE_WEBHOOK_URL or OPENAI_API_KEY to enable real analysis.';
         return NextResponse.json({
           reportId: '',
           verdict: 'mock',
-          headline,
-          reason,
+          headline: language === 'zh' ? '谨慎推进' : 'Proceed with caution',
+          subheadline: language === 'zh' 
+            ? '此为模拟数据，请配置分析服务以获取真实结果。' 
+            : 'This is mock data. Configure analysis provider for real results.',
+          market_snapshot: [
+            language === 'zh' ? '竞争密度：未知' : 'Competition density: Unknown',
+            language === 'zh' ? '需求模式：未知' : 'Demand pattern: Unknown',
+            language === 'zh' ? '价格带：未知' : 'Price band: Unknown',
+          ],
+          hidden_risk: language === 'zh' 
+            ? '未配置分析服务，无法识别真实风险。' 
+            : 'Analysis not configured, cannot identify real risks.',
+          paywall_teaser: language === 'zh' 
+            ? '配置 N8N 或 OpenAI 以解锁完整分析能力。' 
+            : 'Configure N8N or OpenAI to unlock full analysis capabilities.',
         });
       }
       return NextResponse.json(
@@ -61,7 +69,6 @@ export async function POST(req: Request) {
           })
         : await runPartialAnalysis({ location, businessType, language });
     } catch (n8nErr) {
-      // If n8n returns empty body / non-JSON or errors, fall back to OpenAI when configured.
       if (hasN8nWebhook && hasOpenAiKey) {
         console.warn('[funnel/analyze] n8n analyze failed, falling back to OpenAI:', n8nErr);
         parsed = await runPartialAnalysis({ location, businessType, language });
@@ -72,8 +79,14 @@ export async function POST(req: Request) {
 
     const verdict = String(parsed.verdict ?? '').trim();
     const headline = String(parsed.headline ?? '').trim();
-    const reason = String(parsed.reason ?? '').trim();
-    if (!verdict || !headline || !reason) {
+    const subheadline = String(parsed.subheadline ?? '').trim();
+    const marketSnapshot = Array.isArray(parsed.market_snapshot) 
+      ? parsed.market_snapshot.map(s => String(s ?? '').trim()).filter(Boolean)
+      : [];
+    const hiddenRisk = String(parsed.hidden_risk ?? '').trim();
+    const paywallTeaser = String(parsed.paywall_teaser ?? '').trim();
+
+    if (!verdict || !headline) {
       return NextResponse.json({ error: 'Invalid analysis response from provider' }, { status: 502 });
     }
 
@@ -84,12 +97,11 @@ export async function POST(req: Request) {
         businessType: businessType || null,
         verdict,
         headline,
-        reason,
+        reason: subheadline || hiddenRisk,
       });
     } catch (err) {
       const isDevLike = process.env.NODE_ENV !== 'production';
       const message = err instanceof Error ? err.message : String(err);
-      // In local development, allow analysis to succeed even if Supabase admin env is missing.
       if (!isDevLike || !message.includes('Supabase admin env is not configured')) {
         throw err;
       }
@@ -99,7 +111,10 @@ export async function POST(req: Request) {
       reportId,
       verdict,
       headline,
-      reason,
+      subheadline,
+      market_snapshot: marketSnapshot,
+      hidden_risk: hiddenRisk,
+      paywall_teaser: paywallTeaser,
     });
   } catch (e) {
     console.error('[funnel/analyze]', e);
