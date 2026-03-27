@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 type Props = {
@@ -12,27 +12,44 @@ export function ReportActions({ reportId, isLinkedToUser }: Props) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const [linked, setLinked] = useState(isLinkedToUser);
+  const [clerkAvailable, setClerkAvailable] = useState(false);
+  const [ClerkComponents, setClerkComponents] = useState<{
+    SignInButton: React.ComponentType<{ mode: string; children: React.ReactNode }>;
+    SignUpButton: React.ComponentType<{ mode: string; children: React.ReactNode }>;
+    useUser: () => { user: { id: string } | null; isLoaded: boolean };
+  } | null>(null);
+  const [user, setUser] = useState<{ id: string } | null>(null);
+  const [isUserLoaded, setIsUserLoaded] = useState(false);
 
-  const handleDownloadPdf = async () => {
+  useEffect(() => {
+    const loadClerk = async () => {
+      try {
+        const clerk = await import('@clerk/nextjs');
+        if (clerk.SignInButton && clerk.SignUpButton && clerk.useUser) {
+          setClerkComponents({
+            SignInButton: clerk.SignInButton,
+            SignUpButton: clerk.SignUpButton,
+            useUser: clerk.useUser,
+          });
+          setClerkAvailable(true);
+        }
+      } catch {
+        setClerkAvailable(false);
+        setIsUserLoaded(true);
+      }
+    };
+    loadClerk();
+  }, []);
+
+  const handleDownloadPdf = () => {
     setIsDownloading(true);
     try {
-      const res = await fetch(`/api/iq/report/${reportId}/pdf`);
-      if (!res.ok) throw new Error('Download failed');
-      
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `RestaurantIQ-Report-${reportId.slice(0, 8)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
+      window.print();
     } catch (err) {
-      console.error('Download error:', err);
-      alert('Failed to download PDF. Please try again.');
+      console.error('Print error:', err);
+      alert('Failed to open print dialog. Please try again.');
     } finally {
-      setIsDownloading(false);
+      setTimeout(() => setIsDownloading(false), 500);
     }
   };
 
@@ -46,6 +63,11 @@ export function ReportActions({ reportId, isLinkedToUser }: Props) {
       });
       if (res.ok) {
         setLinked(true);
+      } else {
+        const data = await res.json();
+        if (data.error === 'Unauthorized') {
+          alert('Please sign in to save this report to your account.');
+        }
       }
     } catch (err) {
       console.error('Link error:', err);
@@ -77,7 +99,7 @@ export function ReportActions({ reportId, isLinkedToUser }: Props) {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                Generating PDF...
+                Opening Print Dialog...
               </>
             ) : (
               <>
@@ -88,10 +110,13 @@ export function ReportActions({ reportId, isLinkedToUser }: Props) {
               </>
             )}
           </button>
+          <p className="mt-3 text-xs text-white/40">
+            Tip: Select &quot;Save as PDF&quot; in the print dialog
+          </p>
         </div>
       </div>
 
-      {/* Account Section - simplified without Clerk dependency */}
+      {/* Account Section */}
       {linked ? (
         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6">
           <div className="text-center">
@@ -121,15 +146,22 @@ export function ReportActions({ reportId, isLinkedToUser }: Props) {
               Save This Report
             </h3>
             <p className="mb-4 text-sm text-white/60">
-              Link this report to your account for easy access later.
+              Create an account to save reports and access them anytime.
             </p>
-            <button
-              onClick={handleLinkToAccount}
-              disabled={isLinking}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 font-medium text-black transition hover:bg-emerald-400 disabled:opacity-50"
-            >
-              {isLinking ? 'Saving...' : 'Save to My Account'}
-            </button>
+            <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+              <Link
+                href={`/sign-up?redirect_url=/iq/report/${reportId}`}
+                className="w-full rounded-xl bg-emerald-500 px-5 py-2.5 font-medium text-black transition hover:bg-emerald-400 sm:w-auto"
+              >
+                Create Free Account
+              </Link>
+              <Link
+                href={`/sign-in?redirect_url=/iq/report/${reportId}`}
+                className="w-full rounded-xl border border-white/20 bg-white/5 px-5 py-2.5 font-medium text-white transition hover:bg-white/10 sm:w-auto"
+              >
+                Sign In
+              </Link>
+            </div>
           </div>
         </div>
       )}
