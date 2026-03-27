@@ -8,8 +8,11 @@ type Props = {
 };
 
 async function getStripeSession(sessionId: string): Promise<{ reportId: string | null; status: string | null }> {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  if (!secretKey) throw new Error('STRIPE_SECRET_KEY not set');
+  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
+  if (!secretKey) {
+    console.error('[getStripeSession] STRIPE_SECRET_KEY not set');
+    throw new Error('STRIPE_SECRET_KEY not set');
+  }
 
   const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, {
     headers: {
@@ -18,6 +21,8 @@ async function getStripeSession(sessionId: string): Promise<{ reportId: string |
   });
 
   if (!res.ok) {
+    const errText = await res.text();
+    console.error('[getStripeSession] Failed:', res.status, errText);
     throw new Error('Failed to retrieve session');
   }
 
@@ -45,7 +50,8 @@ export default async function IqSuccessPage({ searchParams }: Props) {
     const session = await getStripeSession(sessionId);
     reportId = session.reportId;
     paymentStatus = session.status;
-  } catch {
+  } catch (err) {
+    console.error('[success] getStripeSession error:', err);
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
         <p>Could not verify payment session.</p>
@@ -61,16 +67,26 @@ export default async function IqSuccessPage({ searchParams }: Props) {
     );
   }
 
-  const report = await iqGetReport(reportId);
+  let report;
+  try {
+    report = await iqGetReport(reportId);
+  } catch (err) {
+    console.error('[success] iqGetReport error:', err);
+    return (
+      <main className="flex min-h-screen items-center justify-center px-6">
+        <p>Could not load report data.</p>
+      </main>
+    );
+  }
   
-  // Auto-link report to user if logged in
-  const { userId } = await auth();
-  if (userId && report && !report.user_id) {
-    try {
+  // Auto-link report to user if logged in (wrapped in try-catch to prevent crash)
+  try {
+    const { userId } = await auth();
+    if (userId && report && !report.user_id) {
       await iqLinkReportToUser(reportId, userId);
-    } catch (e) {
-      console.error('[success] Failed to auto-link report to user:', e);
     }
+  } catch (e) {
+    console.error('[success] Failed to auto-link report to user:', e);
   }
 
   if (report?.paid || paymentStatus === 'paid') {

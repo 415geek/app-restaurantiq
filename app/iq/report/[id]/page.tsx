@@ -41,7 +41,14 @@ function ConfidenceBadge({ level }: { level?: string }) {
 
 export default async function IqReportPage({ params }: Props) {
   const { id } = await params;
-  const report = await iqGetReport(id);
+  
+  let report;
+  try {
+    report = await iqGetReport(id);
+  } catch (err) {
+    console.error('[report page] iqGetReport error:', err);
+    notFound();
+  }
   if (!report) notFound();
 
   if (!report.paid) {
@@ -61,6 +68,7 @@ export default async function IqReportPage({ params }: Props) {
   let full = report.full_report_json as FullShape | null;
   if (!full || Object.keys(full).length === 0) {
     try {
+      console.log('[report page] Generating full report for:', id);
       const marketData = report.market_data_json as Record<string, unknown> | null;
       const generated = await runFullReport({
         location: report.location,
@@ -71,7 +79,9 @@ export default async function IqReportPage({ params }: Props) {
       });
       await iqSetFullReport(id, generated);
       full = generated as FullShape;
-    } catch {
+      console.log('[report page] Full report generated successfully');
+    } catch (err) {
+      console.error('[report page] runFullReport error:', err);
       full = {};
     }
   }
