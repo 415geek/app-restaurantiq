@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 
 type Props = {
@@ -10,36 +10,7 @@ type Props = {
 
 export function ReportActions({ reportId, isLinkedToUser }: Props) {
   const [isDownloading, setIsDownloading] = useState(false);
-  const [isLinking, setIsLinking] = useState(false);
   const [linked, setLinked] = useState(isLinkedToUser);
-  const [clerkAvailable, setClerkAvailable] = useState(false);
-  const [ClerkComponents, setClerkComponents] = useState<{
-    SignInButton: React.ComponentType<{ mode: string; children: React.ReactNode }>;
-    SignUpButton: React.ComponentType<{ mode: string; children: React.ReactNode }>;
-    useUser: () => { user: { id: string } | null; isLoaded: boolean };
-  } | null>(null);
-  const [user, setUser] = useState<{ id: string } | null>(null);
-  const [isUserLoaded, setIsUserLoaded] = useState(false);
-
-  useEffect(() => {
-    const loadClerk = async () => {
-      try {
-        const clerk = await import('@clerk/nextjs');
-        if (clerk.SignInButton && clerk.SignUpButton && clerk.useUser) {
-          setClerkComponents({
-            SignInButton: clerk.SignInButton,
-            SignUpButton: clerk.SignUpButton,
-            useUser: clerk.useUser,
-          });
-          setClerkAvailable(true);
-        }
-      } catch {
-        setClerkAvailable(false);
-        setIsUserLoaded(true);
-      }
-    };
-    loadClerk();
-  }, []);
 
   const handleDownloadPdf = () => {
     setIsDownloading(true);
@@ -50,29 +21,6 @@ export function ReportActions({ reportId, isLinkedToUser }: Props) {
       alert('Failed to open print dialog. Please try again.');
     } finally {
       setTimeout(() => setIsDownloading(false), 500);
-    }
-  };
-
-  const handleLinkToAccount = async () => {
-    setIsLinking(true);
-    try {
-      const res = await fetch('/api/iq/link-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportId }),
-      });
-      if (res.ok) {
-        setLinked(true);
-      } else {
-        const data = await res.json();
-        if (data.error === 'Unauthorized') {
-          alert('Please sign in to save this report to your account.');
-        }
-      }
-    } catch (err) {
-      console.error('Link error:', err);
-    } finally {
-      setIsLinking(false);
     }
   };
 
