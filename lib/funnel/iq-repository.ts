@@ -19,6 +19,7 @@ export type IqReportRow = {
   utm_medium: string | null;
   utm_campaign: string | null;
   user_id: string | null;
+  language: string;
   created_at?: string;
 };
 
@@ -32,6 +33,7 @@ export async function iqInsertReport(input: {
   utmSource?: string | null;
   utmMedium?: string | null;
   utmCampaign?: string | null;
+  language?: string;
 }): Promise<string> {
   const sb = supabaseAdmin();
   const { data, error } = await sb
@@ -46,6 +48,7 @@ export async function iqInsertReport(input: {
       utm_source: input.utmSource ?? null,
       utm_medium: input.utmMedium ?? null,
       utm_campaign: input.utmCampaign ?? null,
+      language: input.language ?? 'en',
     })
     .select('id')
     .single();

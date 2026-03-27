@@ -28,6 +28,7 @@ type Props = {
     user_id: string | null;
   };
   full: FullShape;
+  initialLang?: 'en' | 'zh';
 };
 
 const translations = {
@@ -92,8 +93,8 @@ function ConfidenceBadge({ level, lang }: { level?: string; lang: 'en' | 'zh' })
   );
 }
 
-export function ReportContent({ report, full }: Props) {
-  const [lang, setLang] = useState<'en' | 'zh'>('en');
+export function ReportContent({ report, full, initialLang = 'en' }: Props) {
+  const [lang, setLang] = useState<'en' | 'zh'>(initialLang);
   const t = translations[lang];
 
   return (

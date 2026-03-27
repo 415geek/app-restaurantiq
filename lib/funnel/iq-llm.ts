@@ -170,7 +170,9 @@ export async function runFullReport(input: {
   headline: string;
   reason: string;
   marketData?: Record<string, unknown>;
+  language?: 'en' | 'zh';
 }): Promise<Record<string, unknown>> {
+  const language = input.language === 'zh' ? 'zh' : 'en';
   const n8nUrl = process.env.N8N_IQ_FULL_REPORT_WEBHOOK_URL?.trim();
   if (n8nUrl) {
     const raw = await postN8nJson<unknown>(n8nUrl, {
@@ -179,6 +181,7 @@ export async function runFullReport(input: {
       partialHeadline: input.headline,
       partialReason: input.reason,
       market_data: input.marketData,
+      language,
     });
     return fullSchema.parse(raw) as Record<string, unknown>;
   }
@@ -189,20 +192,81 @@ export async function runFullReport(input: {
   }
 
   const marketDataSection = input.marketData
-    ? `\n\nMARKET DATA (from Google Places + Yelp):\n${JSON.stringify(input.marketData, null, 2)}`
+    ? `\n\n市场数据 (来自 Google Places + Yelp):\n${JSON.stringify(input.marketData, null, 2)}`
     : '';
 
-  const systemPrompt = [
-    'You are a top-tier restaurant investment analyst generating a PREMIUM decision report.',
-    'This is a PAID report - users paid $19 for actionable, specific insights.',
-    'Your job is to provide CLARITY and DIRECTION, not generic advice.',
-    'Be specific with numbers, strategies, and action items.',
-    'Sound like a real consultant who has done 100+ location analyses.',
-    'Do NOT use fluffy language. Every sentence must add value.',
-    'Output strict JSON only.',
-  ].join(' ');
+  const systemPrompt = language === 'zh'
+    ? [
+        '你是一名顶级餐饮投资分析师，正在生成一份高级决策报告。',
+        '这是一份付费报告 - 用户支付了 $19 来获取可执行的、具体的洞察。',
+        '你的工作是提供清晰的方向和判断，而不是泛泛而谈的建议。',
+        '必须具体，包含数字、策略和行动项。',
+        '语气要像一个做过 100+ 选址分析的真正顾问。',
+        '禁止使用空洞的语言。每一句话都必须有价值。',
+        '所有内容必须用中文输出。',
+        '严格输出 JSON 格式。',
+      ].join(' ')
+    : [
+        'You are a top-tier restaurant investment analyst generating a PREMIUM decision report.',
+        'This is a PAID report - users paid $19 for actionable, specific insights.',
+        'Your job is to provide CLARITY and DIRECTION, not generic advice.',
+        'Be specific with numbers, strategies, and action items.',
+        'Sound like a real consultant who has done 100+ location analyses.',
+        'Do NOT use fluffy language. Every sentence must add value.',
+        'Output strict JSON only.',
+      ].join(' ');
 
-  const userPrompt = `Generate a comprehensive decision report for this restaurant location.
+  const userPrompt = language === 'zh'
+    ? `为这个餐厅选址生成一份全面的决策报告。
+
+地址: ${input.location}
+业态: ${input.businessType || '餐厅'}
+初步判定: ${input.headline}
+初步评估: ${input.reason}
+${marketDataSection}
+
+生成一份高级报告，包含以下部分（所有内容必须用中文）：
+
+1. 执行摘要 (executive_summary): 2-3 句话。以"建议开/谨慎/不建议开"开头。总结关键决策因素。直接明了。
+
+2. 最终判定 (final_verdict): 一句话回答"应该在这里开店吗？"，并给出主要原因。
+
+3. 商圈分析 (trade_area_analysis): 描述 1 英里半径范围。客流模式、周边商业、交通便利性、停车、可见性。要具体。
+
+4. 人口画像 (demographic_profile): 周边居住/工作的人群？收入水平、年龄结构、用餐习惯。与业态关联分析。
+
+5. 竞争格局 (competition_landscape): 0.5 英里内的直接竞争对手。他们的优势、劣势、价格定位。你可以利用的市场空白在哪里？
+
+6. 营收预估 (revenue_estimate): 月收入范围及假设条件。要具体："预估月营收 $4.5-6.5 万，基于 X 座位、Y 翻台率、Z 平均客单价。"
+
+7. 五大风险 (risks): 5 个具体风险的数组。每个风险包含：是什么、为什么重要、潜在财务影响。
+
+8. 三大机会 (opportunities): 3 个差异化机会的数组。每个都应该是可执行的，且针对这个具体位置。
+
+9. 失败场景 (failure_scenarios): 3 个会导致这家店失败的场景数组。要直言不讳。
+
+10. 差异化策略 (differentiation_strategy): 这家餐厅应该如何差异化才能生存？2-3 个具体策略。
+
+11. 90 天行动计划 (action_plan): 6-8 个具体步骤的数组。每个步骤都应该具体且有时间节点。
+
+12. 置信度 (confidence): "高" / "中" / "低"，基于数据质量和市场清晰度。
+
+严格返回以下 JSON 结构：
+{
+  "executive_summary": "...",
+  "final_verdict": "...",
+  "trade_area_analysis": "...",
+  "demographic_profile": "...",
+  "competition_landscape": "...",
+  "revenue_estimate": "...",
+  "risks": ["风险1", "风险2", "风险3", "风险4", "风险5"],
+  "opportunities": ["机会1", "机会2", "机会3"],
+  "failure_scenarios": ["场景1", "场景2", "场景3"],
+  "differentiation_strategy": "...",
+  "action_plan": ["步骤1", "步骤2", ...],
+  "confidence": "高|中|低"
+}`
+    : `Generate a comprehensive decision report for this restaurant location.
 
 LOCATION: ${input.location}
 BUSINESS TYPE: ${input.businessType || 'Restaurant'}

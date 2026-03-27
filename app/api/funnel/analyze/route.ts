@@ -98,6 +98,7 @@ export async function POST(req: Request) {
         verdict,
         headline,
         reason: subheadline || hiddenRisk,
+        language,
       });
     } catch (err) {
       const isDevLike = process.env.NODE_ENV !== 'production';

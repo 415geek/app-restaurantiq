@@ -50,10 +50,12 @@ export default async function IqReportPage({ params }: Props) {
     );
   }
 
+  const reportLanguage = (report.language === 'zh' ? 'zh' : 'en') as 'en' | 'zh';
+  
   let full = report.full_report_json as FullShape | null;
   if (!full || Object.keys(full).length === 0) {
     try {
-      console.log('[report page] Generating full report for:', id);
+      console.log('[report page] Generating full report for:', id, 'language:', reportLanguage);
       const marketData = report.market_data_json as Record<string, unknown> | null;
       const generated = await runFullReport({
         location: report.location,
@@ -61,6 +63,7 @@ export default async function IqReportPage({ params }: Props) {
         headline: report.headline,
         reason: report.reason,
         marketData: marketData ?? undefined,
+        language: reportLanguage,
       });
       await iqSetFullReport(id, generated);
       full = generated as FullShape;
@@ -83,6 +86,7 @@ export default async function IqReportPage({ params }: Props) {
             user_id: report.user_id,
           }}
           full={full ?? {}}
+          initialLang={reportLanguage}
         />
 
         {/* Share Section - hidden during print */}
