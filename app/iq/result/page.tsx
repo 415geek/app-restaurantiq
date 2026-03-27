@@ -30,6 +30,7 @@ const resultCopy: Record<
     lockedItems: string[];
     redirecting: string;
     unlockReport: string;
+    promoCodeHint: string;
     footnote: string;
     checkoutFailed: string;
     paymentUnavailable: string;
@@ -53,6 +54,7 @@ const resultCopy: Record<
     ],
     redirecting: 'Redirecting…',
     unlockReport: 'Unlock Full Report — $19',
+    promoCodeHint: '🎁 Have a promo code? Enter it on the checkout page',
     footnote: 'Know before you invest. Avoid costly mistakes.',
     checkoutFailed: 'Checkout failed',
     paymentUnavailable: 'Payment is temporarily unavailable.',
@@ -75,6 +77,7 @@ const resultCopy: Record<
     ],
     redirecting: '正在跳转…',
     unlockReport: '解锁完整报告 — $19',
+    promoCodeHint: '🎁 有优惠码？可在结账页面输入使用',
     footnote: '投资前先看清，避免高成本失误。',
     checkoutFailed: '支付会话创建失败',
     paymentUnavailable: '暂时无法支付，请稍后重试。',
@@ -319,10 +322,11 @@ function ResultContent() {
           >
             {checkoutLoading ? t.redirecting : t.unlockReport}
           </button>
+          <p className="mt-3 text-center text-sm text-emerald-300/70">{t.promoCodeHint}</p>
           {checkoutError && (
-            <p className="mt-3 text-center text-sm text-rose-300">{checkoutError}</p>
+            <p className="mt-2 text-center text-sm text-rose-300">{checkoutError}</p>
           )}
-          <p className="mt-4 text-center text-xs text-white/40">{t.footnote}</p>
+          <p className="mt-3 text-center text-xs text-white/40">{t.footnote}</p>
         </div>
 
         {/* Share + Social Proof */}

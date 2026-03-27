@@ -17,6 +17,7 @@ async function createStripeCheckoutSession(params: {
   const body = new URLSearchParams();
   body.append('mode', 'payment');
   body.append('customer_creation', 'always');
+  body.append('allow_promotion_codes', 'true');
   body.append('metadata[reportId]', params.reportId);
   body.append('success_url', params.successUrl);
   body.append('cancel_url', params.cancelUrl);
