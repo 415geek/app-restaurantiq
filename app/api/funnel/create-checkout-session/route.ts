@@ -87,7 +87,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ url: session.url });
   } catch (e) {
     console.error('[funnel/create-checkout-session]', e);
-    const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ error: 'Failed to create checkout session', detail: message.slice(0, 300) }, { status: 500 });
+    let message = 'Unknown error';
+    if (e instanceof Error) {
+      message = e.message;
+    } else if (typeof e === 'object' && e !== null) {
+      message = JSON.stringify(e);
+    } else {
+      message = String(e);
+    }
+    return NextResponse.json({ error: 'Failed to create checkout session', detail: message.slice(0, 500) }, { status: 500 });
   }
 }

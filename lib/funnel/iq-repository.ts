@@ -76,7 +76,7 @@ export async function iqIncrementShareCount(reportId: string): Promise<void> {
 export async function iqGetReport(id: string): Promise<IqReportRow | null> {
   const sb = supabaseAdmin();
   const { data, error } = await sb.from(TABLE).select('*').eq('id', id).maybeSingle();
-  if (error) throw error;
+  if (error) throw new Error(error.message || JSON.stringify(error));
   return data as IqReportRow | null;
 }
 
