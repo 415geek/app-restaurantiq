@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { SignInButton, SignUpButton, useUser } from '@clerk/nextjs';
 import Link from 'next/link';
 
 type Props = {
@@ -10,7 +9,6 @@ type Props = {
 };
 
 export function ReportActions({ reportId, isLinkedToUser }: Props) {
-  const { user, isLoaded } = useUser();
   const [isDownloading, setIsDownloading] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const [linked, setLinked] = useState(isLinkedToUser);
@@ -39,7 +37,6 @@ export function ReportActions({ reportId, isLinkedToUser }: Props) {
   };
 
   const handleLinkToAccount = async () => {
-    if (!user) return;
     setIsLinking(true);
     try {
       const res = await fetch('/api/iq/link-report', {
@@ -94,78 +91,48 @@ export function ReportActions({ reportId, isLinkedToUser }: Props) {
         </div>
       </div>
 
-      {/* Account Section */}
-      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6">
-        {!isLoaded ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
-          </div>
-        ) : user ? (
-          // Logged in user
+      {/* Account Section - simplified without Clerk dependency */}
+      {linked ? (
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6">
           <div className="text-center">
-            {linked ? (
-              <>
-                <div className="mb-3 text-3xl">✅</div>
-                <h3 className="mb-2 text-lg font-semibold text-emerald-300">
-                  Report Saved to Your Account
-                </h3>
-                <p className="mb-4 text-sm text-white/60">
-                  Access this report anytime from your dashboard.
-                </p>
-                <Link
-                  href="/iq/dashboard"
-                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-2.5 font-medium text-emerald-300 transition hover:bg-emerald-500/20"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                  </svg>
-                  Go to Dashboard
-                </Link>
-              </>
-            ) : (
-              <>
-                <div className="mb-3 text-3xl">💾</div>
-                <h3 className="mb-2 text-lg font-semibold text-white">
-                  Save to Your Account
-                </h3>
-                <p className="mb-4 text-sm text-white/60">
-                  Link this report to your account for easy access later.
-                </p>
-                <button
-                  onClick={handleLinkToAccount}
-                  disabled={isLinking}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 font-medium text-black transition hover:bg-emerald-400 disabled:opacity-50"
-                >
-                  {isLinking ? 'Saving...' : 'Save to My Account'}
-                </button>
-              </>
-            )}
-          </div>
-        ) : (
-          // Not logged in
-          <div className="text-center">
-            <div className="mb-3 text-3xl">🔐</div>
-            <h3 className="mb-2 text-lg font-semibold text-white">
-              Create an Account
+            <div className="mb-3 text-3xl">✅</div>
+            <h3 className="mb-2 text-lg font-semibold text-emerald-300">
+              Report Saved
             </h3>
             <p className="mb-4 text-sm text-white/60">
-              Save reports, track analysis history, and unlock exclusive features.
+              This report has been saved to your account.
             </p>
-            <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-              <SignUpButton mode="modal">
-                <button className="w-full rounded-xl bg-emerald-500 px-5 py-2.5 font-medium text-black transition hover:bg-emerald-400 sm:w-auto">
-                  Create Free Account
-                </button>
-              </SignUpButton>
-              <SignInButton mode="modal">
-                <button className="w-full rounded-xl border border-white/20 bg-white/5 px-5 py-2.5 font-medium text-white transition hover:bg-white/10 sm:w-auto">
-                  Sign In
-                </button>
-              </SignInButton>
-            </div>
+            <Link
+              href="/iq/dashboard"
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-2.5 font-medium text-emerald-300 transition hover:bg-emerald-500/20"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+              Go to Dashboard
+            </Link>
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6">
+          <div className="text-center">
+            <div className="mb-3 text-3xl">💾</div>
+            <h3 className="mb-2 text-lg font-semibold text-white">
+              Save This Report
+            </h3>
+            <p className="mb-4 text-sm text-white/60">
+              Link this report to your account for easy access later.
+            </p>
+            <button
+              onClick={handleLinkToAccount}
+              disabled={isLinking}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 font-medium text-black transition hover:bg-emerald-400 disabled:opacity-50"
+            >
+              {isLinking ? 'Saving...' : 'Save to My Account'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

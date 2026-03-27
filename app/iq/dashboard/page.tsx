@@ -1,13 +1,24 @@
 import { redirect } from 'next/navigation';
-import { auth } from '@clerk/nextjs/server';
 import Link from 'next/link';
 import { iqGetUserPaidReports } from '@/lib/funnel/iq-repository';
 
+const isClerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY);
+
 export default async function IqDashboardPage() {
-  const { userId } = await auth();
+  let userId: string | null = null;
+  
+  if (isClerkConfigured) {
+    try {
+      const { auth } = await import('@clerk/nextjs/server');
+      const session = await auth();
+      userId = session.userId;
+    } catch (e) {
+      console.error('[dashboard] auth error:', e);
+    }
+  }
   
   if (!userId) {
-    redirect('/sign-in?redirect_url=/iq/dashboard');
+    redirect('/iq');
   }
 
   const reports = await iqGetUserPaidReports(userId);

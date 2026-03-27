@@ -1,10 +1,22 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { iqGetReport, iqLinkReportToUser } from '@/lib/funnel/iq-repository';
+
+const isClerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY);
 
 export async function POST(req: Request) {
   try {
-    const { userId } = await auth();
+    let userId: string | null = null;
+    
+    if (isClerkConfigured) {
+      try {
+        const { auth } = await import('@clerk/nextjs/server');
+        const session = await auth();
+        userId = session.userId;
+      } catch (e) {
+        console.error('[link-report] auth error:', e);
+      }
+    }
+    
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
