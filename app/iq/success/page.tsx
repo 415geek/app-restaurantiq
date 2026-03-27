@@ -79,14 +79,17 @@ export default async function IqSuccessPage({ searchParams }: Props) {
     );
   }
   
-  // Auto-link report to user if logged in (wrapped in try-catch to prevent crash)
-  try {
-    const { userId } = await auth();
-    if (userId && report && !report.user_id) {
-      await iqLinkReportToUser(reportId, userId);
+  // Auto-link report to user if logged in (only if Clerk is configured)
+  const isClerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY);
+  if (isClerkConfigured) {
+    try {
+      const { userId } = await auth();
+      if (userId && report && !report.user_id) {
+        await iqLinkReportToUser(reportId, userId);
+      }
+    } catch (e) {
+      console.error('[success] Failed to auto-link report to user:', e);
     }
-  } catch (e) {
-    console.error('[success] Failed to auto-link report to user:', e);
   }
 
   if (report?.paid || paymentStatus === 'paid') {

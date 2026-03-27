@@ -4,7 +4,6 @@ import { iqGetReport, iqSetFullReport } from '@/lib/funnel/iq-repository';
 import { runFullReport } from '@/lib/funnel/iq-llm';
 import { ReportShareSection } from '@/components/share/ReportShareSection';
 import { ReportActions } from '@/components/iq/ReportActions';
-import { auth } from '@clerk/nextjs/server';
 
 type FullShape = {
   executive_summary?: string;
