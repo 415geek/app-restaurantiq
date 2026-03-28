@@ -53,7 +53,9 @@ export async function iqInsertReport(input: {
     .select('id')
     .single();
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(error.message || JSON.stringify(error));
+  }
   return data.id as string;
 }
 

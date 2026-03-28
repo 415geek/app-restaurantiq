@@ -15,6 +15,25 @@ type AnalyzeResult = {
   paywall_teaser?: string;
 };
 
+/** API may return error/detail as strings or structured JSON; never call .trim() on unknown. */
+function jsonApiFieldToString(v: unknown): string {
+  if (v == null) return '';
+  if (typeof v === 'string') return v.trim();
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
+
+function formatAnalyzeApiFailure(json: Record<string, unknown> | null, fallback: string): string {
+  const base = (jsonApiFieldToString(json?.error) || fallback).trim();
+  const detail = jsonApiFieldToString(json?.detail);
+  if (!detail || detail === base) return base;
+  const short = detail.length > 240 ? `${detail.slice(0, 240)}…` : detail;
+  return `${base}\n${short}`;
+}
+
 type Locale = 'en' | 'zh';
 
 const resultCopy: Record<
@@ -140,15 +159,15 @@ function ResultContent() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ location, businessType, language: locale }),
         });
-        let json: (AnalyzeResult & { error?: string }) | null = null;
+        let json: (AnalyzeResult & Record<string, unknown>) | null = null;
         try {
           const rawText = await res.clone().text();
-          json = rawText ? (JSON.parse(rawText) as AnalyzeResult & { error?: string }) : null;
+          json = rawText ? (JSON.parse(rawText) as AnalyzeResult & Record<string, unknown>) : null;
         } catch {
           json = null;
         }
         if (!res.ok) {
-          throw new Error(json?.error || t.requestFailed);
+          throw new Error(formatAnalyzeApiFailure(json, t.requestFailed));
         }
         if (!cancelled) {
           setCheckoutError(null);
@@ -234,7 +253,9 @@ function ResultContent() {
   if (error || !data) {
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
-        <p className="text-center text-white/80">{error || t.fallbackLoadFailed}</p>
+        <p className="whitespace-pre-line text-center text-sm text-white/80 sm:text-base">
+          {error || t.fallbackLoadFailed}
+        </p>
       </main>
     );
   }

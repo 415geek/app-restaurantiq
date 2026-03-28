@@ -1,6 +1,6 @@
 # RestaurantIQ Product Module Overview (English)
 
-> Last updated: 2026-03-11 (America/Los_Angeles)
+> Last updated: 2026-03-28 (America/Los_Angeles)
 > Maintenance policy: update this file on every feature change and keep it aligned with the Chinese version.
 
 ## 1. Marketing Site
@@ -186,3 +186,10 @@
   - execution hardening:
     - UberEats platform adapter (requires `UBEREATS_MENU_MUTATION_ENDPOINT`);
     - persisted retry queue (`.runtime/ops-retry-queue/*.json`).
+
+## Added in this update (2026-03-28)
+- **LocationIQ / site-selection funnel (Business IQ) analysis engine V2.0**
+  - Free quick assessment + paid deep-dive prompts upgraded to the V2.0 framework (5-dimension scorecard, fact→impact→action pattern, GO/CAUTION/NO-GO, upgrade hooks; paid themes include trade area/dayparts, competition whitespace, three-scenario revenue, risk matrix, 90-day plan, etc.).
+  - Prompts live in `lib/funnel/iq-prompts-locationiq-v2.ts`; OpenAI direct path and n8n `RestaurantIQ - Analyze` / `RestaurantIQ - Full Report` **Validate+Prompt** nodes stay semantically aligned (including `response_format: json_object`).
+  - Paid full report: n8n webhook payload matches `runFullReport` (`headline`, `reason`, `language`, `market_data`); response keys match the report UI / `fullSchema` (e.g. `executive_summary`, `risks[5]`).
+  - Related APIs: `/api/funnel/analyze`, `/api/funnel/full-report`, and post-checkout full-report generation.

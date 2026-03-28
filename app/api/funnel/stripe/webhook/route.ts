@@ -93,6 +93,9 @@ export async function POST(req: Request) {
                 industry: 'restaurant',
                 cuisine_type: existing.business_type ?? undefined,
                 market_data: marketData ?? undefined,
+                headline: existing.headline,
+                reason: existing.reason,
+                language: existing.language === 'zh' ? 'zh' : 'en',
               })) as Record<string, unknown>)
             : ((await runFullReport({
                 location: existing.location,

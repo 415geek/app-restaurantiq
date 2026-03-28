@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { iqInsertReport } from '@/lib/funnel/iq-repository';
 import { runPartialAnalysis } from '@/lib/funnel/iq-llm';
 import { analyzeWithN8n } from '@/lib/n8n';
+import { unknownErrorMessage } from '@/lib/unknown-error-message';
 
 export const runtime = 'nodejs';
 type AnalysisLanguage = 'en' | 'zh';
@@ -119,11 +120,10 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     console.error('[funnel/analyze]', e);
-    const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
       {
         error: 'Failed to analyze location',
-        detail: message.slice(0, 500),
+        detail: unknownErrorMessage(e, 500),
       },
       { status: 500 },
     );

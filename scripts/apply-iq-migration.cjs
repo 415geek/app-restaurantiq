@@ -1,5 +1,6 @@
 /**
- * Runs supabase/migrations/0002_iq_location_reports.sql against Postgres.
+ * Runs iq funnel SQL migrations in order under supabase/migrations/.
+ * (Previously only 0002 ran — production then missed `language` and other columns.)
  *
  * By default this script does NOTHING (exits 0). Vercel build machines often cannot
  * reach Supabase reliably (IPv6 / pooler / SSL). Prefer `supabase db push` in CI or locally.
@@ -52,8 +53,12 @@ async function main() {
     process.exit(0);
   }
 
-  const sqlPath = path.join(__dirname, '..', 'supabase', 'migrations', '0002_iq_location_reports.sql');
-  const sql = fs.readFileSync(sqlPath, 'utf8');
+  const migrationFiles = [
+    '0002_iq_location_reports.sql',
+    '0003_add_user_id.sql',
+    '0004_add_language.sql',
+    '20260327_add_share_features.sql',
+  ];
 
   const client = new Client({
     connectionString: url,
@@ -63,8 +68,13 @@ async function main() {
   await client.connect();
   try {
     await client.query('CREATE EXTENSION IF NOT EXISTS pgcrypto;');
-    await client.query(sql);
-    console.log('[apply-iq-migration] iq_location_reports migration applied OK');
+    for (const name of migrationFiles) {
+      const sqlPath = path.join(__dirname, '..', 'supabase', 'migrations', name);
+      const sql = fs.readFileSync(sqlPath, 'utf8');
+      await client.query(sql);
+      console.log(`[apply-iq-migration] Applied ${name}`);
+    }
+    console.log('[apply-iq-migration] All iq_location_reports migrations applied OK');
   } finally {
     await client.end();
   }

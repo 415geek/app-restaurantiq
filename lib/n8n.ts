@@ -29,21 +29,33 @@ type N8nFullReportInput = {
   target_audience?: string;
   language?: 'en' | 'zh';
   market_data?: Record<string, unknown>;
+  /** Free-tier headline — anchors paid V2.0 report continuity */
+  headline?: string;
+  /** Free-tier rationale text */
+  reason?: string;
 };
 
+/** Aligns with iq-llm fullSchema / ReportContent FullShape (LocationIQ V2.0 premium). */
 type N8nFullReportOutput = {
-  revenue_estimate?: Record<string, unknown> | string;
-  top_3_risks?: unknown[];
-  top_3_opportunities?: unknown[];
+  executive_summary?: string;
+  final_verdict?: string;
+  trade_area_analysis?: string;
+  demographic_profile?: string;
+  competition_landscape?: string;
+  revenue_estimate?: string;
+  risks?: string[];
+  opportunities?: string[];
+  failure_scenarios?: string[];
+  differentiation_strategy?: string;
   action_plan?: string[];
   confidence?: string;
-  share_preview?: Record<string, unknown>;
 };
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
+/** Must match workflow Code nodes: N8N_IQ_WEBHOOK_SECRET first, then N8N_INTERNAL_AUTH_TOKEN. */
 function getN8nToken(): string | null {
-  return process.env.N8N_INTERNAL_AUTH_TOKEN?.trim() || process.env.N8N_IQ_WEBHOOK_SECRET?.trim() || null;
+  return process.env.N8N_IQ_WEBHOOK_SECRET?.trim() || process.env.N8N_INTERNAL_AUTH_TOKEN?.trim() || null;
 }
 
 function buildHeaders(): HeadersInit {

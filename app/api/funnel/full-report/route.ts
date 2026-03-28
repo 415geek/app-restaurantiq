@@ -38,12 +38,18 @@ export async function POST(req: Request) {
           address: report.location,
           industry: 'restaurant',
           cuisine_type: report.business_type ?? undefined,
+          market_data: (report.market_data_json as Record<string, unknown> | null) ?? undefined,
+          headline: report.headline,
+          reason: report.reason,
+          language: report.language === 'zh' ? 'zh' : 'en',
         })
       : await runFullReport({
           location: report.location,
           businessType: report.business_type,
           headline: report.headline,
           reason: report.reason,
+          marketData: (report.market_data_json as Record<string, unknown> | null) ?? undefined,
+          language: report.language === 'zh' ? 'zh' : 'en',
         });
 
     const fullJson = full as Record<string, unknown>;

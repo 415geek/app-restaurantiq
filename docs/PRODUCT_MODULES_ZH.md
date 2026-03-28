@@ -1,6 +1,6 @@
 # RestaurantIQ 产品功能模块介绍（中文）
 
-> 更新时间：2026-03-11（America/Los_Angeles）
+> 更新时间：2026-03-28（America/Los_Angeles）
 > 维护规则：每次功能变更后同步更新本文件，并与英文版保持一致。
 
 ## 1. 官网（Marketing）
@@ -184,3 +184,10 @@
   - 新增“真实执行 + 重试补偿”能力：
     - `UberEats` 平台执行适配器（需配置 `UBEREATS_MENU_MUTATION_ENDPOINT`）；
     - 重试队列持久化（`.runtime/ops-retry-queue/*.json`）。
+
+## 本次新增（2026-03-28）
+- **LocationIQ / 选址漏斗（Business IQ）分析引擎 V2.0**
+  - 免费速评与付费深度报告提示词升级为 V2.0 框架（5 维评分卡、事实→影响→建议、GO/CAUTION/NO-GO、付费钩子；付费版覆盖贸易区/客流/竞对/三场景营收/风险矩阵/90 天作战等思想）。
+  - 提示词集中在 `lib/funnel/iq-prompts-locationiq-v2.ts`；OpenAI 直连与 n8n `RestaurantIQ - Analyze` / `RestaurantIQ - Full Report` 工作流 **Validate+Prompt** 节点保持语义对齐（`response_format: json_object`）。
+  - 付费全量报告：n8n webhook 请求体与 `runFullReport` 一致，携带 `headline`、`reason`、`language`、`market_data`；返回 JSON 键与报告页 / `fullSchema` 一致（如 `executive_summary`、`risks[5]` 等）。
+  - 相关接口：`/api/funnel/analyze`、`/api/funnel/full-report`、Stripe 支付完成后生成全量报告路径。
