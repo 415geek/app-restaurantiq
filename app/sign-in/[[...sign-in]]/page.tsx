@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { SignIn } from '@clerk/nextjs';
+import { resolveClerkRedirectTarget } from '@/lib/clerk-redirect-url';
 
 const isMockMode = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true';
 const isClerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
@@ -17,7 +18,9 @@ function normalizeRedirectUrl(value: string | string[] | undefined) {
 
 export default async function Page({ searchParams }: SignInPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const redirectUrl = normalizeRedirectUrl(resolvedSearchParams.redirect_url) || '/dashboard';
+  const redirectUrl = resolveClerkRedirectTarget(
+    normalizeRedirectUrl(resolvedSearchParams.redirect_url) || '/dashboard',
+  );
 
   if (isMockMode || !isClerkConfigured) {
     return (

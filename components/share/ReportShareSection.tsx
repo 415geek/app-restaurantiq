@@ -15,8 +15,8 @@ export function ReportShareSection({ reportId, headline, location, confidence }:
     : '';
 
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-      <div className="text-sm text-emerald-300">
+    <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+      <div className="text-sm text-zinc-400">
         Share this report with your team or partners
       </div>
       <ShareButton

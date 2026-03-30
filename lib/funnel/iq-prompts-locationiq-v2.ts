@@ -2,8 +2,8 @@
  * LocationIQ 选址大师 — 分析提示词 V2.0（与产品文档对齐）
  * @see 选址大师_提示词V2.0_升级版.md
  *
- * API 仍为固定 JSON 字段：将 V2.0 的「评分卡 / 三大发现 / 速判 / 钩子」压缩映射到
- * headline / subheadline / market_snapshot / hidden_risk / paywall_teaser / verdict。
+ * 免费层仍为固定 JSON：headline / subheadline / market_snapshot / hidden_risk / paywall_teaser / verdict。
+ * 付费完整报告：见 iq-full-report-schema.ts（结构化竞对、风险矩阵、三场景营收、决策矩阵等）。
  *
  * n8n 工作流内嵌的 system/user 须与此文件语义对齐（无法 import TS）：
  * - workflows/n8n_c8geek_cloud_maxwell_l/personal/RestaurantIQ - Analyze.workflow.ts
@@ -102,6 +102,8 @@ export function locationIqV2PremiumSystemZh(): string {
     '用户为单笔约 $50k–$300k 量级的开店决策付费 $19；输出须像价值 $500+ 的迷你咨询：可执行、假设透明、结论前置。',
     '遵循 V2.0 付费版结构思想：贸易区分层、客流时段矩阵、人口与消费力、竞争清单与空白地图、三场景营收与敏感性、风险概率-影响与对冲、差异化与获客、90天作战图、可比案例、加权决策矩阵。',
     '禁止编造无法支撑的精确数字；关键假设须写明；竞争对手在可得情况下用真实店名（若仅有汇总数据须说明）。',
+    '严禁「A外卖/B快餐/竞品C」等虚构代号；risks 与 opportunities 禁止内容雷同或仅换同义词；公交与精确客流无来源须标 [待核实]。',
+    '若用户消息含【系统数据锚点】，competitors 与营收三场景必须服从其中的店名与美元锚点（允许±25% 但须写清理由）。',
     '风险须配对冲思路；行动计划须具体到人/预算/产出/完成标志，不写「做市场调研」类空话。',
     '全文中文；专有名词、地址、品牌可保留英文。',
     '严格输出 JSON，键名与调用方约定一致。',
@@ -115,7 +117,7 @@ export function locationIqV2PremiumUserZh(input: {
   reason: string;
   marketDataSection: string;
 }): string {
-  return `为以下地址与业态生成付费版「选址可行性深度分析」（LocationIQ V2.0），映射到指定 JSON 字段。
+  return `为以下地址与业态生成付费版「选址可行性深度分析」（LocationIQ V2.0 深度版）。必须输出**一个**合法 JSON 对象，键名与下述结构完全一致，不得省略结构化数组（无数据时用 []，不得用 null 占位数组）。
 
 地址: ${input.location}
 业态: ${input.businessType || '餐厅'}
@@ -123,46 +125,74 @@ export function locationIqV2PremiumUserZh(input: {
 免费版要点/理由: ${input.reason}
 ${input.marketDataSection}
 
-请按 V2.0 思想组织内容，并填入下列键（允许长文本与 Markdown 表格写在字符串内）：
+硬性要求：
+- 优先阅读全文顶部的【系统数据锚点】（若有）：competitors 须使用其中的真实店名；revenue_model.scenarios 的 monthly_revenue_usd 须与锚点区间自洽。
+- 若上方提供市场数据 JSON，竞对名称/评分/距离等必须优先引用；不足处标 [估算] 并写清假设，禁止假装有精确普查数字。
+- competitors：至少 5 行（1 英里内直接/间接竞争）；威胁等级用 高/中/低 或 🔴🟡🟢，analysis 一句说明为何。
+- risk_matrix：恰好 5 条对象，每条须含 probability（高|中|低）、financial_impact（美元/月量级或区间，或「约占月利润X%」）、trigger、mitigation。
+- revenue_model.scenarios：恰好 3 条（保守/基准/乐观），每条 key_assumptions 写明座位、翻台、客单价、入座率、营业日等；methodology 一句话写公式。
+- action_plan_structured：8–12 条对象，每条必有 task；尽量填 owner、budget_band、deliverable、success_metric、timeframe。
+- decision_matrix：5 行（客流与位置25%、人群匹配20%、竞争环境20%、财务可行性20%、运营可行性15%），填 score_100、weight_pct、weighted_score。
+- comparables：success_cases 与 failure_cases 各至少 1 条字符串（店名可英文+区域，说明启示）。
+- acquisition_channels：至少 4 行（如 Google Business、小红书/IG、外卖平台、团餐等），含 priority（P0/P1…）。
+- confidence 仅填：高 或 中 或 低（不要英文）；详细依据放在 confidence_rationale。
+- 仍须填写 competition_landscape、revenue_estimate 等长文字段：在 prose 中写「空白地图」与叙事；competitors/risk_matrix 等结构化字段与 prose 须一致、不矛盾。
+- data_sources_and_disclaimer：列出 Census/Maps/Yelp 等数据来源说明 + 一句非投资建议免责声明。
 
-1. executive_summary：3–4句执行摘要。第1句明确 GO/CAUTION/NO-GO 及核心理由；第2句最大机会；第3句最大风险与应对方向；第4句可选关键假设。末段可加简短「数据来源声明」 bullets（Census/Maps/Yelp 等）与免责声明一句。
-
-2. final_verdict：一句话「是否在此开店」及主因。
-
-3. trade_area_analysis：合并写清核心/次级/边缘贸易区（步行约0.25mi、车程约1mi、约3mi）、地标、时段客流节奏、可达性要点；可用 Markdown 表格。
-
-4. demographic_profile：人口画像、消费力估算方法（标注[估算]）、需求验证信号。
-
-5. competition_landscape：竞争对手表（名称、距离/相对位置描述、业态、评分、评论量、价格带、威胁等级🔴🟡🟢）、竞争强度与「空白地图」（未被满足需求/价格带/时段/品类）。
-
-6. revenue_estimate：三场景（保守/基准/乐观）营收逻辑：座位×翻台×客单价×营业天数×入座率，参数表+假设来源；简述盈亏平衡与回收期方向；敏感性挑 3–5 条。
-
-7. risks：5 条字符串，每条建议含概率档、财务影响方向、触发信号、对冲策略（可分行或分号）。
-
-8. opportunities：3 条可执行差异化机会。
-
-9. failure_scenarios：3 条失败场景，直言不讳。
-
-10. differentiation_strategy：定位语、价格锚定、核心差异化 3 点。
-
-11. action_plan：8–12 步，每步尽量含负责人/预算量级/产出/KPI 或完成标志（对齐 90 天作战图思想）。
-
-12. confidence：高|中|低，并简述依据。
-
-严格返回 JSON：
+返回 JSON 结构示例（请用真实内容替换占位，数组长度满足上文硬性要求）：
 {
+  "report_title": "（地址简称）·（业态）选址可行性深度分析",
+  "dashboard": {
+    "overall_score": 72,
+    "foot_traffic_index": 68,
+    "competition_intensity": 75,
+    "payback_months": "18-26",
+    "recommendation": "CONDITIONAL GO"
+  },
   "executive_summary": "...",
   "final_verdict": "...",
-  "trade_area_analysis": "...",
+  "trade_area_analysis": "（可含 Markdown 表格：核心/次级/边缘贸易区、时段客流）",
   "demographic_profile": "...",
   "competition_landscape": "...",
-  "revenue_estimate": "...",
-  "risks": ["...", "...", "...", "...", "..."],
+  "revenue_estimate": "（叙事+可含 Markdown 表，与 revenue_model 一致）",
+  "competitors": [
+    { "name": "...", "distance_mi": 0.2, "category": "...", "rating": 4.2, "review_count": 300, "price_tier": "$$", "threat_level": "高", "analysis": "..." }
+  ],
+  "risk_matrix": [
+    { "risk": "...", "probability": "中", "financial_impact": "约 $X/月", "trigger": "...", "mitigation": "..." }
+  ],
+  "revenue_model": {
+    "methodology": "营收≈座位×翻台×客单价×营业日×入座率",
+    "scenarios": [
+      { "name": "保守", "monthly_revenue_usd": 0, "key_assumptions": "..." },
+      { "name": "基准", "monthly_revenue_usd": 0, "key_assumptions": "..." },
+      { "name": "乐观", "monthly_revenue_usd": 0, "key_assumptions": "..." }
+    ],
+    "sensitivity": ["租金+10% → ...", "翻台-0.5 → ..."],
+    "breakeven": "...",
+    "monthly_costs_note": "..."
+  },
+  "risks": ["与 risk_matrix 对应的 5 条摘要句"],
   "opportunities": ["...", "...", "..."],
   "failure_scenarios": ["...", "...", "..."],
   "differentiation_strategy": "...",
-  "action_plan": ["...", "..."],
-  "confidence": "高|中|低"
+  "acquisition_channels": [
+    { "channel": "Google Business Profile", "priority": "P0", "rationale": "...", "expected_cac_band": "$0" }
+  ],
+  "action_plan": ["步骤摘要 1", "..."],
+  "action_plan_structured": [
+    { "task": "...", "owner": "创始人", "budget_band": "$0-500", "deliverable": "...", "success_metric": "...", "timeframe": "第1-2周" }
+  ],
+  "comparables": {
+    "success_cases": ["..."],
+    "failure_cases": ["..."]
+  },
+  "decision_matrix": [
+    { "dimension": "客流与位置", "score_100": 70, "weight_pct": 25, "weighted_score": 17.5 }
+  ],
+  "confidence": "中",
+  "confidence_rationale": "...",
+  "data_sources_and_disclaimer": "..."
 }`;
 }
 
@@ -172,6 +202,8 @@ export function locationIqV2PremiumSystemEn(): string {
     'The customer paid $19 for a decision-grade mini report; deliver $500+ consulting density with transparent assumptions and lead-with-conclusion style.',
     'Follow V2.0 premium themes: layered trade area, daypart demand matrix, demographics & spending power, competitor tables & whitespace, three-scenario revenue + sensitivity, risk matrix with mitigations, differentiation & acquisition, 90-day plan, comparables, weighted decision matrix.',
     'No fabricated precision; label [estimate] when needed; use real competitor names when inferable from provided data.',
+    'Never use placeholder competitor labels like "Restaurant A/B/C"; opportunities must not duplicate risks; transit/foot traffic without sources → [TBD].',
+    'If the user message includes [SYSTEM DATA ANCHORS], competitor rows and revenue scenarios MUST follow those names and USD anchors (±25% ok with explicit rationale).',
     'Risks must include mitigations; actions must be concrete (owner, budget band, deliverable, KPI), not generic "do research".',
     'Output strict JSON with the requested keys.',
   ].join(' ');
@@ -184,7 +216,7 @@ export function locationIqV2PremiumUserEn(input: {
   reason: string;
   marketDataSection: string;
 }): string {
-  return `Generate the PAID LocationIQ V2.0 deep-dive report.
+  return `Generate the PAID LocationIQ V2.0 DEEP report. Output a single valid JSON object with EXACTLY the keys below. Do not omit structured arrays (use [] if needed, never null for arrays).
 
 LOCATION: ${input.location}
 BUSINESS TYPE: ${input.businessType || 'Restaurant'}
@@ -192,20 +224,44 @@ FREE TIER HEADLINE: ${input.headline}
 FREE TIER NOTES: ${input.reason}
 ${input.marketDataSection}
 
-Populate JSON keys:
-1. executive_summary: 3–4 sentences (GO/CAUTION/NO-GO, biggest upside, biggest risk + mitigation angle, optional key assumption). Append a short data-source disclaimer + one liability disclaimer line.
-2. final_verdict: one sentence decision + main reason.
-3. trade_area_analysis: layered trade areas, anchors, daypart rhythm, accessibility; markdown tables allowed inside the string.
-4. demographic_profile: demographics, spending power methodology with [estimate] labels, demand validation signals.
-5. competition_landscape: competitor table with threat levels, whitespace map (unmet needs/price/daypart/category gaps).
-6. revenue_estimate: three scenarios with explicit assumptions (seats, turns, ticket, occupancy, days open), break-even direction, sensitivity (3–5 drivers).
-7. risks: array of 5 strings, each with probability tier, financial impact direction, trigger signal, mitigation.
-8. opportunities: 3 actionable differentiation plays.
-9. failure_scenarios: 3 brutal-honesty failure modes.
-10. differentiation_strategy: positioning, pricing anchor, 3 differentiation pillars.
-11. action_plan: 8–12 steps with owner/budget band/deliverable/KPI flavor.
-12. confidence: High|Medium|Low + why.
+Hard requirements:
+- Read [SYSTEM DATA ANCHORS] at the top of the user message when present: use those competitor names verbatim; align revenue_model.scenarios monthly_revenue_usd with anchor bands.
+- If MARKET DATA JSON is present, prefer real competitor names/ratings/distances from it; label [estimate] where data is insufficient—never fake Census precision.
+- competitors: at least 5 rows (direct/indirect within ~1 mile); threat_level High/Medium/Low (or emoji); analysis one sentence why.
+- risk_matrix: exactly 5 objects; each must include probability (High|Medium|Low), financial_impact (USD/month band or % of monthly profit), trigger, mitigation.
+- revenue_model.scenarios: exactly 3 (Conservative/Base/Upside); key_assumptions must mention seats, turns, ticket, occupancy, operating days; methodology one-line formula.
+- action_plan_structured: 8–12 objects; each must have task; fill owner, budget_band, deliverable, success_metric, timeframe when possible.
+- decision_matrix: 5 rows matching weights: traffic/location 25%, demographic fit 20%, competition 20%, financial viability 20%, operational feasibility 15%—include score_100, weight_pct, weighted_score.
+- comparables: at least 1 success_cases and 1 failure_cases string (real-ish names + lesson).
+- acquisition_channels: at least 4 rows with priority (P0/P1…).
+- confidence must be exactly High, Medium, or Low (English only); put rationale in confidence_rationale.
+- competition_landscape and revenue_estimate prose must align with structured competitors/revenue_model (no contradictions).
+- data_sources_and_disclaimer: bullet-style sources + one-line not investment advice.
 
-Return STRICT JSON with keys:
-executive_summary, final_verdict, trade_area_analysis, demographic_profile, competition_landscape, revenue_estimate, risks[5], opportunities[3], failure_scenarios[3], differentiation_strategy, action_plan[], confidence.`;
+Return JSON shape (replace placeholders; satisfy array lengths above):
+{
+  "report_title": "…",
+  "dashboard": { "overall_score": 0, "foot_traffic_index": 0, "competition_intensity": 0, "payback_months": "…", "recommendation": "GO|CAUTION|NO-GO|CONDITIONAL GO" },
+  "executive_summary": "…",
+  "final_verdict": "…",
+  "trade_area_analysis": "…",
+  "demographic_profile": "…",
+  "competition_landscape": "…",
+  "revenue_estimate": "…",
+  "competitors": [{ "name": "…", "distance_mi": 0, "category": "…", "rating": 0, "review_count": 0, "price_tier": "…", "threat_level": "High", "analysis": "…" }],
+  "risk_matrix": [{ "risk": "…", "probability": "Medium", "financial_impact": "…", "trigger": "…", "mitigation": "…" }],
+  "revenue_model": { "methodology": "…", "scenarios": [{ "name": "…", "monthly_revenue_usd": 0, "key_assumptions": "…" }], "sensitivity": ["…"], "breakeven": "…", "monthly_costs_note": "…" },
+  "risks": ["5 summary strings aligned with risk_matrix"],
+  "opportunities": ["…","…","…"],
+  "failure_scenarios": ["…","…","…"],
+  "differentiation_strategy": "…",
+  "acquisition_channels": [{ "channel": "…", "priority": "P0", "rationale": "…", "expected_cac_band": "…" }],
+  "action_plan": ["…"],
+  "action_plan_structured": [{ "task": "…", "owner": "…", "budget_band": "…", "deliverable": "…", "success_metric": "…", "timeframe": "…" }],
+  "comparables": { "success_cases": ["…"], "failure_cases": ["…"] },
+  "decision_matrix": [{ "dimension": "…", "score_100": 0, "weight_pct": 25, "weighted_score": 0 }],
+  "confidence": "Medium",
+  "confidence_rationale": "…",
+  "data_sources_and_disclaimer": "…"
+}`;
 }

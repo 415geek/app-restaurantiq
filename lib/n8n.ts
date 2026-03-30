@@ -15,6 +15,8 @@ type N8nAnalyzeOutput = {
   market_snapshot?: string[];
   hidden_risk?: string;
   paywall_teaser?: string;
+  /** Populated when Analyze workflow merges GatherMarketData.external_data (Google + Yelp). */
+  market_data?: Record<string, unknown>;
   reason?: string;
   tension_type?: string;
   preview?: Record<string, unknown>;
@@ -35,21 +37,8 @@ type N8nFullReportInput = {
   reason?: string;
 };
 
-/** Aligns with iq-llm fullSchema / ReportContent FullShape (LocationIQ V2.0 premium). */
-type N8nFullReportOutput = {
-  executive_summary?: string;
-  final_verdict?: string;
-  trade_area_analysis?: string;
-  demographic_profile?: string;
-  competition_landscape?: string;
-  revenue_estimate?: string;
-  risks?: string[];
-  opportunities?: string[];
-  failure_scenarios?: string[];
-  differentiation_strategy?: string;
-  action_plan?: string[];
-  confidence?: string;
-};
+/** Aligns with iq-full-report-schema + ReportContent (LocationIQ V2 deep premium). */
+type N8nFullReportOutput = Record<string, unknown>;
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 

@@ -7,10 +7,11 @@ export const runtime = 'nodejs';
 
 /**
  * Regenerate or fetch stored full report. Only allowed after payment (webhook sets paid).
+ * Body `{ reportId, force: true }` skips cache and regenerates (e.g. after prompt/market_data upgrades).
  */
 export async function POST(req: Request) {
   try {
-    const { reportId } = (await req.json()) as { reportId?: string };
+    const { reportId, force } = (await req.json()) as { reportId?: string; force?: boolean };
     if (!reportId) {
       return NextResponse.json({ error: 'Missing reportId' }, { status: 400 });
     }
@@ -24,7 +25,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Payment required' }, { status: 402 });
     }
 
-    if (report.full_report_json && Object.keys(report.full_report_json).length > 0) {
+    const hasCached =
+      report.full_report_json && Object.keys(report.full_report_json as object).length > 0;
+    if (hasCached && !force) {
       return NextResponse.json(report.full_report_json);
     }
 

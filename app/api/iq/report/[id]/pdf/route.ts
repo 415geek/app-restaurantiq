@@ -6,20 +6,69 @@ import puppeteer from 'puppeteer-core';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-type FullShape = {
-  executive_summary?: string;
-  final_verdict?: string;
-  trade_area_analysis?: string;
-  demographic_profile?: string;
-  competition_landscape?: string;
-  revenue_estimate?: string;
-  risks?: string[];
-  opportunities?: string[];
-  failure_scenarios?: string[];
-  differentiation_strategy?: string;
-  action_plan?: string[];
-  confidence?: string;
-};
+type FullShape = Record<string, unknown>;
+
+function pickStr(v: unknown): string | undefined {
+  return typeof v === 'string' && v.trim() ? v : undefined;
+}
+
+function pickStrArr(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
+function pdfDashboardTable(full: FullShape): string {
+  const d = full.dashboard;
+  if (!d || typeof d !== 'object') return '';
+  const obj = d as Record<string, unknown>;
+  const keys = ['overall_score', 'foot_traffic_index', 'competition_intensity', 'payback_months', 'recommendation'];
+  const cells = keys
+    .map((k) => {
+      const val = obj[k];
+      if (val === undefined || val === null || val === '') return '';
+      return `<tr><td style="padding:8px;border:1px solid #e5e7eb;font-weight:600;">${escapeHtml(k)}</td><td style="padding:8px;border:1px solid #e5e7eb;">${escapeHtml(String(val))}</td></tr>`;
+    })
+    .join('');
+  if (!cells) return '';
+  return `<div class="section"><h2>Key metrics</h2><table style="width:100%;border-collapse:collapse;font-size:10pt;">${cells}</table></div>`;
+}
+
+function pdfCompetitorsTable(full: FullShape): string {
+  const rows = Array.isArray(full.competitors) ? full.competitors : [];
+  if (rows.length === 0) return '';
+  const head = `<tr><th style="text-align:left;padding:6px;border:1px solid #e5e7eb;">#</th><th style="text-align:left;padding:6px;border:1px solid #e5e7eb;">Name</th><th style="padding:6px;border:1px solid #e5e7eb;">mi</th><th style="padding:6px;border:1px solid #e5e7eb;">Cat</th><th style="padding:6px;border:1px solid #e5e7eb;">★</th><th style="padding:6px;border:1px solid #e5e7eb;">Threat</th></tr>`;
+  const body = rows
+    .map((row, i) => {
+      const r = row as Record<string, unknown>;
+      return `<tr>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${i + 1}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(String(r.name ?? ''))}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(String(r.distance_mi ?? ''))}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(String(r.category ?? ''))}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(String(r.rating ?? ''))}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(String(r.threat_level ?? ''))}</td>
+      </tr>`;
+    })
+    .join('');
+  return `<div class="section"><h2>Competitor matrix</h2><table style="width:100%;border-collapse:collapse;font-size:9pt;">${head}${body}</table></div>`;
+}
+
+function pdfRiskMatrixTable(full: FullShape): string {
+  const rows = Array.isArray(full.risk_matrix) ? full.risk_matrix : [];
+  if (rows.length === 0) return '';
+  const head = `<tr><th style="text-align:left;padding:6px;border:1px solid #e5e7eb;">Risk</th><th style="padding:6px;border:1px solid #e5e7eb;">P</th><th style="padding:6px;border:1px solid #e5e7eb;">Impact</th><th style="padding:6px;border:1px solid #e5e7eb;">Mitigation</th></tr>`;
+  const body = rows
+    .map((row) => {
+      const r = row as Record<string, unknown>;
+      return `<tr>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(String(r.risk ?? ''))}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(String(r.probability ?? ''))}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(String(r.financial_impact ?? ''))}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(String(r.mitigation ?? ''))}</td>
+      </tr>`;
+    })
+    .join('');
+  return `<div class="section"><h2>Risk matrix</h2><table style="width:100%;border-collapse:collapse;font-size:9pt;">${head}${body}</table></div>`;
+}
 
 function generatePdfHtml(report: {
   id: string;
@@ -250,54 +299,59 @@ function generatePdfHtml(report: {
     </div>
   </div>
 
-  ${full.executive_summary ? `
+  ${pdfDashboardTable(full)}
+  ${pdfCompetitorsTable(full)}
+
+  ${pickStr(full.executive_summary) ? `
   <div class="executive-box">
     <h2>Executive Summary</h2>
-    <p>${escapeHtml(full.executive_summary)}</p>
+    <p>${escapeHtml(pickStr(full.executive_summary)!)}</p>
   </div>
   ` : ''}
 
-  ${full.final_verdict ? `
+  ${pickStr(full.final_verdict) ? `
   <div class="verdict-box">
     <h3>✅ Final Verdict</h3>
-    <p style="margin-top: 10px; font-size: 12pt;">${escapeHtml(full.final_verdict)}</p>
+    <p style="margin-top: 10px; font-size: 12pt;">${escapeHtml(pickStr(full.final_verdict)!)}</p>
   </div>
   ` : ''}
 
   <div class="two-column">
-    ${full.trade_area_analysis ? `
+    ${pickStr(full.trade_area_analysis) ? `
     <div class="column-box">
       <h3>📍 Trade Area Analysis</h3>
-      <p>${escapeHtml(full.trade_area_analysis)}</p>
+      <p>${escapeHtml(pickStr(full.trade_area_analysis)!)}</p>
     </div>
     ` : ''}
-    ${full.demographic_profile ? `
+    ${pickStr(full.demographic_profile) ? `
     <div class="column-box">
       <h3>👥 Demographic Profile</h3>
-      <p>${escapeHtml(full.demographic_profile)}</p>
+      <p>${escapeHtml(pickStr(full.demographic_profile)!)}</p>
     </div>
     ` : ''}
   </div>
 
-  ${full.competition_landscape ? `
+  ${pickStr(full.competition_landscape) ? `
   <div class="section">
     <h2>🏪 Competition Landscape</h2>
-    <p>${escapeHtml(full.competition_landscape)}</p>
+    <p>${escapeHtml(pickStr(full.competition_landscape)!)}</p>
   </div>
   ` : ''}
 
-  ${full.revenue_estimate ? `
+  ${pickStr(full.revenue_estimate) ? `
   <div class="revenue-box">
     <h3>💰 Revenue Estimate</h3>
-    <p>${escapeHtml(full.revenue_estimate)}</p>
+    <p>${escapeHtml(pickStr(full.revenue_estimate)!)}</p>
   </div>
   ` : ''}
 
-  ${full.risks && full.risks.length > 0 ? `
+  ${pdfRiskMatrixTable(full)}
+
+  ${pickStrArr(full.risks).length > 0 ? `
   <div class="section">
     <h2>⚠️ Top Risks</h2>
     <div class="list">
-      ${full.risks.map((r, i) => `
+      ${pickStrArr(full.risks).map((r, i) => `
       <div class="list-item">
         <div class="list-number risk">${i + 1}</div>
         <div class="list-content">${escapeHtml(r)}</div>
@@ -307,11 +361,11 @@ function generatePdfHtml(report: {
   </div>
   ` : ''}
 
-  ${full.opportunities && full.opportunities.length > 0 ? `
+  ${pickStrArr(full.opportunities).length > 0 ? `
   <div class="section">
     <h2>💡 Opportunities</h2>
     <div class="list">
-      ${full.opportunities.map((o, i) => `
+      ${pickStrArr(full.opportunities).map((o, i) => `
       <div class="list-item">
         <div class="list-number">${i + 1}</div>
         <div class="list-content">${escapeHtml(o)}</div>
@@ -321,11 +375,11 @@ function generatePdfHtml(report: {
   </div>
   ` : ''}
 
-  ${full.failure_scenarios && full.failure_scenarios.length > 0 ? `
+  ${pickStrArr(full.failure_scenarios).length > 0 ? `
   <div class="section">
     <h2>🚨 Failure Scenarios</h2>
     <div class="list">
-      ${full.failure_scenarios.map((f, i) => `
+      ${pickStrArr(full.failure_scenarios).map((f, i) => `
       <div class="list-item">
         <div class="list-number warning">${i + 1}</div>
         <div class="list-content">${escapeHtml(f)}</div>
@@ -335,18 +389,18 @@ function generatePdfHtml(report: {
   </div>
   ` : ''}
 
-  ${full.differentiation_strategy ? `
+  ${pickStr(full.differentiation_strategy) ? `
   <div class="section">
     <h2>🎯 Differentiation Strategy</h2>
-    <p>${escapeHtml(full.differentiation_strategy)}</p>
+    <p>${escapeHtml(pickStr(full.differentiation_strategy)!)}</p>
   </div>
   ` : ''}
 
-  ${full.action_plan && full.action_plan.length > 0 ? `
+  ${pickStrArr(full.action_plan).length > 0 ? `
   <div class="section">
     <h2>📝 90-Day Action Plan</h2>
     <div class="list">
-      ${full.action_plan.map((a, i) => `
+      ${pickStrArr(full.action_plan).map((a, i) => `
       <div class="list-item">
         <div class="list-number action">${i + 1}</div>
         <div class="list-content">${escapeHtml(a)}</div>
@@ -358,7 +412,7 @@ function generatePdfHtml(report: {
 
   <div class="footer">
     <p>Generated by RestaurantIQ.ai • ${date}</p>
-    <p>Confidence Level: ${full.confidence || 'N/A'}</p>
+    <p>Confidence Level: ${escapeHtml(pickStr(full.confidence) || 'N/A')}</p>
   </div>
   
   <div class="confidential">

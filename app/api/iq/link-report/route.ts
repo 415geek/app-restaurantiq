@@ -35,6 +35,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Report not paid' }, { status: 403 });
     }
 
+    if (report.user_id) {
+      if (report.user_id === userId) {
+        return NextResponse.json({ success: true, alreadyLinked: true });
+      }
+      return NextResponse.json({ error: 'Report is linked to another account' }, { status: 403 });
+    }
+
     await iqLinkReportToUser(reportId, userId);
 
     return NextResponse.json({ success: true });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 type Props = {
@@ -42,8 +42,13 @@ const translations = {
 
 export function ReportActions({ reportId, isLinkedToUser, lang = 'en' }: Props) {
   const [isDownloading, setIsDownloading] = useState(false);
-  const [linked, setLinked] = useState(isLinkedToUser);
   const t = translations[lang];
+
+  // Props update after router.refresh() (e.g. post sign-in link); keep UI in sync.
+  const [linked, setLinked] = useState(isLinkedToUser);
+  useEffect(() => {
+    setLinked(isLinkedToUser);
+  }, [isLinkedToUser]);
 
   const handleDownloadPdf = () => {
     setIsDownloading(true);
@@ -60,19 +65,19 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en' }: Props) 
   return (
     <div className="space-y-6">
       {/* PDF Download Section */}
-      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/50 to-slate-900/50 p-6">
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
         <div className="flex flex-col items-center text-center">
           <div className="mb-4 text-4xl">📄</div>
-          <h3 className="mb-2 text-lg font-semibold text-white">
+          <h3 className="mb-2 text-lg font-semibold text-zinc-100">
             {t.downloadTitle}
           </h3>
-          <p className="mb-4 text-sm text-white/60">
+          <p className="mb-4 text-sm text-zinc-400">
             {t.downloadDesc}
           </p>
           <button
             onClick={handleDownloadPdf}
             disabled={isDownloading}
-            className="flex items-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-black transition hover:bg-white/90 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 font-semibold text-zinc-900 transition hover:bg-white disabled:opacity-50"
           >
             {isDownloading ? (
               <>
@@ -91,7 +96,7 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en' }: Props) 
               </>
             )}
           </button>
-          <p className="mt-3 text-xs text-white/40">
+          <p className="mt-3 text-xs text-zinc-500">
             {t.downloadTip}
           </p>
         </div>
@@ -99,18 +104,18 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en' }: Props) 
 
       {/* Account Section */}
       {linked ? (
-        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
           <div className="text-center">
             <div className="mb-3 text-3xl">✅</div>
-            <h3 className="mb-2 text-lg font-semibold text-emerald-300">
+            <h3 className="mb-2 text-lg font-semibold text-zinc-100">
               {t.savedTitle}
             </h3>
-            <p className="mb-4 text-sm text-white/60">
+            <p className="mb-4 text-sm text-zinc-400">
               {t.savedDesc}
             </p>
             <Link
               href="/iq/dashboard"
-              className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-2.5 font-medium text-emerald-300 transition hover:bg-emerald-500/20"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/80 px-5 py-2.5 font-medium text-zinc-200 transition hover:bg-zinc-800"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -120,25 +125,25 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en' }: Props) 
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
           <div className="text-center">
             <div className="mb-3 text-3xl">💾</div>
-            <h3 className="mb-2 text-lg font-semibold text-white">
+            <h3 className="mb-2 text-lg font-semibold text-zinc-100">
               {t.saveTitle}
             </h3>
-            <p className="mb-4 text-sm text-white/60">
+            <p className="mb-4 text-sm text-zinc-400">
               {t.saveDesc}
             </p>
             <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <Link
                 href={`/sign-up?redirect_url=/iq/report/${reportId}`}
-                className="w-full rounded-xl bg-emerald-500 px-5 py-2.5 font-medium text-black transition hover:bg-emerald-400 sm:w-auto"
+                className="w-full rounded-xl bg-emerald-600 px-5 py-2.5 font-medium text-white transition hover:bg-emerald-500 sm:w-auto"
               >
                 {t.createAccount}
               </Link>
               <Link
                 href={`/sign-in?redirect_url=/iq/report/${reportId}`}
-                className="w-full rounded-xl border border-white/20 bg-white/5 px-5 py-2.5 font-medium text-white transition hover:bg-white/10 sm:w-auto"
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-800/60 px-5 py-2.5 font-medium text-zinc-200 transition hover:bg-zinc-800 sm:w-auto"
               >
                 {t.signIn}
               </Link>

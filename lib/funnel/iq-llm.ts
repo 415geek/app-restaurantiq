@@ -10,6 +10,8 @@ import {
   locationIqV2PremiumUserEn,
   locationIqV2PremiumUserZh,
 } from '@/lib/funnel/iq-prompts-locationiq-v2';
+import { parseIqFullReport } from '@/lib/funnel/iq-full-report-schema';
+import { buildPremiumMarketDataSection } from '@/lib/funnel/iq-premium-anchors';
 
 const partialSchema = z.object({
   verdict: z.string(),
@@ -21,21 +23,6 @@ const partialSchema = z.object({
   reason: z.string().optional(),
 });
 
-const fullSchema = z.object({
-  executive_summary: z.string().optional(),
-  final_verdict: z.string().optional(),
-  trade_area_analysis: z.string().optional(),
-  demographic_profile: z.string().optional(),
-  competition_landscape: z.string().optional(),
-  revenue_estimate: z.string().optional(),
-  risks: z.array(z.string()).optional(),
-  opportunities: z.array(z.string()).optional(),
-  failure_scenarios: z.array(z.string()).optional(),
-  differentiation_strategy: z.string().optional(),
-  action_plan: z.array(z.string()).optional(),
-  confidence: z.string().optional(),
-});
-
 function getOpenAI(): OpenAI | null {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return null;
@@ -44,6 +31,11 @@ function getOpenAI(): OpenAI | null {
 
 function model() {
   return process.env.OPENAI_IQ_MODEL?.trim() || 'gpt-4o-mini';
+}
+
+/** Paid full report: default to stronger model for structured, decision-grade output. */
+function modelFull() {
+  return process.env.OPENAI_IQ_FULL_MODEL?.trim() || process.env.OPENAI_IQ_MODEL?.trim() || 'gpt-4o';
 }
 
 async function postN8nJson<T>(url: string, body: unknown): Promise<T> {
@@ -143,7 +135,7 @@ export async function runFullReport(input: {
       market_data: input.marketData,
       language,
     });
-    return fullSchema.parse(raw) as Record<string, unknown>;
+    return parseIqFullReport(raw);
   }
 
   const client = getOpenAI();
@@ -151,11 +143,7 @@ export async function runFullReport(input: {
     throw new Error('Neither N8N_IQ_FULL_REPORT_WEBHOOK_URL nor OPENAI_API_KEY is configured');
   }
 
-  const marketDataSection = input.marketData
-    ? language === 'zh'
-      ? `\n\n市场数据 (来自 Google Places + Yelp):\n${JSON.stringify(input.marketData, null, 2)}`
-      : `\n\nMARKET DATA (from Google Places + Yelp):\n${JSON.stringify(input.marketData, null, 2)}`
-    : '';
+  const marketDataSection = buildPremiumMarketDataSection(input.marketData ?? null, language);
 
   const systemPrompt = language === 'zh' ? locationIqV2PremiumSystemZh() : locationIqV2PremiumSystemEn();
 
@@ -177,15 +165,22 @@ export async function runFullReport(input: {
         });
 
   const completion = await client.chat.completions.create({
-    model: model(),
+    model: modelFull(),
     messages: [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
+      { role: 'user', content: userPrompt },
     ],
     response_format: { type: 'json_object' },
+    max_completion_tokens: 16_000,
   });
 
   const text = completion.choices[0]?.message?.content;
   if (!text) throw new Error('Empty OpenAI response');
-  return fullSchema.parse(JSON.parse(text)) as Record<string, unknown>;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error('OpenAI full report was not valid JSON');
+  }
+  return parseIqFullReport(parsed);
 }

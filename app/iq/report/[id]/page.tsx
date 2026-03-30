@@ -5,20 +5,7 @@ import { runFullReport } from '@/lib/funnel/iq-llm';
 import { ReportShareSection } from '@/components/share/ReportShareSection';
 import { ReportContent } from '@/components/iq/ReportContent';
 
-type FullShape = {
-  executive_summary?: string;
-  final_verdict?: string;
-  trade_area_analysis?: string;
-  demographic_profile?: string;
-  competition_landscape?: string;
-  revenue_estimate?: string;
-  risks?: string[];
-  opportunities?: string[];
-  failure_scenarios?: string[];
-  differentiation_strategy?: string;
-  action_plan?: string[];
-  confidence?: string;
-};
+type FullShape = Record<string, unknown>;
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -95,7 +82,7 @@ export default async function IqReportPage({ params }: Props) {
             reportId={id}
             headline={report.headline}
             location={report.location}
-            confidence={full?.confidence}
+            confidence={typeof full?.confidence === 'string' ? full.confidence : undefined}
           />
         </div>
       </div>

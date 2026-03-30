@@ -107,7 +107,7 @@ export class RestaurantiqAnalyzeWorkflow {
     })
     Parsejson = {
         mode: 'runOnceForEachItem',
-        jsCode: "const raw = $json;\nconst choice = raw.choices && raw.choices[0];\nconst content = choice && choice.message && choice.message.content ? String(choice.message.content) : '';\n\nlet parsed;\ntry {\n  parsed = JSON.parse(content);\n} catch {\n  throw new Error('Model did not return valid JSON');\n}\n\nconst verdict = String(parsed.verdict || '').trim();\nconst headline = String(parsed.headline || '').trim();\nconst subheadline = String(parsed.subheadline || '').trim();\nconst marketSnapshot = Array.isArray(parsed.market_snapshot)\n  ? parsed.market_snapshot.map((x) => String(x || '').trim()).filter(Boolean).slice(0, 4)\n  : [];\nconst hiddenRisk = String(parsed.hidden_risk || '').trim();\nconst paywallTeaser = String(parsed.paywall_teaser || '').trim();\n\nif (!verdict || !headline) throw new Error('Missing required fields in model JSON');\n\nreturn [{\n  json: {\n    analysis_id: $execution.id,\n    verdict,\n    headline,\n    subheadline,\n    market_snapshot: marketSnapshot,\n    hidden_risk: hiddenRisk,\n    paywall_teaser: paywallTeaser,\n  }\n}];",
+        jsCode: "const raw = $json;\nconst choice = raw.choices && raw.choices[0];\nconst content = choice && choice.message && choice.message.content ? String(choice.message.content) : '';\n\nlet parsed;\ntry {\n  parsed = JSON.parse(content);\n} catch {\n  throw new Error('Model did not return valid JSON');\n}\n\nconst verdict = String(parsed.verdict || '').trim();\nconst headline = String(parsed.headline || '').trim();\nconst subheadline = String(parsed.subheadline || '').trim();\nconst marketSnapshot = Array.isArray(parsed.market_snapshot)\n  ? parsed.market_snapshot.map((x) => String(x || '').trim()).filter(Boolean).slice(0, 4)\n  : [];\nconst hiddenRisk = String(parsed.hidden_risk || '').trim();\nconst paywallTeaser = String(parsed.paywall_teaser || '').trim();\n\nif (!verdict || !headline) throw new Error('Missing required fields in model JSON');\n\nlet market_data = null;\ntry {\n  const gm = $('GatherMarketData').first().json;\n  if (gm && gm.external_data) market_data = gm.external_data;\n} catch (e) {\n  market_data = null;\n}\n\nreturn [{\n  json: {\n    analysis_id: $execution.id,\n    verdict,\n    headline,\n    subheadline,\n    market_snapshot: marketSnapshot,\n    hidden_risk: hiddenRisk,\n    paywall_teaser: paywallTeaser,\n    market_data,\n  }\n}];",
     };
 
     @node({
@@ -119,7 +119,7 @@ export class RestaurantiqAnalyzeWorkflow {
     Respond = {
         respondWith: 'json',
         responseBody:
-            '={{ { "analysis_id": $json.analysis_id, "verdict": $json.verdict, "headline": $json.headline, "subheadline": $json.subheadline, "market_snapshot": $json.market_snapshot, "hidden_risk": $json.hidden_risk, "paywall_teaser": $json.paywall_teaser } }}',
+            '={{ { "analysis_id": $json.analysis_id, "verdict": $json.verdict, "headline": $json.headline, "subheadline": $json.subheadline, "market_snapshot": $json.market_snapshot, "hidden_risk": $json.hidden_risk, "paywall_teaser": $json.paywall_teaser, "market_data": $json.market_data } }}',
         options: {
             responseCode: 200,
         },

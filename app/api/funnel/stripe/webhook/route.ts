@@ -103,6 +103,7 @@ export async function POST(req: Request) {
                 headline: existing.headline,
                 reason: existing.reason,
                 marketData: marketData ?? undefined,
+                language: existing.language === 'zh' ? 'zh' : 'en',
               })) as Record<string, unknown>);
         } catch (genErr) {
           console.error('[funnel/stripe/webhook] full report generation failed', genErr);
