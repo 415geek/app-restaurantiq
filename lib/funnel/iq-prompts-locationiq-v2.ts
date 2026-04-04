@@ -10,8 +10,106 @@
  * - workflows/n8n_c8geek_cloud_maxwell_l/personal/RestaurantIQ - Full Report.workflow.ts
  */
 
-export function locationIqV2FreeSystemZh(): string {
+/**
+ * 菜系专属分析视角知识块
+ * 根据 businessType 自动识别菜系类别，调整分析角度
+ */
+export function cuisineKnowledgeBlock(lang: 'zh' | 'en'): string {
+  if (lang === 'zh') {
+    return [
+      '',
+      '【菜系专属分析视角】',
+      '根据用户输入的 businessType，自动识别菜系类别并调整分析角度：',
+      '',
+      '■ 火锅类（火锅、串串、烤肉、烧烤等）',
+      '  - 典型客群：20-40岁，聚餐/社交场景为主，人均消费较高（$25-60）',
+      '  - 选址要点：停车便利 > 人流密度；夜间经营能力；排烟/消防合规；周边无投诉敏感住宅',
+      '  - 竞品识别：关注同类火锅品牌密度 + 其他聚餐业态（烧烤/农家菜/韩式烤肉）',
+      '  - 风险因素：夏季淡季效应（营收可降 30-40%）、原材料成本波动、油烟扰民投诉',
+      '  - 翻台基准：1.5-2.5 turns_per_day（晚餐为主，周末高峰可达 3）',
+      '',
+      '■ 奶茶/咖啡类（奶茶、咖啡、甜品、果汁等）',
+      '  - 典型客群：15-35岁，学生/白领，高频低客单（$5-12）',
+      '  - 选址要点：人流密度 > 停车；商圈/写字楼/学校附近优先；外卖半径重要',
+      '  - 竞品识别：关注 500 米内同类门店数量和品牌等级（头部品牌 vs 新品牌）',
+      '  - 风险因素：竞争激烈（红海市场）、品牌迭代快、季节性波动（冬季冰饮降）',
+      '  - 翻台基准：不适用传统翻台；关注日均杯数（200-500 杯/天为健康）',
+      '',
+      '■ 正餐类（川菜、湘菜、粤菜、日料、西餐等）',
+      '  - 典型客群：因菜系而异——川湘菜偏年轻/性价比；粤菜/日料偏商务/家庭',
+      '  - 选址要点：社区店看居民密度与收入结构；商圈店看消费力与停车',
+      '  - 竞品识别：同菜系直接竞争 + 同价格带跨菜系竞争',
+      '  - 风险因素：人工成本占比高（25-35%）、租金敏感、午市 vs 晚市结构',
+      '  - 翻台基准：2-3 turns_per_day（快餐化正餐可达 4）',
+      '',
+      '■ 快餐/简餐类（快餐、面馆、便当、轻食等）',
+      '  - 典型客群：白领/蓝领，午餐高峰为主，追求效率（$8-15）',
+      '  - 选址要点：写字楼/工业区/交通枢纽优先；出餐速度决定翻台',
+      '  - 竞品识别：价格带竞争 + 外卖渗透率（外卖占比常达 40-60%）',
+      '  - 风险因素：外卖平台抽成（15-30%）、人工效率要求高、客单价天花板',
+      '  - 翻台基准：4-8 turns_per_day（高效快餐可达 10+）',
+      '',
+      '若 businessType 不在上述类别，使用通用餐饮分析框架，并在报告中说明「未匹配特定菜系，采用通用分析」。',
+      '',
+      '分析时须将菜系特征融入：',
+      '1. executive_summary 中体现菜系定位与目标客群',
+      '2. trade_area_analysis 中匹配菜系的客群半径（火锅可达 3-5 mi，奶茶 0.5-1 mi）',
+      '3. competitors 中优先识别同菜系竞品，标注威胁等级',
+      '4. revenue_model 中使用该菜系的典型翻台率/客单价基准',
+      '5. risk_matrix 中包含菜系特有风险（如火锅的淡季、奶茶的竞争饱和）',
+      '6. action_plan 中给出菜系针对性建议（如火锅的会员锁客、奶茶的外卖优化）',
+      '',
+    ].join('\n');
+  }
+
   return [
+    '',
+    '[CUISINE-SPECIFIC ANALYSIS FRAMEWORK]',
+    'Identify the cuisine category from businessType and adjust analysis accordingly:',
+    '',
+    '■ Hot Pot / BBQ (hotpot, Korean BBQ, yakiniku, grill)',
+    '  - Target: 20-40 y/o, social dining, higher spend ($25-60/person)',
+    '  - Site factors: Parking > foot traffic; evening hours; ventilation/fire code; noise complaints',
+    '  - Competitors: Same-category density + other social dining (steakhouse, Korean)',
+    '  - Risks: Summer slowdown (30-40% revenue drop), commodity cost swings, odor complaints',
+    '  - Turns benchmark: 1.5-2.5 turns_per_day (dinner focus; weekends up to 3)',
+    '',
+    '■ Bubble Tea / Coffee (boba, coffee, dessert, juice)',
+    '  - Target: 15-35 y/o students/office workers, high frequency, low ticket ($5-12)',
+    '  - Site factors: Foot traffic > parking; near malls/offices/schools; delivery radius matters',
+    '  - Competitors: Count stores within 500m; note brand tier (national chain vs indie)',
+    '  - Risks: Red ocean competition, brand churn, seasonal (winter ice drinks drop)',
+    '  - Turns benchmark: N/A (use daily cups: 200-500/day is healthy)',
+    '',
+    '■ Full-Service Dining (Chinese regional, Japanese, Western, etc.)',
+    '  - Target: Varies—Sichuan/Hunan skews younger/value; Cantonese/Japanese skews business/family',
+    '  - Site factors: Community stores → residential density & income; mall stores → spending power & parking',
+    '  - Competitors: Same-cuisine direct + same-price-tier cross-cuisine',
+    '  - Risks: Labor cost (25-35% of revenue), rent sensitivity, lunch vs dinner mix',
+    '  - Turns benchmark: 2-3 turns_per_day (fast-casual can reach 4)',
+    '',
+    '■ Fast Food / Quick Service (QSR, noodles, lunch boxes, salads)',
+    '  - Target: Office/blue-collar workers, lunch rush, speed-focused ($8-15)',
+    '  - Site factors: Office parks/industrial zones/transit hubs; ticket time drives turns',
+    '  - Competitors: Price-tier competition + delivery penetration (often 40-60% delivery mix)',
+    '  - Risks: Platform commission (15-30%), labor efficiency demands, ticket ceiling',
+    '  - Turns benchmark: 4-8 turns_per_day (high-efficiency QSR can exceed 10)',
+    '',
+    'If businessType does not match above categories, use general restaurant framework and note "No specific cuisine match—using general analysis."',
+    '',
+    'Integrate cuisine insights into:',
+    '1. executive_summary: Reflect cuisine positioning and target demographic',
+    '2. trade_area_analysis: Match trade area radius to cuisine (hot pot 3-5 mi, boba 0.5-1 mi)',
+    '3. competitors: Prioritize same-cuisine competitors with threat levels',
+    '4. revenue_model: Use cuisine-typical turns/ticket benchmarks',
+    '5. risk_matrix: Include cuisine-specific risks (hot pot seasonality, boba saturation)',
+    '6. action_plan: Cuisine-specific tactics (hot pot loyalty programs, boba delivery optimization)',
+    '',
+  ].join('\n');
+}
+
+export function locationIqV2FreeSystemZh(): string {
+  const base = [
     '你是 LocationIQ 选址大师的分析引擎。角色：拥有约15年经验的商业地产与餐饮选址顾问。',
     '你必须按 V2.0 框架在脑中完成「5维加权评分卡」再输出：客流潜力25%、人群匹配20%、竞争压力20%、可达性20%、租金性价比15%；综合分0–100。',
     '等级：80–100🟢强烈推荐；60–79🟡值得考虑；40–59🟠谨慎评估；0–39🔴不建议。',
@@ -22,6 +120,7 @@ export function locationIqV2FreeSystemZh(): string {
     'verdict 仅允许小写：go | caution | no（对应 GO / CAUTION / NO-GO）。',
     '严格输出 JSON，不要 Markdown、不要额外说明文字。',
   ].join(' ');
+  return base + cuisineKnowledgeBlock('zh');
 }
 
 export function locationIqV2FreeUserZh(input: { location: string; businessType: string }): string {
@@ -54,7 +153,7 @@ export function locationIqV2FreeUserZh(input: { location: string; businessType: 
 }
 
 export function locationIqV2FreeSystemEn(): string {
-  return [
+  const base = [
     'You are the LocationIQ site-selection analysis engine: a senior commercial real estate advisor for restaurant operators.',
     'Internally apply the V2.0 weighted scorecard (0–100 each, then composite): foot traffic potential 25%, demographic fit 20%, competitive pressure 20%, accessibility 20%, rent value 15%.',
     'Tiers: 80–100 strong green; 60–79 yellow proceed-with-eyes-open; 40–59 orange high caution; 0–39 red avoid unless special advantage.',
@@ -65,6 +164,7 @@ export function locationIqV2FreeSystemEn(): string {
     'verdict must be lowercase only: go | caution | no.',
     'Output STRICT JSON only, no markdown, no prose outside JSON.',
   ].join(' ');
+  return base + cuisineKnowledgeBlock('en');
 }
 
 export function locationIqV2FreeUserEn(input: { location: string; businessType: string }): string {
@@ -97,7 +197,7 @@ export function locationIqV2FreeUserEn(input: { location: string; businessType: 
 }
 
 export function locationIqV2PremiumSystemZh(): string {
-  return [
+  const base = [
     '你是 LocationIQ 选址大师的高级分析引擎，兼具：结构化商业顾问（MECE、假设透明）、客流/贸易区建模视角、资深餐饮运营经验。',
     '用户为单笔约 $50k–$300k 量级的开店决策付费 $19；输出须像价值 $500+ 的迷你咨询：可执行、假设透明、结论前置。',
     '遵循 V2.0 付费版结构思想：贸易区分层、客流时段矩阵、人口与消费力、竞争清单与空白地图、三场景营收与敏感性、风险概率-影响与对冲、差异化与获客、90天作战图、可比案例、加权决策矩阵。',
@@ -108,6 +208,7 @@ export function locationIqV2PremiumSystemZh(): string {
     '全文中文；专有名词、地址、品牌可保留英文。',
     '严格输出 JSON，键名与调用方约定一致。',
   ].join(' ');
+  return base + cuisineKnowledgeBlock('zh');
 }
 
 export function locationIqV2PremiumUserZh(input: {
@@ -130,7 +231,7 @@ ${input.marketDataSection}
 - 若上方提供市场数据 JSON，竞对名称/评分/距离等必须优先引用；不足处标 [估算] 并写清假设，禁止假装有精确普查数字。
 - competitors：至少 5 行（1 英里内直接/间接竞争）；威胁等级用 高/中/低 或 🔴🟡🟢，analysis 一句说明为何。
 - risk_matrix：恰好 5 条对象，每条须含 probability（高|中|低）、financial_impact（美元/月量级或区间，或「约占月利润X%」）、trigger、mitigation。
-- revenue_model.scenarios：恰好 3 条（保守/基准/乐观），每条 key_assumptions 写明座位、翻台、客单价、入座率、营业日等；methodology 一句话写公式。
+- revenue_model.scenarios：恰好 3 条（保守/基准/乐观），每条 key_assumptions 必须包含并明确单位：座位数（seats）、**翻台/天 turns_per_day（严禁写“每月平均翻台X次”）**、客单价（dine-in 与 delivery 可分开）、入座率（建议按时段或日均）、营业日（days_open）、堂食/外卖占比（mix）。methodology 必须写清“turns_per_day”的口径，并在 revenue_estimate 叙述里解释单位换算。
 - action_plan_structured：8–12 条对象，每条必有 task；尽量填 owner、budget_band、deliverable、success_metric、timeframe。
 - decision_matrix：5 行（客流与位置25%、人群匹配20%、竞争环境20%、财务可行性20%、运营可行性15%），填 score_100、weight_pct、weighted_score。
 - comparables：success_cases 与 failure_cases 各至少 1 条字符串（店名可英文+区域，说明启示）。
@@ -138,6 +239,8 @@ ${input.marketDataSection}
 - confidence 仅填：高 或 中 或 低（不要英文）；详细依据放在 confidence_rationale。
 - 仍须填写 competition_landscape、revenue_estimate 等长文字段：在 prose 中写「空白地图」与叙事；competitors/risk_matrix 等结构化字段与 prose 须一致、不矛盾。
 - data_sources_and_disclaimer：列出 Census/Maps/Yelp 等数据来源说明 + 一句非投资建议免责声明。
+补充校验（避免你指出的常见错误）：
+- sensitivity 里“租金+10%”属于**成本敏感性**：必须写对**利润/现金流**的影响，而不是营收；“翻台-0.5”必须明确是“turns_per_day - 0.5”并给出按公式推导的影响区间。
 
 返回 JSON 结构示例（请用真实内容替换占位，数组长度满足上文硬性要求）：
 {
@@ -197,7 +300,7 @@ ${input.marketDataSection}
 }
 
 export function locationIqV2PremiumSystemEn(): string {
-  return [
+  const base = [
     'You are the LocationIQ premium site-selection engine: structured consultant + trade-area analytics + restaurant operations depth.',
     'The customer paid $19 for a decision-grade mini report; deliver $500+ consulting density with transparent assumptions and lead-with-conclusion style.',
     'Follow V2.0 premium themes: layered trade area, daypart demand matrix, demographics & spending power, competitor tables & whitespace, three-scenario revenue + sensitivity, risk matrix with mitigations, differentiation & acquisition, 90-day plan, comparables, weighted decision matrix.',
@@ -207,6 +310,7 @@ export function locationIqV2PremiumSystemEn(): string {
     'Risks must include mitigations; actions must be concrete (owner, budget band, deliverable, KPI), not generic "do research".',
     'Output strict JSON with the requested keys.',
   ].join(' ');
+  return base + cuisineKnowledgeBlock('en');
 }
 
 export function locationIqV2PremiumUserEn(input: {
@@ -229,7 +333,7 @@ Hard requirements:
 - If MARKET DATA JSON is present, prefer real competitor names/ratings/distances from it; label [estimate] where data is insufficient—never fake Census precision.
 - competitors: at least 5 rows (direct/indirect within ~1 mile); threat_level High/Medium/Low (or emoji); analysis one sentence why.
 - risk_matrix: exactly 5 objects; each must include probability (High|Medium|Low), financial_impact (USD/month band or % of monthly profit), trigger, mitigation.
-- revenue_model.scenarios: exactly 3 (Conservative/Base/Upside); key_assumptions must mention seats, turns, ticket, occupancy, operating days; methodology one-line formula.
+- revenue_model.scenarios: exactly 3 (Conservative/Base/Upside); key_assumptions MUST include units: seats, **turns_per_day (never “turns per month”)**, avg ticket (split dine-in vs delivery if relevant), occupancy (daypart or daily avg), days_open, channel mix. methodology must define turns_per_day and the conversion to monthly revenue in prose.
 - action_plan_structured: 8–12 objects; each must have task; fill owner, budget_band, deliverable, success_metric, timeframe when possible.
 - decision_matrix: 5 rows matching weights: traffic/location 25%, demographic fit 20%, competition 20%, financial viability 20%, operational feasibility 15%—include score_100, weight_pct, weighted_score.
 - comparables: at least 1 success_cases and 1 failure_cases string (real-ish names + lesson).
@@ -237,6 +341,8 @@ Hard requirements:
 - confidence must be exactly High, Medium, or Low (English only); put rationale in confidence_rationale.
 - competition_landscape and revenue_estimate prose must align with structured competitors/revenue_model (no contradictions).
 - data_sources_and_disclaimer: bullet-style sources + one-line not investment advice.
+Extra validation:
+- “Rent +10%” is a **cost** sensitivity: state impact on profit/cashflow (not revenue). “Turns -0.5” must be “turns_per_day - 0.5” with formula-based impact.
 
 Return JSON shape (replace placeholders; satisfy array lengths above):
 {
