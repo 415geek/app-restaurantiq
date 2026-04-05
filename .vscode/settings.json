@@ -1,6 +1,5 @@
 {
   "n8n.host": "https://n8n.c8geek.cloud",
-  "n8n.apiKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyM2IzOTlmNy1iN2JmLTQ0OTAtOGRlYi0zMWQ5MWNiYzkwNWMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiOTk1MjlmZDAtMTRkMy00MDFmLWEwZGEtZTIyYmY3ZmVjMmM1IiwiaWF0IjoxNzcyNDc3NDE3fQ.BTD7XNpNyO1eGSp5TNbp0082-EuMBVFbFa3A0_ME8Hw",
   "n8n.syncFolder": "workflows",
   "n8n.syncMode": "auto",
   "n8n.projectId": "TetxDJaGPpRJbFV3",
