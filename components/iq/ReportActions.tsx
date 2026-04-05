@@ -12,10 +12,15 @@ type Props = {
 const translations = {
   en: {
     downloadTitle: 'Download Formal Report',
-    downloadDesc: 'Get a professionally formatted PDF — ready for investors, partners, or your records.',
-    downloadBtn: 'Download PDF Report',
-    downloadingBtn: 'Opening Print Dialog...',
-    downloadTip: 'Tip: Select "Save as PDF" in the print dialog',
+    downloadDesc:
+      'Server-generated PDF (A4) with tables and branding — best for sharing, printing, and archives.',
+    downloadBtn: 'Download PDF',
+    downloadingBtn: 'Generating PDF…',
+    downloadTip: 'If download fails (e.g. local dev without Chromium), use Print below.',
+    printFallbackTitle: 'Print this page',
+    printFallbackDesc: 'Use your browser’s print dialog and choose “Save as PDF”.',
+    printFallbackBtn: 'Print / Save as PDF',
+    pdfError: 'Could not generate PDF. Try Print / Save as PDF instead.',
     savedTitle: 'Report Saved',
     savedDesc: 'This report has been saved to your account.',
     goToDashboard: 'Go to Dashboard',
@@ -26,10 +31,14 @@ const translations = {
   },
   zh: {
     downloadTitle: '下载正式报告',
-    downloadDesc: '获取专业格式的 PDF 报告，可用于投资人、合作伙伴展示或个人存档。',
-    downloadBtn: '下载 PDF 报告',
-    downloadingBtn: '正在打开打印对话框...',
-    downloadTip: '提示：在打印对话框中选择"另存为 PDF"',
+    downloadDesc: '由服务器生成 A4 PDF（含表格与品牌样式），便于分享、打印与存档。',
+    downloadBtn: '下载 PDF',
+    downloadingBtn: '正在生成 PDF…',
+    downloadTip: '若下载失败（如本地未配置 Chromium），请使用下方「打印」另存为 PDF。',
+    printFallbackTitle: '打印本页',
+    printFallbackDesc: '使用浏览器打印，并选择「另存为 PDF」。',
+    printFallbackBtn: '打印 / 另存为 PDF',
+    pdfError: '无法生成 PDF，请改用打印并另存为 PDF。',
     savedTitle: '报告已保存',
     savedDesc: '此报告已保存到您的账户中。',
     goToDashboard: '前往控制台',
@@ -42,6 +51,7 @@ const translations = {
 
 export function ReportActions({ reportId, isLinkedToUser, lang = 'en' }: Props) {
   const [isDownloading, setIsDownloading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const t = translations[lang];
 
   // Props update after router.refresh() (e.g. post sign-in link); keep UI in sync.
@@ -50,15 +60,48 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en' }: Props) 
     setLinked(isLinkedToUser);
   }, [isLinkedToUser]);
 
-  const handleDownloadPdf = () => {
+  const handleDownloadServerPdf = async () => {
+    setPdfError(null);
     setIsDownloading(true);
+    try {
+      const url = `/api/iq/report/${encodeURIComponent(reportId)}/pdf?lang=${lang}`;
+      const res = await fetch(url, { method: 'GET', credentials: 'same-origin' });
+      const ct = res.headers.get('content-type') || '';
+      if (!res.ok) {
+        setPdfError(t.pdfError);
+        return;
+      }
+      if (!ct.includes('application/pdf')) {
+        setPdfError(t.pdfError);
+        return;
+      }
+      const blob = await res.blob();
+      const dispo = res.headers.get('content-disposition') || '';
+      const match = /filename="([^"]+)"/.exec(dispo);
+      const filename = match?.[1] ?? `RestaurantIQ-Report-${reportId.slice(0, 8)}.pdf`;
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = filename;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(href);
+    } catch (e) {
+      console.error('PDF download error:', e);
+      setPdfError(t.pdfError);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handlePrintFallback = () => {
     try {
       window.print();
     } catch (err) {
       console.error('Print error:', err);
       alert(lang === 'zh' ? '无法打开打印对话框，请重试。' : 'Failed to open print dialog. Please try again.');
-    } finally {
-      setTimeout(() => setIsDownloading(false), 500);
     }
   };
 
@@ -75,7 +118,8 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en' }: Props) 
             {t.downloadDesc}
           </p>
           <button
-            onClick={handleDownloadPdf}
+            type="button"
+            onClick={() => void handleDownloadServerPdf()}
             disabled={isDownloading}
             className="flex items-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 font-semibold text-zinc-900 transition hover:bg-white disabled:opacity-50"
           >
@@ -96,9 +140,26 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en' }: Props) 
               </>
             )}
           </button>
+          {pdfError ? (
+            <p className="mt-3 text-xs text-amber-400/90" role="alert">
+              {pdfError}
+            </p>
+          ) : null}
           <p className="mt-3 text-xs text-zinc-500">
             {t.downloadTip}
           </p>
+          <div className="mt-6 w-full border-t border-zinc-800 pt-6">
+            <p className="mb-2 text-sm font-medium text-zinc-300">{t.printFallbackTitle}</p>
+            <p className="mb-3 text-xs text-zinc-500">{t.printFallbackDesc}</p>
+            <button
+              type="button"
+              onClick={handlePrintFallback}
+              disabled={isDownloading}
+              className="rounded-xl border border-zinc-600 bg-zinc-800/80 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800 disabled:opacity-50"
+            >
+              {t.printFallbackBtn}
+            </button>
+          </div>
         </div>
       </div>
 
