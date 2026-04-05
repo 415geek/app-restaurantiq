@@ -2,6 +2,12 @@
   "plugins": {
     "supabase": {
       "enabled": true
+    },
+    "vercel": {
+      "enabled": true
+    },
+    "clerk": {
+      "enabled": true
     }
   }
 }
