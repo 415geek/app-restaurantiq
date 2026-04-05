@@ -10,6 +10,9 @@ import {
   type WebResearchPack,
   type DeepResearchPack,
 } from '@/lib/funnel/iq-web-research';
+import { formatCaltransForAnchors, type CaltransAADTResult } from '@/lib/funnel/external-data/caltrans';
+import { formatListingsForAnchors, type CommercialListingsResult } from '@/lib/funnel/external-data/commercial-listings';
+import { formatBrightDataForAnchors, type MarketResearchResult } from '@/lib/funnel/external-data/brightdata';
 
 type Lang = 'en' | 'zh';
 
@@ -252,8 +255,45 @@ export function buildPremiumMarketDataSection(
           : `\n\n[WEB RESEARCH DIGEST — fold into key_evidence_points and narrative; cite domain or [search]; no copy-paste]\n${digest}`;
     }
   }
+
+  let caltransBlock = '';
+  const ct = marketData?.caltrans_traffic;
+  if (ct && Array.isArray(ct) && ct.length > 0) {
+    const digest = formatCaltransForAnchors(ct as CaltransAADTResult[], lang);
+    if (digest) {
+      caltransBlock =
+        lang === 'zh'
+          ? `\n\n${digest}`
+          : `\n\n${digest}`;
+    }
+  }
+
+  let listingsBlock = '';
+  const cl = marketData?.commercial_listings;
+  if (cl && typeof cl === 'object') {
+    const digest = formatListingsForAnchors(cl as CommercialListingsResult, lang);
+    if (digest) {
+      listingsBlock =
+        lang === 'zh'
+          ? `\n\n${digest}`
+          : `\n\n${digest}`;
+    }
+  }
+
+  let brightdataBlock = '';
+  const bd = marketData?.brightdata_research;
+  if (bd && typeof bd === 'object') {
+    const digest = formatBrightDataForAnchors(bd as MarketResearchResult, lang);
+    if (digest) {
+      brightdataBlock =
+        lang === 'zh'
+          ? `\n\n${digest}`
+          : `\n\n${digest}`;
+    }
+  }
+
   if (!marketData || typeof marketData !== 'object') {
-    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}`;
+    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}`;
   }
 
   const mdForJson = { ...marketData };
@@ -270,7 +310,7 @@ export function buildPremiumMarketDataSection(
   
   const jsonBlock =
     lang === 'zh'
-      ? `\n\n【市场数据原始 JSON（Google Places / Yelp / ACS / 联网检索 / 深度研究 meta）】\n${JSON.stringify(mdForJson, null, 2)}`
-      : `\n\nRAW MARKET DATA JSON (Google Places / Yelp / ACS / web research / deep research meta):\n${JSON.stringify(mdForJson, null, 2)}`;
-  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${jsonBlock}`;
+      ? `\n\n【市场数据原始 JSON（Google Places / Yelp / ACS / Caltrans / 商业房源 / BrightData / 深度研究 meta）】\n${JSON.stringify(mdForJson, null, 2)}`
+      : `\n\nRAW MARKET DATA JSON (Google Places / Yelp / ACS / Caltrans / commercial listings / BrightData / deep research meta):\n${JSON.stringify(mdForJson, null, 2)}`;
+  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${jsonBlock}`;
 }

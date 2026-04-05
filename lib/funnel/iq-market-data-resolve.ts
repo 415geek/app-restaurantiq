@@ -3,6 +3,9 @@
  * - Google Places pack when summary/competitors are missing (common n8n-analyze gap)
  * - Optional Tavily web_research (TAVILY_API_KEY) once per row unless already present
  * - For premium reports: Tavily Deep Research for comprehensive McKinsey-style analysis
+ * - Caltrans traffic data (California state highways only)
+ * - Commercial real estate listings (requires LOOPNET_RAPIDAPI_KEY)
+ * - Bright Data enhanced web scraping (requires BRIGHTDATA_API_TOKEN)
  */
 
 import { enrichMarketDataWithAcs } from '@/lib/funnel/iq-acs-enrichment';
@@ -13,10 +16,28 @@ import {
   fetchTavilyDeepResearch,
   type DeepResearchPack,
 } from '@/lib/funnel/iq-web-research';
+import { fetchCaltransTrafficByLocation, type CaltransAADTResult } from '@/lib/funnel/external-data/caltrans';
+import { fetchCommercialListings, type CommercialListingsResult } from '@/lib/funnel/external-data/commercial-listings';
+import { conductMarketResearch, type MarketResearchResult } from '@/lib/funnel/external-data/brightdata';
 
 function num(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+function extractCityFromLocation(location: string): string | null {
+  const parts = location.split(',').map((p) => p.trim());
+  if (parts.length >= 2) {
+    return parts[parts.length - 2] || parts[0];
+  }
+  const words = location.split(/\s+/);
+  if (words.length >= 2) {
+    const lastTwoWords = words.slice(-2).join(' ');
+    if (/san\s+francisco|los\s+angeles|new\s+york/i.test(lastTwoWords)) {
+      return lastTwoWords;
+    }
+  }
+  return null;
 }
 
 export function needsGooglePlacesEnrichment(marketData: Record<string, unknown> | null | undefined): boolean {
@@ -100,12 +121,12 @@ export async function resolveMarketDataForIqReport(input: {
     }
 
     if (!hasCompletedDeepResearch) {
-      console.log('[resolve-market-data] fetching Tavily Deep Research for premium report...');
+      console.log('[resolve-market-data] fetching Tavily Deep Research (pro model) for premium report...');
       const deepRes = await fetchTavilyDeepResearch({
         location,
         businessType: businessType || 'restaurant',
         lang,
-        model: 'mini',
+        model: 'pro', // Use pro model for higher quality analysis
       });
       if (deepRes) {
         base = { ...base, deep_research: deepRes };
@@ -117,6 +138,59 @@ export async function resolveMarketDataForIqReport(input: {
       }
     } else {
       console.log('[resolve-market-data] deep_research already present, skipping');
+    }
+
+    // Fetch Caltrans traffic data if geocode available and in California
+    const geo = base.geocode as { lat?: number; lng?: number; state?: string } | undefined;
+    if (geo?.lat && geo?.lng && !base.caltrans_traffic) {
+      const stateStr = String(geo.state || '').toLowerCase();
+      if (stateStr.includes('california') || stateStr === 'ca') {
+        console.log('[resolve-market-data] fetching Caltrans traffic data...');
+        const caltransData = await fetchCaltransTrafficByLocation(geo.lat, geo.lng, 2);
+        if (caltransData.length > 0) {
+          base = { ...base, caltrans_traffic: caltransData };
+          console.log('[resolve-market-data] caltrans data:', caltransData.length, 'highway segments found');
+        }
+      }
+    }
+
+    // Fetch commercial listings if not already present
+    if (!base.commercial_listings) {
+      const geoObj = base.geocode as { city?: string; state?: string } | undefined;
+      const city = geoObj?.city || extractCityFromLocation(location);
+      const state = geoObj?.state || 'CA';
+      if (city) {
+        console.log('[resolve-market-data] fetching commercial listings for', city, state);
+        const listingsResult = await fetchCommercialListings({
+          city,
+          state,
+          propertyType: 'retail restaurant',
+          maxResults: 10,
+        });
+        base = { ...base, commercial_listings: listingsResult };
+        console.log('[resolve-market-data] commercial listings status:', listingsResult.status);
+      }
+    }
+
+    // Bright Data enhanced market research (if API token configured)
+    if (!base.brightdata_research && process.env.BRIGHTDATA_API_TOKEN) {
+      console.log('[resolve-market-data] fetching Bright Data enhanced research...');
+      try {
+        const bdResearch = await conductMarketResearch({
+          location,
+          businessType: businessType || 'restaurant',
+        });
+        if (bdResearch.search_results.length > 0 || bdResearch.competitor_reviews || bdResearch.real_estate_data) {
+          base = { ...base, brightdata_research: bdResearch };
+          console.log('[resolve-market-data] Bright Data research:', 
+            bdResearch.search_results.length, 'search results,',
+            bdResearch.competitor_reviews ? '1 competitor review set' : 'no reviews',
+            bdResearch.real_estate_data?.length || 0, 'real estate listings'
+          );
+        }
+      } catch (e) {
+        console.warn('[resolve-market-data] Bright Data error:', e);
+      }
     }
   }
 
