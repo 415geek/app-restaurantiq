@@ -99,7 +99,7 @@ export async function resolveMarketDataForIqReport(input: {
         location,
         businessType: businessType || 'restaurant',
         lang,
-        model: 'pro',
+        model: 'mini',
       });
       if (deepRes) {
         base = { ...base, deep_research: deepRes };

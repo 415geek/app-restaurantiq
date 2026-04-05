@@ -60,8 +60,11 @@ export async function POST(req: Request) {
       await iqUpdateMarketDataJson(reportId, enrichedMd);
     }
 
-    const full = hasN8nWebhook
-      ? await generateFullReportWithN8n({
+    let full: Record<string, unknown>;
+    
+    if (hasN8nWebhook) {
+      try {
+        full = await generateFullReportWithN8n({
           analysis_id: report.id,
           address: report.location,
           industry: 'restaurant',
@@ -70,8 +73,10 @@ export async function POST(req: Request) {
           headline: report.headline,
           reason: report.reason,
           language: targetLang,
-        })
-      : await runFullReport({
+        });
+      } catch (n8nError) {
+        console.warn('[funnel/full-report] n8n failed, falling back to OpenAI:', n8nError);
+        full = await runFullReport({
           location: report.location,
           businessType: report.business_type,
           headline: report.headline,
@@ -79,8 +84,19 @@ export async function POST(req: Request) {
           marketData: marketForLlm,
           language: targetLang,
         });
+      }
+    } else {
+      full = await runFullReport({
+        location: report.location,
+        businessType: report.business_type,
+        headline: report.headline,
+        reason: report.reason,
+        marketData: marketForLlm,
+        language: targetLang,
+      });
+    }
 
-    const fullJson = full as Record<string, unknown>;
+    const fullJson = full;
     if (!isPreview) {
       await iqSetFullReport(reportId, fullJson);
     }
