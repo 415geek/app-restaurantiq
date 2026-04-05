@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { iqInsertReport } from '@/lib/funnel/iq-repository';
-import { gatherIqMarketDataFromGoogle } from '@/lib/funnel/iq-market-data';
+import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { runPartialAnalysis } from '@/lib/funnel/iq-llm';
 import { analyzeWithN8n } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
@@ -61,7 +61,6 @@ export async function POST(req: Request) {
     }
 
     let parsed: Awaited<ReturnType<typeof analyzeWithN8n>>;
-    let usedN8n = false;
     try {
       if (hasN8nWebhook) {
         parsed = await analyzeWithN8n({
@@ -70,7 +69,6 @@ export async function POST(req: Request) {
           cuisine_type: businessType || undefined,
           language,
         });
-        usedN8n = true;
       } else {
         parsed = await runPartialAnalysis({ location, businessType, language });
       }
@@ -78,7 +76,6 @@ export async function POST(req: Request) {
       if (hasN8nWebhook && hasOpenAiKey) {
         console.warn('[funnel/analyze] n8n analyze failed, falling back to OpenAI:', n8nErr);
         parsed = await runPartialAnalysis({ location, businessType, language });
-        usedN8n = false;
       } else {
         throw n8nErr;
       }
@@ -97,16 +94,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid analysis response from provider' }, { status: 502 });
     }
 
-    let marketDataJson: Record<string, unknown> | null = null;
+    let marketSeed: Record<string, unknown> | null = null;
     const fromN8n = parsed.market_data;
     if (fromN8n && typeof fromN8n === 'object' && !Array.isArray(fromN8n)) {
-      marketDataJson = fromN8n as Record<string, unknown>;
-    } else if (!usedN8n) {
-      marketDataJson = await gatherIqMarketDataFromGoogle({
-        location,
-        businessType: businessType || 'restaurant',
-      });
+      marketSeed = fromN8n as Record<string, unknown>;
     }
+
+    const marketDataJson = await resolveMarketDataForIqReport({
+      existing: marketSeed,
+      location,
+      businessType: businessType || 'restaurant',
+    });
 
     let reportId = '';
     try {

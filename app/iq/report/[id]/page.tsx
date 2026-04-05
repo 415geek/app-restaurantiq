@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { iqGetReport, iqSetFullReport } from '@/lib/funnel/iq-repository';
+import { iqGetReport, iqSetFullReport, iqUpdateMarketDataJson } from '@/lib/funnel/iq-repository';
+import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { runFullReport } from '@/lib/funnel/iq-llm';
 import { ReportShareSection } from '@/components/share/ReportShareSection';
 import { ReportContent } from '@/components/iq/ReportContent';
@@ -43,13 +44,22 @@ export default async function IqReportPage({ params }: Props) {
   if (!full || Object.keys(full).length === 0) {
     try {
       console.log('[report page] Generating full report for:', id, 'language:', reportLanguage);
-      const marketData = report.market_data_json as Record<string, unknown> | null;
+      const enrichedMd = await resolveMarketDataForIqReport({
+        existing: report.market_data_json as Record<string, unknown> | null | undefined,
+        location: report.location,
+        businessType: report.business_type || 'restaurant',
+      });
+      const marketData =
+        enrichedMd ?? (report.market_data_json as Record<string, unknown> | null) ?? undefined;
+      if (enrichedMd && Object.keys(enrichedMd).length > 0) {
+        await iqUpdateMarketDataJson(id, enrichedMd);
+      }
       const generated = await runFullReport({
         location: report.location,
         businessType: report.business_type,
         headline: report.headline,
         reason: report.reason,
-        marketData: marketData ?? undefined,
+        marketData,
         language: reportLanguage,
       });
       await iqSetFullReport(id, generated);

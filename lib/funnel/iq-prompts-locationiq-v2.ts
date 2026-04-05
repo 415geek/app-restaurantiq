@@ -202,6 +202,7 @@ export function locationIqV2PremiumSystemZh(): string {
     '用户为单笔约 $50k–$300k 量级的开店决策付费 $19；输出须像价值 $500+ 的迷你咨询：可执行、假设透明、结论前置。',
     '遵循 V2.0 付费版结构思想：贸易区分层、客流时段矩阵、人口与消费力、竞争清单与空白地图、三场景营收与敏感性、风险概率-影响与对冲、差异化与获客、90天作战图、可比案例、加权决策矩阵。',
     '禁止编造无法支撑的精确数字；关键假设须写明；竞争对手在可得情况下用真实店名（若仅有汇总数据须说明）。',
+    '人口与贸易区：凡用户消息含【人口与消费力——官方统计锚点】，demographic_profile 开篇必须用表格或编号列表**逐条列出**其中人口/收入/年龄/房价数字，再写对业态的含义；trade_area_analysis 必须用 **≥5 行** Markdown 表格写清半径/时段/需求假设/依据，且依据列至少各出现一次 **[ACS]** 与 **[Places]**。',
     '严禁「A外卖/B快餐/竞品C」等虚构代号；risks 与 opportunities 禁止内容雷同或仅换同义词；公交与精确客流无来源须标 [待核实]。',
     '若用户消息含【系统数据锚点】，competitors 与营收三场景必须服从其中的店名与美元锚点（允许±25% 但须写清理由）。',
     '风险须配对冲思路；行动计划须具体到人/预算/产出/完成标志，不写「做市场调研」类空话。',
@@ -239,8 +240,15 @@ ${input.marketDataSection}
 - confidence 仅填：高 或 中 或 低（不要英文）；详细依据放在 confidence_rationale。
 - 仍须填写 competition_landscape、revenue_estimate 等长文字段：在 prose 中写「空白地图」与叙事；competitors/risk_matrix 等结构化字段与 prose 须一致、不矛盾。
 - data_sources_and_disclaimer：列出 Census/Maps/Yelp 等数据来源说明 + 一句非投资建议免责声明。
+- demographic_profile：**第一段**必须是 Markdown 表格或有序列表，逐行引用【人口与消费力——官方统计锚点】中的 **全部** 数字（片区+县级；抑制项写「数据抑制」）；第二段起再解读消费力与目标客群；禁止首段无数字。
+- trade_area_analysis：必须含 **≥5 行** 的 Markdown 表格（列建议：范围/半径、时段或日型、需求或客流判断、依据）；依据列须含 **[ACS]**（人口/收入与客单承受力）与 **[Places]**（market_data 中 Google 样本数 N 或具名店密度），禁止通篇散文套话。
 补充校验（避免你指出的常见错误）：
 - sensitivity 里“租金+10%”属于**成本敏感性**：必须写对**利润/现金流**的影响，而不是营收；“翻台-0.5”必须明确是“turns_per_day - 0.5”并给出按公式推导的影响区间。
+
+【参考级交付（对齐高价值 PDF 样本）】
+- site_and_access_assessment：一段「物业+路况」专业叙述（路段等级/可见性/车速感/停车线索）；无一手数据须标 [估算] 并写验证方式。
+- key_evidence_points：≥6 条短句；每条必须含「一个可核对数据点 + 来源标签」（Maps/Yelp/ACS/市政或交通官网/open data/[检索]/[估算]）。
+- alternative_corridors：≥3 条对象；每条含 corridor_name、rationale、listings（≥2 行：address_or_listing、sqft、monthly_rent_usd、highlights、source_tag）；无真房源时整行标 [估算] 并写下一步核实动作（踩盘、经纪、商业地产平台等）。
 
 返回 JSON 结构示例（请用真实内容替换占位，数组长度满足上文硬性要求）：
 {
@@ -295,7 +303,24 @@ ${input.marketDataSection}
   ],
   "confidence": "中",
   "confidence_rationale": "...",
-  "data_sources_and_disclaimer": "..."
+  "data_sources_and_disclaimer": "...",
+  "site_and_access_assessment": "...",
+  "key_evidence_points": ["数据点+来源标签 …", "…", "…", "…", "…", "…"],
+  "alternative_corridors": [
+    {
+      "corridor_name": "…",
+      "rationale": "…",
+      "listings": [
+        {
+          "address_or_listing": "…",
+          "sqft": 1200,
+          "monthly_rent_usd": 4500,
+          "highlights": "…",
+          "source_tag": "[估算] 或 LoopNet …"
+        }
+      ]
+    }
+  ]
 }`;
 }
 
@@ -305,6 +330,7 @@ export function locationIqV2PremiumSystemEn(): string {
     'The customer paid $19 for a decision-grade mini report; deliver $500+ consulting density with transparent assumptions and lead-with-conclusion style.',
     'Follow V2.0 premium themes: layered trade area, daypart demand matrix, demographics & spending power, competitor tables & whitespace, three-scenario revenue + sensitivity, risk matrix with mitigations, differentiation & acquisition, 90-day plan, comparables, weighted decision matrix.',
     'No fabricated precision; label [estimate] when needed; use real competitor names when inferable from provided data.',
+    'Demographics & trade area: When the user message includes [DEMOGRAPHICS — OFFICIAL ANCHORS], demographic_profile MUST open with a Markdown table OR numbered list quoting EVERY population/income/age/home-value line, then interpret fit for the concept. trade_area_analysis MUST include a Markdown table with **≥5 rows** (radius/range, daypart, demand assumption, evidence), with evidence citing **[ACS]** at least once and **[Places]** at least once.',
     'Never use placeholder competitor labels like "Restaurant A/B/C"; opportunities must not duplicate risks; transit/foot traffic without sources → [TBD].',
     'If the user message includes [SYSTEM DATA ANCHORS], competitor rows and revenue scenarios MUST follow those names and USD anchors (±25% ok with explicit rationale).',
     'Risks must include mitigations; actions must be concrete (owner, budget band, deliverable, KPI), not generic "do research".',
@@ -341,8 +367,15 @@ Hard requirements:
 - confidence must be exactly High, Medium, or Low (English only); put rationale in confidence_rationale.
 - competition_landscape and revenue_estimate prose must align with structured competitors/revenue_model (no contradictions).
 - data_sources_and_disclaimer: bullet-style sources + one-line not investment advice.
+- demographic_profile: **First block** must be a Markdown table OR ordered list that quotes **all** numeric lines from [DEMOGRAPHICS — OFFICIAL ANCHORS] (tract + county; write "suppressed" if missing); only after that, add interpretation—no number-free opening paragraph.
+- trade_area_analysis: must include a Markdown table with **≥5 rows** (suggested columns: radius/range, daypart, demand/traffic judgment, evidence). Evidence must include **[ACS]** (population/income vs ticket affordability) and **[Places]** (Google sample count N or named competitor density from market_data). No vague "high/medium/low traffic" without radius + daypart + numeric tie-in.
 Extra validation:
 - “Rent +10%” is a **cost** sensitivity: state impact on profit/cashflow (not revenue). “Turns -0.5” must be “turns_per_day - 0.5” with formula-based impact.
+
+Reference-grade delivery (match premium PDF samples):
+- site_and_access_assessment: one narrative block on property visibility, road classification, speed/traffic feel, parking signals; label [estimate] without primary sources.
+- key_evidence_points: ≥6 short bullets; each must include one checkable fact or figure plus a source tag (Maps/Yelp/ACS/city or DOT/open data/[search]/[estimate]).
+- alternative_corridors: ≥3 objects with corridor_name, rationale, listings (≥2 rows: address_or_listing, sqft, monthly_rent_usd, highlights, source_tag); if no real listing, mark [estimate] and state verification steps.
 
 Return JSON shape (replace placeholders; satisfy array lengths above):
 {
@@ -368,6 +401,23 @@ Return JSON shape (replace placeholders; satisfy array lengths above):
   "decision_matrix": [{ "dimension": "…", "score_100": 0, "weight_pct": 25, "weighted_score": 0 }],
   "confidence": "Medium",
   "confidence_rationale": "…",
-  "data_sources_and_disclaimer": "…"
+  "data_sources_and_disclaimer": "…",
+  "site_and_access_assessment": "…",
+  "key_evidence_points": ["fact + source …", "…", "…", "…", "…", "…"],
+  "alternative_corridors": [
+    {
+      "corridor_name": "…",
+      "rationale": "…",
+      "listings": [
+        {
+          "address_or_listing": "…",
+          "sqft": 1200,
+          "monthly_rent_usd": 4500,
+          "highlights": "…",
+          "source_tag": "[estimate] or LoopNet …"
+        }
+      ]
+    }
+  ]
 }`;
 }

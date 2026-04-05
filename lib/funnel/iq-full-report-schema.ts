@@ -51,6 +51,21 @@ export const decisionMatrixRowSchema = z.object({
   weighted_score: z.union([z.number(), z.string()]).optional(),
 });
 
+/** Alternative trade corridors + sample listings (reference-report style). */
+export const listingRowSchema = z.object({
+  address_or_listing: z.string(),
+  sqft: z.union([z.number(), z.string()]).optional(),
+  monthly_rent_usd: z.union([z.number(), z.string()]).optional(),
+  highlights: optionalString,
+  source_tag: optionalString,
+});
+
+export const alternativeCorridorSchema = z.object({
+  corridor_name: z.string(),
+  rationale: optionalString,
+  listings: z.array(listingRowSchema).optional(),
+});
+
 /**
  * Paid LocationIQ report: structured + legacy prose fields.
  * Unknown keys are preserved for forward compatibility.
@@ -101,6 +116,9 @@ export const iqFullReportSchema = z
     confidence: optionalString,
     confidence_rationale: optionalString,
     data_sources_and_disclaimer: optionalString,
+    site_and_access_assessment: optionalString,
+    key_evidence_points: z.array(z.string()).optional(),
+    alternative_corridors: z.array(alternativeCorridorSchema).optional(),
   })
   .passthrough();
 

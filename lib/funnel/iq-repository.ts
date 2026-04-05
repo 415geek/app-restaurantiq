@@ -120,6 +120,18 @@ export async function iqSetFullReport(reportId: string, fullReportJson: Record<s
   if (error) throw error;
 }
 
+export async function iqUpdateMarketDataJson(
+  reportId: string,
+  marketDataJson: Record<string, unknown>,
+): Promise<void> {
+  const sb = supabaseAdmin();
+  const { error } = await sb
+    .from(TABLE)
+    .update({ market_data_json: marketDataJson, updated_at: new Date().toISOString() })
+    .eq('id', reportId);
+  if (error) throw error;
+}
+
 export async function iqLinkReportToUser(reportId: string, userId: string): Promise<void> {
   const sb = supabaseAdmin();
   const { error } = await sb

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { iqGetReport, iqMarkPaidAndReport } from '@/lib/funnel/iq-repository';
+import { iqGetReport, iqMarkPaidAndReport, iqUpdateMarketDataJson } from '@/lib/funnel/iq-repository';
+import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { runFullReport } from '@/lib/funnel/iq-llm';
 import { generateFullReportWithN8n } from '@/lib/n8n';
 
@@ -84,15 +85,24 @@ export async function POST(req: Request) {
           const hasN8nWebhook = Boolean(
             process.env.N8N_FULL_REPORT_WEBHOOK_URL?.trim() || process.env.N8N_IQ_FULL_REPORT_WEBHOOK_URL?.trim()
           );
-          const marketData = existing.market_data_json as Record<string, unknown> | null;
-          
+          const enrichedMd = await resolveMarketDataForIqReport({
+            existing: existing.market_data_json as Record<string, unknown> | null | undefined,
+            location: existing.location,
+            businessType: existing.business_type || 'restaurant',
+          });
+          const marketData =
+            enrichedMd ?? (existing.market_data_json as Record<string, unknown> | null) ?? undefined;
+          if (enrichedMd && Object.keys(enrichedMd).length > 0) {
+            await iqUpdateMarketDataJson(reportId, enrichedMd);
+          }
+
           fullJson = hasN8nWebhook
             ? ((await generateFullReportWithN8n({
                 analysis_id: existing.id,
                 address: existing.location,
                 industry: 'restaurant',
                 cuisine_type: existing.business_type ?? undefined,
-                market_data: marketData ?? undefined,
+                market_data: marketData,
                 headline: existing.headline,
                 reason: existing.reason,
                 language: existing.language === 'zh' ? 'zh' : 'en',
@@ -102,7 +112,7 @@ export async function POST(req: Request) {
                 businessType: existing.business_type,
                 headline: existing.headline,
                 reason: existing.reason,
-                marketData: marketData ?? undefined,
+                marketData: marketData,
                 language: existing.language === 'zh' ? 'zh' : 'en',
               })) as Record<string, unknown>);
         } catch (genErr) {
