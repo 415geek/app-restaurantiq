@@ -70,7 +70,7 @@ export type DeepResearchPack = {
   error?: string;
 };
 
-const DEEP_RESEARCH_TIMEOUT_MS = 300_000;
+const DEEP_RESEARCH_TIMEOUT_MS = 120_000;
 const POLL_INTERVAL_MS = 5_000;
 
 function buildDeepResearchPrompt(location: string, businessType: string, lang: 'en' | 'zh'): string {
@@ -514,7 +514,15 @@ export function summarizeDeepResearchForAnchors(
   pack: DeepResearchPack | null | undefined,
   lang: 'en' | 'zh' = 'en'
 ): string {
-  if (!pack || pack.status !== 'completed') return '';
+  if (!pack) return '';
+  
+  if (pack.status === 'timeout' || pack.status === 'error') {
+    return lang === 'zh'
+      ? `\n\n【深度研究状态】Tavily Deep Research ${pack.status === 'timeout' ? '超时' : '失败'}（${pack.response_time_sec}秒）。请依赖下方的 web_research 摘要和 ACS 数据进行分析。\n`
+      : `\n\n[DEEP RESEARCH STATUS] Tavily Deep Research ${pack.status} after ${pack.response_time_sec}s. Rely on web_research digest and ACS data below for analysis.\n`;
+  }
+  
+  if (pack.status !== 'completed') return '';
   
   const lines: string[] = [];
   const L = lang === 'zh';

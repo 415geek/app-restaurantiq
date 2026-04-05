@@ -88,12 +88,18 @@ export async function resolveMarketDataForIqReport(input: {
   base = await enrichMarketDataWithAcs(base);
 
   if (isPremium) {
-    const hasDeepResearch =
-      base.deep_research &&
-      typeof base.deep_research === 'object' &&
-      (base.deep_research as DeepResearchPack).status === 'completed';
+    const existingDeep = base.deep_research as DeepResearchPack | undefined;
+    const hasCompletedDeepResearch =
+      existingDeep &&
+      typeof existingDeep === 'object' &&
+      existingDeep.status === 'completed';
+    
+    const shouldRetryDeep = existingDeep?.status === 'timeout' || existingDeep?.status === 'error';
+    if (shouldRetryDeep) {
+      console.log('[resolve-market-data] previous deep research failed, will retry');
+    }
 
-    if (!hasDeepResearch) {
+    if (!hasCompletedDeepResearch) {
       console.log('[resolve-market-data] fetching Tavily Deep Research for premium report...');
       const deepRes = await fetchTavilyDeepResearch({
         location,
@@ -104,14 +110,21 @@ export async function resolveMarketDataForIqReport(input: {
       if (deepRes) {
         base = { ...base, deep_research: deepRes };
         console.log('[resolve-market-data] deep research status:', deepRes.status, 'time:', deepRes.response_time_sec, 's');
+        
+        if (deepRes.status !== 'completed') {
+          console.log('[resolve-market-data] deep research did not complete, ensuring web_research fallback...');
+        }
       }
     } else {
       console.log('[resolve-market-data] deep_research already present, skipping');
     }
   }
 
+  const deepStatus = (base.deep_research as DeepResearchPack | undefined)?.status;
+  const needsWebFallback = isPremium && deepStatus !== 'completed';
   const hasWeb = base.web_research && typeof base.web_research === 'object';
-  if (!hasWeb) {
+  
+  if (!hasWeb || needsWebFallback) {
     const tavily = await fetchTavilyMarketResearch({
       location,
       businessType: businessType || 'restaurant',
