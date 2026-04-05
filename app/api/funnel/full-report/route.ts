@@ -52,6 +52,8 @@ export async function POST(req: Request) {
       existing: report.market_data_json as Record<string, unknown> | null | undefined,
       location: report.location,
       businessType: report.business_type || 'restaurant',
+      isPremium: true,
+      lang: targetLang,
     });
     const marketForLlm = enrichedMd ?? (report.market_data_json as Record<string, unknown> | null) ?? undefined;
     if (enrichedMd && Object.keys(enrichedMd).length > 0) {

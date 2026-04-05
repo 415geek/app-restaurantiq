@@ -2,12 +2,17 @@
  * Ensures paid-report generation always receives rich market_data when keys exist:
  * - Google Places pack when summary/competitors are missing (common n8n-analyze gap)
  * - Optional Tavily web_research (TAVILY_API_KEY) once per row unless already present
+ * - For premium reports: Tavily Deep Research for comprehensive McKinsey-style analysis
  */
 
 import { enrichMarketDataWithAcs } from '@/lib/funnel/iq-acs-enrichment';
 import { gatherIqMarketDataFromGoogle } from '@/lib/funnel/iq-market-data';
 import { extractMarketSummary } from '@/lib/funnel/iq-premium-anchors';
-import { fetchTavilyMarketResearch } from '@/lib/funnel/iq-web-research';
+import {
+  fetchTavilyMarketResearch,
+  fetchTavilyDeepResearch,
+  type DeepResearchPack,
+} from '@/lib/funnel/iq-web-research';
 
 function num(v: unknown): number | null {
   const n = Number(v);
@@ -45,6 +50,7 @@ function mergeGoogleOntoExisting(
     yelp_raw: existing.yelp_raw ?? google.yelp_raw,
     external_data: existing.external_data,
     web_research: existing.web_research,
+    deep_research: existing.deep_research,
     fetched_at: new Date().toISOString(),
   };
 }
@@ -52,13 +58,18 @@ function mergeGoogleOntoExisting(
 /**
  * Returns enriched market_data (may be null if nothing could be gathered).
  * Persists are done by callers via iqUpdateMarketDataJson when desired.
+ *
+ * @param isPremium - If true, triggers Tavily Deep Research for comprehensive analysis
+ * @param lang - Language preference for deep research prompts ('en' or 'zh')
  */
 export async function resolveMarketDataForIqReport(input: {
   existing: Record<string, unknown> | null | undefined;
   location: string;
   businessType: string;
+  isPremium?: boolean;
+  lang?: 'en' | 'zh';
 }): Promise<Record<string, unknown> | null> {
-  const { location, businessType } = input;
+  const { location, businessType, isPremium = false, lang = 'en' } = input;
   let base: Record<string, unknown> =
     input.existing && typeof input.existing === 'object' && !Array.isArray(input.existing)
       ? { ...input.existing }
@@ -75,6 +86,29 @@ export async function resolveMarketDataForIqReport(input: {
   }
 
   base = await enrichMarketDataWithAcs(base);
+
+  if (isPremium) {
+    const hasDeepResearch =
+      base.deep_research &&
+      typeof base.deep_research === 'object' &&
+      (base.deep_research as DeepResearchPack).status === 'completed';
+
+    if (!hasDeepResearch) {
+      console.log('[resolve-market-data] fetching Tavily Deep Research for premium report...');
+      const deepRes = await fetchTavilyDeepResearch({
+        location,
+        businessType: businessType || 'restaurant',
+        lang,
+        model: 'pro',
+      });
+      if (deepRes) {
+        base = { ...base, deep_research: deepRes };
+        console.log('[resolve-market-data] deep research status:', deepRes.status, 'time:', deepRes.response_time_sec, 's');
+      }
+    } else {
+      console.log('[resolve-market-data] deep_research already present, skipping');
+    }
+  }
 
   const hasWeb = base.web_research && typeof base.web_research === 'object';
   if (!hasWeb) {

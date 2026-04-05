@@ -48,6 +48,8 @@ export default async function IqReportPage({ params }: Props) {
         existing: report.market_data_json as Record<string, unknown> | null | undefined,
         location: report.location,
         businessType: report.business_type || 'restaurant',
+        isPremium: true,
+        lang: reportLanguage,
       });
       const marketData =
         enrichedMd ?? (report.market_data_json as Record<string, unknown> | null) ?? undefined;

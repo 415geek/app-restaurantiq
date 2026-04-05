@@ -6,7 +6,9 @@
 
 import {
   summarizeWebResearchForAnchors,
+  summarizeDeepResearchForAnchors,
   type WebResearchPack,
+  type DeepResearchPack,
 } from '@/lib/funnel/iq-web-research';
 
 type Lang = 'en' | 'zh';
@@ -226,6 +228,19 @@ export function buildPremiumMarketDataSection(
 ): string {
   const anchors = buildPremiumMarketAnchorsBlock(marketData, lang);
   const acsAnchors = buildAcsQuantAnchorsBlock(marketData, lang);
+  
+  let deepResearchBlock = '';
+  const dr = marketData?.deep_research;
+  if (dr && typeof dr === 'object') {
+    const digest = summarizeDeepResearchForAnchors(dr as DeepResearchPack, lang);
+    if (digest) {
+      deepResearchBlock =
+        lang === 'zh'
+          ? `\n\n【Tavily 深度研究报告（麦肯锡级选址分析 — 必须参考并整合到报告各个部分；引用具体数据时标注 [DeepRes]）】\n${digest}`
+          : `\n\n[TAVILY DEEP RESEARCH REPORT — McKinsey-level site analysis — integrate findings throughout report; cite with [DeepRes]]\n${digest}`;
+    }
+  }
+  
   let webBlock = '';
   const wr = marketData?.web_research;
   if (wr && typeof wr === 'object') {
@@ -238,11 +253,24 @@ export function buildPremiumMarketDataSection(
     }
   }
   if (!marketData || typeof marketData !== 'object') {
-    return `${anchors}${acsAnchors}${webBlock}`;
+    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}`;
   }
+
+  const mdForJson = { ...marketData };
+  if (mdForJson.deep_research) {
+    const drObj = mdForJson.deep_research as Record<string, unknown>;
+    mdForJson.deep_research = {
+      status: drObj.status,
+      model: drObj.model,
+      response_time_sec: drObj.response_time_sec,
+      has_structured_report: Boolean(drObj.report),
+      sources_count: Array.isArray(drObj.sources) ? drObj.sources.length : 0,
+    };
+  }
+  
   const jsonBlock =
     lang === 'zh'
-      ? `\n\n【市场数据原始 JSON（Google Places / Yelp / ACS / 联网检索等）】\n${JSON.stringify(marketData, null, 2)}`
-      : `\n\nRAW MARKET DATA JSON (Google Places / Yelp / ACS / web research):\n${JSON.stringify(marketData, null, 2)}`;
-  return `${anchors}${acsAnchors}${webBlock}${jsonBlock}`;
+      ? `\n\n【市场数据原始 JSON（Google Places / Yelp / ACS / 联网检索 / 深度研究 meta）】\n${JSON.stringify(mdForJson, null, 2)}`
+      : `\n\nRAW MARKET DATA JSON (Google Places / Yelp / ACS / web research / deep research meta):\n${JSON.stringify(mdForJson, null, 2)}`;
+  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${jsonBlock}`;
 }
