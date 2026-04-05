@@ -115,7 +115,7 @@ export async function resolveMarketDataForIqReport(input: {
       typeof existingDeep === 'object' &&
       existingDeep.status === 'completed';
     
-    const shouldRetryDeep = existingDeep?.status === 'timeout' || existingDeep?.status === 'error';
+    const shouldRetryDeep = existingDeep?.status === 'timeout' || existingDeep?.status === 'failed';
     if (shouldRetryDeep) {
       console.log('[resolve-market-data] previous deep research failed, will retry');
     }
