@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { iqGetReport, iqSetFullReport, iqUpdateMarketDataJson } from '@/lib/funnel/iq-repository';
-import { runFullReport } from '@/lib/funnel/iq-llm';
-import { generateFullReportWithN8n } from '@/lib/n8n';
+import { generateIqFullReportWithN8nFallback } from '@/lib/funnel/iq-generate-full-report';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 
 export const runtime = 'nodejs';
@@ -41,10 +40,6 @@ export async function POST(req: Request) {
       return NextResponse.json(report.full_report_json);
     }
 
-    const hasN8nWebhook = Boolean(
-      process.env.N8N_FULL_REPORT_WEBHOOK_URL?.trim() || process.env.N8N_IQ_FULL_REPORT_WEBHOOK_URL?.trim()
-    );
-
     const targetLang: 'en' | 'zh' =
       language === 'zh' || language === 'en' ? language : report.language === 'zh' ? 'zh' : 'en';
 
@@ -60,41 +55,15 @@ export async function POST(req: Request) {
       await iqUpdateMarketDataJson(reportId, enrichedMd);
     }
 
-    let full: Record<string, unknown>;
-    
-    if (hasN8nWebhook) {
-      try {
-        full = await generateFullReportWithN8n({
-          analysis_id: report.id,
-          address: report.location,
-          industry: 'restaurant',
-          cuisine_type: report.business_type ?? undefined,
-          market_data: marketForLlm,
-          headline: report.headline,
-          reason: report.reason,
-          language: targetLang,
-        });
-      } catch (n8nError) {
-        console.warn('[funnel/full-report] n8n failed, falling back to OpenAI:', n8nError);
-        full = await runFullReport({
-          location: report.location,
-          businessType: report.business_type,
-          headline: report.headline,
-          reason: report.reason,
-          marketData: marketForLlm,
-          language: targetLang,
-        });
-      }
-    } else {
-      full = await runFullReport({
-        location: report.location,
-        businessType: report.business_type,
-        headline: report.headline,
-        reason: report.reason,
-        marketData: marketForLlm,
-        language: targetLang,
-      });
-    }
+    const full = await generateIqFullReportWithN8nFallback({
+      reportId: report.id,
+      location: report.location,
+      businessType: report.business_type,
+      headline: report.headline,
+      reason: report.reason,
+      marketData: marketForLlm,
+      language: targetLang,
+    });
 
     const fullJson = full;
     if (!isPreview) {

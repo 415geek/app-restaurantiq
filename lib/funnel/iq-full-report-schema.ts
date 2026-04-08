@@ -134,6 +134,42 @@ export function parseIqFullReport(raw: unknown): Record<string, unknown> {
   throw new Error('Full report response was not a JSON object');
 }
 
+/** Heuristic 0–100 score for ops / logging (not shown to end users). */
+export function scoreFullReportCompleteness(full: Record<string, unknown>): number {
+  let s = 0;
+  const ex = typeof full.executive_summary === 'string' ? full.executive_summary.length : 0;
+  if (ex > 120) s += 12;
+  if (ex > 350) s += 10;
+  const comp = Array.isArray(full.competitors) ? full.competitors.length : 0;
+  if (comp >= 3) s += 12;
+  if (comp >= 5) s += 10;
+  const rm = full.revenue_model as Record<string, unknown> | undefined;
+  const scenarios = rm && Array.isArray(rm.scenarios) ? rm.scenarios.length : 0;
+  if (scenarios >= 3) s += 15;
+  else if (scenarios >= 1) s += 6;
+  const risks = Array.isArray(full.risk_matrix) ? full.risk_matrix.length : 0;
+  if (risks >= 5) s += 15;
+  else if (risks >= 3) s += 8;
+  const ev = Array.isArray(full.key_evidence_points) ? full.key_evidence_points.length : 0;
+  if (ev >= 6) s += 12;
+  else if (ev >= 3) s += 5;
+  const dm = Array.isArray(full.decision_matrix) ? full.decision_matrix.length : 0;
+  if (dm >= 5) s += 10;
+  else if (dm >= 3) s += 4;
+  if (typeof full.final_verdict === 'string' && full.final_verdict.length > 20) s += 4;
+  return Math.min(100, s);
+}
+
+export function logFullReportQuality(full: Record<string, unknown>, context = ''): void {
+  const score = scoreFullReportCompleteness(full);
+  const suffix = context ? ` ${context}` : '';
+  if (score < 42) {
+    console.warn(`[iq-full-report] low completeness score=${score}${suffix}`);
+  } else {
+    console.log(`[iq-full-report] completeness score=${score}${suffix}`);
+  }
+}
+
 /** Map 高/中/低 and English variants to badge keys. */
 export function normalizeConfidenceLevel(raw?: string): 'High' | 'Medium' | 'Low' | undefined {
   if (!raw || typeof raw !== 'string') return undefined;

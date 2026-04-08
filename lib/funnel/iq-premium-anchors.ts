@@ -16,6 +16,8 @@ import { formatBrightDataForAnchors, type MarketResearchResult } from '@/lib/fun
 
 type Lang = 'en' | 'zh';
 
+const FREE_BRIEF_MAX_CHARS = 2_800;
+
 function fmtQty(v: unknown, lang: Lang): string {
   if (typeof v === 'number' && Number.isFinite(v)) return lang === 'zh' ? `${v.toLocaleString('zh-CN')}` : `${v.toLocaleString('en-US')}`;
   return lang === 'zh' ? '（数据抑制或缺失）' : '(suppressed or missing)';
@@ -106,6 +108,104 @@ function num(v: unknown): number | null {
 }
 
 /** Accepts DB `market_data_json` or n8n `external_data`-shaped objects. */
+/**
+ * Short factual block for FREE partial analysis prompts (Places + ACS only).
+ * Keeps gpt-4o-mini / n8n grounded without shipping full premium JSON into the user message.
+ */
+export function buildFreeTierMarketBrief(
+  marketData: Record<string, unknown> | null | undefined,
+  lang: Lang,
+): string {
+  if (!marketData || typeof marketData !== 'object' || Object.keys(marketData).length === 0) {
+    return lang === 'zh'
+      ? '【预检索】暂无结构化市场数据。三条 market_snapshot 须用 [估算] 标明假设，并写清如何核实（如 Google Maps 现场计数、商圈报告等）。'
+      : '[Pre-fetch] No structured market data. Each market_snapshot line must label [estimate] + how to verify (e.g. Maps field count, trade-area report).';
+  }
+
+  const lines: string[] = [];
+  const geo = marketData.geocode as Record<string, unknown> | undefined;
+  const formatted =
+    geo && typeof geo.formatted_address === 'string' ? String(geo.formatted_address).trim() : '';
+  if (formatted) {
+    lines.push(lang === 'zh' ? `地理编码地址：${formatted}` : `Geocoded: ${formatted}`);
+  }
+
+  const summary = extractMarketSummary(marketData);
+  if (summary) {
+    const ng = num(summary.competitor_count_google);
+    const ny = num(summary.competitor_count_yelp);
+    const n = Math.max(ng ?? 0, ny ?? 0);
+    const gSamples = Array.isArray(summary.sample_competitors_google)
+      ? (summary.sample_competitors_google as unknown[])
+      : [];
+    const names = gSamples
+      .slice(0, 6)
+      .map((row) => {
+        if (!row || typeof row !== 'object') return '';
+        return String((row as Record<string, unknown>).name ?? '').trim();
+      })
+      .filter(Boolean);
+    if (lang === 'zh') {
+      lines.push(
+        `检索样本餐厅数 N≈${n}（Google/Yelp 较大值）；avg 评分约 ${num(summary.avg_rating_google) ?? num(summary.avg_rating_yelp) ?? '—'}`,
+      );
+      if (names.length) {
+        lines.push(`Google 样本店名（market_snapshot 至少引用 1 个真名，勿改字）：${names.join('、')}`);
+      }
+    } else {
+      lines.push(
+        `Sample restaurant count N≈${n} (max of Google/Yelp); avg rating ~ ${num(summary.avg_rating_google) ?? num(summary.avg_rating_yelp) ?? 'n/a'}`,
+      );
+      if (names.length) {
+        lines.push(`Google sample names (cite ≥1 verbatim in market_snapshot): ${names.join(', ')}`);
+      }
+    }
+  } else {
+    lines.push(
+      lang === 'zh'
+        ? 'summary 缺失：说明未拿到 Places 摘要，竞对用 [估算] + 核实方式。'
+        : 'No Places summary: state gap; use [estimate] + verification path for competition.',
+    );
+  }
+
+  const acs = marketData.acs_context;
+  if (acs && typeof acs === 'object') {
+    const a = acs as Record<string, unknown>;
+    const tract = (a.tract as Record<string, unknown> | undefined) ?? {};
+    const county = (a.county as Record<string, unknown> | undefined) ?? {};
+    const tractAvail = a.tract_data_available === true;
+    const mhiT = num(tract.median_household_income_usd);
+    const mhiC = num(county.median_household_income_usd);
+    const popT = num(tract.population);
+    const popC = num(county.population);
+    if (lang === 'zh') {
+      if (tractAvail && (mhiT || popT)) {
+        lines.push(
+          `ACS：片区人口约 ${popT ?? '—'}，家庭收入中位数约 $${mhiT ?? '—'}（须在至少一条洞察中体现消费力含义）。`,
+        );
+      } else if (mhiC || popC) {
+        lines.push(
+          `ACS（县级）：人口约 ${popC ?? '—'}，家庭收入中位数约 $${mhiC ?? '—'}（引用时标注县级粒度）。`,
+        );
+      }
+    } else {
+      if (tractAvail && (mhiT || popT)) {
+        lines.push(
+          `ACS tract: population ~${popT ?? 'n/a'}, median household income ~$${mhiT ?? 'n/a'} (tie to ticket affordability in ≥1 insight).`,
+        );
+      } else if (mhiC || popC) {
+        lines.push(
+          `ACS county: population ~${popC ?? 'n/a'}, median household income ~$${mhiC ?? 'n/a'} (cite county granularity).`,
+        );
+      }
+    }
+  }
+
+  const body = lines.join('\n');
+  if (body.length <= FREE_BRIEF_MAX_CHARS) return body;
+  return `${body.slice(0, FREE_BRIEF_MAX_CHARS)}…`;
+}
+
 export function extractMarketSummary(marketData: Record<string, unknown> | null | undefined): Record<
   string,
   unknown

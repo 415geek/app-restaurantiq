@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { iqInsertReport } from '@/lib/funnel/iq-repository';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
+import { buildFreeTierMarketBrief } from '@/lib/funnel/iq-premium-anchors';
 import { runPartialAnalysis } from '@/lib/funnel/iq-llm';
 import { analyzeWithN8n } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
@@ -60,6 +61,16 @@ export async function POST(req: Request) {
       );
     }
 
+    const prefetchedMarket =
+      (await resolveMarketDataForIqReport({
+        existing: null,
+        location,
+        businessType: businessType || 'restaurant',
+        isPremium: false,
+        lang: language,
+      })) ?? null;
+    const freeBrief = buildFreeTierMarketBrief(prefetchedMarket, language);
+
     let parsed: Awaited<ReturnType<typeof analyzeWithN8n>>;
     try {
       if (hasN8nWebhook) {
@@ -68,14 +79,27 @@ export async function POST(req: Request) {
           industry: 'restaurant',
           cuisine_type: businessType || undefined,
           language,
+          ...(prefetchedMarket && Object.keys(prefetchedMarket).length > 0
+            ? { market_data: prefetchedMarket }
+            : {}),
         });
       } else {
-        parsed = await runPartialAnalysis({ location, businessType, language });
+        parsed = await runPartialAnalysis({
+          location,
+          businessType,
+          language,
+          marketDataBrief: freeBrief,
+        });
       }
     } catch (n8nErr) {
       if (hasN8nWebhook && hasOpenAiKey) {
         console.warn('[funnel/analyze] n8n analyze failed, falling back to OpenAI:', n8nErr);
-        parsed = await runPartialAnalysis({ location, businessType, language });
+        parsed = await runPartialAnalysis({
+          location,
+          businessType,
+          language,
+          marketDataBrief: freeBrief,
+        });
       } else {
         throw n8nErr;
       }
@@ -97,13 +121,17 @@ export async function POST(req: Request) {
     let marketSeed: Record<string, unknown> | null = null;
     const fromN8n = parsed.market_data;
     if (fromN8n && typeof fromN8n === 'object' && !Array.isArray(fromN8n)) {
-      marketSeed = fromN8n as Record<string, unknown>;
+      marketSeed = { ...(prefetchedMarket ?? {}), ...(fromN8n as Record<string, unknown>) };
+    } else if (prefetchedMarket && Object.keys(prefetchedMarket).length > 0) {
+      marketSeed = { ...prefetchedMarket };
     }
 
     const marketDataJson = await resolveMarketDataForIqReport({
       existing: marketSeed,
       location,
       businessType: businessType || 'restaurant',
+      isPremium: false,
+      lang: language,
     });
 
     let reportId = '';

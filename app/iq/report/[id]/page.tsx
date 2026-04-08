@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { iqGetReport, iqSetFullReport, iqUpdateMarketDataJson } from '@/lib/funnel/iq-repository';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
-import { runFullReport } from '@/lib/funnel/iq-llm';
+import { generateIqFullReportWithN8nFallback } from '@/lib/funnel/iq-generate-full-report';
 import { ReportShareSection } from '@/components/share/ReportShareSection';
 import { ReportContent } from '@/components/iq/ReportContent';
 
@@ -56,7 +56,8 @@ export default async function IqReportPage({ params }: Props) {
       if (enrichedMd && Object.keys(enrichedMd).length > 0) {
         await iqUpdateMarketDataJson(id, enrichedMd);
       }
-      const generated = await runFullReport({
+      const generated = await generateIqFullReportWithN8nFallback({
+        reportId: id,
         location: report.location,
         businessType: report.business_type,
         headline: report.headline,
@@ -68,7 +69,7 @@ export default async function IqReportPage({ params }: Props) {
       full = generated as FullShape;
       console.log('[report page] Full report generated successfully');
     } catch (err) {
-      console.error('[report page] runFullReport error:', err);
+      console.error('[report page] generateIqFullReportWithN8nFallback error:', err);
       full = {};
     }
   }

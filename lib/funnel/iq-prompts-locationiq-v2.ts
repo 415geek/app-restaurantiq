@@ -123,11 +123,25 @@ export function locationIqV2FreeSystemZh(): string {
   return base + cuisineKnowledgeBlock('zh');
 }
 
-export function locationIqV2FreeUserZh(input: { location: string; businessType: string }): string {
+export function locationIqV2FreeUserZh(input: {
+  location: string;
+  businessType: string;
+  /** Pre-fetched Places/ACS anchors — improves grounding vs address-only. */
+  marketDataBrief?: string;
+}): string {
+  const anchorBlock = input.marketDataBrief?.trim()
+    ? [
+        '',
+        '【以下为本地址预检索的客观锚点（headline 与 market_snapshot 合计至少体现 2 处具体事实/数字/真店名；禁止整段忽略；不足处标 [估算] 并写核实方式）】',
+        input.marketDataBrief.trim(),
+        '',
+      ].join('\n')
+    : '';
   return [
     '请基于以下输入生成「免费版选址速评」（LocationIQ V2.0）。',
     `地址: ${input.location}`,
     `业态: ${input.businessType || '餐饮'}`,
+    anchorBlock,
     '',
     '先在脑中完成5维0–100评分与综合分，再压缩进下列 JSON 字段（不要单独输出 Markdown 表格）：',
     '',
@@ -167,11 +181,24 @@ export function locationIqV2FreeSystemEn(): string {
   return base + cuisineKnowledgeBlock('en');
 }
 
-export function locationIqV2FreeUserEn(input: { location: string; businessType: string }): string {
+export function locationIqV2FreeUserEn(input: {
+  location: string;
+  businessType: string;
+  marketDataBrief?: string;
+}): string {
+  const anchorBlock = input.marketDataBrief?.trim()
+    ? [
+        '',
+        '[Pre-fetched anchors for this address — cite ≥2 concrete facts, numbers, or verbatim store names across headline + market_snapshot; do not ignore; use [estimate] + verification path where gaps exist]',
+        input.marketDataBrief.trim(),
+        '',
+      ].join('\n')
+    : '';
   return [
     'Generate the FREE LocationIQ V2.0 site quick assessment from the inputs below.',
     `Address: ${input.location}`,
     `Business type: ${input.businessType || 'Restaurant'}`,
+    anchorBlock,
     '',
     'After scoring internally, compress into JSON fields (no separate markdown tables):',
     '',

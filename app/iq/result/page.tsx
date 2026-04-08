@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ShareButton } from '@/components/share/ShareButton';
 import { SocialProofStats, SocialProofBadge } from '@/components/social-proof/Stats';
+import { getIqPaywallLockedItems } from '@/lib/funnel/iq-paywall-sections';
 
 type AnalyzeResult = {
   reportId: string;
@@ -46,7 +47,6 @@ const resultCopy: Record<
     marketSnapshot: string;
     keyRisk: string;
     lockedFullReport: string;
-    lockedItems: string[];
     redirecting: string;
     unlockReport: string;
     promoCodeHint: string;
@@ -65,12 +65,6 @@ const resultCopy: Record<
     marketSnapshot: 'Market Snapshot',
     keyRisk: 'Hidden Risk',
     lockedFullReport: 'Full Analysis Locked',
-    lockedItems: [
-      '📊 Revenue projection & break-even timeline',
-      '⚠️ Top 5 risks with mitigation strategies',
-      '💡 3 differentiation opportunities',
-      '📋 90-day action plan',
-    ],
     redirecting: 'Redirecting…',
     unlockReport: 'Unlock Full Report — $19',
     promoCodeHint: '🎁 Have a promo code? Enter it on the checkout page',
@@ -88,12 +82,6 @@ const resultCopy: Record<
     marketSnapshot: '市场快照',
     keyRisk: '关键风险',
     lockedFullReport: '完整分析（已锁定）',
-    lockedItems: [
-      '📊 收入预估 & 回本周期',
-      '⚠️ 5大风险及应对策略',
-      '💡 3个差异化机会点',
-      '📋 90天落地行动方案',
-    ],
     redirecting: '正在跳转…',
     unlockReport: '解锁完整报告 — $19',
     promoCodeHint: '🎁 有优惠码？可在结账页面输入使用',
@@ -328,7 +316,7 @@ function ResultContent() {
             🔒 {t.lockedFullReport}
           </h2>
           <ul className="space-y-2.5 text-sm text-white/50">
-            {t.lockedItems.map((item, i) => (
+            {getIqPaywallLockedItems(locale).map((item, i) => (
               <li key={i} className="flex items-center gap-2">
                 <span className="blur-[2px]">████</span>
                 <span>{item}</span>

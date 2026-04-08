@@ -5,6 +5,8 @@ type N8nAnalyzeInput = {
   budget_range?: string;
   target_audience?: string;
   language?: 'en' | 'zh';
+  /** Optional: server pre-fetched Places/ACS pack so the workflow can skip duplicate fetches or enrich the LLM. */
+  market_data?: Record<string, unknown>;
 };
 
 type N8nAnalyzeOutput = {
@@ -89,7 +91,8 @@ function getAnalyzeWebhookUrl(): string | null {
   );
 }
 
-function getFullReportWebhookUrl(): string | null {
+/** Exported so funnel code can align n8n vs OpenAI fallback without duplicating env names. */
+export function getFullReportWebhookUrl(): string | null {
   return (
     process.env.N8N_FULL_REPORT_WEBHOOK_URL?.trim() ||
     process.env.N8N_IQ_FULL_REPORT_WEBHOOK_URL?.trim() ||

@@ -63,6 +63,8 @@ export async function runPartialAnalysis(input: {
   location: string;
   businessType: string;
   language?: 'en' | 'zh';
+  /** Places/ACS digest from resolveMarketDataForIqReport (free tier). */
+  marketDataBrief?: string;
 }): Promise<{
   verdict: string;
   headline: string;
@@ -95,10 +97,12 @@ export async function runPartialAnalysis(input: {
       ? locationIqV2FreeUserZh({
           location: input.location,
           businessType: input.businessType || '餐饮',
+          marketDataBrief: input.marketDataBrief,
         })
       : locationIqV2FreeUserEn({
           location: input.location,
           businessType: input.businessType || 'Restaurant',
+          marketDataBrief: input.marketDataBrief,
         });
 
   const completion = await client.chat.completions.create({
@@ -115,7 +119,11 @@ export async function runPartialAnalysis(input: {
   return partialSchema.parse(JSON.parse(text));
 }
 
-export async function runFullReport(input: {
+/**
+ * OpenAI-only paid full report (used when n8n is off or after n8n failure).
+ * For production entry, use `generateIqFullReportWithN8nFallback` from iq-generate-full-report.ts.
+ */
+export async function runFullPremiumReportOpenAI(input: {
   location: string;
   businessType: string | null;
   headline: string;
@@ -124,23 +132,9 @@ export async function runFullReport(input: {
   language?: 'en' | 'zh';
 }): Promise<Record<string, unknown>> {
   const language = input.language === 'zh' ? 'zh' : 'en';
-  const n8nUrl = process.env.N8N_IQ_FULL_REPORT_WEBHOOK_URL?.trim();
-  if (n8nUrl) {
-    const raw = await postN8nJson<unknown>(n8nUrl, {
-      address: input.location,
-      industry: 'restaurant',
-      cuisine_type: input.businessType ?? '',
-      headline: input.headline,
-      reason: input.reason,
-      market_data: input.marketData,
-      language,
-    });
-    return parseIqFullReport(raw);
-  }
-
   const client = getOpenAI();
   if (!client) {
-    throw new Error('Neither N8N_IQ_FULL_REPORT_WEBHOOK_URL nor OPENAI_API_KEY is configured');
+    throw new Error('OPENAI_API_KEY is not configured (required for full report when n8n is unavailable)');
   }
 
   const marketDataSection = buildPremiumMarketDataSection(input.marketData ?? null, language);

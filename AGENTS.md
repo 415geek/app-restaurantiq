@@ -511,6 +511,9 @@ If `credential create` fails, read the returned validation message and change th
 - `full_report_json` is reused until regeneration; use `POST /api/funnel/full-report` with `force: true` after prompt or data pipeline changes.
 - IQ auth redirects and Clerk allow-list targets are documented in `docs/CLERK_REDIRECTS.md`; `NEXT_PUBLIC_APP_URL` drives absolute post-sign-in URLs; guest-paid reports attach to the signed-in user via `POST /api/iq/link-report` (triggered from the report page client when Clerk session exists).
 - Paid IQ report PDFs are served from `GET /api/iq/report/{id}/pdf?lang=zh|en` (Puppeteer + `puppeteer-core` and `@sparticuz/chromium` on Vercel). The report UI should prefer downloading that response as a Blob and only fall back to `window.print()` if the API fails; local dev may need a working Chromium for that route.
-- Premium IQ reports use Tavily Deep Research API (`TAVILY_API_KEY`) for McKinsey-style location analysis; default model is "mini" with 300s timeout; results stored in `market_data_json.deep_research`.
+- Premium IQ reports use Tavily Deep Research API (`TAVILY_API_KEY`) for McKinsey-style location analysis; default model is "pro" with 300s timeout; results stored in `market_data_json.deep_research`.
 - The full-report route has OpenAI fallback when n8n workflow fails (Class A config gaps like missing credentials).
 - ACS demographic data enrichment requires geocode from Google Maps API (`GOOGLE_MAPS_API_KEY`) to convert addresses to lat/lng for census tract lookups.
+- Caltrans AADT traffic data API (`lib/funnel/external-data/caltrans.ts`) only covers California state highways (101, 280, etc.), not local streets; uses ArcGIS REST API at `caltrans-gis.dot.ca.gov`.
+- LoopNet has no official public API; commercial listings require `LOOPNET_RAPIDAPI_KEY` for RapidAPI integration; without key returns manual search instructions.
+- Bright Data MCP integration (`BRIGHTDATA_API_TOKEN`) enables enhanced market research: Google SERP, Zillow listings, Google Maps reviews, LinkedIn company profiles, Crunchbase data.
