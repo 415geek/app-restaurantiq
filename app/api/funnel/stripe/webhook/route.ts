@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { iqGetReport, iqMarkPaidAndReport, iqUpdateMarketDataJson } from '@/lib/funnel/iq-repository';
-import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
-import { generateIqFullReportWithN8nFallback } from '@/lib/funnel/iq-generate-full-report';
+import { iqGetReport } from '@/lib/funnel/iq-repository';
+import { fulfillIqPaidPurchase } from '@/lib/funnel/iq-complete-purchase';
 
 export const runtime = 'nodejs';
 
@@ -78,47 +77,14 @@ export async function POST(req: Request) {
         return NextResponse.json({ received: true });
       }
 
-      let fullJson = existing.full_report_json as Record<string, unknown> | null;
-      if (!fullJson || Object.keys(fullJson).length === 0) {
-        try {
-          const payLang = existing.language === 'zh' ? 'zh' : 'en';
-          const enrichedMd = await resolveMarketDataForIqReport({
-            existing: existing.market_data_json as Record<string, unknown> | null | undefined,
-            location: existing.location,
-            businessType: existing.business_type || 'restaurant',
-            isPremium: true,
-            lang: payLang,
-          });
-          const marketData =
-            enrichedMd ?? (existing.market_data_json as Record<string, unknown> | null) ?? undefined;
-          if (enrichedMd && Object.keys(enrichedMd).length > 0) {
-            await iqUpdateMarketDataJson(reportId, enrichedMd);
-          }
-
-          fullJson = (await generateIqFullReportWithN8nFallback({
-            reportId: existing.id,
-            location: existing.location,
-            businessType: existing.business_type,
-            headline: existing.headline,
-            reason: existing.reason,
-            marketData,
-            language: payLang,
-          })) as Record<string, unknown>;
-        } catch (genErr) {
-          console.error('[funnel/stripe/webhook] full report generation failed', genErr);
-          fullJson = null;
-        }
-      }
-
       const email =
         session.customer_details?.email ??
         (typeof session.customer_email === 'string' ? session.customer_email : null);
 
-      await iqMarkPaidAndReport({
+      await fulfillIqPaidPurchase({
         reportId,
         stripeSessionId: session.id,
         customerEmail: email,
-        fullReportJson: fullJson,
       });
     }
 

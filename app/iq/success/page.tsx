@@ -2,15 +2,29 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import { iqGetReport, iqLinkReportToUser } from '@/lib/funnel/iq-repository';
+import { fulfillIqPaidPurchase } from '@/lib/funnel/iq-complete-purchase';
 
 type Props = {
   searchParams?: Promise<{ session_id?: string }>;
 };
 
-async function getStripeSession(sessionId: string): Promise<{ reportId: string | null; status: string | null }> {
+type StripeSessionPayload = {
+  metadata?: { reportId?: string };
+  payment_status?: string;
+  status?: string;
+  customer_details?: { email?: string };
+  customer_email?: string;
+};
+
+async function getStripeCheckoutSession(sessionId: string): Promise<{
+  reportId: string | null;
+  paymentStatus: string | null;
+  checkoutStatus: string | null;
+  customerEmail: string | null;
+}> {
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) {
-    console.error('[getStripeSession] STRIPE_SECRET_KEY not set');
+    console.error('[getStripeCheckoutSession] STRIPE_SECRET_KEY not set');
     throw new Error('STRIPE_SECRET_KEY not set');
   }
 
@@ -22,15 +36,29 @@ async function getStripeSession(sessionId: string): Promise<{ reportId: string |
 
   if (!res.ok) {
     const errText = await res.text();
-    console.error('[getStripeSession] Failed:', res.status, errText);
+    console.error('[getStripeCheckoutSession] Failed:', res.status, errText);
     throw new Error('Failed to retrieve session');
   }
 
-  const session = await res.json();
+  const session = (await res.json()) as StripeSessionPayload;
+  const customerEmail =
+    session.customer_details?.email ??
+    (typeof session.customer_email === 'string' ? session.customer_email : null);
+
   return {
     reportId: session.metadata?.reportId ?? null,
-    status: session.payment_status ?? null,
+    paymentStatus: session.payment_status ?? null,
+    checkoutStatus: session.status ?? null,
+    customerEmail,
   };
+}
+
+function checkoutPaymentSucceeded(paymentStatus: string | null, checkoutStatus: string | null): boolean {
+  const paid =
+    paymentStatus === 'paid' ||
+    paymentStatus === 'no_payment_required';
+  const complete = checkoutStatus === 'complete';
+  return paid && complete;
 }
 
 export default async function IqSuccessPage({ searchParams }: Props) {
@@ -46,12 +74,16 @@ export default async function IqSuccessPage({ searchParams }: Props) {
 
   let reportId: string | null = null;
   let paymentStatus: string | null = null;
+  let checkoutStatus: string | null = null;
+  let customerEmail: string | null = null;
   try {
-    const session = await getStripeSession(sessionId);
+    const session = await getStripeCheckoutSession(sessionId);
     reportId = session.reportId;
-    paymentStatus = session.status;
+    paymentStatus = session.paymentStatus;
+    checkoutStatus = session.checkoutStatus;
+    customerEmail = session.customerEmail;
   } catch (err) {
-    console.error('[success] getStripeSession error:', err);
+    console.error('[success] getStripeCheckoutSession error:', err);
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
         <p>Could not verify payment session.</p>
@@ -92,7 +124,35 @@ export default async function IqSuccessPage({ searchParams }: Props) {
     }
   }
 
-  if (report?.paid || paymentStatus === 'paid') {
+  if (report?.paid) {
+    redirect(`/iq/report/${reportId}`);
+  }
+
+  /** Stripe redirects here before webhooks; mark paid in DB so /iq/report/[id] does not show locked. */
+  if (checkoutPaymentSucceeded(paymentStatus, checkoutStatus)) {
+    try {
+      await fulfillIqPaidPurchase({
+        reportId,
+        stripeSessionId: sessionId,
+        customerEmail,
+      });
+    } catch (e) {
+      console.error('[success] fulfillIqPaidPurchase error:', e);
+      return (
+        <main className="flex min-h-screen items-center justify-center px-6">
+          <div className="max-w-md space-y-4 text-center">
+            <p className="text-white/90">Payment received, but we could not unlock your report yet.</p>
+            <p className="text-sm text-white/60">Please wait a minute and refresh, or contact support with your session ID.</p>
+            <Link
+              href={`/iq/report/${reportId}`}
+              className="inline-block text-emerald-400 underline"
+            >
+              Try opening report again
+            </Link>
+          </div>
+        </main>
+      );
+    }
     redirect(`/iq/report/${reportId}`);
   }
 
