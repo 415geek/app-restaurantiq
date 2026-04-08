@@ -16,7 +16,8 @@ const translations = {
       'Server-generated PDF (A4) with tables and branding — best for sharing, printing, and archives.',
     downloadBtn: 'Download PDF',
     downloadingBtn: 'Generating PDF…',
-    downloadTip: 'If download fails (e.g. local dev without Chromium), use Print below.',
+    downloadTip:
+      'If nothing downloads after ~30s or you see an error, use Print below and choose “Save as PDF”.',
     printFallbackTitle: 'Print this page',
     printFallbackDesc: 'Use your browser’s print dialog and choose “Save as PDF”.',
     printFallbackBtn: 'Print / Save as PDF',
@@ -34,7 +35,7 @@ const translations = {
     downloadDesc: '由服务器生成 A4 PDF（含表格与品牌样式），便于分享、打印与存档。',
     downloadBtn: '下载 PDF',
     downloadingBtn: '正在生成 PDF…',
-    downloadTip: '若下载失败（如本地未配置 Chromium），请使用下方「打印」另存为 PDF。',
+    downloadTip: '若约 30 秒内未开始下载或提示错误，请使用下方「打印 / 另存为 PDF」。',
     printFallbackTitle: '打印本页',
     printFallbackDesc: '使用浏览器打印，并选择「另存为 PDF」。',
     printFallbackBtn: '打印 / 另存为 PDF',
@@ -67,6 +68,14 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en' }: Props) 
       const url = `/api/iq/report/${encodeURIComponent(reportId)}/pdf?lang=${lang}`;
       const res = await fetch(url, { method: 'GET', credentials: 'same-origin' });
       const ct = res.headers.get('content-type') || '';
+      if (res.status === 403) {
+        setPdfError(lang === 'zh' ? '需完成购买后才能下载正式 PDF。' : 'Purchase is required to download the PDF.');
+        return;
+      }
+      if (res.status === 404) {
+        setPdfError(lang === 'zh' ? '找不到该报告。' : 'Report not found.');
+        return;
+      }
       if (!res.ok) {
         setPdfError(t.pdfError);
         return;

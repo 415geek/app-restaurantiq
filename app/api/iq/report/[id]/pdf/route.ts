@@ -2,9 +2,68 @@ import { NextResponse } from 'next/server';
 import { iqGetReport } from '@/lib/funnel/iq-repository';
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
+import type { Browser } from 'puppeteer-core';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+
+const PDF_VIEWPORT = { width: 1200, height: 1600 };
+
+function isVercelServerless(): boolean {
+  return (
+    process.env.VERCEL === '1' ||
+    process.env.VERCEL === 'true' ||
+    Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME)
+  );
+}
+
+/**
+ * Vercel: always @sparticuz/chromium. Local: PUPPETEER_EXECUTABLE_PATH / CHROME_PATH, then bundled chromium, then common Chrome paths.
+ */
+async function launchPdfBrowser(): Promise<Browser> {
+  if (isVercelServerless()) {
+    return puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: PDF_VIEWPORT,
+      executablePath: await chromium.executablePath(),
+      headless: true,
+    });
+  }
+
+  const envPath =
+    process.env.PUPPETEER_EXECUTABLE_PATH?.trim() || process.env.CHROME_PATH?.trim();
+  if (envPath) {
+    return puppeteer.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      defaultViewport: PDF_VIEWPORT,
+      executablePath: envPath,
+      headless: true,
+    });
+  }
+
+  try {
+    return await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: PDF_VIEWPORT,
+      executablePath: await chromium.executablePath(),
+      headless: true,
+    });
+  } catch (e) {
+    console.warn('[api/iq/report/pdf] @sparticuz/chromium launch failed, trying system Chrome:', e);
+    const sys =
+      process.platform === 'darwin'
+        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+        : process.platform === 'win32'
+          ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+          : '/usr/bin/google-chrome-stable';
+    return puppeteer.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      defaultViewport: PDF_VIEWPORT,
+      executablePath: sys,
+      headless: true,
+    });
+  }
+}
 
 type FullShape = Record<string, unknown>;
 type Lang = 'en' | 'zh';
@@ -762,42 +821,30 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       lang,
     });
 
-    let browser;
+    const browser = await launchPdfBrowser();
     try {
-      browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: { width: 1200, height: 1600 },
-        executablePath: await chromium.executablePath(),
-        headless: true,
+      const page = await browser.newPage();
+      // Static HTML: avoid networkidle0 (can hang); load is enough for print.
+      await page.setContent(html, { waitUntil: 'load', timeout: 45_000 });
+
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: { top: '12mm', right: '12mm', bottom: '14mm', left: '12mm' },
       });
-    } catch {
-      browser = await puppeteer.launch({
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        defaultViewport: { width: 1200, height: 1600 },
-        headless: true,
+
+      const suffix = lang === 'zh' ? '-zh' : '';
+      const filename = `RestaurantIQ-Report-${id.slice(0, 8)}${suffix}.pdf`;
+
+      return new NextResponse(Buffer.from(pdfBuffer), {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
       });
+    } finally {
+      await browser.close().catch(() => {});
     }
-
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 45_000 });
-
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '12mm', right: '12mm', bottom: '14mm', left: '12mm' },
-    });
-
-    await browser.close();
-
-    const suffix = lang === 'zh' ? '-zh' : '';
-    const filename = `RestaurantIQ-Report-${id.slice(0, 8)}${suffix}.pdf`;
-
-    return new NextResponse(Buffer.from(pdfBuffer), {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
-    });
   } catch (error) {
     console.error('[api/iq/report/pdf]', error);
     return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 });
