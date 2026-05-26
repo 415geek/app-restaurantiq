@@ -95,6 +95,11 @@ const resultCopy: Record<
     redirecting: string;
     unlockReport: string;
     promoCodeHint: string;
+    accessCodePlaceholder: string;
+    accessCodeSubmit: string;
+    accessCodeSubmitting: string;
+    accessCodeInvalid: string;
+    accessCodeGenericError: string;
     footnote: string;
     checkoutFailed: string;
     paymentUnavailable: string;
@@ -114,7 +119,12 @@ const resultCopy: Record<
     redirecting: 'Redirecting…',
     unlockReport: 'Unlock Risk Audit — $19',
     riskAudit: 'Location risk scorecard',
-    promoCodeHint: '🎁 Have a promo code? Enter it on the checkout page',
+    promoCodeHint: '🔑 Enter access code to unlock the report',
+    accessCodePlaceholder: 'Access code',
+    accessCodeSubmit: 'Unlock',
+    accessCodeSubmitting: 'Unlocking…',
+    accessCodeInvalid: 'Invalid access code',
+    accessCodeGenericError: 'Could not redeem code. Please try again.',
     footnote: 'Know before you invest. Avoid costly mistakes.',
     checkoutFailed: 'Checkout failed',
     paymentUnavailable: 'Payment is temporarily unavailable.',
@@ -132,7 +142,12 @@ const resultCopy: Record<
     redirecting: '正在跳转…',
     unlockReport: '解锁完整风险审计 — $19',
     riskAudit: '选址风险评分卡',
-    promoCodeHint: '🎁 有优惠码？可在结账页面输入使用',
+    promoCodeHint: '🔑 输入 access code 解锁报告',
+    accessCodePlaceholder: '请输入 access code',
+    accessCodeSubmit: '解锁',
+    accessCodeSubmitting: '解锁中…',
+    accessCodeInvalid: 'Access code 无效',
+    accessCodeGenericError: '无法兑换 access code，请稍后重试。',
     footnote: '投资前先看清，避免高成本失误。',
     checkoutFailed: '支付会话创建失败',
     paymentUnavailable: '暂时无法支付，请稍后重试。',
@@ -202,6 +217,9 @@ function ResultContent() {
   const [error, setError] = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [accessCode, setAccessCode] = useState('');
+  const [accessCodeLoading, setAccessCodeLoading] = useState(false);
+  const [accessCodeError, setAccessCodeError] = useState<string | null>(null);
   // Lead capture gate — required before the free report is revealed.
   // Returning visitors who already left their email skip the modal.
   const [unlocked, setUnlocked] = useState(false);
@@ -323,6 +341,47 @@ function ResultContent() {
       setCheckoutError(t.checkoutFailed);
     } finally {
       setCheckoutLoading(false);
+    }
+  }
+
+  async function handleRedeemAccessCode() {
+    if (!data?.reportId) {
+      setAccessCodeError(t.paymentUnavailable);
+      return;
+    }
+    const trimmed = accessCode.trim();
+    if (!trimmed) {
+      setAccessCodeError(t.accessCodeInvalid);
+      return;
+    }
+    setAccessCodeLoading(true);
+    setAccessCodeError(null);
+    try {
+      const res = await fetch('/api/funnel/redeem-access-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId: data.reportId, code: trimmed }),
+      });
+      const raw = await res.text();
+      let json: { ok?: boolean; reportUrl?: string; error?: string } = {};
+      if (raw) {
+        try {
+          json = JSON.parse(raw) as { ok?: boolean; reportUrl?: string; error?: string };
+        } catch { /* ignore */ }
+      }
+      if (res.ok && json.ok && json.reportUrl) {
+        window.location.href = json.reportUrl;
+        return;
+      }
+      if (res.status === 401) {
+        setAccessCodeError(t.accessCodeInvalid);
+      } else {
+        setAccessCodeError(json.error || t.accessCodeGenericError);
+      }
+    } catch {
+      setAccessCodeError(t.accessCodeGenericError);
+    } finally {
+      setAccessCodeLoading(false);
     }
   }
 
@@ -476,11 +535,49 @@ function ResultContent() {
           >
             {checkoutLoading ? t.redirecting : t.unlockReport}
           </button>
-          <p className="mt-3 text-center text-sm text-emerald-300/70">{t.promoCodeHint}</p>
           {checkoutError && (
             <p className="mt-2 text-center text-sm text-rose-300">{checkoutError}</p>
           )}
-          <p className="mt-3 text-center text-xs text-white/40">{t.footnote}</p>
+
+          <div className="mt-5">
+            <p className="mb-2 text-center text-sm text-emerald-300/80">{t.promoCodeHint}</p>
+            <form
+              className="flex flex-col gap-2 sm:flex-row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleRedeemAccessCode();
+              }}
+            >
+              <input
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                spellCheck={false}
+                value={accessCode}
+                onChange={(e) => {
+                  setAccessCode(e.target.value);
+                  if (accessCodeError) setAccessCodeError(null);
+                }}
+                placeholder={t.accessCodePlaceholder}
+                maxLength={64}
+                aria-label={t.accessCodePlaceholder}
+                disabled={accessCodeLoading}
+                className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition focus:border-emerald-400/60 focus:bg-white/10 disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={accessCodeLoading || !accessCode.trim()}
+                className="rounded-xl bg-emerald-400/20 px-5 py-3 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/30 disabled:opacity-50"
+              >
+                {accessCodeLoading ? t.accessCodeSubmitting : t.accessCodeSubmit}
+              </button>
+            </form>
+            {accessCodeError && (
+              <p className="mt-2 text-center text-sm text-rose-300">{accessCodeError}</p>
+            )}
+          </div>
+
+          <p className="mt-4 text-center text-xs text-white/40">{t.footnote}</p>
         </div>
 
         {/* Share + Social Proof */}

@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import type { CompetitorMapPin, CompetitorMapTier } from '@/lib/funnel/iq-competitor-map';
 
 type Props = {
@@ -116,6 +118,11 @@ export function CompetitorMap({
   whitelistTotal,
   insufficient,
 }: Props) {
+  // When the Google Static Maps <img> fails (most commonly the API key is HTTP-referrer
+  // restricted and 'app.restaurantiq.ai' isn't whitelisted, or the Static Maps API
+  // isn't enabled on the project), fall back to the inline SVG so users still see the
+  // pin layout instead of a broken image icon.
+  const [staticMapFailed, setStaticMapFailed] = useState(false);
   const tooFewPins = pins.length < MIN_USEFUL_PINS;
   const noCenter = !center;
   const showInsufficient = insufficient || tooFewPins || noCenter;
@@ -133,19 +140,21 @@ export function CompetitorMap({
   const H = 320;
   const projected = center ? projectPins(center, pins, W, H) : null;
   const tiersPresent = new Set<CompetitorMapTier>(['site', ...pins.map((p) => p.tier)]);
+  const useStatic = staticMapUrl && !staticMapFailed;
 
   return (
     <div className="space-y-4">
       {showInsufficient && <InsufficientPanel lang={lang} whitelistTotal={whitelistTotal} />}
-      {staticMapUrl ? (
+      {useStatic ? (
         <div className="overflow-hidden rounded-xl border border-zinc-700">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={staticMapUrl}
+            src={staticMapUrl as string}
             alt={lang === 'zh' ? '竞品分布地图' : 'Competitor map'}
             className="h-auto w-full"
             width={640}
             height={360}
+            onError={() => setStaticMapFailed(true)}
           />
         </div>
       ) : projected ? (
