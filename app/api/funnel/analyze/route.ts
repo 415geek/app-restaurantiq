@@ -3,7 +3,7 @@ import { iqInsertReport } from '@/lib/funnel/iq-repository';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { buildFreeTierMarketBrief } from '@/lib/funnel/iq-premium-anchors';
 import { runPartialAnalysis } from '@/lib/funnel/iq-llm';
-import { analyzeWithN8n } from '@/lib/n8n';
+import { analyzeWithN8n, getAnalyzeWebhookUrl } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
 
 export const runtime = 'nodejs';
@@ -11,9 +11,27 @@ type AnalysisLanguage = 'en' | 'zh';
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { location?: string; businessType?: string; language?: string };
+    const body = (await req.json()) as {
+      location?: string;
+      businessType?: string;
+      language?: string;
+      monthlyRentUsd?: number | string;
+      sqft?: number | string;
+    };
     const location = String(body.location ?? '').trim();
     const businessType = String(body.businessType ?? '').trim();
+    const monthlyRentUsd = body.monthlyRentUsd != null ? Number(body.monthlyRentUsd) : undefined;
+    const sqft = body.sqft != null ? Number(body.sqft) : undefined;
+    const userInputs =
+      (Number.isFinite(monthlyRentUsd) && monthlyRentUsd! > 0) ||
+      (Number.isFinite(sqft) && sqft! > 0)
+        ? {
+            ...(Number.isFinite(monthlyRentUsd) && monthlyRentUsd! > 0
+              ? { monthly_rent_usd: monthlyRentUsd }
+              : {}),
+            ...(Number.isFinite(sqft) && sqft! > 0 ? { sqft } : {}),
+          }
+        : undefined;
     const language: AnalysisLanguage = String(body.language ?? 'en').toLowerCase() === 'zh' ? 'zh' : 'en';
 
     if (!location) {
@@ -24,9 +42,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Location is too long' }, { status: 400 });
     }
 
-    const hasN8nWebhook = Boolean(
-      process.env.N8N_ANALYZE_WEBHOOK_URL?.trim() || process.env.N8N_IQ_ANALYZE_WEBHOOK_URL?.trim()
-    );
+    const hasN8nWebhook = Boolean(getAnalyzeWebhookUrl());
     const hasOpenAiKey = Boolean(process.env.OPENAI_API_KEY?.trim());
     if (!hasN8nWebhook && !hasOpenAiKey) {
       const isDevLike = process.env.NODE_ENV !== 'production';
@@ -61,14 +77,19 @@ export async function POST(req: Request) {
       );
     }
 
-    const prefetchedMarket =
-      (await resolveMarketDataForIqReport({
-        existing: null,
-        location,
-        businessType: businessType || 'restaurant',
-        isPremium: false,
-        lang: language,
-      })) ?? null;
+    let prefetchedMarket: Record<string, unknown> | null = null;
+    try {
+      prefetchedMarket =
+        (await resolveMarketDataForIqReport({
+          existing: null,
+          location,
+          businessType: businessType || 'restaurant',
+          isPremium: false,
+          lang: language,
+        })) ?? null;
+    } catch (prefetchErr) {
+      console.warn('[funnel/analyze] market prefetch failed, continuing:', prefetchErr);
+    }
     const freeBrief = buildFreeTierMarketBrief(prefetchedMarket, language);
 
     let parsed: Awaited<ReturnType<typeof analyzeWithN8n>>;
@@ -80,8 +101,15 @@ export async function POST(req: Request) {
           cuisine_type: businessType || undefined,
           language,
           ...(prefetchedMarket && Object.keys(prefetchedMarket).length > 0
-            ? { market_data: prefetchedMarket }
-            : {}),
+            ? {
+                market_data: {
+                  ...prefetchedMarket,
+                  ...(userInputs ? { user_inputs: userInputs } : {}),
+                },
+              }
+            : userInputs
+              ? { market_data: { user_inputs: userInputs } }
+              : {}),
         });
       } else {
         parsed = await runPartialAnalysis({
@@ -89,6 +117,9 @@ export async function POST(req: Request) {
           businessType,
           language,
           marketDataBrief: freeBrief,
+          monthlyRentUsd:
+            Number.isFinite(monthlyRentUsd) && monthlyRentUsd! > 0 ? monthlyRentUsd : undefined,
+          sqft: Number.isFinite(sqft) && sqft! > 0 ? sqft : undefined,
         });
       }
     } catch (n8nErr) {
@@ -99,6 +130,10 @@ export async function POST(req: Request) {
           businessType,
           language,
           marketDataBrief: freeBrief,
+          monthlyRentUsd:
+            Number.isFinite(monthlyRentUsd) && monthlyRentUsd! > 0 ? monthlyRentUsd : undefined,
+          sqft: Number.isFinite(sqft) && sqft! > 0 ? sqft : undefined,
+          openAiOnly: true,
         });
       } else {
         throw n8nErr;
@@ -126,14 +161,24 @@ export async function POST(req: Request) {
       marketSeed = { ...prefetchedMarket };
     }
 
-    const marketDataJson = await resolveMarketDataForIqReport({
-      existing: marketSeed,
-      location,
-      businessType: businessType || 'restaurant',
-      isPremium: false,
-      lang: language,
-    });
-
+    let marketDataJson: Record<string, unknown> | null = null;
+    try {
+      marketDataJson = await resolveMarketDataForIqReport({
+        existing:
+          userInputs && marketSeed
+            ? { ...marketSeed, user_inputs: userInputs }
+            : userInputs
+              ? { user_inputs: userInputs }
+              : marketSeed,
+        location,
+        businessType: businessType || 'restaurant',
+        isPremium: false,
+        lang: language,
+      });
+    } catch (mergeErr) {
+      console.warn('[funnel/analyze] post-analyze market merge failed:', mergeErr);
+      marketDataJson = marketSeed;
+    }
     let reportId = '';
     try {
       reportId = await iqInsertReport({
@@ -146,12 +191,20 @@ export async function POST(req: Request) {
         marketDataJson: marketDataJson ?? undefined,
       });
     } catch (err) {
-      const isDevLike = process.env.NODE_ENV !== 'production';
       const message = err instanceof Error ? err.message : String(err);
-      if (!isDevLike || !message.includes('Supabase admin env is not configured')) {
+      const missingAdmin = message.includes('Supabase admin env is not configured');
+      if (process.env.NODE_ENV === 'production' && !missingAdmin) {
+        console.error('[funnel/analyze] iqInsertReport failed (non-fatal):', message);
+        // Analysis already succeeded — do not fail the user-facing response when persistence fails.
+        reportId = '';
+      } else if (process.env.NODE_ENV !== 'production' && missingAdmin) {
+        reportId = '';
+      } else {
         throw err;
       }
     }
+    const decisionTier = String((parsed as { decision_tier?: string }).decision_tier ?? '').trim();
+    const riskAuditPreview = (parsed as { risk_audit_preview?: unknown }).risk_audit_preview;
 
     return NextResponse.json({
       reportId,
@@ -161,13 +214,20 @@ export async function POST(req: Request) {
       market_snapshot: marketSnapshot,
       hidden_risk: hiddenRisk,
       paywall_teaser: paywallTeaser,
+      ...(decisionTier ? { decision_tier: decisionTier } : {}),
+      ...(riskAuditPreview && typeof riskAuditPreview === 'object'
+        ? { risk_audit_preview: riskAuditPreview }
+        : {}),
     });
   } catch (e) {
-    console.error('[funnel/analyze]', e);
+    const cause =
+      e instanceof Error && e.cause !== undefined ? unknownErrorMessage(e.cause, 300) : undefined;
+    console.error('[funnel/analyze]', e, cause ? { cause } : '');
     return NextResponse.json(
       {
         error: 'Failed to analyze location',
         detail: unknownErrorMessage(e, 500),
+        ...(cause ? { cause } : {}),
       },
       { status: 500 },
     );

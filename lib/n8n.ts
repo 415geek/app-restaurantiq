@@ -42,11 +42,13 @@ type N8nFullReportInput = {
 /** Aligns with iq-full-report-schema + ReportContent (LocationIQ V2 deep premium). */
 type N8nFullReportOutput = Record<string, unknown>;
 
+import { envValue } from '@/lib/env-value';
+
 const DEFAULT_TIMEOUT_MS = 120_000;
 
 /** Must match workflow Code nodes: N8N_IQ_WEBHOOK_SECRET first, then N8N_INTERNAL_AUTH_TOKEN. */
 function getN8nToken(): string | null {
-  return process.env.N8N_IQ_WEBHOOK_SECRET?.trim() || process.env.N8N_INTERNAL_AUTH_TOKEN?.trim() || null;
+  return envValue('N8N_IQ_WEBHOOK_SECRET') || envValue('N8N_INTERNAL_AUTH_TOKEN');
 }
 
 function buildHeaders(): HeadersInit {
@@ -57,12 +59,18 @@ function buildHeaders(): HeadersInit {
 }
 
 async function postJson<T>(url: string, payload: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: buildHeaders(),
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: buildHeaders(),
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+  } catch (e) {
+    const cause = e instanceof Error && e.cause instanceof Error ? `: ${e.cause.message}` : '';
+    throw new Error(`n8n webhook request failed for ${url}${cause}`, { cause: e });
+  }
 
   const text = await res.text();
   if (!res.ok) {
@@ -83,21 +91,29 @@ async function postJson<T>(url: string, payload: unknown): Promise<T> {
   }
 }
 
-function getAnalyzeWebhookUrl(): string | null {
-  return (
-    process.env.N8N_ANALYZE_WEBHOOK_URL?.trim() ||
-    process.env.N8N_IQ_ANALYZE_WEBHOOK_URL?.trim() ||
-    null
-  );
+/**
+ * Force-OpenAI override:
+ *   IQ_USE_OPENAI=1 / true   → ignore n8n analyze + full-report webhooks
+ *   IQ_PROVIDER=openai       → same effect
+ * Useful for testing new prompt changes locally without pushing to n8n.
+ */
+function isOpenAiForced(): boolean {
+  const flag = envValue('IQ_USE_OPENAI');
+  if (flag && /^(1|true|yes|on)$/i.test(flag)) return true;
+  const provider = envValue('IQ_PROVIDER');
+  return provider != null && /^openai$/i.test(provider);
+}
+
+export function getAnalyzeWebhookUrl(): string | null {
+  if (isOpenAiForced()) return null;
+  // Prefer N8N_IQ_* — legacy N8N_ANALYZE_* entries were sometimes pasted with JSON quotes.
+  return envValue('N8N_IQ_ANALYZE_WEBHOOK_URL') || envValue('N8N_ANALYZE_WEBHOOK_URL');
 }
 
 /** Exported so funnel code can align n8n vs OpenAI fallback without duplicating env names. */
 export function getFullReportWebhookUrl(): string | null {
-  return (
-    process.env.N8N_FULL_REPORT_WEBHOOK_URL?.trim() ||
-    process.env.N8N_IQ_FULL_REPORT_WEBHOOK_URL?.trim() ||
-    null
-  );
+  if (isOpenAiForced()) return null;
+  return envValue('N8N_IQ_FULL_REPORT_WEBHOOK_URL') || envValue('N8N_FULL_REPORT_WEBHOOK_URL');
 }
 
 export async function analyzeWithN8n(input: N8nAnalyzeInput): Promise<N8nAnalyzeOutput> {
