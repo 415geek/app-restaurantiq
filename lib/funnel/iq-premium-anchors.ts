@@ -13,6 +13,10 @@ import {
 import { formatCaltransForAnchors, type CaltransAADTResult } from '@/lib/funnel/external-data/caltrans';
 import { formatListingsForAnchors, type CommercialListingsResult } from '@/lib/funnel/external-data/commercial-listings';
 import { formatBrightDataForAnchors, type MarketResearchResult } from '@/lib/funnel/external-data/brightdata';
+import {
+  formatFinanceModelForAnchors,
+  type DeterministicFinanceModel,
+} from '@/lib/funnel/iq-finance-model';
 
 type Lang = 'en' | 'zh';
 
@@ -452,8 +456,17 @@ export function buildPremiumMarketDataSection(
     }
   }
 
+  // D-4: deterministic break-even / safe-revenue anchors. Must appear AFTER user
+  // inputs so the LLM sees the resolved numbers (which already factor in those
+  // inputs) and is forbidden to deviate.
+  let financeModelBlock = '';
+  const fm = marketData?.finance_model as DeterministicFinanceModel | undefined;
+  if (fm && typeof fm === 'object' && typeof fm.break_even_revenue_monthly_usd === 'number') {
+    financeModelBlock = formatFinanceModelForAnchors(fm, lang);
+  }
+
   if (!marketData || typeof marketData !== 'object') {
-    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}`;
+    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}`;
   }
 
   const mdForJson = { ...marketData };
@@ -472,5 +485,5 @@ export function buildPremiumMarketDataSection(
     lang === 'zh'
       ? `\n\n【市场数据原始 JSON（Google Places / Yelp / ACS / Caltrans / 商业房源 / BrightData / 深度研究 meta）】\n${JSON.stringify(mdForJson, null, 2)}`
       : `\n\nRAW MARKET DATA JSON (Google Places / Yelp / ACS / Caltrans / commercial listings / BrightData / deep research meta):\n${JSON.stringify(mdForJson, null, 2)}`;
-  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${jsonBlock}`;
+  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${jsonBlock}`;
 }

@@ -206,6 +206,10 @@ export type IqReportGroundingFlags = {
   _dropped_competitor_names?: string[];
   /** Human-readable warning strings — rendered in the UI sources/methodology footer. */
   _warnings?: string[];
+  /** True when the deterministic finance model was applied (D-4 — overrides LLM guesses). */
+  _finance_model_applied?: boolean;
+  /** Snapshot of the finance model used (for UI callout). */
+  _finance_model_snapshot?: import('./iq-finance-model').DeterministicFinanceModel;
 };
 
 export type IqReportWithGrounding = Record<string, unknown> & IqReportGroundingFlags;
@@ -282,4 +286,50 @@ export function shouldRetryForCompetitorGrounding(
     if (kept < MIN_WHITELIST_FOR_GROUNDED_REPORT) return true;
   }
   return false;
+}
+
+/**
+ * D-4: Force-override the LLM's break-even / safe-revenue / cost_breakdown with
+ * the deterministic finance model. The LLM is instructed via the anchor block
+ * to mirror these numbers, but we still override post-hoc as a hard guarantee.
+ *
+ * Pure function — does not mutate input. Returns the report unchanged when
+ * `financeModel` is undefined (e.g. legacy reports without market_data).
+ */
+export function applyFinanceModelOverride(
+  report: IqReportWithGrounding,
+  financeModel:
+    | import('./iq-finance-model').DeterministicFinanceModel
+    | null
+    | undefined,
+): IqReportWithGrounding {
+  if (!financeModel || typeof financeModel !== 'object') return report;
+  if (typeof financeModel.break_even_revenue_monthly_usd !== 'number') return report;
+  if (typeof financeModel.safe_revenue_monthly_usd !== 'number') return report;
+
+  const existingRiskAudit =
+    report.risk_audit && typeof report.risk_audit === 'object'
+      ? (report.risk_audit as Record<string, unknown>)
+      : {};
+
+  const overriddenRiskAudit: Record<string, unknown> = {
+    ...existingRiskAudit,
+    break_even_revenue_monthly_usd: financeModel.break_even_revenue_monthly_usd,
+    safe_revenue_monthly_usd: financeModel.safe_revenue_monthly_usd,
+    cost_breakdown: financeModel.cost_breakdown,
+  };
+
+  const existingWarnings = Array.isArray(report._warnings) ? report._warnings.slice() : [];
+  const note =
+    financeModel.confidence === 'low'
+      ? `Break-even and safe revenue are computed from the deterministic D-4 finance model with LOW confidence (only ${financeModel.confidence_reasons.join(', ')}). Numbers are bounded by archetype + city tier estimates; add real rent / sqft / lease terms to upgrade confidence.`
+      : `Break-even and safe revenue are computed from the deterministic D-4 finance model (${financeModel.confidence} confidence): ${financeModel.confidence_reasons.join('; ')}.`;
+
+  return {
+    ...report,
+    risk_audit: overriddenRiskAudit,
+    _finance_model_applied: true,
+    _finance_model_snapshot: financeModel,
+    _warnings: [...existingWarnings, note],
+  };
 }

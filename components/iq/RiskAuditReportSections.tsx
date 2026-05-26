@@ -3,6 +3,7 @@
 import { CompetitorMap } from '@/components/iq/CompetitorMap';
 import { RiskAuditScorecard } from '@/components/iq/RiskAuditScorecard';
 import { buildCompetitorMapPins } from '@/lib/funnel/iq-competitor-map';
+import type { DeterministicFinanceModel } from '@/lib/funnel/iq-finance-model';
 import {
   normalizeRiskAuditFromFull,
   numScore,
@@ -79,6 +80,19 @@ export function RiskAuditReportSections({
   const safeRev = numScore(audit.safe_revenue_monthly_usd);
   const costs = audit.cost_breakdown ?? [];
 
+  // D-4: deterministic finance-model evidence stamp (set by applyFinanceModelOverride).
+  const financeApplied = full._finance_model_applied === true;
+  const financeSnapshot =
+    full._finance_model_snapshot && typeof full._finance_model_snapshot === 'object'
+      ? (full._finance_model_snapshot as DeterministicFinanceModel)
+      : undefined;
+  const calcBadge = lang === 'zh' ? '公式计算' : 'Calculated';
+  const confidenceCopy: Record<'high' | 'medium' | 'low', { zh: string; en: string }> = {
+    high: { zh: '高置信度', en: 'High confidence' },
+    medium: { zh: '中等置信度', en: 'Medium confidence' },
+    low: { zh: '低置信度', en: 'Low confidence' },
+  };
+
   return (
     <>
       <SectionShell title={t.riskAudit} icon="🛡️">
@@ -91,23 +105,95 @@ export function RiskAuditReportSections({
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {breakEven !== undefined && (
               <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3">
-                <div className="text-xs uppercase tracking-wide text-amber-200/70">{t.breakEven}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs uppercase tracking-wide text-amber-200/70">{t.breakEven}</span>
+                  {financeApplied && (
+                    <span
+                      className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-200"
+                      title={
+                        lang === 'zh'
+                          ? '由 D-4 公式计算：租金 + 人力 + 其他固定成本 / 边际贡献率'
+                          : 'Computed by D-4 formula: (rent + labor + other fixed) / contribution margin'
+                      }
+                    >
+                      {calcBadge}
+                    </span>
+                  )}
+                </div>
                 <div className="mt-1 text-xl font-semibold text-amber-100">
                   ${breakEven.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US')}
                   {lang === 'zh' ? '/月' : '/mo'}
                 </div>
+                {financeSnapshot && (
+                  <div className="mt-1 text-xs text-amber-200/70">
+                    {lang === 'zh'
+                      ? `≈ $${financeSnapshot.break_even_daily_revenue_usd.toLocaleString('en-US')}/天 · 约 ${financeSnapshot.daily_covers_needed_breakeven} 单@$${financeSnapshot.avg_ticket_usd}`
+                      : `≈ $${financeSnapshot.break_even_daily_revenue_usd.toLocaleString('en-US')}/day · ~${financeSnapshot.daily_covers_needed_breakeven} covers @ $${financeSnapshot.avg_ticket_usd}`}
+                  </div>
+                )}
               </div>
             )}
             {safeRev !== undefined && (
               <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3">
-                <div className="text-xs uppercase tracking-wide text-emerald-200/70">{t.safeRevenue}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs uppercase tracking-wide text-emerald-200/70">{t.safeRevenue}</span>
+                  {financeApplied && (
+                    <span
+                      className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-200"
+                      title={
+                        lang === 'zh'
+                          ? '保本 × 1.20–1.35（业态相关安全乘数）'
+                          : 'Break-even × 1.20–1.35 (archetype-specific safety multiplier)'
+                      }
+                    >
+                      {calcBadge}
+                    </span>
+                  )}
+                </div>
                 <div className="mt-1 text-xl font-semibold text-emerald-100">
                   ${safeRev.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US')}
                   {lang === 'zh' ? '/月' : '/mo'}
                 </div>
+                {financeSnapshot && (
+                  <div className="mt-1 text-xs text-emerald-200/70">
+                    {lang === 'zh'
+                      ? `≈ $${financeSnapshot.safe_daily_revenue_usd.toLocaleString('en-US')}/天 · 约 ${financeSnapshot.daily_covers_needed_safe} 单@$${financeSnapshot.avg_ticket_usd}`
+                      : `≈ $${financeSnapshot.safe_daily_revenue_usd.toLocaleString('en-US')}/day · ~${financeSnapshot.daily_covers_needed_safe} covers @ $${financeSnapshot.avg_ticket_usd}`}
+                  </div>
+                )}
               </div>
             )}
           </div>
+        )}
+
+        {financeApplied && financeSnapshot && (
+          <details className="mt-4 rounded-xl border border-zinc-700/60 bg-zinc-900/40 px-4 py-3 text-sm text-zinc-300">
+            <summary className="cursor-pointer font-medium text-zinc-100">
+              {lang === 'zh' ? '如何计算（点击展开）' : 'How this was calculated (click to expand)'}
+              <span className="ml-2 text-xs text-zinc-400">
+                · {confidenceCopy[financeSnapshot.confidence][lang === 'zh' ? 'zh' : 'en']}
+              </span>
+            </summary>
+            <div className="mt-3 space-y-2">
+              <div className="text-xs text-zinc-400">
+                {lang === 'zh' ? '业态原型：' : 'Cuisine archetype: '}
+                <span className="text-zinc-200">
+                  {lang === 'zh'
+                    ? financeSnapshot.cuisine_archetype_label_zh
+                    : financeSnapshot.cuisine_archetype_label_en}
+                </span>
+              </div>
+              <ul className="list-disc space-y-1 pl-5 text-xs leading-relaxed text-zinc-300">
+                {financeSnapshot.assumptions.map((a, i) => (
+                  <li key={i}>{a}</li>
+                ))}
+              </ul>
+              <div className="pt-2 text-[11px] text-zinc-500">
+                {lang === 'zh' ? '引用：' : 'Citations: '}
+                {financeSnapshot.citations.join(' · ')}
+              </div>
+            </div>
+          </details>
         )}
       </SectionShell>
 

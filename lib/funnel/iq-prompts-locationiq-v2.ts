@@ -492,6 +492,7 @@ ${input.marketDataSection}
 - key_evidence_points：≥6 条短句；每条必须含「一个可核对数据点 + 来源标签」（Maps/Yelp/ACS/市政或交通官网/open data/[检索]/[估算]）。
 - alternative_corridors：≥3 条对象；每条含 corridor_name、rationale、listings（≥2 行：address_or_listing、sqft、monthly_rent_usd、highlights、source_tag）；无真房源时整行标 [估算] 并写下一步核实动作（踩盘、经纪、商业地产平台等）。
 - risk_audit：必填 — decision_tier、overall_score、one_line_conclusion、六层分数、radar（7维）、break_even_revenue_monthly_usd、safe_revenue_monthly_usd、top_risks（3条）、playbook（3–5条打法）、lease_checklist（≥10条签租前清单）、cost_breakdown、competitor_tiers_note（直接/半直接/替代/流量竞品）、data_confidence_pct、missing_data、acquired_data。
+  · 【D-4 重要】break_even_revenue_monthly_usd、safe_revenue_monthly_usd、cost_breakdown 三项**必须**与 user message 中「确定性盈亏平衡模型」锚点块的数字一字不差；禁止自行重新估算或舍入。若锚点块缺失才允许自行估算并标 [估算]。
 - one_line_conclusion：顶层重复一句「能不能做+条件」供结果页首屏。
 - differentiation_strategy 须像顾问打法（SKU 数量、定价带、外卖 SKU 策略）。
 
@@ -676,6 +677,7 @@ Reference-grade delivery (match premium PDF samples):
 - key_evidence_points: ≥6 short bullets; each must include one checkable fact or figure plus a source tag (Maps/Yelp/ACS/city or DOT/open data/[search]/[estimate]).
 - alternative_corridors: ≥3 objects with corridor_name, rationale, listings (≥2 rows: address_or_listing, sqft, monthly_rent_usd, highlights, source_tag); if no real listing, mark [estimate] and state verification steps.
 - risk_audit: REQUIRED object — decision_tier, overall_score, one_line_conclusion, six layer scores, radar (7 dims), break_even_revenue_monthly_usd, safe_revenue_monthly_usd, top_risks (3), playbook (3–5 tactics), lease_checklist (≥10 items), cost_breakdown rows, competitor_tiers_note (direct/semi-direct/substitute/traffic), data_confidence_pct, missing_data, acquired_data.
+  · [D-4 CRITICAL] break_even_revenue_monthly_usd, safe_revenue_monthly_usd, and cost_breakdown MUST match the "DETERMINISTIC BREAK-EVEN MODEL" anchor block in the user message — verbatim, no rounding, no separate guesses. Only if that anchor block is missing may you estimate; in that case label every figure [estimate].
 - one_line_conclusion: duplicate the hero answer at top level for UI.
 - differentiation_strategy must read like an operator playbook (menu SKU count, pricing bands, delivery SKU strategy).
 

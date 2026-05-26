@@ -304,6 +304,58 @@ function pdfRiskAuditBlock(
     })
     .join('');
 
+  // D-4: deterministic finance-model evidence block in the PDF.
+  const financeApplied = (full as Record<string, unknown>)._finance_model_applied === true;
+  const financeSnapshot =
+    (full as Record<string, unknown>)._finance_model_snapshot &&
+    typeof (full as Record<string, unknown>)._finance_model_snapshot === 'object'
+      ? ((full as Record<string, unknown>)._finance_model_snapshot as {
+          confidence: 'high' | 'medium' | 'low';
+          confidence_reasons: string[];
+          avg_ticket_usd: number;
+          break_even_daily_revenue_usd: number;
+          safe_daily_revenue_usd: number;
+          daily_covers_needed_breakeven: number;
+          daily_covers_needed_safe: number;
+          cuisine_archetype_label_en: string;
+          cuisine_archetype_label_zh: string;
+          assumptions: string[];
+          citations: string[];
+        })
+      : null;
+  const calcBadge = lang === 'zh' ? '公式计算' : 'Calculated';
+  const calcBadgeHtml = financeApplied
+    ? `<span style="display:inline-block;margin-left:6px;padding:1px 6px;font-size:8pt;background:#dcfce7;color:#166534;border-radius:8px;border:1px solid #86efac;">${escapeHtml(calcBadge)}</span>`
+    : '';
+  const dailyBreakHint = financeSnapshot && breakEven != null
+    ? (lang === 'zh'
+        ? `（约 $${financeSnapshot.break_even_daily_revenue_usd.toLocaleString()}/天 · ${financeSnapshot.daily_covers_needed_breakeven} 单@$${financeSnapshot.avg_ticket_usd}）`
+        : `(~$${financeSnapshot.break_even_daily_revenue_usd.toLocaleString()}/day · ${financeSnapshot.daily_covers_needed_breakeven} covers @ $${financeSnapshot.avg_ticket_usd})`)
+    : '';
+  const dailySafeHint = financeSnapshot && safeRev != null
+    ? (lang === 'zh'
+        ? `（约 $${financeSnapshot.safe_daily_revenue_usd.toLocaleString()}/天 · ${financeSnapshot.daily_covers_needed_safe} 单@$${financeSnapshot.avg_ticket_usd}）`
+        : `(~$${financeSnapshot.safe_daily_revenue_usd.toLocaleString()}/day · ${financeSnapshot.daily_covers_needed_safe} covers @ $${financeSnapshot.avg_ticket_usd})`)
+    : '';
+
+  const financeNoteHtml = financeApplied && financeSnapshot
+    ? `<div style="margin:8px 0 14px;padding:10px 12px;border-left:3px solid #16a34a;background:#f0fdf4;font-size:9pt;color:#14532d;">
+        <div style="font-weight:600;margin-bottom:4px;">
+          ${escapeHtml(lang === 'zh' ? '盈亏平衡计算方法（D-4 确定性模型）' : 'How break-even was calculated (D-4 deterministic model)')}
+          · ${escapeHtml(financeSnapshot.confidence === 'high' ? (lang === 'zh' ? '高置信度' : 'High confidence') : financeSnapshot.confidence === 'medium' ? (lang === 'zh' ? '中等置信度' : 'Medium confidence') : (lang === 'zh' ? '低置信度' : 'Low confidence'))}
+        </div>
+        <div style="margin-bottom:6px;font-size:8.5pt;">
+          ${escapeHtml(lang === 'zh' ? '业态原型：' : 'Archetype: ')}${escapeHtml(lang === 'zh' ? financeSnapshot.cuisine_archetype_label_zh : financeSnapshot.cuisine_archetype_label_en)}
+        </div>
+        <ul style="margin:0 0 0 16px;padding:0;font-size:8.5pt;line-height:1.45;">
+          ${financeSnapshot.assumptions.map((a) => `<li>${escapeHtml(a)}</li>`).join('')}
+        </ul>
+        <div style="margin-top:6px;font-size:8pt;color:#15803d;">
+          ${escapeHtml(lang === 'zh' ? '引用：' : 'Citations: ')}${escapeHtml(financeSnapshot.citations.join(' · '))}
+        </div>
+      </div>`
+    : '';
+
   return `
   <div class="section">
     <h2>🛡 ${escapeHtml(L.riskAudit)}</h2>
@@ -311,7 +363,8 @@ function pdfRiskAuditBlock(
     ${overall != null ? `<p style="margin-bottom:8px;"><strong>${lang === 'zh' ? '综合分' : 'Overall'}:</strong> ${overall}/100${conf != null ? ` · ${escapeHtml(L.dataConfidence)}: ${conf}%` : ''}</p>` : ''}
     ${audit.one_line_conclusion || pickStr(full.one_line_conclusion) ? `<p style="margin-bottom:12px;font-style:italic;">${escapeHtml(audit.one_line_conclusion || pickStr(full.one_line_conclusion) || '')}</p>` : ''}
     ${layerRows ? `<table style="width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:14px;"><tr style="background:#1a365d;color:#fff;"><th style="padding:8px;text-align:left;">${escapeHtml(L.layer)}</th><th style="padding:8px;">${escapeHtml(L.score)}</th></tr>${layerRows}</table>` : ''}
-    ${breakEven != null || safeRev != null ? `<p style="margin-bottom:10px;">${breakEven != null ? `<strong>${escapeHtml(L.breakEven)}:</strong> $${breakEven.toLocaleString()}` : ''}${safeRev != null ? ` &nbsp;|&nbsp; <strong>${escapeHtml(L.safeRevenue)}:</strong> $${safeRev.toLocaleString()}` : ''}</p>` : ''}
+    ${breakEven != null || safeRev != null ? `<p style="margin-bottom:10px;">${breakEven != null ? `<strong>${escapeHtml(L.breakEven)}:</strong> $${breakEven.toLocaleString()}${calcBadgeHtml} <span style="color:#92400e;font-size:8.5pt;">${dailyBreakHint}</span>` : ''}${safeRev != null ? `<br /><strong>${escapeHtml(L.safeRevenue)}:</strong> $${safeRev.toLocaleString()}${calcBadgeHtml} <span style="color:#15803d;font-size:8.5pt;">${dailySafeHint}</span>` : ''}</p>` : ''}
+    ${financeNoteHtml}
     ${costRows ? `<table style="width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:14px;">${costRows}</table>` : ''}
     ${mapUrl ? `<div style="margin:14px 0;"><h3 style="font-size:10pt;margin-bottom:8px;">${escapeHtml(L.competitorMap)}</h3><img src="${escapeHtml(mapUrl)}" alt="map" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0;" /></div>` : ''}
     ${audit.competitor_tiers_note ? `<p style="margin-bottom:12px;font-size:10pt;">${escapeHtml(audit.competitor_tiers_note)}</p>` : ''}

@@ -10,6 +10,7 @@
 
 import { enrichMarketDataWithAcs } from '@/lib/funnel/iq-acs-enrichment';
 import { enrichMarketDataWithDemographicNarrative } from '@/lib/funnel/iq-demographic-narrative';
+import { computeFinanceModel } from '@/lib/funnel/iq-finance-model';
 import { gatherIqMarketDataFromGoogle } from '@/lib/funnel/iq-market-data';
 import { extractMarketSummary } from '@/lib/funnel/iq-premium-anchors';
 import {
@@ -218,6 +219,20 @@ export async function resolveMarketDataForIqReport(input: {
     if (tavily) {
       base = { ...base, web_research: tavily };
     }
+  }
+
+  // D-4: deterministic break-even / safe-revenue model. Cheap (no API), runs for
+  // every report so /api/funnel/full-report can use it without recomputing. Free
+  // tier ignores it; paid prompt + applyFinanceModelOverride pick it up later.
+  try {
+    const finance_model = computeFinanceModel({
+      marketData: base,
+      businessType,
+      location,
+    });
+    base = { ...base, finance_model };
+  } catch (err) {
+    console.warn('[resolve-market-data] finance_model compute failed (non-fatal)', err);
   }
 
   if (!base || Object.keys(base).length === 0) return null;

@@ -7,10 +7,12 @@
 import { generateFullReportWithN8n, getFullReportWebhookUrl } from '@/lib/n8n';
 import {
   applyCompetitorWhitelist,
+  applyFinanceModelOverride,
   logFullReportQuality,
   parseIqFullReport,
   type IqReportWithGrounding,
 } from '@/lib/funnel/iq-full-report-schema';
+import type { DeterministicFinanceModel } from '@/lib/funnel/iq-finance-model';
 import { extractCompetitorWhitelist } from '@/lib/funnel/iq-market-signals';
 import { runFullPremiumReportOpenAI } from '@/lib/funnel/iq-llm';
 
@@ -41,13 +43,20 @@ export async function generateIqFullReportWithN8nFallback(
   // Build the whitelist once — both branches need it for grounding.
   const whitelist = extractCompetitorWhitelist(input.marketData ?? null);
 
+  // D-4: deterministic finance model was attached to market_data by
+  // resolveMarketDataForIqReport. Use it to override LLM's break_even / safe_revenue.
+  const financeModel = (input.marketData?.finance_model ?? null) as
+    | DeterministicFinanceModel
+    | null;
+
   if (getFullReportWebhookUrl()) {
     try {
       const raw = await generateFullReportWithN8n(payload);
       const parsed = parseIqFullReport(raw);
       const grounded = applyCompetitorWhitelist(parsed, whitelist);
-      logFullReportQuality(grounded, `reportId=${input.reportId} n8n`);
-      return grounded;
+      const withFinance = applyFinanceModelOverride(grounded, financeModel);
+      logFullReportQuality(withFinance, `reportId=${input.reportId} n8n`);
+      return withFinance;
     } catch (e) {
       console.warn('[iq-generate-full-report] n8n failed, falling back to OpenAI:', e);
     }
@@ -61,6 +70,7 @@ export async function generateIqFullReportWithN8nFallback(
     marketData: input.marketData,
     language: input.language,
   });
-  logFullReportQuality(parsed, `reportId=${input.reportId} openai-fallback`);
-  return parsed;
+  const withFinance = applyFinanceModelOverride(parsed, financeModel);
+  logFullReportQuality(withFinance, `reportId=${input.reportId} openai-fallback`);
+  return withFinance;
 }
