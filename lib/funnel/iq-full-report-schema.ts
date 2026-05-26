@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { decisionTierSchema, riskAuditFullSchema } from '@/lib/funnel/iq-risk-audit-model';
 
 const optionalString = z.string().optional();
 
@@ -119,6 +120,11 @@ export const iqFullReportSchema = z
     site_and_access_assessment: optionalString,
     key_evidence_points: z.array(z.string()).optional(),
     alternative_corridors: z.array(alternativeCorridorSchema).optional(),
+    one_line_conclusion: optionalString,
+    decision_tier: decisionTierSchema.optional(),
+    risk_audit: riskAuditFullSchema.optional(),
+    data_confidence_pct: z.union([z.number(), z.string()]).optional(),
+    lease_checklist: z.array(z.string()).optional(),
   })
   .passthrough();
 

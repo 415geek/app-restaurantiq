@@ -82,9 +82,13 @@ async function fetchAcsYear(
     url.searchParams.set('for', `county:${county}`);
     url.searchParams.set('in', `state:${state}`);
   }
-  const res = await fetch(url, { cache: 'no-store' });
-  const json = await res.json().catch(() => null);
-  return rowFromAcsResponse(json);
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    const json = await res.json().catch(() => null);
+    return rowFromAcsResponse(json);
+  } catch {
+    return null;
+  }
 }
 
 export type AcsContextShape = {

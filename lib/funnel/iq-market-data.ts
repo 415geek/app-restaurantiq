@@ -66,6 +66,7 @@ export async function gatherIqMarketDataFromGoogle(input: {
         formatted_address?: string;
         types?: string[];
         place_id?: string;
+        geometry?: { location?: { lat: number; lng: number } };
       }>;
     };
 
@@ -88,6 +89,8 @@ export async function gatherIqMarketDataFromGoogle(input: {
         reviews: x.user_ratings_total ?? null,
         price_level: x.price_level ?? null,
         address: x.formatted_address ?? null,
+        lat: x.geometry?.location?.lat ?? null,
+        lng: x.geometry?.location?.lng ?? null,
         types: Array.isArray(x.types) ? x.types.slice(0, 4) : [],
       })),
       sample_competitors_yelp: [] as unknown[],

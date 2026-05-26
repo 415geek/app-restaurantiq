@@ -392,8 +392,22 @@ export function buildPremiumMarketDataSection(
     }
   }
 
+  let userInputsBlock = '';
+  const ui = marketData?.user_inputs;
+  if (ui && typeof ui === 'object') {
+    const u = ui as Record<string, unknown>;
+    const rent = u.monthly_rent_usd;
+    const sq = u.sqft;
+    if (rent != null || sq != null) {
+      userInputsBlock =
+        lang === 'zh'
+          ? `\n\n【用户补充输入（必须用于 cost_pressure、break_even、rent 敏感性；勿忽略）】\n月租金 USD: ${rent ?? '未提供'}\n面积 sqft: ${sq ?? '未提供'}`
+          : `\n\n[USER INPUTS — MUST use in cost_pressure, break_even, rent sensitivity]\nMonthly rent USD: ${rent ?? 'not provided'}\nSqft: ${sq ?? 'not provided'}`;
+    }
+  }
+
   if (!marketData || typeof marketData !== 'object') {
-    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}`;
+    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}`;
   }
 
   const mdForJson = { ...marketData };
@@ -412,5 +426,5 @@ export function buildPremiumMarketDataSection(
     lang === 'zh'
       ? `\n\n【市场数据原始 JSON（Google Places / Yelp / ACS / Caltrans / 商业房源 / BrightData / 深度研究 meta）】\n${JSON.stringify(mdForJson, null, 2)}`
       : `\n\nRAW MARKET DATA JSON (Google Places / Yelp / ACS / Caltrans / commercial listings / BrightData / deep research meta):\n${JSON.stringify(mdForJson, null, 2)}`;
-  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${jsonBlock}`;
+  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${jsonBlock}`;
 }

@@ -10,8 +10,14 @@ import {
   locationIqV2PremiumUserEn,
   locationIqV2PremiumUserZh,
 } from '@/lib/funnel/iq-prompts-locationiq-v2';
+import { getAnalyzeWebhookUrl } from '@/lib/n8n';
 import { parseIqFullReport } from '@/lib/funnel/iq-full-report-schema';
 import { buildPremiumMarketDataSection } from '@/lib/funnel/iq-premium-anchors';
+import {
+  decisionTierSchema,
+  decisionTierToVerdict,
+  riskAuditPreviewSchema,
+} from '@/lib/funnel/iq-risk-audit-model';
 
 const partialSchema = z.object({
   verdict: z.string(),
@@ -21,6 +27,8 @@ const partialSchema = z.object({
   hidden_risk: z.string().optional(),
   paywall_teaser: z.string().optional(),
   reason: z.string().optional(),
+  decision_tier: decisionTierSchema.optional(),
+  risk_audit_preview: riskAuditPreviewSchema.optional(),
 });
 
 function getOpenAI(): OpenAI | null {
@@ -65,6 +73,10 @@ export async function runPartialAnalysis(input: {
   language?: 'en' | 'zh';
   /** Places/ACS digest from resolveMarketDataForIqReport (free tier). */
   marketDataBrief?: string;
+  monthlyRentUsd?: number;
+  sqft?: number;
+  /** When true, skip n8n and use OpenAI only (e.g. after analyzeWithN8n already failed). */
+  openAiOnly?: boolean;
 }): Promise<{
   verdict: string;
   headline: string;
@@ -73,13 +85,16 @@ export async function runPartialAnalysis(input: {
   hidden_risk?: string;
   paywall_teaser?: string;
   reason?: string;
+  decision_tier?: string;
+  risk_audit_preview?: z.infer<typeof riskAuditPreviewSchema>;
 }> {
   const language = input.language === 'zh' ? 'zh' : 'en';
-  const n8nUrl = process.env.N8N_IQ_ANALYZE_WEBHOOK_URL?.trim();
+  const n8nUrl = input.openAiOnly ? null : getAnalyzeWebhookUrl();
   if (n8nUrl) {
     const raw = await postN8nJson<unknown>(n8nUrl, {
-      location: input.location,
-      businessType: input.businessType || null,
+      address: input.location,
+      industry: 'restaurant',
+      cuisine_type: input.businessType || undefined,
       language,
     });
     return partialSchema.parse(raw);
@@ -98,11 +113,15 @@ export async function runPartialAnalysis(input: {
           location: input.location,
           businessType: input.businessType || '餐饮',
           marketDataBrief: input.marketDataBrief,
+          monthlyRentUsd: input.monthlyRentUsd,
+          sqft: input.sqft,
         })
       : locationIqV2FreeUserEn({
           location: input.location,
           businessType: input.businessType || 'Restaurant',
           marketDataBrief: input.marketDataBrief,
+          monthlyRentUsd: input.monthlyRentUsd,
+          sqft: input.sqft,
         });
 
   const completion = await client.chat.completions.create({
@@ -116,7 +135,11 @@ export async function runPartialAnalysis(input: {
 
   const text = completion.choices[0]?.message?.content;
   if (!text) throw new Error('Empty OpenAI response');
-  return partialSchema.parse(JSON.parse(text));
+  const parsed = partialSchema.parse(JSON.parse(text));
+  if (parsed.decision_tier) {
+    parsed.verdict = decisionTierToVerdict(parsed.decision_tier);
+  }
+  return parsed;
 }
 
 /**
