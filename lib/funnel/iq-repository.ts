@@ -1,6 +1,116 @@
 import { supabaseAdmin } from '@/lib/server/supabase-admin';
 
 const TABLE = 'iq_location_reports';
+const LEADS_TABLE = 'iq_leads';
+
+export type IqLeadInput = {
+  email: string;
+  name?: string | null;
+  phone?: string | null;
+  cuisine?: string | null;
+  location?: string | null;
+  language?: string | null;
+  reportId?: string | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  userAgent?: string | null;
+  ipHash?: string | null;
+};
+
+/**
+ * Persist a free-tier lead capture (email-gated unlock).
+ * Returns the lead id. Caller should attach this to the report flow.
+ */
+export async function iqInsertLead(input: IqLeadInput): Promise<string> {
+  const sb = supabaseAdmin();
+  const { data, error } = await sb
+    .from(LEADS_TABLE)
+    .insert({
+      email: input.email.trim().toLowerCase(),
+      name: input.name?.trim() || null,
+      phone: input.phone?.trim() || null,
+      cuisine: input.cuisine?.trim() || null,
+      location: input.location?.trim() || null,
+      language: input.language?.trim() || 'en',
+      report_id: input.reportId || null,
+      utm_source: input.utmSource || null,
+      utm_medium: input.utmMedium || null,
+      utm_campaign: input.utmCampaign || null,
+      user_agent: input.userAgent || null,
+      ip_hash: input.ipHash || null,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    throw new Error(error.message || JSON.stringify(error));
+  }
+  return data.id as string;
+}
+
+export type IqLeadRow = {
+  id: string;
+  created_at: string;
+  email: string;
+  name: string | null;
+  phone: string | null;
+  cuisine: string | null;
+  location: string | null;
+  language: string;
+  report_id: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+};
+
+export type IqLeadListResult = {
+  rows: IqLeadRow[];
+  total: number;
+};
+
+const LEAD_COLUMNS =
+  'id, created_at, email, name, phone, cuisine, location, language, report_id, utm_source, utm_medium, utm_campaign';
+
+/**
+ * Admin-only: list leads with simple pagination + optional search by email/name/cuisine.
+ * Uses service-role client; callers MUST verify admin session before invoking.
+ */
+export async function iqListLeads(opts: {
+  limit?: number;
+  offset?: number;
+  search?: string | null;
+} = {}): Promise<IqLeadListResult> {
+  const sb = supabaseAdmin();
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  let query = sb
+    .from(LEADS_TABLE)
+    .select(LEAD_COLUMNS, { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  const search = opts.search?.trim();
+  if (search) {
+    // Escape PostgREST `or` filter separators.
+    const safe = search.replace(/[,()]/g, ' ').trim();
+    if (safe) {
+      const pattern = `%${safe}%`;
+      query = query.or(
+        `email.ilike.${pattern},name.ilike.${pattern},cuisine.ilike.${pattern},location.ilike.${pattern}`,
+      );
+    }
+  }
+
+  const { data, error, count } = await query;
+  if (error) {
+    throw new Error(error.message || JSON.stringify(error));
+  }
+  return {
+    rows: (data ?? []) as IqLeadRow[],
+    total: count ?? (data?.length ?? 0),
+  };
+}
 
 export type IqReportRow = {
   id: string;
