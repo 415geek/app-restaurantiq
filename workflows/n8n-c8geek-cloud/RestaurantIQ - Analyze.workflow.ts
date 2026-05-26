@@ -90,6 +90,24 @@ const language = String(body.language || 'en').toLowerCase() === 'zh' ? 'zh' : '
 
 if (!address) throw new Error('Missing address');
 
+const userInputs = (body && body.market_data && body.market_data.user_inputs) || {};
+const monthlyRentUsd = Number(userInputs.monthly_rent_usd);
+const sqftValue = Number(userInputs.sqft);
+const hasRent = Number.isFinite(monthlyRentUsd) && monthlyRentUsd > 0;
+const hasSqft = Number.isFinite(sqftValue) && sqftValue > 0;
+const rentLineZh = hasRent
+  ? \`用户已提供月租金（USD）: \${monthlyRentUsd} — 视为已知，禁止在 missing_data 中标注 monthly_rent / rent\`
+  : '用户未提供月租金 — 在 missing_data 中可标注 monthly_rent';
+const sqftLineZh = hasSqft
+  ? \`用户已提供面积（sqft）: \${sqftValue} — 视为已知，禁止在 missing_data 中标注 sqft\`
+  : '用户未提供面积 — 在 missing_data 中可标注 sqft';
+const rentLineEn = hasRent
+  ? \`User-provided monthly rent (USD): \${monthlyRentUsd} — treat as known; do NOT list monthly_rent / rent in missing_data\`
+  : 'Monthly rent not provided — you may list monthly_rent in missing_data';
+const sqftLineEn = hasSqft
+  ? \`User-provided size (sqft): \${sqftValue} — treat as known; do NOT list sqft in missing_data\`
+  : 'Sqft not provided — you may list sqft in missing_data';
+
 const system = language === 'zh'
   ? [
       '你是 LocationIQ 选址大师的分析引擎。角色：麦肯锡商业地产与餐饮选址合伙人，向华人餐饮老板做签租前汇报。',
@@ -117,6 +135,8 @@ const user = language === 'zh'
       '请基于以下输入生成「免费版选址速评」（LocationIQ V2.0）。',
       \`地址: \${address}\`,
       \`业态: \${industry}\${cuisine_type ? '（' + cuisine_type + '）' : ''}\`,
+      rentLineZh,
+      sqftLineZh,
       '',
       '先在脑中完成六层评分与 decision_tier，再压缩进下列 JSON（不要单独输出 Markdown 表格）：',
       '',
@@ -154,6 +174,8 @@ const user = language === 'zh'
       'Generate the FREE LocationIQ V2.0 site quick assessment from the inputs below.',
       \`Address: \${address}\`,
       \`Business type: \${industry}\${cuisine_type ? ' (' + cuisine_type + ')' : ''}\`,
+      rentLineEn,
+      sqftLineEn,
       '',
       'After six-layer scoring and decision_tier, compress into JSON (no separate markdown tables):',
       '',

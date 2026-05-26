@@ -9,6 +9,58 @@ import { unknownErrorMessage } from '@/lib/unknown-error-message';
 export const runtime = 'nodejs';
 type AnalysisLanguage = 'en' | 'zh';
 
+/**
+ * Free-tier provider prompts (especially the n8n analyze workflow) don't read
+ * `market_data.user_inputs.*`, so the LLM happily lists `monthly_rent` /
+ * `sqft` in `missing_data` even when the user supplied them on the lead form.
+ * After every LLM reply we scrub `missing_data` for any field the user
+ * actually provided and add it to `acquired_data` so the scorecard shows the
+ * right picture regardless of which provider answered.
+ */
+const RENT_MISSING_KEYS = new Set(['monthly_rent', 'monthly_rent_usd', 'rent', 'rent_usd', 'rent_monthly']);
+const SQFT_MISSING_KEYS = new Set(['sqft', 'size_sqft', 'square_feet', 'square_footage']);
+const RENT_ACQUIRED_LABEL = 'User-provided rent';
+const SQFT_ACQUIRED_LABEL = 'User-provided sqft';
+
+function reconcileRiskAuditPreviewWithUserInputs(
+  preview: unknown,
+  userInputs: { monthly_rent_usd?: number; sqft?: number } | undefined,
+): Record<string, unknown> | undefined {
+  if (!preview || typeof preview !== 'object' || Array.isArray(preview)) {
+    return preview && typeof preview === 'object' ? (preview as Record<string, unknown>) : undefined;
+  }
+  if (!userInputs) return preview as Record<string, unknown>;
+
+  const obj = { ...(preview as Record<string, unknown>) };
+  const hasRent = typeof userInputs.monthly_rent_usd === 'number' && userInputs.monthly_rent_usd > 0;
+  const hasSqft = typeof userInputs.sqft === 'number' && userInputs.sqft > 0;
+
+  // missing_data: drop fields the user actually supplied.
+  const rawMissing = obj.missing_data;
+  if (Array.isArray(rawMissing)) {
+    const filtered = rawMissing.filter((entry) => {
+      if (typeof entry !== 'string') return true;
+      const key = entry.trim().toLowerCase();
+      if (hasRent && RENT_MISSING_KEYS.has(key)) return false;
+      if (hasSqft && SQFT_MISSING_KEYS.has(key)) return false;
+      return true;
+    });
+    obj.missing_data = filtered;
+  }
+
+  // acquired_data: credit the user inputs (idempotent against repeated calls).
+  const rawAcquired = obj.acquired_data;
+  const acquired = Array.isArray(rawAcquired)
+    ? rawAcquired.filter((x): x is string => typeof x === 'string').map((x) => x.trim()).filter(Boolean)
+    : [];
+  const acquiredSet = new Set(acquired.map((x) => x.toLowerCase()));
+  if (hasRent && !acquiredSet.has(RENT_ACQUIRED_LABEL.toLowerCase())) acquired.push(RENT_ACQUIRED_LABEL);
+  if (hasSqft && !acquiredSet.has(SQFT_ACQUIRED_LABEL.toLowerCase())) acquired.push(SQFT_ACQUIRED_LABEL);
+  obj.acquired_data = acquired;
+
+  return obj;
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as {
@@ -204,7 +256,8 @@ export async function POST(req: Request) {
       }
     }
     const decisionTier = String((parsed as { decision_tier?: string }).decision_tier ?? '').trim();
-    const riskAuditPreview = (parsed as { risk_audit_preview?: unknown }).risk_audit_preview;
+    const rawRiskAuditPreview = (parsed as { risk_audit_preview?: unknown }).risk_audit_preview;
+    const riskAuditPreview = reconcileRiskAuditPreviewWithUserInputs(rawRiskAuditPreview, userInputs);
 
     return NextResponse.json({
       reportId,
