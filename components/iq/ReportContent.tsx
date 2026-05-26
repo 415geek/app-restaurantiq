@@ -563,11 +563,35 @@ export function ReportContent({
             <ReportMarkdown>{fullView.trade_area_analysis as string}</ReportMarkdown>
           </SectionShell>
         )}
-        {str(fullView.demographic_profile) && (
-          <SectionShell title={t.demographicProfile} icon="👥">
-            <ReportMarkdown>{fullView.demographic_profile as string}</ReportMarkdown>
-          </SectionShell>
-        )}
+        {(() => {
+          const demoNarrative = (marketData?.demographic_narrative ?? null) as
+            | { paragraph_zh?: string; paragraph_en?: string; model?: string; generated_at?: string }
+            | null;
+          const claudePara =
+            demoNarrative && typeof demoNarrative === 'object'
+              ? lang === 'zh'
+                ? demoNarrative.paragraph_zh
+                : demoNarrative.paragraph_en
+              : null;
+          const hasLlm = str(fullView.demographic_profile);
+          if (!hasLlm && !claudePara) return null;
+          return (
+            <SectionShell title={t.demographicProfile} icon="👥">
+              {claudePara && (
+                <div className="mb-4 rounded-lg border border-blue-700/40 bg-blue-950/30 p-4 text-sm leading-relaxed text-blue-100">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-blue-300">
+                    <span>{lang === 'zh' ? 'McKinsey 风格人口与消费力简报' : 'McKinsey-style Demographics Brief'}</span>
+                    <span className="rounded bg-blue-800/40 px-1.5 py-0.5 text-[10px] text-blue-200">
+                      Claude · ACS B03002/B19001/B15003
+                    </span>
+                  </div>
+                  <p className="whitespace-pre-line">{claudePara}</p>
+                </div>
+              )}
+              {hasLlm && <ReportMarkdown>{fullView.demographic_profile as string}</ReportMarkdown>}
+            </SectionShell>
+          );
+        })()}
       </div>
 
       {competitors.length > 0 && (

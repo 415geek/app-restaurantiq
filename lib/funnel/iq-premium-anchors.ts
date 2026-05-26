@@ -28,6 +28,17 @@ function fmtUsd(v: unknown, lang: Lang): string {
   return lang === 'zh' ? '（数据抑制或缺失）' : '(suppressed or missing)';
 }
 
+function fmtPct(v: unknown, lang: Lang): string {
+  if (typeof v === 'number' && Number.isFinite(v)) return `${Math.round(v)}%`;
+  return lang === 'zh' ? '（数据抑制或缺失）' : '(suppressed or missing)';
+}
+
+type _AcsShareLike = { pct?: unknown; count?: unknown } | undefined | null;
+function pickPct(v: _AcsShareLike): unknown {
+  if (!v || typeof v !== 'object') return null;
+  return (v as Record<string, unknown>).pct;
+}
+
 /** Census ACS pack → prompt block forcing quantitative demographic + trade-area prose. */
 export function buildAcsQuantAnchorsBlock(
   marketData: Record<string, unknown> | null | undefined,
@@ -49,6 +60,13 @@ export function buildAcsQuantAnchorsBlock(
   const tractName = typeof tract.name === 'string' ? tract.name : '';
   const countyName = typeof county.name === 'string' ? county.name : '';
 
+  const tractRace = (tract.race_ethnicity as Record<string, unknown> | undefined) ?? {};
+  const tractInc = (tract.income_brackets as Record<string, unknown> | undefined) ?? {};
+  const tractEdu = (tract.education as Record<string, unknown> | undefined) ?? {};
+  const countyRace = (county.race_ethnicity as Record<string, unknown> | undefined) ?? {};
+  const countyInc = (county.income_brackets as Record<string, unknown> | undefined) ?? {};
+  const countyEdu = (county.education as Record<string, unknown> | undefined) ?? {};
+
   if (lang === 'zh') {
     const lines = [
       '\n\n【人口与消费力——官方统计锚点（必须在 demographic_profile 最前面用 Markdown 表格或有序列表逐行引用；禁止用散文吞掉数字）】',
@@ -61,11 +79,25 @@ export function buildAcsQuantAnchorsBlock(
       tractAvail ? `- 片区人均收入 B19301（USD）：${fmtUsd(tract.per_capita_income_usd, 'zh')}` : '',
       tractAvail ? `- 片区年龄中位数 B01002：${fmtQty(tract.median_age, 'zh')}` : '',
       tractAvail ? `- 片区自有住房价值中位数 B25077（USD）：${fmtUsd(tract.median_home_value_usd, 'zh')}` : '',
-      `- 所在县总人口 B01003：${fmtQty(county.population, 'zh')}`,
+      tractAvail ? `- 片区租金中位数 B25064（USD/月）：${fmtUsd(tract.median_gross_rent_usd, 'zh')}` : '',
+      tractAvail ? `- 片区种族与西班牙裔 B03002（占比）：白人(NH) ${fmtPct(pickPct(tractRace.white_nh as _AcsShareLike), 'zh')}；亚裔(NH) ${fmtPct(pickPct(tractRace.asian_nh as _AcsShareLike), 'zh')}；黑人(NH) ${fmtPct(pickPct(tractRace.black_nh as _AcsShareLike), 'zh')}；西班牙裔(任何种族) ${fmtPct(pickPct(tractRace.hispanic_any_race as _AcsShareLike), 'zh')}` : '',
+      tractAvail ? `- 片区家庭收入分布 B19001：≥$100k 占比 ${fmtPct(tractInc.pct_100k_plus, 'zh')}；≥$200k 占比 ${fmtPct(tractInc.pct_200k_plus, 'zh')}` : '',
+      tractAvail ? `- 片区学历 B15003：本科及以上(25 岁+) 占比 ${fmtPct(tractEdu.bachelors_plus_pct, 'zh')}` : '',
+      `- 所在县名称：${countyName || '（见 ACS NAME 字段）'}`,
+      `- 县总人口 B01003：${fmtQty(county.population, 'zh')}`,
       `- 县家庭收入中位数 B19013（USD）：${fmtUsd(county.median_household_income_usd, 'zh')}`,
       `- 县人均收入 B19301（USD）：${fmtUsd(county.per_capita_income_usd, 'zh')}`,
       `- 县年龄中位数 B01002：${fmtQty(county.median_age, 'zh')}`,
       `- 县自有住房价值中位数 B25077（USD）：${fmtUsd(county.median_home_value_usd, 'zh')}`,
+      `- 县租金中位数 B25064（USD/月）：${fmtUsd(county.median_gross_rent_usd, 'zh')}`,
+      `- 县种族与西班牙裔 B03002（占比）：白人(NH) ${fmtPct(pickPct(countyRace.white_nh as _AcsShareLike), 'zh')}；亚裔(NH) ${fmtPct(pickPct(countyRace.asian_nh as _AcsShareLike), 'zh')}；黑人(NH) ${fmtPct(pickPct(countyRace.black_nh as _AcsShareLike), 'zh')}；西班牙裔(任何种族) ${fmtPct(pickPct(countyRace.hispanic_any_race as _AcsShareLike), 'zh')}`,
+      `- 县家庭收入分布 B19001：≥$100k 占比 ${fmtPct(countyInc.pct_100k_plus, 'zh')}；≥$200k 占比 ${fmtPct(countyInc.pct_200k_plus, 'zh')}`,
+      `- 县学历 B15003：本科及以上(25 岁+) 占比 ${fmtPct(countyEdu.bachelors_plus_pct, 'zh')}`,
+      '',
+      '【人口叙事写作铁律——D-3】',
+      '- 任何「亚裔比例 / 西班牙裔比例 / 高收入家庭占比 / 本科及以上比例」等定量结论，**必须**直接引用上表中的具体百分比；若该数字为「数据抑制或缺失」，须明文写「ACS 该字段不可获取」并改用县级或附近片区数据替代，**禁止编造或写"数据抑制"作为结论**。',
+      '- demographic_profile 必须新增 1 段「目标客群与消费力推演」：基于 ≥$100k / ≥$200k 家庭占比 + 本科以上学历占比 + 该业态(cuisine)的人均客单价区间，给出周中午餐 / 周末晚餐两个时段的可承受客单价区间（USD），并写明所引用的具体 ACS 字段。',
+      '- 若 marketData.demographic_narrative 存在（Claude 预先生成的 McKinsey 风格段落），可作为参考结构与措辞，但不得复制超过 30 个连续汉字；最终段落须由你重新组织语言并补充与本店 cuisine 的关联。',
       '',
       '【贸易区与客流——量化要求】',
       '- trade_area_analysis 必须包含 **至少 5 行** 的 Markdown 表格，建议列：「范围/半径」「时段/日型（工作日午/工作日晚/周末）」「客流或需求假设」「依据」。',
@@ -87,11 +119,25 @@ export function buildAcsQuantAnchorsBlock(
     tractAvail ? `- Tract per capita income B19301 (USD): ${fmtUsd(tract.per_capita_income_usd, 'en')}` : '',
     tractAvail ? `- Tract median age B01002: ${fmtQty(tract.median_age, 'en')}` : '',
     tractAvail ? `- Tract median owner home value B25077 (USD): ${fmtUsd(tract.median_home_value_usd, 'en')}` : '',
+    tractAvail ? `- Tract median gross rent B25064 (USD/mo): ${fmtUsd(tract.median_gross_rent_usd, 'en')}` : '',
+    tractAvail ? `- Tract race & Hispanic B03002 (share): White(NH) ${fmtPct(pickPct(tractRace.white_nh as _AcsShareLike), 'en')}; Asian(NH) ${fmtPct(pickPct(tractRace.asian_nh as _AcsShareLike), 'en')}; Black(NH) ${fmtPct(pickPct(tractRace.black_nh as _AcsShareLike), 'en')}; Hispanic(any race) ${fmtPct(pickPct(tractRace.hispanic_any_race as _AcsShareLike), 'en')}` : '',
+    tractAvail ? `- Tract HH income brackets B19001: share >= $100k ${fmtPct(tractInc.pct_100k_plus, 'en')}; share >= $200k ${fmtPct(tractInc.pct_200k_plus, 'en')}` : '',
+    tractAvail ? `- Tract education B15003: bachelor's+ share of pop 25+ ${fmtPct(tractEdu.bachelors_plus_pct, 'en')}` : '',
+    `- County NAME: ${countyName || '(ACS NAME)'}`,
     `- County population B01003: ${fmtQty(county.population, 'en')}`,
     `- County median household income B19013 (USD): ${fmtUsd(county.median_household_income_usd, 'en')}`,
     `- County per capita income B19301 (USD): ${fmtUsd(county.per_capita_income_usd, 'en')}`,
     `- County median age B01002: ${fmtQty(county.median_age, 'en')}`,
     `- County median owner home value B25077 (USD): ${fmtUsd(county.median_home_value_usd, 'en')}`,
+    `- County median gross rent B25064 (USD/mo): ${fmtUsd(county.median_gross_rent_usd, 'en')}`,
+    `- County race & Hispanic B03002 (share): White(NH) ${fmtPct(pickPct(countyRace.white_nh as _AcsShareLike), 'en')}; Asian(NH) ${fmtPct(pickPct(countyRace.asian_nh as _AcsShareLike), 'en')}; Black(NH) ${fmtPct(pickPct(countyRace.black_nh as _AcsShareLike), 'en')}; Hispanic(any race) ${fmtPct(pickPct(countyRace.hispanic_any_race as _AcsShareLike), 'en')}`,
+    `- County HH income brackets B19001: share >= $100k ${fmtPct(countyInc.pct_100k_plus, 'en')}; share >= $200k ${fmtPct(countyInc.pct_200k_plus, 'en')}`,
+    `- County education B15003: bachelor's+ share of pop 25+ ${fmtPct(countyEdu.bachelors_plus_pct, 'en')}`,
+    '',
+    '[DEMOGRAPHIC NARRATIVE RULES — D-3]',
+    '- Any quantitative claim about Asian / Hispanic / high-income / bachelor\'s+ share MUST cite the percentage above; if a field shows "suppressed or missing", explicitly say so and fall back to county or nearby-tract data. Do NOT fabricate Census-style precision or just write "suppressed" as a conclusion.',
+    '- demographic_profile MUST include a "target customer & purchasing power" paragraph that ties the >= $100k / >= $200k HH shares + bachelor\'s+ share + cuisine to a defensible weekday-lunch and weekend-dinner ticket band (USD), citing the exact ACS fields used.',
+    '- If marketData.demographic_narrative exists (Claude-generated McKinsey-style paragraph), use it as a reference for structure/tone but do NOT copy more than ~20 contiguous words; you must rewrite and tie it to this specific cuisine.',
     '',
     '[TRADE AREA — QUANT RULES]',
     '- trade_area_analysis MUST include a Markdown table with **≥5 rows** (suggested columns: radius/range, daypart, demand/foot-traffic assumption, evidence).',

@@ -803,11 +803,33 @@ function generatePdfHtml(input: {
       <h3>📍 ${escapeHtml(L.tradeArea)}</h3>
       <div class="prose">${proseToHtml(pickStr(full.trade_area_analysis)!)}</div>
     </div>` : ''}
-    ${pickStr(full.demographic_profile) ? `
-    <div class="column-box">
-      <h3>👥 ${escapeHtml(L.demographic)}</h3>
-      <div class="prose">${proseToHtml(pickStr(full.demographic_profile)!)}</div>
-    </div>` : ''}
+    ${(() => {
+      const narr = (marketData && typeof marketData === 'object'
+        ? (marketData as Record<string, unknown>).demographic_narrative
+        : null) as { paragraph_zh?: string; paragraph_en?: string } | null;
+      const claudePara =
+        narr && typeof narr === 'object'
+          ? lang === 'zh'
+            ? (narr.paragraph_zh || '').trim()
+            : (narr.paragraph_en || '').trim()
+          : '';
+      const hasLlm = !!pickStr(full.demographic_profile);
+      if (!claudePara && !hasLlm) return '';
+      const claudeBlock = claudePara
+        ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:12px;">
+             <div style="font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#1d4ed8;margin-bottom:6px;">
+               ${lang === 'zh' ? 'MCKINSEY 风格人口与消费力简报 · CLAUDE · ACS B03002/B19001/B15003' : 'McKinsey-style Demographics Brief · Claude · ACS B03002/B19001/B15003'}
+             </div>
+             ${proseToHtml(claudePara)}
+           </div>`
+        : '';
+      const llmBlock = hasLlm ? `<div class="prose">${proseToHtml(pickStr(full.demographic_profile)!)}</div>` : '';
+      return `<div class="column-box">
+        <h3>👥 ${escapeHtml(L.demographic)}</h3>
+        ${claudeBlock}
+        ${llmBlock}
+      </div>`;
+    })()}
   </div>
 
   ${pickStr(full.competition_landscape) ? `

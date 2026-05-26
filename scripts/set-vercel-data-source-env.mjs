@@ -21,6 +21,7 @@ const KEYS_TO_PUSH = [
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_API_KEY_BACKUP',
   'DEEPSEEK_API_KEY',
+  'GOOGLE_MAPS_API_KEY',
 ];
 
 function unquote(v) {

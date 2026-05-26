@@ -9,6 +9,7 @@
  */
 
 import { enrichMarketDataWithAcs } from '@/lib/funnel/iq-acs-enrichment';
+import { enrichMarketDataWithDemographicNarrative } from '@/lib/funnel/iq-demographic-narrative';
 import { gatherIqMarketDataFromGoogle } from '@/lib/funnel/iq-market-data';
 import { extractMarketSummary } from '@/lib/funnel/iq-premium-anchors';
 import {
@@ -107,6 +108,17 @@ export async function resolveMarketDataForIqReport(input: {
   }
 
   base = await enrichMarketDataWithAcs(base);
+
+  if (isPremium) {
+    try {
+      base = await enrichMarketDataWithDemographicNarrative(base, {
+        cuisine: businessType,
+        address: location,
+      });
+    } catch (err) {
+      console.warn('[resolve-market-data] demographic narrative enrichment failed', err);
+    }
+  }
 
   if (isPremium) {
     const existingDeep = base.deep_research as DeepResearchPack | undefined;
