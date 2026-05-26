@@ -1,19 +1,19 @@
 {
-  "version": 2,
-  "activeInstanceId": "instance-263f656b",
-  "instances": [
+  "version": 4,
+  "activeEnvironmentId": "instance-263f656b",
+  "environmentTargets": [
     {
-      "id": "legacy-default-project",
+      "id": "legacy-default-project-instance",
       "name": "Default instance",
+      "kind": "external-instance",
+      "url": "https://n8n.c8geek.cloud",
       "instanceIdentifier": "n8n_c8geek_cloud_maxwell_l"
     },
     {
-      "id": "instance-263f656b",
+      "id": "instance-263f656b-instance",
       "name": "n8n_c8geek_cloud",
-      "host": "https://n8n.c8geek.cloud",
-      "syncFolder": "./workflows",
-      "projectId": "personal",
-      "projectName": "Personal",
+      "kind": "external-instance",
+      "url": "https://n8n.c8geek.cloud",
       "instanceIdentifier": "n8n_c8geek_cloud_maxwell_l",
       "verification": {
         "status": "verified",
@@ -25,9 +25,26 @@
       }
     }
   ],
-  "host": "https://n8n.c8geek.cloud",
-  "syncFolder": "./workflows",
-  "projectId": "personal",
-  "projectName": "Personal",
-  "instanceIdentifier": "n8n_c8geek_cloud_maxwell_l"
+  "environments": [
+    {
+      "id": "legacy-default-project",
+      "name": "Default instance",
+      "syncSlug": "default-instance",
+      "environmentTargetId": "legacy-default-project-instance",
+      "projectId": "personal",
+      "projectName": "Personal",
+      "workflowsPath": "workflows/default-instance",
+      "syncFolder": "./workflows"
+    },
+    {
+      "id": "instance-263f656b",
+      "name": "n8n_c8geek_cloud",
+      "syncSlug": "n8n-c8geek-cloud",
+      "environmentTargetId": "instance-263f656b-instance",
+      "projectId": "personal",
+      "projectName": "Personal",
+      "workflowsPath": "workflows/n8n-c8geek-cloud",
+      "syncFolder": "./workflows"
+    }
+  ]
 }

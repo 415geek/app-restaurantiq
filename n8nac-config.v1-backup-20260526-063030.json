@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "activeInstanceId": "instance-263f656b",
+  "instances": [
+    {
+      "id": "legacy-default-project",
+      "name": "Default instance",
+      "instanceIdentifier": "n8n_c8geek_cloud_maxwell_l"
+    },
+    {
+      "id": "instance-263f656b",
+      "name": "n8n_c8geek_cloud",
+      "host": "https://n8n.c8geek.cloud",
+      "syncFolder": "./workflows",
+      "projectId": "personal",
+      "projectName": "Personal",
+      "instanceIdentifier": "n8n_c8geek_cloud_maxwell_l",
+      "verification": {
+        "status": "verified",
+        "normalizedHost": "https://n8n.c8geek.cloud",
+        "userId": "23b399f7-b7bf-4490-8deb-31d91cbc905c",
+        "userName": "Maxwell L",
+        "userEmail": "geekyiot@gmail.com",
+        "lastCheckedAt": "2026-04-03T19:03:22.065Z"
+      }
+    }
+  ],
+  "host": "https://n8n.c8geek.cloud",
+  "syncFolder": "./workflows",
+  "projectId": "personal",
+  "projectName": "Personal",
+  "instanceIdentifier": "n8n_c8geek_cloud_maxwell_l"
+}

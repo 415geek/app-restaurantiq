@@ -7,7 +7,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
 // Property name                    Node type (short)         Flags
-// Webhook                            webhook
+// Webhook                            webhook                    [creds]
 // ValidatePrompt                     code
 // Openai                             httpRequest
 // Parsejson                          code
@@ -34,6 +34,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
     active: true,
     description: '',
     isArchived: false,
+    projectId: 'TetxDJaGPpRJbFV3',
     settings: {
         executionOrder: 'v1',
         binaryMode: 'separate',
@@ -53,6 +54,7 @@ export class RestaurantiqAnalyzeWorkflow {
         type: 'n8n-nodes-base.webhook',
         version: 2,
         position: [272, 304],
+        credentials: { httpHeaderAuth: { id: 'JI9XqrzAg4eF0ayn', name: 'RestaurantIQ IQ Webhook Bearer' } },
     })
     Webhook = {
         httpMethod: 'POST',
@@ -61,6 +63,7 @@ export class RestaurantiqAnalyzeWorkflow {
         options: {
             rawBody: false,
         },
+        authentication: 'headerAuth',
     };
 
     @node({
@@ -72,25 +75,11 @@ export class RestaurantiqAnalyzeWorkflow {
     })
     ValidatePrompt = {
         mode: 'runOnceForEachItem',
-        jsCode: `const expected = String(
-  ($vars?.N8N_IQ_WEBHOOK_SECRET ?? '') ||
-  $env.N8N_IQ_WEBHOOK_SECRET ||
-  $env.N8N_INTERNAL_AUTH_TOKEN ||
-  ''
-).trim();
-let root = $json;
+        jsCode: `let root = $json;
 try {
   root = $('Webhook').first().json;
 } catch {
   /* fallback when Webhook item shape differs */
-}
-const headers = root.headers || {};
-const auth = String(
-  headers.authorization || headers.Authorization || headers['x-authorization'] || ''
-).trim();
-const want = expected ? 'Bearer ' + expected : '';
-if (expected && auth !== want) {
-  throw new Error('Unauthorized');
 }
 
 const body = root.body || {};
@@ -103,25 +92,23 @@ if (!address) throw new Error('Missing address');
 
 const system = language === 'zh'
   ? [
-      '你是 LocationIQ 选址大师的分析引擎。角色：拥有约15年经验的商业地产与餐饮选址顾问。',
-      '你必须按 V2.0 框架在脑中完成「5维加权评分卡」再输出：客流潜力25%、人群匹配20%、竞争压力20%、可达性20%、租金性价比15%；综合分0–100。',
-      '等级：80–100🟢强烈推荐；60–79🟡值得考虑；40–59🟠谨慎评估；0–39🔴不建议。',
-      '数据意识：可依据 Google Maps/Places、Census/ACS、Yelp、Walk Score、Google Trends 等公开数据类型表述；若无可靠数据，禁止编造精确数字，须写「根据该区域典型水平估算」并标注[估算]。',
-      '每条判断须可追溯：先事实或[估算]→再对开店的影响→再给一条可执行建议（在 market_snapshot 三句中体现）。',
-      '语气：资深顾问向老板汇报，专业、克制，不要论文腔与营销空话。',
-      '免费版目标：约30秒内呈现冲击力结论 + 3条关键洞察 + 强付费升级钩子；勿把付费版深度一次性讲完。',
-      'verdict 仅允许小写：go | caution | no（对应 GO / CAUTION / NO-GO）。',
+      '你是 LocationIQ 选址大师的分析引擎。角色：麦肯锡商业地产与餐饮选址合伙人，向华人餐饮老板做签租前汇报。',
+      '脑中完成六层0–100与decision_tier，再压缩为免费JSON；综合分仅辅助，首句须回答签/有条件签/暂不签。',
+      '数据：优先 market_data/锚点；无数据单点标[估算]，禁止三次重复「根据该区域典型水平估算」。',
+      '免费版=30秒签租备忘录：结论+3条证据+1致命风险+「完整版才能拍板的3个问题」；勿交付三场景营收或完整竞对矩阵。',
+      '禁止空话：机会大于风险、潜力巨大、交通便利、人流不错、建议加强营销。',
+      'market_snapshot每条≤55字：【事实】→【对利润/现金流含义】→【完整版才解锁的数字或清单】；paywall_teaser用「完整版将回答你现在无法拍板的3个问题：①…②…③…」。',
+      'verdict仅go|caution|no；decision_tier必填；risk_audit_preview.one_line_conclusion为决策句。',
       '严格输出 JSON，不要 Markdown、不要额外说明文字。',
     ].join(' ')
   : [
-      'You are the LocationIQ site-selection analysis engine: a senior commercial real estate advisor for restaurant operators.',
-      'Internally apply the V2.0 weighted scorecard (0–100 each, then composite): foot traffic potential 25%, demographic fit 20%, competitive pressure 20%, accessibility 20%, rent value 15%.',
-      'Tiers: 80–100 strong green; 60–79 yellow proceed-with-eyes-open; 40–59 orange high caution; 0–39 red avoid unless special advantage.',
-      'Data hygiene: you may reference typical public data sources (Google Places, Census/ACS, Yelp, Walk Score, Google Trends). Never invent exact figures; use directional language or label assumptions [estimate].',
-      'Each insight should flow: fact or [estimate] → impact on opening decision → one actionable suggestion.',
-      'Tone: partner-level memo, not marketing fluff or academic essay.',
-      'Free tier: punchy conclusion + three insights + strong upgrade hook; do not deliver the full paid report.',
-      'verdict must be lowercase only: go | caution | no.',
+      'You are LocationIQ: a McKinsey-style restaurant real-estate partner writing a pre-lease memo.',
+      'Score six layers 0–100 and set decision_tier; lead with sign/conditional/do not sign—not score alone.',
+      'Prioritize market_data anchors; label gaps [estimate]; never repeat the same generic estimate phrase three times.',
+      'Free tier = 30s memo: verdict + 3 evidence bullets + 1 costly risk + 3 questions only the paid report answers; no three revenue scenarios or full competitor matrix.',
+      'Ban fluff: opportunity outweighs risk, huge potential, convenient location, good foot traffic, improve marketing.',
+      'market_snapshot ≤~35 words each: [fact] → [P&L meaning] → [paid-only tease]; paywall_teaser: "The full report answers 3 decisions you cannot make today: ①…②…③…".',
+      'verdict go|caution|no; decision_tier required; risk_audit_preview.one_line_conclusion must be a decision sentence.',
       'Output STRICT JSON only, no markdown, no prose outside JSON.',
     ].join(' ');
 
@@ -131,13 +118,13 @@ const user = language === 'zh'
       \`地址: \${address}\`,
       \`业态: \${industry}\${cuisine_type ? '（' + cuisine_type + '）' : ''}\`,
       '',
-      '先在脑中完成5维0–100评分与综合分，再压缩进下列 JSON 字段（不要单独输出 Markdown 表格）：',
+      '先在脑中完成六层评分与 decision_tier，再压缩进下列 JSON（不要单独输出 Markdown 表格）：',
       '',
-      'headline：一行内包含「综合约XX/100 + 等级emoji（🟢/🟡/🟠/🔴）+ 机会vs风险张力」，像投资判断标题。',
-      'subheadline：一句话概括评分卡最关键依据，勿泄露付费版才应给的细节。',
-      'market_snapshot：恰好3条字符串；每条对应「关键发现」：以可核查事实或[估算]起句 → 对投资决策的影响 → 一句可执行建议；禁止空洞套话。',
-      'hidden_risk：一条最高优先级风险，须关联利润/复购/生存/差异化/价格战等，并让人感知忽略成本。',
-      'paywall_teaser：一句强钩子，指向付费版：完整竞对清单与威胁矩阵、三场景营收模型、风险概率-影响矩阵与对冲、90天路线图含KPI与预算、可比成功/失败案例等；勿重复 hidden_risk。',
+      'headline：优先「{签租判断}｜{一句赌注}」；可含「综合约XX/100」；须含至少一处锚点（店名/N/距离/路段）；禁止「机会大于风险」。',
+      'subheadline：一句「若现在签 lease，你赌的是___」。',
+      'market_snapshot：恰好3条，每条≤55字；【事实】→【利润/现金流含义】→【完整版才给的数字或清单】；分别覆盖竞争、客流、经济钩子。',
+      'hidden_risk：「若忽视，可能导致___」并尽量量化；勿与 paywall_teaser 重复。',
+      'paywall_teaser：「完整版将回答你现在无法拍板的 3 个问题：①…②…③…」（从保本额、三场景营收、竞对威胁、签租清单、替代走廊、失败对照中选3）。',
       'verdict：go | caution | no；信息不足且下行风险显著时用 caution。',
       '',
       '严格输出 JSON：',
@@ -168,13 +155,13 @@ const user = language === 'zh'
       \`Address: \${address}\`,
       \`Business type: \${industry}\${cuisine_type ? ' (' + cuisine_type + ')' : ''}\`,
       '',
-      'After scoring internally, compress into JSON fields (no separate markdown tables):',
+      'After six-layer scoring and decision_tier, compress into JSON (no separate markdown tables):',
       '',
-      'headline: one line with approximate composite score /100, tier label, and opportunity-vs-risk tension.',
-      'subheadline: one sentence with the strongest evidence summary; withhold paid-only depth.',
-      'market_snapshot: exactly 3 strings; each is a key finding: lead with fact or [estimate] → impact → one actionable suggestion.',
-      'hidden_risk: single top risk tied to margins, repeat visits, survival, differentiation, or discount wars; must feel costly to ignore.',
-      'paywall_teaser: one line teasing paid report: competitor matrix, three-scenario revenue model, risk probability-impact matrix with mitigations, 90-day plan with KPIs/budget, comparable success/failure cases; do not repeat hidden_risk.',
+      'headline: prefer "{lease call} | {one bet}"; score optional; include ≥1 anchor; ban "opportunity outweighs risk".',
+      'subheadline: one line "If you sign today, you are betting on ___".',
+      'market_snapshot: exactly 3 strings, ≤~35 words each: [fact] → [P&L meaning] → [paid-only tease]; cover competition, traffic, economics hook.',
+      'hidden_risk: "If ignored, likely ___" with quantified downside when possible; do not repeat paywall_teaser.',
+      'paywall_teaser: "The full report answers 3 decisions you cannot make today: ①…②…③…" (pick 3 specific paid deliverables).',
       'verdict: go | caution | no; use caution when uncertainty with meaningful downside.',
       '',
       'Return STRICT JSON:',
@@ -201,8 +188,7 @@ const user = language === 'zh'
       'Do not output a reason field; stay concise; do not provide the full solution.',
     ].filter(Boolean).join('\\n');
 
-return [{
-  json: {
+return { json: {
     system,
     user,
     address,
@@ -210,7 +196,7 @@ return [{
     cuisine_type,
     language
   }
-}];`,
+};`,
     };
 
     @node({
@@ -284,8 +270,7 @@ try {
   market_data = null;
 }
 
-return [{
-  json: {
+return { json: {
     analysis_id: $execution.id,
     verdict,
     headline,
@@ -297,7 +282,7 @@ return [{
     risk_audit_preview: riskAuditPreview,
     market_data,
   }
-}];`,
+};`,
     };
 
     @node({
@@ -464,13 +449,12 @@ const clipped = raw.length > 22000 ? raw.slice(0, 22000) + ' ...[truncated]' : r
 
 const augmentedUser = \`\${input.user}\\n\\nExternal multi-source data (Google Places + Yelp) is attached below. Use it as primary evidence and avoid vague statements.\\n\\nMarket data summary:\\n\${summaryText}\\n\\nRaw external data JSON:\\n\${clipped}\`;
 
-return [{
-  json: {
+return { json: {
     ...input,
     user: augmentedUser,
     external_data: dataPack,
   }
-}];`,
+};`,
     };
 
     // =====================================================================

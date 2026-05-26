@@ -7,7 +7,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
 // Property name                    Node type (short)         Flags
-// Webhook                            webhook
+// Webhook                            webhook                    [creds]
 // ValidatePrompt                     code
 // Openai                             httpRequest
 // Parsejson                          code
@@ -29,14 +29,16 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 @workflow({
     id: '0b4e252ef26f49c8',
     name: 'RestaurantIQ - Full Report',
-    active: false,
+    active: true,
     description: '',
     isArchived: false,
+    projectId: 'TetxDJaGPpRJbFV3',
     settings: {
         executionOrder: 'v1',
         binaryMode: 'separate',
         availableInMCP: false,
         callerPolicy: 'workflowsFromSameOwner',
+        timeSavedMode: 'fixed',
     },
 })
 export class RestaurantiqFullReportWorkflow {
@@ -51,6 +53,7 @@ export class RestaurantiqFullReportWorkflow {
         type: 'n8n-nodes-base.webhook',
         version: 2,
         position: [272, 528],
+        credentials: { httpHeaderAuth: { id: 'JI9XqrzAg4eF0ayn', name: 'RestaurantIQ IQ Webhook Bearer' } },
     })
     Webhook = {
         httpMethod: 'POST',
@@ -59,6 +62,7 @@ export class RestaurantiqFullReportWorkflow {
         options: {
             rawBody: false,
         },
+        authentication: 'headerAuth',
     };
 
     @node({
@@ -70,20 +74,13 @@ export class RestaurantiqFullReportWorkflow {
     })
     ValidatePrompt = {
         mode: 'runOnceForEachItem',
-        jsCode: `const expected = String(
-  ($vars?.N8N_IQ_WEBHOOK_SECRET ?? '') ||
-  $env.N8N_IQ_WEBHOOK_SECRET ||
-  $env.N8N_INTERNAL_AUTH_TOKEN ||
-  ''
-).trim();
-let root = $json;
+        jsCode: `let root = $json;
 try {
   root = $('Webhook').first().json;
-} catch {}
-const headers = root.headers || {};
-const auth = String(headers.authorization || headers.Authorization || headers['x-authorization'] || '').trim();
-const want = expected ? 'Bearer ' + expected : '';
-if (expected && auth !== want) { throw new Error('Unauthorized'); }
+} catch {
+  /* fallback when Webhook item shape differs */
+}
+
 const body = root.body || {};
 const address = String(body.address || body.location || '').trim();
 const industry = String(body.industry || body.businessType || 'restaurant').trim();
@@ -104,12 +101,14 @@ const system = language === 'zh'
       '严禁「A外卖/B快餐/竞品C」等虚构代号；risks 与 opportunities 禁止内容雷同；公交与精确客流无来源须标 [待核实]。',
       '用户消息含【系统数据锚点】时须服从其中店名与美元营收锚点（±25% 须写理由）。',
       '风险须配对冲思路；行动计划须具体到人/预算/产出/完成标志，不写「做市场调研」类空话。',
+      '麦肯锡付费标准：SCR（情境→冲突→建议）；每节至少一条反直觉发现；禁止「市场前景广阔」「竞争适中」等模板句；key_evidence_points≥8条且每条含数字+来源。',
       '全文中文；专有名词、地址、品牌可保留英文。',
       '严格输出 JSON，键名与前端约定一致。',
     ].join(' ')
   : [
       'You are the LocationIQ premium site-selection engine: structured consultant + trade-area analytics + restaurant operations depth.',
       'The customer paid $19 for a decision-grade mini report; deliver $500+ consulting density with transparent assumptions and lead-with-conclusion style.',
+      'McKinsey paid bar: SCR (situation→complication→recommendation); one non-obvious insight per major section; ban template fluff; key_evidence_points≥8 with number+source each.',
       'Follow V2.0 premium themes: layered trade area, daypart demand matrix, demographics & spending power, competitor tables & whitespace, three-scenario revenue + sensitivity, risk matrix with mitigations, differentiation & acquisition, 90-day plan, comparables, weighted decision matrix.',
       'No fabricated precision; label [estimate] when needed; use real competitor names when inferable from provided data.',
       'Never use A/B/C placeholder competitor labels; opportunities must not duplicate risks; transit/foot traffic without sources → [TBD].',
@@ -249,7 +248,7 @@ const user = language === 'zh'
       'Return ONE JSON object with ALL keys (arrays must exist, use [] if needed): report_title, one_line_conclusion, decision_tier, risk_audit (overall_score, six layer scores, radar, break_even_revenue_monthly_usd, safe_revenue_monthly_usd, top_risks, playbook, lease_checklist>=10, cost_breakdown, competitor_tiers_note, data_confidence_pct, missing_data, acquired_data), dashboard{overall_score,foot_traffic_index,competition_intensity,payback_months,recommendation}, executive_summary, final_verdict, site_and_access_assessment, key_evidence_points (>=6 strings), alternative_corridors (>=3 objects with corridor_name,rationale,listings>=2 rows address_or_listing,sqft,monthly_rent_usd,highlights,source_tag), trade_area_analysis, demographic_profile, competition_landscape, revenue_estimate, competitors (>=5 objects with name,distance_mi,category,rating,review_count,price_tier,threat_level,analysis), risk_matrix (exactly 5 objects with risk,probability,financial_impact,trigger,mitigation), revenue_model{methodology,scenarios[3],sensitivity,breakeven,monthly_costs_note}, risks[5], opportunities[3], failure_scenarios[3], differentiation_strategy, acquisition_channels (>=4), action_plan, action_plan_structured (8-12 objects), comparables{success_cases,failure_cases}, decision_matrix (5 rows), confidence (High|Medium|Low only), confidence_rationale, data_sources_and_disclaimer. If web_research exists in market_data, fold into evidence + narrative. Prefer real competitor names from market_data.',
     ].filter(Boolean).join('\\n');
 
-return [{ json: { system: systemWithCuisine, user } }];`,
+return { json: { system: systemWithCuisine, user } };`,
     };
 
     @node({
@@ -295,7 +294,7 @@ return [{ json: { system: systemWithCuisine, user } }];`,
 const choice = raw.choices && raw.choices[0];
 const content = choice && choice.message && choice.message.content ? String(choice.message.content) : '';
 let parsed; try { parsed = JSON.parse(content); } catch { throw new Error('Model did not return valid JSON'); }
-return [{ json: parsed }];`,
+return { json: parsed };`,
     };
 
     @node({
