@@ -42,62 +42,139 @@ function yelpPriceToInt(p: string | null): number | null {
   return n >= 1 && n <= 4 ? n : null;
 }
 
+/**
+ * Yelp can geocode the bare address itself via `location=` (no lat/lng required), but
+ * we still want a lat/lng to power the competitor map. Until we add a Google-independent
+ * geocoder, fall back to a coarse city-centroid lookup for known SF / LA / NYC ZIP
+ * prefixes so paid reports don't crash when Google geocode silently fails on Vercel.
+ */
+function staticGeocodeFallback(addressRaw: string): GeocodeResult | null {
+  const address = addressRaw.toLowerCase();
+  if (/\bsan francisco\b/.test(address) || /,\s*sf\b/.test(address)) {
+    return { formatted_address: addressRaw, lat: 37.7749, lng: -122.4194 };
+  }
+  if (/\blos angeles\b/.test(address) || /,\s*la\b/.test(address)) {
+    return { formatted_address: addressRaw, lat: 34.0522, lng: -118.2437 };
+  }
+  if (/\bnew york\b/.test(address) || /,\s*ny\b/.test(address)) {
+    return { formatted_address: addressRaw, lat: 40.7128, lng: -74.006 };
+  }
+  return null;
+}
+
 export async function gatherIqMarketDataFromGoogle(input: {
   location: string;
   businessType: string;
 }): Promise<Record<string, unknown> | null> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
-  if (!apiKey) return null;
-
   const location = input.location.trim();
   const cuisine = input.businessType.trim();
   if (!location) return null;
 
+  let geocode: GeocodeResult | null = null;
+  let placesStatus: string = 'NOT_RUN';
+  let gRows: Array<{
+    name?: string;
+    rating?: number;
+    user_ratings_total?: number;
+    price_level?: number;
+    formatted_address?: string;
+    types?: string[];
+    place_id?: string;
+    geometry?: { location?: { lat: number; lng: number } };
+  }> = [];
+
+  // ── Step 1: Google geocode + textsearch (best-effort) ───────────────────────────
+  if (apiKey) {
+    try {
+      const geocodeUrl = new URL('https://maps.googleapis.com/maps/api/geocode/json');
+      geocodeUrl.searchParams.set('address', location);
+      geocodeUrl.searchParams.set('key', apiKey);
+      const geocodeRes = await fetch(geocodeUrl, { cache: 'no-store' });
+      if (geocodeRes.ok) {
+        const geocodeData = (await geocodeRes.json()) as {
+          status?: string;
+          error_message?: string;
+          results?: Array<{ formatted_address?: string; geometry?: { location?: { lat: number; lng: number } }; place_id?: string }>;
+        };
+        if (geocodeData.status === 'OK' && geocodeData.results?.length) {
+          const top = geocodeData.results[0];
+          geocode = {
+            formatted_address: String(top.formatted_address ?? location),
+            lat: top.geometry?.location?.lat ?? 0,
+            lng: top.geometry?.location?.lng ?? 0,
+            place_id: top.place_id,
+          };
+        } else {
+          console.warn(
+            '[iq-market-data] geocode non-OK status=%s message=%s',
+            geocodeData.status,
+            geocodeData.error_message ?? '',
+          );
+        }
+      } else {
+        console.warn('[iq-market-data] geocode http=%d', geocodeRes.status);
+      }
+    } catch (err) {
+      console.warn('[iq-market-data] geocode threw:', err);
+    }
+
+    if (geocode) {
+      try {
+        const query =
+          cuisine.length > 0
+            ? `${cuisine} restaurant near ${location}`
+            : `restaurants near ${location}`;
+        const placesUrl = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json');
+        placesUrl.searchParams.set('query', query);
+        placesUrl.searchParams.set('type', 'restaurant');
+        placesUrl.searchParams.set('key', apiKey);
+        const placesRes = await fetch(placesUrl, { cache: 'no-store' });
+        if (placesRes.ok) {
+          const placesData = (await placesRes.json()) as {
+            status?: string;
+            error_message?: string;
+            results?: typeof gRows;
+          };
+          placesStatus = placesData.status ?? 'UNKNOWN';
+          if (placesData.status === 'OK' && Array.isArray(placesData.results)) {
+            gRows = placesData.results.slice(0, 12);
+          } else if (placesData.status !== 'OK') {
+            console.warn(
+              '[iq-market-data] places textsearch non-OK status=%s message=%s',
+              placesData.status,
+              placesData.error_message ?? '',
+            );
+          }
+        } else {
+          console.warn('[iq-market-data] places textsearch http=%d', placesRes.status);
+        }
+      } catch (err) {
+        console.warn('[iq-market-data] places textsearch threw:', err);
+      }
+    }
+  } else {
+    console.warn('[iq-market-data] GOOGLE_MAPS_API_KEY missing — skipping Google leg');
+  }
+
+  // Fall back to a coarse city-centroid lookup so Yelp + Foursquare still run.
+  if (!geocode) {
+    const fallback = staticGeocodeFallback(location);
+    if (fallback) {
+      console.warn('[iq-market-data] using static fallback geocode for %s', location);
+      geocode = fallback;
+    }
+  }
+
+  // If we still have no geocode AND no Google places, there's nothing useful to return.
+  if (!geocode && gRows.length === 0) {
+    return null;
+  }
+
+  // We need a non-null geocode for Yelp/FSQ even if it's coarse; if still null, bail.
+  if (!geocode) return null;
+
   try {
-    const geocodeUrl = new URL('https://maps.googleapis.com/maps/api/geocode/json');
-    geocodeUrl.searchParams.set('address', location);
-    geocodeUrl.searchParams.set('key', apiKey);
-    const geocodeRes = await fetch(geocodeUrl, { cache: 'no-store' });
-    if (!geocodeRes.ok) return null;
-    const geocodeData = (await geocodeRes.json()) as {
-      status?: string;
-      results?: Array<{ formatted_address?: string; geometry?: { location?: { lat: number; lng: number } }; place_id?: string }>;
-    };
-    if (geocodeData.status !== 'OK' || !geocodeData.results?.length) return null;
-
-    const top = geocodeData.results[0];
-    const geocode: GeocodeResult = {
-      formatted_address: String(top.formatted_address ?? location),
-      lat: top.geometry?.location?.lat ?? 0,
-      lng: top.geometry?.location?.lng ?? 0,
-      place_id: top.place_id,
-    };
-
-    const query =
-      cuisine.length > 0
-        ? `${cuisine} restaurant near ${location}`
-        : `restaurants near ${location}`;
-    const placesUrl = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json');
-    placesUrl.searchParams.set('query', query);
-    placesUrl.searchParams.set('type', 'restaurant');
-    placesUrl.searchParams.set('key', apiKey);
-    const placesRes = await fetch(placesUrl, { cache: 'no-store' });
-    if (!placesRes.ok) return null;
-    const placesData = (await placesRes.json()) as {
-      status?: string;
-      results?: Array<{
-        name?: string;
-        rating?: number;
-        user_ratings_total?: number;
-        price_level?: number;
-        formatted_address?: string;
-        types?: string[];
-        place_id?: string;
-        geometry?: { location?: { lat: number; lng: number } };
-      }>;
-    };
-
-    const gRows = Array.isArray(placesData.results) ? placesData.results.slice(0, 12) : [];
     const ratings = gRows.map((x) => num(x.rating)).filter((x): x is number => x !== null);
     const reviews = gRows.map((x) => num(x.user_ratings_total)).filter((x): x is number => x !== null);
     const avg = (arr: number[]) =>
@@ -169,7 +246,7 @@ export async function gatherIqMarketDataFromGoogle(input: {
         lat: r.lat,
         lng: r.lng,
       })),
-      places_status: placesData.status ?? 'UNKNOWN',
+      places_status: placesStatus,
       yelp_status: yelpPack?.api_status ?? 'not_configured',
       foursquare_status: fsqPack?.api_status ?? 'not_configured',
     };
@@ -183,7 +260,7 @@ export async function gatherIqMarketDataFromGoogle(input: {
       summary,
       google_raw: {
         textsearch: {
-          status: placesData.status,
+          status: placesStatus,
           results: gRows,
         },
       },
@@ -202,10 +279,8 @@ export async function gatherIqMarketDataFromGoogle(input: {
     };
   } catch (err) {
     // Defensive: keep returning null on transport errors so callers can fall back to
-    // existing market_data. Don't crash the report path.
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('[iq-market-data] gather failed:', err);
-    }
+    // existing market_data. Log on every env so we can diagnose Vercel issues.
+    console.warn('[iq-market-data] gather failed (post-geocode):', err);
     return null;
   }
 }
