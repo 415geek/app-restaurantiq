@@ -17,6 +17,51 @@ export const maxDuration = 60;
 
 const PDF_VIEWPORT = { width: 1200, height: 1600 };
 
+/**
+ * D-2: cold-start font cache.
+ *
+ * @sparticuz/chromium v143 only bundles Open Sans (Latin). Without a CJK font,
+ * zh PDFs render as tofu boxes. We fetch a tiny Noto Sans SC subset from the
+ * @fontsource CDN once per Lambda cold-start, base64-encode it, and inline it
+ * into the HTML as a data URI. Subsequent invocations on the same hot Lambda
+ * reuse the in-memory cache, so Puppeteer never makes a network call mid-render
+ * (which is what caused the previous flakes with @import url(...)).
+ *
+ * If the fetch fails we still try to render — the route is best-effort.
+ */
+let cjkFontDataUri: string | null = null;
+let cjkFontFetchPromise: Promise<string | null> | null = null;
+const CJK_FONT_URL =
+  'https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-sc@latest/chinese-simplified-400-normal.woff2';
+
+async function loadCjkFontDataUri(): Promise<string | null> {
+  if (cjkFontDataUri) return cjkFontDataUri;
+  if (cjkFontFetchPromise) return cjkFontFetchPromise;
+  cjkFontFetchPromise = (async () => {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8_000);
+      const res = await fetch(CJK_FONT_URL, { signal: ctrl.signal, cache: 'force-cache' });
+      clearTimeout(timer);
+      if (!res.ok) {
+        console.warn(`[api/iq/report/pdf] CJK font HTTP ${res.status}`);
+        return null;
+      }
+      const buf = Buffer.from(await res.arrayBuffer());
+      const dataUri = `data:font/woff2;base64,${buf.toString('base64')}`;
+      cjkFontDataUri = dataUri;
+      console.log(`[api/iq/report/pdf] CJK font cached, bytes=${buf.length}`);
+      return dataUri;
+    } catch (err) {
+      console.warn('[api/iq/report/pdf] CJK font fetch failed (non-fatal):', err);
+      return null;
+    } finally {
+      cjkFontFetchPromise = null;
+    }
+  })();
+  return cjkFontFetchPromise;
+}
+
 function isVercelServerless(): boolean {
   return (
     process.env.VERCEL === '1' ||
@@ -30,8 +75,20 @@ function isVercelServerless(): boolean {
  */
 async function launchPdfBrowser(): Promise<Browser> {
   if (isVercelServerless()) {
+    // D-2: drop the graphics stack (no GPU on Lambda). This also avoids
+    // extracting swiftshader.tar.br at runtime, shaving ~15MB off cold-start.
+    try {
+      (chromium as unknown as { setGraphicsMode: boolean }).setGraphicsMode = false;
+    } catch {
+      /* older versions ignore */
+    }
+    const args = [
+      ...chromium.args,
+      '--font-render-hinting=none',
+      '--disable-font-subpixel-positioning',
+    ];
     return puppeteer.launch({
-      args: chromium.args,
+      args,
       defaultViewport: PDF_VIEWPORT,
       executablePath: await chromium.executablePath(),
       headless: true,
@@ -358,7 +415,7 @@ function pdfRiskAuditBlock(
 
   return `
   <div class="section">
-    <h2>🛡 ${escapeHtml(L.riskAudit)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.riskAudit)}</h2>
     ${tierCopy ? `<p style="font-weight:700;color:#1a365d;margin-bottom:8px;">${escapeHtml(tierCopy.label)} — ${escapeHtml(tierCopy.desc)}</p>` : ''}
     ${overall != null ? `<p style="margin-bottom:8px;"><strong>${lang === 'zh' ? '综合分' : 'Overall'}:</strong> ${overall}/100${conf != null ? ` · ${escapeHtml(L.dataConfidence)}: ${conf}%` : ''}</p>` : ''}
     ${audit.one_line_conclusion || pickStr(full.one_line_conclusion) ? `<p style="margin-bottom:12px;font-style:italic;">${escapeHtml(audit.one_line_conclusion || pickStr(full.one_line_conclusion) || '')}</p>` : ''}
@@ -580,7 +637,7 @@ function pdfSiteAccess(full: FullShape, lang: Lang): string {
   const L = labels(lang);
   const t = pickStr(full.site_and_access_assessment);
   if (!t) return '';
-  return `<div class="section"><h2>🛣 ${escapeHtml(L.siteAccess)}</h2><div class="prose">${proseToHtml(t)}</div></div>`;
+  return `<div class="section"><h2><span class="head-mark">■</span> ${escapeHtml(L.siteAccess)}</h2><div class="prose">${proseToHtml(t)}</div></div>`;
 }
 
 function pdfKeyEvidencePoints(full: FullShape, lang: Lang): string {
@@ -596,7 +653,7 @@ function pdfKeyEvidencePoints(full: FullShape, lang: Lang): string {
       </div>`,
     )
     .join('');
-  return `<div class="section"><h2>📌 ${escapeHtml(L.evidencePoints)}</h2><div class="list">${items}</div></div>`;
+  return `<div class="section"><h2><span class="head-mark">■</span> ${escapeHtml(L.evidencePoints)}</h2><div class="list">${items}</div></div>`;
 }
 
 function pdfAlternativeCorridors(full: FullShape, lang: Lang): string {
@@ -639,7 +696,7 @@ function pdfAlternativeCorridors(full: FullShape, lang: Lang): string {
     </div>`;
     })
     .join('');
-  return `<div class="section"><h2>🗺 ${escapeHtml(L.alternativeCorridors)}</h2>${blocks}</div>`;
+  return `<div class="section"><h2><span class="head-mark">■</span> ${escapeHtml(L.alternativeCorridors)}</h2>${blocks}</div>`;
 }
 
 function generatePdfHtml(input: {
@@ -649,8 +706,9 @@ function generatePdfHtml(input: {
   full: FullShape;
   lang: Lang;
   marketData?: Record<string, unknown> | null;
+  cjkFontDataUri?: string | null;
 }): string {
-  const { location, business_type, headline, full, lang, marketData = null } = input;
+  const { location, business_type, headline, full, lang, marketData = null, cjkFontDataUri: cjkUri = null } = input;
   const L = labels(lang);
   const dateStr =
     lang === 'zh'
@@ -659,15 +717,28 @@ function generatePdfHtml(input: {
 
   const title = pickStr(full.report_title) || headline;
 
+  const cjkFontFace = cjkUri
+    ? `@font-face {
+        font-family: 'Noto Sans SC';
+        font-weight: 400 700;
+        font-style: normal;
+        font-display: block;
+        src: url('${cjkUri}') format('woff2');
+      }`
+    : '';
+
   return `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
   <meta charset="UTF-8">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+    /* D-2: no remote @import here. CJK is injected as base64 data URI above
+       (see generatePdfHtml -> cjkFontDataUri) so Puppeteer never makes a
+       network call during setContent. */
+    ${cjkFontFace}
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: 'Noto Sans SC', 'Open Sans', 'PingFang SC', 'Microsoft YaHei', 'Inter', -apple-system, BlinkMacSystemFont, 'Liberation Sans', Arial, sans-serif;
       font-size: 11pt;
       line-height: 1.55;
       color: #1e293b;
@@ -751,6 +822,15 @@ function generatePdfHtml(input: {
       padding-bottom: 6px;
       margin-bottom: 14px;
     }
+    /* D-2: replace emoji glyphs (which Lambda has no font for) with a
+       brand-gold square mark that any font can render. */
+    .head-mark {
+      display: inline-block;
+      color: #d69e2e;
+      font-size: 0.9em;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
     .column-box {
       background: #f8fafc;
       border: 1px solid #e2e8f0;
@@ -818,9 +898,9 @@ function generatePdfHtml(input: {
     <div class="subtitle">${escapeHtml(L.subtitle)}</div>
     <h1 class="report-title">${escapeHtml(title)}</h1>
     <div class="meta">
-      <span>📍 ${escapeHtml(location)}</span>
-      ${business_type ? `<span>🍽️ ${escapeHtml(business_type)}</span>` : ''}
-      <span>📅 ${escapeHtml(dateStr)}</span>
+      <span>${escapeHtml(location)}</span>
+      ${business_type ? `<span>· ${escapeHtml(business_type)}</span>` : ''}
+      <span>· ${escapeHtml(dateStr)}</span>
     </div>
   </div>
 
@@ -842,7 +922,7 @@ function generatePdfHtml(input: {
 
   ${pickStr(full.final_verdict) ? `
   <div class="verdict-box">
-    <h3>✓ ${escapeHtml(L.finalVerdict)}</h3>
+    <h3>${escapeHtml(L.finalVerdict)}</h3>
     <div style="margin-top:10px;text-align:left;" class="prose">${proseToHtml(pickStr(full.final_verdict)!)}</div>
   </div>` : ''}
 
@@ -853,7 +933,7 @@ function generatePdfHtml(input: {
   <div class="two-column">
     ${pickStr(full.trade_area_analysis) ? `
     <div class="column-box">
-      <h3>📍 ${escapeHtml(L.tradeArea)}</h3>
+      <h3><span class="head-mark">■</span> ${escapeHtml(L.tradeArea)}</h3>
       <div class="prose">${proseToHtml(pickStr(full.trade_area_analysis)!)}</div>
     </div>` : ''}
     ${(() => {
@@ -878,7 +958,7 @@ function generatePdfHtml(input: {
         : '';
       const llmBlock = hasLlm ? `<div class="prose">${proseToHtml(pickStr(full.demographic_profile)!)}</div>` : '';
       return `<div class="column-box">
-        <h3>👥 ${escapeHtml(L.demographic)}</h3>
+        <h3><span class="head-mark">■</span> ${escapeHtml(L.demographic)}</h3>
         ${claudeBlock}
         ${llmBlock}
       </div>`;
@@ -887,13 +967,13 @@ function generatePdfHtml(input: {
 
   ${pickStr(full.competition_landscape) ? `
   <div class="section">
-    <h2>🏪 ${escapeHtml(L.competition)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.competition)}</h2>
     <div class="prose">${proseToHtml(pickStr(full.competition_landscape)!)}</div>
   </div>` : ''}
 
   ${pickStr(full.revenue_estimate) ? `
   <div class="revenue-box">
-    <h3>💰 ${escapeHtml(L.revenueEstimate)}</h3>
+    <h3>${escapeHtml(L.revenueEstimate)}</h3>
     <div class="prose">${proseToHtml(pickStr(full.revenue_estimate)!)}</div>
   </div>` : ''}
 
@@ -902,7 +982,7 @@ function generatePdfHtml(input: {
 
   ${pickStrArr(full.risks).length > 0 ? `
   <div class="section">
-    <h2>⚠ ${escapeHtml(L.topRisks)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.topRisks)}</h2>
     <div class="list">
       ${pickStrArr(full.risks).map((r, i) => `
       <div class="list-item">
@@ -914,7 +994,7 @@ function generatePdfHtml(input: {
 
   ${pickStrArr(full.opportunities).length > 0 ? `
   <div class="section">
-    <h2>💡 ${escapeHtml(L.opportunities)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.opportunities)}</h2>
     <div class="list">
       ${pickStrArr(full.opportunities).map((o, i) => `
       <div class="list-item">
@@ -926,7 +1006,7 @@ function generatePdfHtml(input: {
 
   ${pickStrArr(full.failure_scenarios).length > 0 ? `
   <div class="section">
-    <h2>⚡ ${escapeHtml(L.failureScenarios)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.failureScenarios)}</h2>
     <div class="list">
       ${pickStrArr(full.failure_scenarios).map((f, i) => `
       <div class="list-item">
@@ -938,13 +1018,13 @@ function generatePdfHtml(input: {
 
   ${pickStr(full.differentiation_strategy) ? `
   <div class="section">
-    <h2>🎯 ${escapeHtml(L.differentiation)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.differentiation)}</h2>
     <div class="prose">${proseToHtml(pickStr(full.differentiation_strategy)!)}</div>
   </div>` : ''}
 
   ${pickStrArr(full.action_plan).length > 0 ? `
   <div class="section">
-    <h2>📝 ${escapeHtml(L.actionPlan)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.actionPlan)}</h2>
     <div class="list">
       ${pickStrArr(full.action_plan).map((a, i) => `
       <div class="list-item">
@@ -961,7 +1041,7 @@ function generatePdfHtml(input: {
 
   ${pickStr(full.data_sources_and_disclaimer) ? `
   <div class="section">
-    <h2>📎 ${escapeHtml(L.dataSources)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.dataSources)}</h2>
     <div class="prose">${proseToHtml(pickStr(full.data_sources_and_disclaimer)!)}</div>
   </div>` : ''}
 
@@ -979,18 +1059,25 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id } = await params;
   const url = new URL(req.url);
   const lang: Lang = url.searchParams.get('lang') === 'zh' ? 'zh' : 'en';
+  // Allow ?debug=1 to bypass auth gate locally and emit detailed error JSON.
+  const debug = url.searchParams.get('debug') === '1' && process.env.NODE_ENV !== 'production';
+  const t0 = Date.now();
 
+  let browser: Browser | null = null;
   try {
     const report = await iqGetReport(id);
     if (!report) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
-    if (!report.paid) {
+    if (!report.paid && !debug) {
       return NextResponse.json({ error: 'Report not paid' }, { status: 403 });
     }
 
     const full = (report.full_report_json || {}) as FullShape;
+    // Only fetch CJK font when language requires it; English PDFs use the
+    // chromium-bundled Open Sans and stay fast.
+    const cjkUri = lang === 'zh' ? await loadCjkFontDataUri() : null;
     const html = generatePdfHtml({
       location: report.location,
       business_type: report.business_type,
@@ -998,34 +1085,68 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       full,
       lang,
       marketData: (report.market_data_json as Record<string, unknown> | null) ?? null,
+      cjkFontDataUri: cjkUri,
     });
 
-    const browser = await launchPdfBrowser();
-    try {
-      const page = await browser.newPage();
-      // Static HTML: avoid networkidle0 (can hang); load is enough for print.
-      await page.setContent(html, { waitUntil: 'load', timeout: 45_000 });
+    console.log(
+      `[api/iq/report/pdf] start id=${id} lang=${lang} html_bytes=${html.length} on=${
+        isVercelServerless() ? 'vercel' : 'local'
+      }`,
+    );
 
-      const pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: { top: '12mm', right: '12mm', bottom: '14mm', left: '12mm' },
-      });
+    browser = await launchPdfBrowser();
+    const page = await browser.newPage();
+    // Static HTML: avoid networkidle0 (can hang); domcontentloaded is enough,
+    // we don't have any remote fonts/scripts after the D-2 refactor.
+    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    // Wait one paint cycle so layout settles before pdf() captures it.
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
 
-      const suffix = lang === 'zh' ? '-zh' : '';
-      const filename = `RestaurantIQ-Report-${id.slice(0, 8)}${suffix}.pdf`;
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '12mm', right: '12mm', bottom: '14mm', left: '12mm' },
+      preferCSSPageSize: false,
+      timeout: 45_000,
+    });
 
-      return new NextResponse(Buffer.from(pdfBuffer), {
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="${filename}"`,
-        },
-      });
-    } finally {
+    const suffix = lang === 'zh' ? '-zh' : '';
+    const filename = `RestaurantIQ-Report-${id.slice(0, 8)}${suffix}.pdf`;
+
+    console.log(
+      `[api/iq/report/pdf] done id=${id} bytes=${pdfBuffer.length} elapsed_ms=${Date.now() - t0}`,
+    );
+
+    return new NextResponse(Buffer.from(pdfBuffer), {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'private, max-age=0, must-revalidate',
+      },
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+    console.error('[api/iq/report/pdf] FAIL', {
+      id,
+      lang,
+      elapsed_ms: Date.now() - t0,
+      message: msg,
+      stack,
+    });
+    if (debug) {
+      return NextResponse.json(
+        { error: 'pdf_generation_failed', message: msg, stack, elapsed_ms: Date.now() - t0 },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json(
+      { error: 'Failed to generate PDF', detail: msg.slice(0, 280) },
+      { status: 500 },
+    );
+  } finally {
+    if (browser) {
       await browser.close().catch(() => {});
     }
-  } catch (error) {
-    console.error('[api/iq/report/pdf]', error);
-    return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 });
   }
 }
