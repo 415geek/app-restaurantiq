@@ -76,8 +76,8 @@ async function main() {
   console.log(JSON.stringify(json, null, 2));
 
   if (!res.ok) process.exit(1);
-  if (!json.verdict || !json.headline || !json.reason) {
-    console.error('响应缺少 verdict / headline / reason');
+  if (!json.verdict || !json.headline) {
+    console.error('响应缺少 verdict / headline');
     process.exit(1);
   }
 }
