@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server';
 import { iqGetReport } from '@/lib/funnel/iq-repository';
+import { buildCompetitorMapPins, buildGoogleStaticMapUrl } from '@/lib/funnel/iq-competitor-map';
+import {
+  decisionTierDisplay,
+  layerLabel,
+  normalizeRiskAuditFromFull,
+  numScore,
+  parseDecisionTier,
+} from '@/lib/funnel/iq-risk-audit-model';
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import type { Browser } from 'puppeteer-core';
@@ -160,6 +168,15 @@ function labels(lang: Lang) {
       channel: '渠道',
       pri: '优先级',
       rationale: '理由',
+      riskAudit: '选址风险审计',
+      oneLineConclusion: '一句话结论',
+      breakEven: '打平月营收',
+      safeRevenue: '安全月营收',
+      leaseChecklist: '签租前清单',
+      playbook: '打法建议',
+      competitorMap: '竞品分布',
+      dataConfidence: '数据置信度',
+      layer: '维度',
     };
   }
   return {
@@ -223,7 +240,85 @@ function labels(lang: Lang) {
     channel: 'Channel',
     pri: 'Pri.',
     rationale: 'Rationale',
+    riskAudit: 'Location risk audit',
+    oneLineConclusion: 'One-line conclusion',
+    breakEven: 'Break-even revenue / mo',
+    safeRevenue: 'Safe revenue / mo',
+    leaseChecklist: 'Pre-lease checklist',
+    playbook: 'Playbook',
+    competitorMap: 'Competitor map',
+    dataConfidence: 'Data confidence',
+    layer: 'Layer',
   };
+}
+
+function pdfRiskAuditBlock(
+  full: FullShape,
+  lang: Lang,
+  marketData: Record<string, unknown> | null,
+): string {
+  const L = labels(lang);
+  const audit = normalizeRiskAuditFromFull(full);
+  if (!audit) return '';
+
+  const tier = parseDecisionTier(audit.decision_tier ?? full.decision_tier);
+  const tierCopy = decisionTierDisplay(tier, lang);
+  const overall = numScore(audit.overall_score);
+  const breakEven = numScore(audit.break_even_revenue_monthly_usd);
+  const safeRev = numScore(audit.safe_revenue_monthly_usd);
+  const conf = numScore(audit.data_confidence_pct);
+
+  const layers = (audit.layers ?? []).slice(0, 6);
+  const layerRows = layers
+    .map((row) => {
+      const sc = numScore(row.score);
+      return `<tr>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${escapeHtml(layerLabel(String(row.id), lang))}</td>
+        <td style="padding:6px;border:1px solid #e2e8f0;text-align:center;">${sc ?? '—'}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const topRisks = (audit.top_risks ?? pickStrArr(full.risks)).slice(0, 5);
+  const playbook = (audit.playbook ?? []).slice(0, 5);
+  const checklist = (audit.lease_checklist ?? []).slice(0, 12);
+
+  const mapPins = buildCompetitorMapPins({
+    marketData,
+    reportCompetitors: Array.isArray(full.competitors) ? full.competitors : [],
+  });
+  const mapUrl =
+    mapPins.center && mapPins.pins.length > 0
+      ? buildGoogleStaticMapUrl({ center: mapPins.center, pins: mapPins.pins, width: 600, height: 280 })
+      : null;
+
+  const costs = audit.cost_breakdown ?? [];
+  const costRows = costs
+    .map((c) => {
+      const amt = numScore(c.amount_usd);
+      return `<tr>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${escapeHtml(c.item)}</td>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${amt != null ? `$${amt.toLocaleString()}` : '—'}</td>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${escapeHtml(c.note ?? '')}</td>
+      </tr>`;
+    })
+    .join('');
+
+  return `
+  <div class="section">
+    <h2>🛡 ${escapeHtml(L.riskAudit)}</h2>
+    ${tierCopy ? `<p style="font-weight:700;color:#1a365d;margin-bottom:8px;">${escapeHtml(tierCopy.label)} — ${escapeHtml(tierCopy.desc)}</p>` : ''}
+    ${overall != null ? `<p style="margin-bottom:8px;"><strong>${lang === 'zh' ? '综合分' : 'Overall'}:</strong> ${overall}/100${conf != null ? ` · ${escapeHtml(L.dataConfidence)}: ${conf}%` : ''}</p>` : ''}
+    ${audit.one_line_conclusion || pickStr(full.one_line_conclusion) ? `<p style="margin-bottom:12px;font-style:italic;">${escapeHtml(audit.one_line_conclusion || pickStr(full.one_line_conclusion) || '')}</p>` : ''}
+    ${layerRows ? `<table style="width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:14px;"><tr style="background:#1a365d;color:#fff;"><th style="padding:8px;text-align:left;">${escapeHtml(L.layer)}</th><th style="padding:8px;">${escapeHtml(L.score)}</th></tr>${layerRows}</table>` : ''}
+    ${breakEven != null || safeRev != null ? `<p style="margin-bottom:10px;">${breakEven != null ? `<strong>${escapeHtml(L.breakEven)}:</strong> $${breakEven.toLocaleString()}` : ''}${safeRev != null ? ` &nbsp;|&nbsp; <strong>${escapeHtml(L.safeRevenue)}:</strong> $${safeRev.toLocaleString()}` : ''}</p>` : ''}
+    ${costRows ? `<table style="width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:14px;">${costRows}</table>` : ''}
+    ${mapUrl ? `<div style="margin:14px 0;"><h3 style="font-size:10pt;margin-bottom:8px;">${escapeHtml(L.competitorMap)}</h3><img src="${escapeHtml(mapUrl)}" alt="map" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0;" /></div>` : ''}
+    ${audit.competitor_tiers_note ? `<p style="margin-bottom:12px;font-size:10pt;">${escapeHtml(audit.competitor_tiers_note)}</p>` : ''}
+    ${topRisks.length ? `<h3 style="font-size:10pt;margin:12px 0 6px;">${escapeHtml(L.topRisks)}</h3><ul style="margin-left:18px;">${topRisks.map((r) => `<li style="margin-bottom:6px;">${escapeHtml(r)}</li>`).join('')}</ul>` : ''}
+    ${playbook.length ? `<h3 style="font-size:10pt;margin:12px 0 6px;">${escapeHtml(L.playbook)}</h3><ul style="margin-left:18px;">${playbook.map((r) => `<li style="margin-bottom:6px;">${escapeHtml(r)}</li>`).join('')}</ul>` : ''}
+    ${checklist.length ? `<h3 style="font-size:10pt;margin:12px 0 6px;">${escapeHtml(L.leaseChecklist)}</h3><ol style="margin-left:18px;">${checklist.map((r) => `<li style="margin-bottom:4px;">${escapeHtml(r)}</li>`).join('')}</ol>` : ''}
+  </div>`;
 }
 
 function dashKeyLabel(key: string, lang: Lang): string {
@@ -500,8 +595,9 @@ function generatePdfHtml(input: {
   headline: string;
   full: FullShape;
   lang: Lang;
+  marketData?: Record<string, unknown> | null;
 }): string {
-  const { location, business_type, headline, full, lang } = input;
+  const { location, business_type, headline, full, lang, marketData = null } = input;
   const L = labels(lang);
   const dateStr =
     lang === 'zh'
@@ -676,7 +772,14 @@ function generatePdfHtml(input: {
   </div>
 
   ${pdfDashboardTable(full, lang)}
+  ${pdfRiskAuditBlock(full, lang, marketData)}
   ${pdfCompetitorsTable(full, lang)}
+
+  ${pickStr(full.one_line_conclusion) && !normalizeRiskAuditFromFull(full) ? `
+  <div class="executive-box">
+    <h2>${escapeHtml(L.oneLineConclusion)}</h2>
+    <p style="line-height:1.55;">${escapeHtml(pickStr(full.one_line_conclusion)!)}</p>
+  </div>` : ''}
 
   ${pickStr(full.executive_summary) ? `
   <div class="executive-box">
@@ -819,6 +922,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       headline: report.headline,
       full,
       lang,
+      marketData: (report.market_data_json as Record<string, unknown> | null) ?? null,
     });
 
     const browser = await launchPdfBrowser();

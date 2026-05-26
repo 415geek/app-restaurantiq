@@ -6,7 +6,9 @@ import { useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { ReportActions } from './ReportActions';
 import { ReportMarkdown } from './ReportMarkdown';
+import { RiskAuditReportSections } from './RiskAuditReportSections';
 import { normalizeConfidenceLevel } from '@/lib/funnel/iq-full-report-schema';
+import { normalizeRiskAuditFromFull, productPositioningLine } from '@/lib/funnel/iq-risk-audit-model';
 
 type FullReportView = Record<string, unknown>;
 
@@ -20,6 +22,8 @@ type Props = {
   };
   full: FullReportView;
   initialLang?: 'en' | 'zh';
+  marketData?: Record<string, unknown> | null;
+  staticMapUrl?: string | null;
 };
 
 const translations = {
@@ -59,6 +63,15 @@ const translations = {
     competition: 'Competition',
     payback: 'Payback (mo)',
     recommendation: 'Recommendation',
+    riskAudit: 'Location risk audit',
+    auditTopRisks: 'Top 3 risks',
+    playbook: 'Recommended playbook',
+    leaseChecklist: 'Pre-lease checklist',
+    costModel: 'Cost & break-even model',
+    breakEven: 'Break-even revenue',
+    safeRevenue: 'Safer target revenue',
+    competitorTiers: 'Competitor tiers',
+    competitorMap: 'Competitor map',
   },
   zh: {
     fullReport: 'RestaurantIQ 付费深度分析',
@@ -96,6 +109,15 @@ const translations = {
     competition: '竞争强度',
     payback: '回收期(月)',
     recommendation: '建议等级',
+    riskAudit: '选址风险审计',
+    auditTopRisks: '三大核心风险',
+    playbook: '最佳打法建议',
+    leaseChecklist: '签 lease 前清单',
+    costModel: '成本与打平模型',
+    breakEven: '盈亏平衡营业额',
+    safeRevenue: '安全营收线',
+    competitorTiers: '竞品分层说明',
+    competitorMap: '竞品分布地图',
   },
 };
 
@@ -210,7 +232,13 @@ function IqReportAutoLink({
   return null;
 }
 
-export function ReportContent({ report, full, initialLang = 'en' }: Props) {
+export function ReportContent({
+  report,
+  full,
+  initialLang = 'en',
+  marketData = null,
+  staticMapUrl = null,
+}: Props) {
   const [lang, setLang] = useState<'en' | 'zh'>(initialLang);
   const [linkedLocally, setLinkedLocally] = useState(false);
   const handleReportLinked = useCallback(() => setLinkedLocally(true), []);
@@ -271,8 +299,12 @@ export function ReportContent({ report, full, initialLang = 'en' }: Props) {
   const failureCases = safeArr(comparables?.failure_cases);
 
   const displayTitle = str(fullView.report_title) || report.headline;
+  const heroLine =
+    str(fullView.one_line_conclusion) ||
+    normalizeRiskAuditFromFull(fullView)?.one_line_conclusion;
   const confRaw = str(fullView.confidence);
   const confRationale = str(fullView.confidence_rationale);
+  const hasRiskAudit = Boolean(normalizeRiskAuditFromFull(fullView) ?? fullView.risk_audit);
 
   const showRevenueModelBlock =
     !!revenueModel &&
@@ -385,7 +417,32 @@ export function ReportContent({ report, full, initialLang = 'en' }: Props) {
             {t.businessType}: {report.business_type}
           </p>
         )}
+        <p className="mt-4 text-xs text-emerald-400/80">{productPositioningLine(lang)}</p>
+        {heroLine && (
+          <p className="mt-4 text-lg font-medium leading-relaxed text-zinc-200">{heroLine}</p>
+        )}
       </header>
+
+      {hasRiskAudit && (
+        <RiskAuditReportSections
+          full={fullView}
+          lang={lang}
+          businessType={report.business_type}
+          marketData={marketData}
+          staticMapUrl={staticMapUrl}
+          t={{
+            riskAudit: t.riskAudit,
+            topRisks: t.auditTopRisks,
+            playbook: t.playbook,
+            leaseChecklist: t.leaseChecklist,
+            costModel: t.costModel,
+            breakEven: t.breakEven,
+            safeRevenue: t.safeRevenue,
+            competitorTiers: t.competitorTiers,
+            competitorMap: t.competitorMap,
+          }}
+        />
+      )}
 
       {/* Dashboard */}
       {dashboard && Object.keys(dashboard).length > 0 && (

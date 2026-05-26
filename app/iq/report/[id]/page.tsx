@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { iqGetReport, iqSetFullReport, iqUpdateMarketDataJson } from '@/lib/funnel/iq-repository';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { generateIqFullReportWithN8nFallback } from '@/lib/funnel/iq-generate-full-report';
+import { buildCompetitorMapPins, buildGoogleStaticMapUrl } from '@/lib/funnel/iq-competitor-map';
 import { ReportShareSection } from '@/components/share/ReportShareSection';
 import { ReportContent } from '@/components/iq/ReportContent';
 
@@ -74,6 +75,16 @@ export default async function IqReportPage({ params }: Props) {
     }
   }
 
+  const marketData = (report.market_data_json as Record<string, unknown> | null) ?? null;
+  const mapPins = buildCompetitorMapPins({
+    marketData,
+    reportCompetitors: Array.isArray(full?.competitors) ? full.competitors : [],
+  });
+  const staticMapUrl =
+    mapPins.center && mapPins.pins.length > 0
+      ? buildGoogleStaticMapUrl({ center: mapPins.center, pins: mapPins.pins })
+      : null;
+
   return (
     <main className="min-h-screen px-6 py-12">
       <div className="mx-auto max-w-4xl space-y-6">
@@ -87,6 +98,8 @@ export default async function IqReportPage({ params }: Props) {
           }}
           full={full ?? {}}
           initialLang={reportLanguage}
+          marketData={marketData}
+          staticMapUrl={staticMapUrl}
         />
 
         {/* Share Section - hidden during print */}
