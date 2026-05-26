@@ -72,6 +72,7 @@ const translations = {
     safeRevenue: 'Safer target revenue',
     competitorTiers: 'Competitor tiers',
     competitorMap: 'Competitor map',
+    competitorInsights: 'Competitor deep insights',
   },
   zh: {
     fullReport: 'RestaurantIQ 付费深度分析',
@@ -118,6 +119,7 @@ const translations = {
     safeRevenue: '安全营收线',
     competitorTiers: '竞品分层说明',
     competitorMap: '竞品分布地图',
+    competitorInsights: '竞品深度洞察',
   },
 };
 
@@ -440,6 +442,7 @@ export function ReportContent({
             safeRevenue: t.safeRevenue,
             competitorTiers: t.competitorTiers,
             competitorMap: t.competitorMap,
+            competitorInsights: t.competitorInsights,
           }}
         />
       )}

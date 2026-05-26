@@ -10,6 +10,7 @@
 
 import { enrichMarketDataWithAcs } from '@/lib/funnel/iq-acs-enrichment';
 import { enrichMarketDataWithDemographicNarrative } from '@/lib/funnel/iq-demographic-narrative';
+import { enrichMarketDataWithCompetitorInsights } from '@/lib/funnel/iq-deepseek-competitor-insights';
 import { computeFinanceModel } from '@/lib/funnel/iq-finance-model';
 import { gatherIqMarketDataFromGoogle } from '@/lib/funnel/iq-market-data';
 import { extractMarketSummary } from '@/lib/funnel/iq-premium-anchors';
@@ -118,6 +119,18 @@ export async function resolveMarketDataForIqReport(input: {
       });
     } catch (err) {
       console.warn('[resolve-market-data] demographic narrative enrichment failed', err);
+    }
+
+    // D-5: DeepSeek-V3 reads review excerpts + menus + ratings for top 4-6
+    // competitors and writes a grounded per-competitor + cluster summary. Idempotent
+    // and cached 14 days, so safe to call on every paid resolve.
+    try {
+      base = await enrichMarketDataWithCompetitorInsights(base, {
+        cuisine: businessType,
+        address: location,
+      });
+    } catch (err) {
+      console.warn('[resolve-market-data] competitor insights enrichment failed', err);
     }
   }
 

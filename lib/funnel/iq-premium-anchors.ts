@@ -17,6 +17,7 @@ import {
   formatFinanceModelForAnchors,
   type DeterministicFinanceModel,
 } from '@/lib/funnel/iq-finance-model';
+import type { CompetitorInsights } from '@/lib/funnel/iq-deepseek-competitor-insights';
 
 type Lang = 'en' | 'zh';
 
@@ -375,6 +376,106 @@ export function buildPremiumMarketAnchorsBlock(
   return lines.join('\n');
 }
 
+/**
+ * D-5: formats DeepSeek competitor insights into a prompt anchor block.
+ * Forces the paid-report LLM to cite per-competitor positioning, complaints, and
+ * gaps that DeepSeek already grounded in real review excerpts.
+ */
+export function buildCompetitorInsightsBlock(
+  insights: CompetitorInsights | null | undefined,
+  lang: Lang,
+): string {
+  if (
+    !insights ||
+    !Array.isArray(insights.per_competitor) ||
+    insights.per_competitor.length === 0
+  ) {
+    return '';
+  }
+
+  const isZh = lang === 'zh';
+  const lines: string[] = [];
+
+  lines.push(
+    isZh
+      ? '\n\n【竞品深度洞察（DeepSeek-V3 基于 Google + Yelp 真实评论摘要——必须在 competition_landscape / competitors / opportunities 中引用，禁止抛弃）】'
+      : '\n\n[COMPETITOR INSIGHTS — DeepSeek-V3 grounded summary of Google + Yelp reviews — MUST appear in competition_landscape / competitors / opportunities; do NOT discard]',
+  );
+  lines.push(
+    isZh
+      ? `- 评论摘要覆盖：Google ${insights.reviews_fetched.google_competitors} 家、Yelp ${insights.reviews_fetched.yelp_competitors} 家、共 ${insights.reviews_fetched.total_review_excerpts} 条评论片段。`
+      : `- Review coverage: ${insights.reviews_fetched.google_competitors} Google + ${insights.reviews_fetched.yelp_competitors} Yelp, ${insights.reviews_fetched.total_review_excerpts} review excerpts total.`,
+  );
+
+  insights.per_competitor.forEach((row, i) => {
+    const threatLabel = isZh
+      ? row.threat_level === 'high'
+        ? '高威胁'
+        : row.threat_level === 'low'
+          ? '低威胁'
+          : '中等威胁'
+      : row.threat_level;
+    const ratingPart =
+      row.rating != null && row.review_count != null
+        ? ` ${row.rating}/5 · ${row.review_count} ${isZh ? '条评论' : 'reviews'}`
+        : '';
+    lines.push('');
+    lines.push(
+      `[#${i + 1}] ${row.name}${ratingPart}${row.price_tier ? ` · ${row.price_tier}` : ''} — ${threatLabel}`,
+    );
+    if (row.positioning) {
+      lines.push(`  ${isZh ? '定位' : 'positioning'}: ${row.positioning}`);
+    }
+    if (row.signature_items.length) {
+      lines.push(
+        `  ${isZh ? '代表产品（来自评论/简介）' : 'signature items (from reviews/editorial)'}: ${row.signature_items.join(', ')}`,
+      );
+    }
+    if (row.top_complaints.length) {
+      lines.push(
+        `  ${isZh ? '高频差评' : 'top complaints'}: ${row.top_complaints.join('; ')}`,
+      );
+    }
+    if (row.top_praise.length) {
+      lines.push(
+        `  ${isZh ? '高频好评' : 'top praise'}: ${row.top_praise.join('; ')}`,
+      );
+    }
+    if (row.pricing_perception) {
+      lines.push(
+        `  ${isZh ? '价格感知' : 'pricing perception'}: ${row.pricing_perception}`,
+      );
+    }
+    const takeaway = isZh ? row.ai_takeaway_zh : row.ai_takeaway_en;
+    if (takeaway) {
+      lines.push(`  ${isZh ? '判断' : 'takeaway'}: ${takeaway}`);
+    }
+  });
+
+  const cluster = isZh ? insights.cluster_summary_zh : insights.cluster_summary_en;
+  if (cluster) {
+    lines.push('');
+    lines.push(isZh ? `【竞品集群总结】${cluster}` : `[CLUSTER SUMMARY] ${cluster}`);
+  }
+  const gaps = isZh ? insights.gaps_and_openings_zh : insights.gaps_and_openings_en;
+  if (gaps) {
+    lines.push(
+      isZh
+        ? `【市场缺口（必须在 opportunities 至少 1 条引用并扩写）】${gaps}`
+        : `[GAPS & OPENINGS — must surface in at least 1 opportunity bullet, expanded with cuisine fit] ${gaps}`,
+    );
+  }
+
+  lines.push('');
+  lines.push(
+    isZh
+      ? '【硬性写作要求】(a) competitors 字段前 3 行必须从上方 [#1]/[#2]/[#3] 取真名，店名一字不改；(b) 「top_complaints / top_praise / signature_items」可作为 differentiators 与 opportunities 的事实依据；(c) cluster_summary 与 gaps 不得复制超过 30 个连续字符，须改写后融入对应段落。'
+      : '[WRITING RULES] (a) The first 3 competitors[] rows MUST quote names verbatim from [#1]/[#2]/[#3] above; (b) Use top_complaints / top_praise / signature_items as evidence in differentiators + opportunities; (c) Do NOT copy more than ~20 contiguous words from cluster_summary or gaps — rewrite and tie to this cuisine.',
+  );
+
+  return lines.join('\n');
+}
+
 export function buildPremiumMarketDataSection(
   marketData: Record<string, unknown> | null | undefined,
   lang: Lang,
@@ -465,8 +566,15 @@ export function buildPremiumMarketDataSection(
     financeModelBlock = formatFinanceModelForAnchors(fm, lang);
   }
 
+  // D-5: DeepSeek competitor insights block (per-comp + cluster + gaps).
+  let competitorInsightsBlock = '';
+  const ci = marketData?.competitor_insights as CompetitorInsights | undefined;
+  if (ci && typeof ci === 'object' && Array.isArray(ci.per_competitor) && ci.per_competitor.length) {
+    competitorInsightsBlock = buildCompetitorInsightsBlock(ci, lang);
+  }
+
   if (!marketData || typeof marketData !== 'object') {
-    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}`;
+    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${competitorInsightsBlock}`;
   }
 
   const mdForJson = { ...marketData };
@@ -480,10 +588,21 @@ export function buildPremiumMarketDataSection(
       sources_count: Array.isArray(drObj.sources) ? drObj.sources.length : 0,
     };
   }
+  // D-5: competitor_insights is already rendered as a dedicated anchor block above.
+  // Drop it from the raw JSON dump to save 2-4k tokens per prompt.
+  if (mdForJson.competitor_insights) {
+    const ciObj = mdForJson.competitor_insights as CompetitorInsights;
+    mdForJson.competitor_insights = {
+      provider: ciObj.provider,
+      model: ciObj.model,
+      per_competitor_count: ciObj.per_competitor?.length ?? 0,
+      total_review_excerpts: ciObj.reviews_fetched?.total_review_excerpts ?? 0,
+    } as unknown as CompetitorInsights;
+  }
   
   const jsonBlock =
     lang === 'zh'
       ? `\n\n【市场数据原始 JSON（Google Places / Yelp / ACS / Caltrans / 商业房源 / BrightData / 深度研究 meta）】\n${JSON.stringify(mdForJson, null, 2)}`
       : `\n\nRAW MARKET DATA JSON (Google Places / Yelp / ACS / Caltrans / commercial listings / BrightData / deep research meta):\n${JSON.stringify(mdForJson, null, 2)}`;
-  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${jsonBlock}`;
+  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${competitorInsightsBlock}${jsonBlock}`;
 }

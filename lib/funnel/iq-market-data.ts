@@ -220,6 +220,9 @@ export async function gatherIqMarketDataFromGoogle(input: {
         lat: x.geometry?.location?.lat ?? null,
         lng: x.geometry?.location?.lng ?? null,
         types: Array.isArray(x.types) ? x.types.slice(0, 4) : [],
+        // D-5: include place_id so the DeepSeek competitor-insight pipeline
+        // can pull Place Details reviews without a second name->id lookup.
+        place_id: x.place_id ?? null,
       })),
       sample_competitors_yelp: yelpRows.slice(0, 12).map((r) => ({
         yelp_id: r.yelp_id,

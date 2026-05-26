@@ -19,8 +19,10 @@ export type MarketCacheSource =
   | 'foursquare_search'
   | 'foursquare_place_detail'
   | 'google_places_textsearch'
+  | 'google_place_details'
   | 'census_acs'
   | 'deepseek_summary'
+  | 'deepseek_competitor_insights'
   | 'claude_demographics';
 
 export interface MarketCacheKeyInput {

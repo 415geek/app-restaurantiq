@@ -232,6 +232,7 @@ function labels(lang: Lang) {
       leaseChecklist: '签租前清单',
       playbook: '打法建议',
       competitorMap: '竞品分布',
+      competitorInsights: '竞品深度洞察',
       dataConfidence: '数据置信度',
       layer: '维度',
     };
@@ -304,6 +305,7 @@ function labels(lang: Lang) {
     leaseChecklist: 'Pre-lease checklist',
     playbook: 'Playbook',
     competitorMap: 'Competitor map',
+    competitorInsights: 'Competitor deep insights',
     dataConfidence: 'Data confidence',
     layer: 'Layer',
   };
@@ -465,6 +467,131 @@ function pdfDashboardTable(full: FullShape, lang: Lang): string {
     .join('');
   if (!cells) return '';
   return `<div class="section"><h2>${escapeHtml(L.keyMetrics)}</h2><table style="width:100%;border-collapse:collapse;font-size:10pt;">${cells}</table></div>`;
+}
+
+type CompetitorInsightsForPdf = {
+  provider: string;
+  model: string;
+  reviews_fetched: {
+    google_competitors: number;
+    yelp_competitors: number;
+    total_review_excerpts: number;
+  };
+  per_competitor: Array<{
+    name: string;
+    rating: number | null;
+    review_count: number | null;
+    price_tier: string | null;
+    positioning: string;
+    signature_items: string[];
+    top_complaints: string[];
+    top_praise: string[];
+    pricing_perception: string;
+    threat_level: 'high' | 'medium' | 'low';
+    ai_takeaway_zh: string;
+    ai_takeaway_en: string;
+  }>;
+  cluster_summary_zh: string;
+  cluster_summary_en: string;
+  gaps_and_openings_zh: string;
+  gaps_and_openings_en: string;
+};
+
+function pdfCompetitorInsightsBlock(
+  marketData: Record<string, unknown> | null | undefined,
+  lang: Lang,
+): string {
+  const ci = (marketData?.competitor_insights as CompetitorInsightsForPdf | undefined) ?? undefined;
+  if (!ci || !Array.isArray(ci.per_competitor) || ci.per_competitor.length === 0) return '';
+  const L = labels(lang);
+  const isZh = lang === 'zh';
+
+  const intro = isZh
+    ? `<p style="margin:4px 0 12px;font-size:9pt;color:#475569;">${escapeHtml(`AI 评论分析 · 基于 ${ci.reviews_fetched.total_review_excerpts} 条 Google + Yelp 评论摘要`)}</p>`
+    : `<p style="margin:4px 0 12px;font-size:9pt;color:#475569;">${escapeHtml(`AI review analysis · grounded in ${ci.reviews_fetched.total_review_excerpts} Google + Yelp review excerpts`)}</p>`;
+
+  const rowHtml = ci.per_competitor
+    .map((row) => {
+      const threatColor =
+        row.threat_level === 'high'
+          ? { border: '#fda4af', bg: '#fff1f2', text: '#9f1239' }
+          : row.threat_level === 'low'
+            ? { border: '#86efac', bg: '#f0fdf4', text: '#166534' }
+            : { border: '#fcd34d', bg: '#fffbeb', text: '#92400e' };
+      const threatLabel = isZh
+        ? row.threat_level === 'high'
+          ? '高威胁'
+          : row.threat_level === 'low'
+            ? '低威胁'
+            : '中等威胁'
+        : row.threat_level.toUpperCase();
+      const meta = [
+        row.rating != null ? `${row.rating}/5` : null,
+        row.review_count != null
+          ? `${row.review_count.toLocaleString(isZh ? 'zh-CN' : 'en-US')} ${isZh ? '条评论' : 'reviews'}`
+          : null,
+        row.price_tier ?? null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      const items = row.signature_items
+        .slice(0, 5)
+        .map(
+          (it) =>
+            `<span style="display:inline-block;margin:2px 4px 0 0;padding:1px 6px;background:#e2e8f0;color:#1e293b;border-radius:6px;font-size:8pt;">${escapeHtml(it)}</span>`,
+        )
+        .join('');
+      const praise = row.top_praise.length
+        ? `<div style="margin-top:4px;font-size:8.5pt;color:#15803d;"><strong>${escapeHtml(isZh ? '高频好评：' : 'Top praise: ')}</strong>${escapeHtml(row.top_praise.join(' · '))}</div>`
+        : '';
+      const complaints = row.top_complaints.length
+        ? `<div style="margin-top:2px;font-size:8.5pt;color:#9f1239;"><strong>${escapeHtml(isZh ? '高频差评：' : 'Top complaints: ')}</strong>${escapeHtml(row.top_complaints.join(' · '))}</div>`
+        : '';
+      const pricing = row.pricing_perception
+        ? `<div style="margin-top:2px;font-size:8.5pt;color:#475569;"><strong>${escapeHtml(isZh ? '价格感知：' : 'Pricing: ')}</strong>${escapeHtml(row.pricing_perception)}</div>`
+        : '';
+      const takeaway = isZh ? row.ai_takeaway_zh : row.ai_takeaway_en;
+      const takeawayHtml = takeaway
+        ? `<div style="margin-top:6px;padding:6px 8px;background:#fffbeb;border-left:3px solid #f59e0b;font-size:8.5pt;color:#78350f;">${escapeHtml(takeaway)}</div>`
+        : '';
+      const positioning = row.positioning
+        ? `<div style="margin-top:6px;font-size:9pt;color:#334155;line-height:1.45;">${escapeHtml(row.positioning)}</div>`
+        : '';
+      return `<div style="margin-bottom:10px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;background:#fafafa;page-break-inside:avoid;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div style="min-width:0;flex:1;">
+            <div style="font-weight:600;color:#0f172a;font-size:10pt;">${escapeHtml(row.name)}</div>
+            <div style="font-size:8.5pt;color:#64748b;margin-top:2px;">${escapeHtml(meta)}</div>
+          </div>
+          <span style="flex-shrink:0;padding:1px 6px;font-size:8pt;border:1px solid ${threatColor.border};background:${threatColor.bg};color:${threatColor.text};border-radius:8px;font-weight:600;">${escapeHtml(threatLabel)}</span>
+        </div>
+        ${positioning}
+        ${items ? `<div style="margin-top:6px;"><div style="font-size:7.5pt;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">${escapeHtml(isZh ? '代表产品' : 'Signature items')}</div><div style="margin-top:3px;">${items}</div></div>` : ''}
+        ${praise}
+        ${complaints}
+        ${pricing}
+        ${takeawayHtml}
+      </div>`;
+    })
+    .join('');
+
+  const cluster = isZh ? ci.cluster_summary_zh : ci.cluster_summary_en;
+  const clusterHtml = cluster
+    ? `<div style="margin-top:8px;padding:10px 12px;background:#f1f5f9;border-left:3px solid #475569;font-size:9pt;color:#1e293b;line-height:1.5;"><div style="font-size:7.5pt;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">${escapeHtml(isZh ? '竞品集群总结' : 'Cluster summary')}</div>${escapeHtml(cluster)}</div>`
+    : '';
+
+  const gaps = isZh ? ci.gaps_and_openings_zh : ci.gaps_and_openings_en;
+  const gapsHtml = gaps
+    ? `<div style="margin-top:8px;padding:10px 12px;background:#f0fdf4;border-left:3px solid #16a34a;font-size:9pt;color:#14532d;line-height:1.5;"><div style="font-size:7.5pt;color:#15803d;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">${escapeHtml(isZh ? '可切入的市场缺口' : 'Gaps & openings')}</div>${escapeHtml(gaps)}</div>`
+    : '';
+
+  const footer = `<div style="margin-top:10px;font-size:7.5pt;color:#94a3b8;">${escapeHtml(
+    isZh
+      ? `由 ${ci.provider} (${ci.model}) 基于 Google Place Details + Yelp Fusion 评论摘要生成`
+      : `Generated by ${ci.provider} (${ci.model}) from Google Place Details + Yelp Fusion review excerpts`,
+  )}</div>`;
+
+  return `<div class="section"><h2><span class="head-mark">■</span> ${escapeHtml(L.competitorInsights)}</h2>${intro}${rowHtml}${clusterHtml}${gapsHtml}${footer}</div>`;
 }
 
 function pdfCompetitorsTable(full: FullShape, lang: Lang): string {
@@ -906,6 +1033,7 @@ function generatePdfHtml(input: {
 
   ${pdfDashboardTable(full, lang)}
   ${pdfRiskAuditBlock(full, lang, marketData)}
+  ${pdfCompetitorInsightsBlock(marketData, lang)}
   ${pdfCompetitorsTable(full, lang)}
 
   ${pickStr(full.one_line_conclusion) && !normalizeRiskAuditFromFull(full) ? `
