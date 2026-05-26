@@ -5,7 +5,13 @@
  */
 
 import { generateFullReportWithN8n, getFullReportWebhookUrl } from '@/lib/n8n';
-import { parseIqFullReport, logFullReportQuality } from '@/lib/funnel/iq-full-report-schema';
+import {
+  applyCompetitorWhitelist,
+  logFullReportQuality,
+  parseIqFullReport,
+  type IqReportWithGrounding,
+} from '@/lib/funnel/iq-full-report-schema';
+import { extractCompetitorWhitelist } from '@/lib/funnel/iq-market-signals';
 import { runFullPremiumReportOpenAI } from '@/lib/funnel/iq-llm';
 
 export type GenerateIqFullReportInput = {
@@ -20,7 +26,7 @@ export type GenerateIqFullReportInput = {
 
 export async function generateIqFullReportWithN8nFallback(
   input: GenerateIqFullReportInput,
-): Promise<Record<string, unknown>> {
+): Promise<IqReportWithGrounding> {
   const payload = {
     analysis_id: input.reportId,
     address: input.location,
@@ -32,12 +38,16 @@ export async function generateIqFullReportWithN8nFallback(
     language: input.language,
   };
 
+  // Build the whitelist once — both branches need it for grounding.
+  const whitelist = extractCompetitorWhitelist(input.marketData ?? null);
+
   if (getFullReportWebhookUrl()) {
     try {
       const raw = await generateFullReportWithN8n(payload);
       const parsed = parseIqFullReport(raw);
-      logFullReportQuality(parsed, `reportId=${input.reportId}`);
-      return parsed;
+      const grounded = applyCompetitorWhitelist(parsed, whitelist);
+      logFullReportQuality(grounded, `reportId=${input.reportId} n8n`);
+      return grounded;
     } catch (e) {
       console.warn('[iq-generate-full-report] n8n failed, falling back to OpenAI:', e);
     }

@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { decisionTierSchema, riskAuditFullSchema } from '@/lib/funnel/iq-risk-audit-model';
+import {
+  type CompetitorWhitelist,
+  isCompetitorWhitelisted,
+  MIN_WHITELIST_FOR_GROUNDED_REPORT,
+} from '@/lib/funnel/iq-market-signals';
 
 const optionalString = z.string().optional();
 
@@ -185,4 +190,96 @@ export function normalizeConfidenceLevel(raw?: string): 'High' | 'Medium' | 'Low
   if (t.startsWith('中') || /\bmedium\b/i.test(lower) || /\bmed\b/i.test(lower)) return 'Medium';
   if (t.startsWith('低') || /\blow\b/i.test(lower)) return 'Low';
   return undefined;
+}
+
+/**
+ * Internal flags injected by the post-LLM grounding pass. We deliberately use
+ * leading underscores so they survive `passthrough()` but are obviously
+ * non-canonical to anyone reading the JSON.
+ */
+export type IqReportGroundingFlags = {
+  /** True when one or more competitor rows were dropped or the LLM produced too few real ones. */
+  _insufficient_competitor_data?: boolean;
+  /** Total whitelisted competitors retrieved from market_data (Google ∪ Yelp ∪ BrightData). */
+  _whitelist_total?: number;
+  /** Names that were in the LLM output but NOT in the whitelist (silently dropped). */
+  _dropped_competitor_names?: string[];
+  /** Human-readable warning strings — rendered in the UI sources/methodology footer. */
+  _warnings?: string[];
+};
+
+export type IqReportWithGrounding = Record<string, unknown> & IqReportGroundingFlags;
+
+/**
+ * Filter `competitors[]` to those that pass the whitelist check, and attach
+ * grounding flags. Pure function — does not mutate the input.
+ *
+ * Decision: we filter (drop unverified rows) rather than fail validation. The
+ * report stays useful even if the LLM tries to add 1–2 hallucinations, and the
+ * UI can render a "Data Sources" badge explaining what was dropped.
+ */
+export function applyCompetitorWhitelist(
+  report: Record<string, unknown>,
+  whitelist: CompetitorWhitelist,
+): IqReportWithGrounding {
+  const competitors = Array.isArray(report.competitors) ? (report.competitors as unknown[]) : [];
+  const kept: unknown[] = [];
+  const dropped: string[] = [];
+
+  for (const row of competitors) {
+    if (!row || typeof row !== 'object') continue;
+    const name = (row as Record<string, unknown>).name;
+    if (typeof name !== 'string' || !name.trim()) continue;
+    if (isCompetitorWhitelisted(name, whitelist)) {
+      kept.push(row);
+    } else {
+      dropped.push(name.trim());
+    }
+  }
+
+  const warnings: string[] = [];
+  if (dropped.length > 0) {
+    warnings.push(
+      `Dropped ${dropped.length} unverified competitor name(s) not present in Google/Yelp/BrightData retrieval: ${dropped.join(', ')}.`,
+    );
+  }
+  if (whitelist.total < MIN_WHITELIST_FOR_GROUNDED_REPORT) {
+    warnings.push(
+      `Only ${whitelist.total} named competitor(s) were retrieved (minimum for grounded competitor analysis is ${MIN_WHITELIST_FOR_GROUNDED_REPORT}). Treat competitor commentary as low-confidence.`,
+    );
+  }
+
+  const insufficient =
+    whitelist.total < MIN_WHITELIST_FOR_GROUNDED_REPORT || kept.length < MIN_WHITELIST_FOR_GROUNDED_REPORT;
+
+  const out: IqReportWithGrounding = {
+    ...report,
+    competitors: kept,
+    _whitelist_total: whitelist.total,
+    _dropped_competitor_names: dropped,
+    _insufficient_competitor_data: insufficient,
+  };
+  if (warnings.length > 0) {
+    const existing = Array.isArray(report._warnings) ? (report._warnings as string[]).slice() : [];
+    out._warnings = [...existing, ...warnings];
+  }
+  return out;
+}
+
+/**
+ * Whether the report needs a retry against a stricter prompt. We retry once
+ * when the LLM tried to fabricate ≥2 competitors OR dropped the count below
+ * the grounding threshold even though the whitelist had enough entries.
+ */
+export function shouldRetryForCompetitorGrounding(
+  report: IqReportWithGrounding,
+  whitelist: CompetitorWhitelist,
+): boolean {
+  const dropped = report._dropped_competitor_names ?? [];
+  if (dropped.length >= 2) return true;
+  if (whitelist.total >= MIN_WHITELIST_FOR_GROUNDED_REPORT) {
+    const kept = Array.isArray(report.competitors) ? report.competitors.length : 0;
+    if (kept < MIN_WHITELIST_FOR_GROUNDED_REPORT) return true;
+  }
+  return false;
 }

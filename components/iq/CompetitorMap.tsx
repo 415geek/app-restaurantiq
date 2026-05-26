@@ -3,11 +3,76 @@
 import type { CompetitorMapPin, CompetitorMapTier } from '@/lib/funnel/iq-competitor-map';
 
 type Props = {
-  center: { lat: number; lng: number };
+  center: { lat: number; lng: number } | null;
   pins: CompetitorMapPin[];
   lang: 'en' | 'zh';
   staticMapUrl?: string | null;
+  /**
+   * Total named competitors retrieved from market_data (Google ∪ Yelp ∪ BrightData).
+   * When 0–2, we render a "data insufficient" panel instead of a near-empty map.
+   */
+  whitelistTotal?: number;
+  /**
+   * Set when the post-LLM grounding pass dropped one or more hallucinated names
+   * or judged the kept count too low. Triggers the warning banner.
+   */
+  insufficient?: boolean;
 };
+
+const MIN_USEFUL_PINS = 2;
+
+function InsufficientPanel({
+  lang,
+  whitelistTotal,
+}: {
+  lang: 'en' | 'zh';
+  whitelistTotal?: number;
+}) {
+  const count = whitelistTotal ?? 0;
+  if (lang === 'zh') {
+    return (
+      <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-5">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl" aria-hidden>
+            ⚠️
+          </span>
+          <div className="space-y-2 text-sm leading-relaxed text-amber-100">
+            <p className="font-semibold">竞品数据不足以绘制可信地图</p>
+            <p className="text-amber-100/85">
+              本次仅检索到 <strong>{count}</strong> 家具名竞品（Google / Yelp / BrightData 合计）。
+              报告其他部分仍可参考，但<strong>竞品分布、威胁等级、收入对标</strong>请视为低置信度。
+            </p>
+            <p className="text-amber-100/75">
+              如需精准竞品分析，可在系统设置中接入 Yelp Fusion API 或扩大检索半径后重新生成。
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-5">
+      <div className="flex items-start gap-3">
+        <span className="text-2xl" aria-hidden>
+          ⚠️
+        </span>
+        <div className="space-y-2 text-sm leading-relaxed text-amber-100">
+          <p className="font-semibold">Competitor data is too thin to plot a reliable map</p>
+          <p className="text-amber-100/85">
+            Only <strong>{count}</strong> named competitor(s) were retrieved (Google / Yelp / BrightData
+            combined). Other sections remain useful, but treat the
+            <strong> competitor mix, threat levels, and revenue benchmarks </strong>
+            as low-confidence.
+          </p>
+          <p className="text-amber-100/75">
+            Enable Yelp Fusion in settings or widen the search radius before regenerating for a high-fidelity
+            competitive picture.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const TIER_STYLE: Record<CompetitorMapTier, { fill: string; label: { en: string; zh: string } }> = {
   site: { fill: '#34d399', label: { en: 'Your site', zh: '目标址' } },
@@ -43,14 +108,35 @@ function projectPins(
   };
 }
 
-export function CompetitorMap({ center, pins, lang, staticMapUrl }: Props) {
+export function CompetitorMap({
+  center,
+  pins,
+  lang,
+  staticMapUrl,
+  whitelistTotal,
+  insufficient,
+}: Props) {
+  const tooFewPins = pins.length < MIN_USEFUL_PINS;
+  const noCenter = !center;
+  const showInsufficient = insufficient || tooFewPins || noCenter;
+
+  // No usable map → render the warning panel only.
+  if (showInsufficient && noCenter) {
+    return (
+      <div className="space-y-4">
+        <InsufficientPanel lang={lang} whitelistTotal={whitelistTotal} />
+      </div>
+    );
+  }
+
   const W = 560;
   const H = 320;
-  const projected = projectPins(center, pins, W, H);
+  const projected = center ? projectPins(center, pins, W, H) : null;
   const tiersPresent = new Set<CompetitorMapTier>(['site', ...pins.map((p) => p.tier)]);
 
   return (
     <div className="space-y-4">
+      {showInsufficient && <InsufficientPanel lang={lang} whitelistTotal={whitelistTotal} />}
       {staticMapUrl ? (
         <div className="overflow-hidden rounded-xl border border-zinc-700">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -62,11 +148,18 @@ export function CompetitorMap({ center, pins, lang, staticMapUrl }: Props) {
             height={360}
           />
         </div>
-      ) : (
+      ) : projected ? (
         <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/60">
           <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img">
             <rect width={W} height={H} fill="#0f172a" />
-            <circle cx={projected.site.x} cy={projected.site.y} r={10} fill="#34d399" stroke="#ecfdf5" strokeWidth={2} />
+            <circle
+              cx={projected.site.x}
+              cy={projected.site.y}
+              r={10}
+              fill="#34d399"
+              stroke="#ecfdf5"
+              strokeWidth={2}
+            />
             {projected.pins.map((p) => (
               <circle
                 key={`${p.name}-${p.lat}`}
@@ -81,7 +174,7 @@ export function CompetitorMap({ center, pins, lang, staticMapUrl }: Props) {
             ))}
           </svg>
         </div>
-      )}
+      ) : null}
 
       <div className="flex flex-wrap gap-3 text-xs text-zinc-400">
         {Array.from(tiersPresent).map((tier) => (

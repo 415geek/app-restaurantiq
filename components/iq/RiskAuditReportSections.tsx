@@ -70,6 +70,11 @@ export function RiskAuditReportSections({
     reportCompetitors: Array.isArray(full.competitors) ? full.competitors : [],
   });
 
+  // Grounding flags injected by lib/funnel/iq-full-report-schema.applyCompetitorWhitelist.
+  const insufficientCompetitorData = full._insufficient_competitor_data === true;
+  const whitelistTotal =
+    typeof full._whitelist_total === 'number' ? (full._whitelist_total as number) : undefined;
+
   const breakEven = numScore(audit.break_even_revenue_monthly_usd);
   const safeRev = numScore(audit.safe_revenue_monthly_usd);
   const costs = audit.cost_breakdown ?? [];
@@ -106,17 +111,20 @@ export function RiskAuditReportSections({
         )}
       </SectionShell>
 
-      {(center && pins.length > 0) || audit.competitor_tiers_note ? (
+      {(center && pins.length > 0) ||
+      audit.competitor_tiers_note ||
+      insufficientCompetitorData ? (
         <SectionShell title={t.competitorMap} icon="🗺️">
-          {center && pins.length > 0 && (
-            <CompetitorMap center={center} pins={pins} lang={lang} staticMapUrl={staticMapUrl} />
-          )}
+          <CompetitorMap
+            center={center}
+            pins={pins}
+            lang={lang}
+            staticMapUrl={staticMapUrl}
+            whitelistTotal={whitelistTotal}
+            insufficient={insufficientCompetitorData}
+          />
           {audit.competitor_tiers_note && (
-            <p
-              className={`text-sm leading-relaxed text-zinc-300 ${center && pins.length > 0 ? 'mt-4' : ''}`}
-            >
-              {audit.competitor_tiers_note}
-            </p>
+            <p className="mt-4 text-sm leading-relaxed text-zinc-300">{audit.competitor_tiers_note}</p>
           )}
         </SectionShell>
       ) : null}
