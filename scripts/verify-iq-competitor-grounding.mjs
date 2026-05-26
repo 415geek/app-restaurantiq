@@ -104,6 +104,39 @@ const emptyMarketData = {
   brightdata_research: {},
 };
 
+// D-1 fixture: Yelp + Foursquare actually populated.
+const multiSourceMarketData = {
+  geocode: { lat: 37.7361, lng: -122.4756 },
+  google_raw: {
+    textsearch: {
+      results: [
+        { name: 'Boba Guys Sunset', geometry: { location: { lat: 37.7374, lng: -122.4762 } } },
+      ],
+    },
+  },
+  summary: {
+    sample_competitors_google: [
+      { name: 'Boba Guys Sunset', rating: 4.5, reviews: 320 },
+    ],
+    sample_competitors_yelp: [
+      { yelp_id: 'abc1', name: 'Tea & Cake', rating: 4.6, reviews: 412, price_level: 2, lat: 37.7370, lng: -122.4761 },
+      { yelp_id: 'abc2', name: 'Snowflake Sunset', rating: 4.3, reviews: 280, price_level: 1, lat: 37.7359, lng: -122.4744 },
+      { yelp_id: 'abc3', name: 'Boba Guys Sunset', rating: 4.5, reviews: 310 }, // dedupes with google
+    ],
+    sample_competitors_foursquare: [
+      { fsq_id: 'fsq1', name: 'Sharetea — Outer Sunset', price_tier: 2, lat: 37.7365, lng: -122.4758 },
+      { fsq_id: 'fsq2', name: '85°C Bakery Café', price_tier: 1 },
+    ],
+  },
+  foursquare_raw: {
+    search: {
+      competitors: [
+        { fsq_id: 'fsq3', name: 'Plentea SF', price_tier: 2 },
+      ],
+    },
+  },
+};
+
 const thinMarketData = {
   google_raw: {
     textsearch: {
@@ -236,6 +269,28 @@ assert('empty block does NOT leak fake placeholders', !/A\/B\/C/.test(blockZhEmp
 // ---------- 7. MIN_WHITELIST_FOR_GROUNDED_REPORT exists & sensible ----------
 header('MIN_WHITELIST_FOR_GROUNDED_REPORT');
 assert('exported number ≥ 2', typeof MIN_WHITELIST_FOR_GROUNDED_REPORT === 'number' && MIN_WHITELIST_FOR_GROUNDED_REPORT >= 2);
+
+// ---------- 8. D-1 multi-source merge ----------
+header('D-1: multi-source whitelist merge');
+const ms = extractCompetitorWhitelist(multiSourceMarketData);
+assert(`merges google + yelp + foursquare (total=${ms.total})`, ms.total >= 5 && ms.total <= 7);
+assert('Boba Guys dedupes google + yelp', (ms.byKey.get('boba guys sunset')?.sources ?? []).length >= 2);
+assert(
+  'Boba Guys sources include both google AND yelp',
+  ms.byKey.get('boba guys sunset')?.sources?.includes('google') &&
+    ms.byKey.get('boba guys sunset')?.sources?.includes('yelp'),
+);
+assert(`countsBySource.yelp ≥ 3 (got ${ms.countsBySource.yelp})`, ms.countsBySource.yelp >= 3);
+assert(`countsBySource.foursquare ≥ 3 (got ${ms.countsBySource.foursquare})`, ms.countsBySource.foursquare >= 3);
+assert('Sharetea (Foursquare with em-dash) survives normalization', isCompetitorWhitelisted('Sharetea Outer Sunset', ms));
+assert('85°C Bakery (accented) recognized', isCompetitorWhitelisted('85°C Bakery Café', ms));
+assert('foursquare_raw fallback picked up Plentea SF', isCompetitorWhitelisted('Plentea SF', ms));
+
+header('D-1: prompt block reflects 4 sources');
+const blockEnD1 = buildCompetitorWhitelistPromptBlock(ms, 'en');
+assert('EN block includes Foursquare count', /Foursquare=\d+/.test(blockEnD1));
+const blockZhD1 = buildCompetitorWhitelistPromptBlock(ms, 'zh');
+assert('ZH block includes Foursquare count', /Foursquare=\d+/.test(blockZhD1));
 
 // ---------- Summary ----------
 console.log(`\n[result] ${pass} passed, ${fail} failed`);

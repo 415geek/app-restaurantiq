@@ -11,7 +11,9 @@
  * Sources merged (in priority order):
  *   - google_raw.textsearch.results[].name
  *   - summary.sample_competitors_google[].name
- *   - summary.sample_competitors_yelp[].name
+ *   - summary.sample_competitors_yelp[].name           (Yelp Fusion — D-1)
+ *   - summary.sample_competitors_foursquare[].name     (Foursquare Places — D-1)
+ *   - foursquare_raw.search.competitors[].name         (D-1 raw fallback)
  *   - brightdata_research.search_results[] (best-effort)
  *
  * The whitelist is lowercase + punctuation-stripped; exact case + accents are
@@ -45,7 +47,7 @@ export type CompetitorWhitelist = {
   /** Total distinct competitors after dedupe. */
   total: number;
   /** Granular per-source counts (for confidence chips + UI). */
-  countsBySource: { google: number; yelp: number; brightdata: number };
+  countsBySource: { google: number; yelp: number; foursquare: number; brightdata: number };
 };
 
 // Smart quotes, em/en-dash, common ASCII punctuation, middle dot.
@@ -127,7 +129,7 @@ export function extractCompetitorWhitelist(
   marketData: Record<string, unknown> | null | undefined,
 ): CompetitorWhitelist {
   const byKey = new Map<string, CompetitorWhitelistEntry>();
-  const counts = { google: 0, yelp: 0, brightdata: 0 };
+  const counts = { google: 0, yelp: 0, foursquare: 0, brightdata: 0 };
 
   if (!marketData) {
     return { keys: new Set(), byKey, displayNames: [], total: 0, countsBySource: counts };
@@ -140,6 +142,8 @@ export function extractCompetitorWhitelist(
     asRecord(root.summary) ?? (ext ? asRecord(ext.summary) : null);
   const googleRaw =
     asRecord(root.google_raw) ?? (ext ? asRecord(ext.google_raw) : null);
+  const foursquareRaw =
+    asRecord(root.foursquare_raw) ?? (ext ? asRecord(ext.foursquare_raw) : null);
   const brightData =
     asRecord(root.brightdata_research) ?? (ext ? asRecord(ext.brightdata_research) : null);
 
@@ -182,8 +186,8 @@ export function extractCompetitorWhitelist(
   counts.google = 0;
   for (const e of byKey.values()) if (e.sources.includes('google')) counts.google += 1;
 
-  // Pass 3: Yelp samples.
-  const beforeYelp = byKey.size;
+  // Pass 3: Yelp samples (now populated by D-1 multi-source gather).
+  // Each row carries: { yelp_id, name, rating, reviews, price_level, address, lat, lng, ... }
   for (const row of summary ? asArray(summary.sample_competitors_yelp) : []) {
     const r = asRecord(row);
     if (!r) continue;
@@ -192,13 +196,47 @@ export function extractCompetitorWhitelist(
       address: r.address,
       rating: r.rating,
       reviewCount: r.review_count ?? r.reviews,
-      priceLevel: r.price,
+      priceLevel: r.price_level ?? r.price,
       lat: r.lat ?? (asRecord(r.coordinates)?.latitude as unknown),
       lng: r.lng ?? (asRecord(r.coordinates)?.longitude as unknown),
     });
   }
   counts.yelp = 0;
   for (const e of byKey.values()) if (e.sources.includes('yelp')) counts.yelp += 1;
+
+  // Pass 3.5: Foursquare samples (summary.sample_competitors_foursquare).
+  for (const row of summary ? asArray(summary.sample_competitors_foursquare) : []) {
+    const r = asRecord(row);
+    if (!r) continue;
+    addEntry(byKey, 'foursquare', {
+      name: r.name,
+      address: r.address,
+      // Foursquare price is integer 1..4 — matches Google's price_level scale.
+      priceLevel: r.price_tier,
+      lat: r.lat,
+      lng: r.lng,
+    });
+  }
+
+  // Foursquare raw fallback (for the direct search response shape).
+  if (foursquareRaw) {
+    const fsqSearch = asRecord(foursquareRaw.search);
+    if (fsqSearch) {
+      for (const row of asArray(fsqSearch.competitors)) {
+        const r = asRecord(row);
+        if (!r) continue;
+        addEntry(byKey, 'foursquare', {
+          name: r.name,
+          address: r.address,
+          priceLevel: r.price_tier,
+          lat: r.lat,
+          lng: r.lng,
+        });
+      }
+    }
+  }
+  counts.foursquare = 0;
+  for (const e of byKey.values()) if (e.sources.includes('foursquare')) counts.foursquare += 1;
 
   // Pass 4: Bright Data — looser shape; try a couple of known fields.
   if (brightData) {
@@ -259,14 +297,14 @@ export function buildCompetitorWhitelistPromptBlock(
 ): string {
   if (wl.total === 0) {
     return lang === 'zh'
-      ? '\n\n【竞品白名单】无 — 系统未检索到任何具名竞品。本次报告 competitors 数组必须为空数组 []，并在 competition_landscape 中明确写「未检索到附近具名竞品（Google/Yelp 同时返回空）」。禁止编造 A/B/C 占位名。\n'
-      : '\n\n[COMPETITOR WHITELIST] EMPTY — no named competitors were retrieved. Return competitors as []; competition_landscape must say "no named competitors retrieved from Google/Yelp"; do NOT invent A/B/C placeholders.\n';
+      ? '\n\n【竞品白名单】无 — 系统未检索到任何具名竞品。本次报告 competitors 数组必须为空数组 []，并在 competition_landscape 中明确写「未检索到附近具名竞品（Google/Yelp/Foursquare 同时返回空）」。禁止编造 A/B/C 占位名。\n'
+      : '\n\n[COMPETITOR WHITELIST] EMPTY — no named competitors were retrieved. Return competitors as []; competition_landscape must say "no named competitors retrieved from Google/Yelp/Foursquare"; do NOT invent A/B/C placeholders.\n';
   }
   const lines = wl.displayNames.map((n, i) => `  ${i + 1}. ${n}`).join('\n');
   if (lang === 'zh') {
     return [
       '\n\n【竞品白名单——硬约束】',
-      `本次检索到的具名竞品（共 ${wl.total} 家，Google=${wl.countsBySource.google} / Yelp=${wl.countsBySource.yelp} / BrightData=${wl.countsBySource.brightdata}）：`,
+      `本次检索到的具名竞品（共 ${wl.total} 家，Google=${wl.countsBySource.google} / Yelp=${wl.countsBySource.yelp} / Foursquare=${wl.countsBySource.foursquare} / BrightData=${wl.countsBySource.brightdata}）：`,
       lines,
       '',
       '规则：',
@@ -278,7 +316,7 @@ export function buildCompetitorWhitelistPromptBlock(
   }
   return [
     '\n\n[COMPETITOR WHITELIST — HARD CONSTRAINT]',
-    `Retrieved named competitors (total ${wl.total}; Google=${wl.countsBySource.google} / Yelp=${wl.countsBySource.yelp} / BrightData=${wl.countsBySource.brightdata}):`,
+    `Retrieved named competitors (total ${wl.total}; Google=${wl.countsBySource.google} / Yelp=${wl.countsBySource.yelp} / Foursquare=${wl.countsBySource.foursquare} / BrightData=${wl.countsBySource.brightdata}):`,
     lines,
     '',
     'Rules:',

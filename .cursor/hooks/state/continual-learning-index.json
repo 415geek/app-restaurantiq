@@ -1,9 +1,12 @@
 {
   "version": 1,
-  "updatedAt": "2026-04-08T06:16:23Z",
+  "updatedAt": "2026-05-26T18:46:13Z",
   "transcripts": {
     "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/f1f45797-4517-4d14-bd68-0b03a6a4448b/f1f45797-4517-4d14-bd68-0b03a6a4448b.jsonl": {
       "mtime": 1774684571044
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/f1f45797-4517-4d14-bd68-0b03a6a4448b/subagents/92e85a90-f73a-494d-a2a4-d68248f17aee.jsonl": {
+      "mtime": 1774661586612
     },
     "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/76748c84-a449-47b9-9f03-18803b5fde49/76748c84-a449-47b9-9f03-18803b5fde49.jsonl": {
       "mtime": 1774686757917
@@ -20,6 +23,18 @@
     "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/d863dfc4-bab8-4d49-b907-c4582e7b3998/d863dfc4-bab8-4d49-b907-c4582e7b3998.jsonl": {
       "mtime": 1775448377929
     },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/d863dfc4-bab8-4d49-b907-c4582e7b3998/subagents/49e3b58b-8d7b-4d68-be20-ac507a74d086.jsonl": {
+      "mtime": 1774771944093
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/d863dfc4-bab8-4d49-b907-c4582e7b3998/subagents/544dd6e0-dea9-462e-a207-4173617194d2.jsonl": {
+      "mtime": 1775384305843
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/d863dfc4-bab8-4d49-b907-c4582e7b3998/subagents/a5560f44-0b5d-4279-842a-3ad23b2fd503.jsonl": {
+      "mtime": 1775448365652
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/d863dfc4-bab8-4d49-b907-c4582e7b3998/subagents/289bd65b-8d8b-4472-a882-0acaf6049d76.jsonl": {
+      "mtime": 1774772126724
+    },
     "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/43ab87fb-0fe5-4073-b30d-e15cf413aa94/43ab87fb-0fe5-4073-b30d-e15cf413aa94.jsonl": {
       "mtime": 1774686815096
     },
@@ -29,17 +44,26 @@
     "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/702b51b1-6e3c-4581-8fb7-ccc8ce46cb4b/702b51b1-6e3c-4581-8fb7-ccc8ce46cb4b.jsonl": {
       "mtime": 1774686757782
     },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/5aaa7484-deed-471a-8668-a517be9c8f72/5aaa7484-deed-471a-8668-a517be9c8f72.jsonl": {
+      "mtime": 1777629676170
+    },
     "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/90109f49-0903-4b1e-acbe-48b93548a9e3/90109f49-0903-4b1e-acbe-48b93548a9e3.jsonl": {
       "mtime": 1774661640253
     },
     "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/a0077abd-e6d4-4a94-baab-6cbfcc324e99/a0077abd-e6d4-4a94-baab-6cbfcc324e99.jsonl": {
       "mtime": 1774661794700
     },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/ff1116b6-6034-442b-88f1-12a270162f91/ff1116b6-6034-442b-88f1-12a270162f91.jsonl": {
+      "mtime": 1779820935166
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/ff1116b6-6034-442b-88f1-12a270162f91/subagents/9577dde8-d326-442c-accd-59a28e7b0488.jsonl": {
+      "mtime": 1779820945323
+    },
     "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/615c10ae-3465-483b-8c4f-4a850bf4bef3/615c10ae-3465-483b-8c4f-4a850bf4bef3.jsonl": {
       "mtime": 1774769884722
     },
     "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/62e67fb7-d641-490c-b374-a48c802ecf19/62e67fb7-d641-490c-b374-a48c802ecf19.jsonl": {
-      "mtime": 1775628921252
+      "mtime": 1775629000456
     },
     "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/792673be-e319-4c11-aa83-26f6566b9fc8/792673be-e319-4c11-aa83-26f6566b9fc8.jsonl": {
       "mtime": 1774661633067
@@ -76,21 +100,6 @@
     },
     "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/ce582bdb-d5b3-4236-a102-f28d0461b997/ce582bdb-d5b3-4236-a102-f28d0461b997.jsonl": {
       "mtime": 1774686760545
-    },
-    "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/d863dfc4-bab8-4d49-b907-c4582e7b3998/subagents/49e3b58b-8d7b-4d68-be20-ac507a74d086.jsonl": {
-      "mtime": 1774771944093
-    },
-    "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/d863dfc4-bab8-4d49-b907-c4582e7b3998/subagents/544dd6e0-dea9-462e-a207-4173617194d2.jsonl": {
-      "mtime": 1775384305843
-    },
-    "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/d863dfc4-bab8-4d49-b907-c4582e7b3998/subagents/a5560f44-0b5d-4279-842a-3ad23b2fd503.jsonl": {
-      "mtime": 1775448365652
-    },
-    "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/d863dfc4-bab8-4d49-b907-c4582e7b3998/subagents/289bd65b-8d8b-4472-a882-0acaf6049d76.jsonl": {
-      "mtime": 1774772126724
-    },
-    "/Users/c8geek/.cursor/projects/Users-c8geek-app-restaurantiq/agent-transcripts/f1f45797-4517-4d14-bd68-0b03a6a4448b/subagents/92e85a90-f73a-494d-a2a4-d68248f17aee.jsonl": {
-      "mtime": 1774661586612
     }
   }
 }
