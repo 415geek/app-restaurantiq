@@ -26,6 +26,10 @@ export type GenerateIqFullReportInput = {
   reason: string;
   marketData: Record<string, unknown> | undefined;
   language: 'en' | 'zh';
+  /** Skip C-5 cross-verify to finish within serverless time budget (browser-triggered path). */
+  skipDualVerify?: boolean;
+  /** Skip completeness/competitor regen retries (faster, single LLM pass). */
+  leanGeneration?: boolean;
 };
 
 export async function generateIqFullReportWithN8nFallback(
@@ -58,14 +62,16 @@ export async function generateIqFullReportWithN8nFallback(
       const grounded = applyCompetitorWhitelist(parsed, whitelist);
       const withFinance = applyFinanceModelOverride(grounded, financeModel);
       logFullReportQuality(withFinance, `reportId=${input.reportId} n8n`);
-      const verified = await applyDualModelVerification(withFinance, {
-        language: input.language,
-        location: input.location,
-        businessType: input.businessType,
-        primaryProvider: 'n8n',
-        reportSource: 'n8n',
-      });
-      return stripInternalIqReportFields(verified);
+      const out = input.skipDualVerify
+        ? withFinance
+        : await applyDualModelVerification(withFinance, {
+            language: input.language,
+            location: input.location,
+            businessType: input.businessType,
+            primaryProvider: 'n8n',
+            reportSource: 'n8n',
+          });
+      return stripInternalIqReportFields(out);
     } catch (e) {
       console.warn('[iq-generate-full-report] n8n failed, falling back to in-app LLM:', e);
     }
@@ -78,20 +84,23 @@ export async function generateIqFullReportWithN8nFallback(
     reason: input.reason,
     marketData: input.marketData,
     language: input.language,
+    leanGeneration: input.leanGeneration,
   });
   const withFinance = applyFinanceModelOverride(parsed, financeModel);
   logFullReportQuality(withFinance, `reportId=${input.reportId} llm`);
-  const verified = await applyDualModelVerification(withFinance, {
-    language: input.language,
-    location: input.location,
-    businessType: input.businessType,
-    primaryProvider:
-      typeof parsed._generation_provider === 'string'
-        ? parsed._generation_provider
-        : undefined,
-    primaryModel:
-      typeof parsed._generation_model === 'string' ? parsed._generation_model : undefined,
-    reportSource: 'llm',
-  });
-  return stripInternalIqReportFields(verified);
+  const out = input.skipDualVerify
+    ? withFinance
+    : await applyDualModelVerification(withFinance, {
+        language: input.language,
+        location: input.location,
+        businessType: input.businessType,
+        primaryProvider:
+          typeof parsed._generation_provider === 'string'
+            ? parsed._generation_provider
+            : undefined,
+        primaryModel:
+          typeof parsed._generation_model === 'string' ? parsed._generation_model : undefined,
+        reportSource: 'llm',
+      });
+  return stripInternalIqReportFields(out);
 }

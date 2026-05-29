@@ -79,12 +79,15 @@ function routeConfig(task: IqLlmTask): {
           maxTokens: 4_096,
         },
       };
-    case 'iq_full':
+    case 'iq_full': {
+      const fullThinking =
+        primaryProvider === 'mimo' &&
+        /^(1|true|yes|on)$/i.test(process.env.MIMO_IQ_FULL_THINKING?.trim() ?? '');
       return {
         primary: {
           provider: primaryProvider,
           model: fullModel,
-          thinking: primaryProvider === 'mimo',
+          thinking: fullThinking,
           maxTokens: 16_000,
         },
         fallback: {
@@ -94,6 +97,7 @@ function routeConfig(task: IqLlmTask): {
           maxTokens: 16_000,
         },
       };
+    }
     case 'iq_verify':
       return {
         primary: {

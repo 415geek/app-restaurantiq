@@ -315,6 +315,8 @@ export async function runFullPremiumReport(input: {
   reason: string;
   marketData?: Record<string, unknown>;
   language?: 'en' | 'zh';
+  /** Single-pass generation (no completeness/competitor regen) for serverless time limits. */
+  leanGeneration?: boolean;
 }): Promise<IqReportWithGrounding> {
   const language = input.language === 'zh' ? 'zh' : 'en';
 
@@ -344,7 +346,11 @@ export async function runFullPremiumReport(input: {
   let completeness = scoreFullReportCompleteness(grounded);
   const minScore = minCompletenessForPaidReport();
 
-  if (completeness < minScore && shouldUseFullMarketContextForIqFull()) {
+  if (
+    !input.leanGeneration &&
+    completeness < minScore &&
+    shouldUseFullMarketContextForIqFull()
+  ) {
     console.warn(
       `[iq-full-report] completeness ${completeness} < ${minScore}; regenerating once (MiMo)`,
     );
@@ -360,7 +366,7 @@ export async function runFullPremiumReport(input: {
     }
   }
 
-  if (shouldRetryForCompetitorGrounding(grounded, whitelist)) {
+  if (!input.leanGeneration && shouldRetryForCompetitorGrounding(grounded, whitelist)) {
     const droppedCount = grounded._dropped_competitor_names?.length ?? 0;
     console.warn(
       `[iq-full-report] retrying due to ${droppedCount} hallucinated competitor(s); whitelist had ${whitelist.total}`,

@@ -15,14 +15,19 @@ export const maxDuration = 300;
  * - `persist`: boolean — when false, does NOT write full_report_json (preview mode for language toggles)
  */
 function fullReportErrorMessage(lang: 'en' | 'zh', code: string): string {
+  if (code === 'FULL_REPORT_TIMEOUT') {
+    return lang === 'zh'
+      ? '生成时间较长已超时，请点击下方「重试生成」再试一次。'
+      : 'Generation timed out. Tap Retry below to try again.';
+  }
   if (code === 'FULL_REPORT_GENERATION_FAILED') {
     return lang === 'zh'
-      ? '完整报告生成失败，请稍后刷新重试。'
-      : 'Full report generation failed. Please refresh and try again.';
+      ? '完整报告生成失败，请点击「重试生成」或稍后刷新。'
+      : 'Full report generation failed. Tap Retry or refresh later.';
   }
   return lang === 'zh'
-    ? '完整报告生成失败，请稍后刷新重试。'
-    : 'Full report generation failed. Please refresh and try again.';
+    ? '完整报告生成失败，请点击「重试生成」或稍后刷新。'
+    : 'Full report generation failed. Tap Retry or refresh later.';
 }
 
 export async function POST(req: Request) {
@@ -67,6 +72,7 @@ export async function POST(req: Request) {
         lang: targetLang,
         /** Client-triggered generation: do not block on a fresh Tavily deep-research run. */
         skipDeepResearchFetch: true,
+        leanResolve: true,
       });
     } catch (enrichErr) {
       console.warn('[funnel/full-report] market enrich failed, using stored market_data', enrichErr);
@@ -88,6 +94,8 @@ export async function POST(req: Request) {
       reason: report.reason,
       marketData: marketForLlm,
       language: targetLang,
+      skipDualVerify: true,
+      leanGeneration: true,
     });
 
     const fullJson = full;
@@ -98,12 +106,17 @@ export async function POST(req: Request) {
   } catch (e) {
     console.error('[funnel/full-report]', e);
     const msg = e instanceof Error ? e.message : String(e);
+    const isTimeout =
+      /timeout|timed out|504|FUNCTION_INVOCATION_TIMEOUT|deadline/i.test(msg) ||
+      (e instanceof Error && e.name === 'AbortError');
+    const code = isTimeout ? 'FULL_REPORT_TIMEOUT' : msg;
     return NextResponse.json(
       {
-        error: fullReportErrorMessage(targetLang, msg),
+        error: fullReportErrorMessage(targetLang, code),
+        retryable: true,
         ...(process.env.NODE_ENV === 'development' ? { detail: msg.slice(0, 300) } : {}),
       },
-      { status: 500 },
+      { status: isTimeout ? 504 : 500 },
     );
   }
 }
