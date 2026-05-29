@@ -92,8 +92,11 @@ export async function resolveMarketDataForIqReport(input: {
   businessType: string;
   isPremium?: boolean;
   lang?: 'en' | 'zh';
+  /** When true, reuse cached deep_research only — do not start a new Tavily deep-research job. */
+  skipDeepResearchFetch?: boolean;
 }): Promise<Record<string, unknown> | null> {
-  const { location, businessType, isPremium = false, lang = 'en' } = input;
+  const { location, businessType, isPremium = false, lang = 'en', skipDeepResearchFetch = false } =
+    input;
   let base: Record<string, unknown> =
     input.existing && typeof input.existing === 'object' && !Array.isArray(input.existing)
       ? { ...input.existing }
@@ -146,7 +149,7 @@ export async function resolveMarketDataForIqReport(input: {
       console.log('[resolve-market-data] previous deep research failed, will retry');
     }
 
-    if (!hasCompletedDeepResearch) {
+    if (!hasCompletedDeepResearch && !skipDeepResearchFetch) {
       console.log('[resolve-market-data] fetching Tavily Deep Research (pro model) for premium report...');
       const deepRes = await fetchTavilyDeepResearch({
         location,

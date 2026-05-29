@@ -492,8 +492,8 @@ export function buildPremiumMarketDataSection(
     if (digest) {
       deepResearchBlock =
         lang === 'zh'
-          ? `\n\n【Tavily 深度研究报告（麦肯锡级选址分析 — 必须参考并整合到报告各个部分；引用具体数据时标注 [DeepRes]）】\n${digest}`
-          : `\n\n[TAVILY DEEP RESEARCH REPORT — McKinsey-level site analysis — integrate findings throughout report; cite with [DeepRes]]\n${digest}`;
+          ? `\n\n【深度市场研究报告 — 必须参考并整合到报告各个部分；引用具体数据时标注 [DeepRes]】\n${digest}`
+          : `\n\n[DEEP MARKET RESEARCH REPORT — integrate findings throughout report; cite with [DeepRes]]\n${digest}`;
     }
   }
   
@@ -604,13 +604,19 @@ export function buildPremiumMarketDataSection(
 
   const evidencePreamble = fullContext
     ? lang === 'zh'
-      ? '\n\n【全量证据块 — MiMo 1M 上下文】以下 JSON 含 ACS 全表、具名竞品、Yelp/Google 评论摘录、商业租盘、Caltrans 车流、竞品洞察全文。每个关键数字/店名必须来自本块或上方锚点；否则标 [估算] 或 data not retrieved。引用格式：[来源 · YYYY-MM-DD]。\n'
-      : '\n\n[FULL EVIDENCE BLOCK — MiMo 1M context] JSON below includes full ACS, named competitors, Yelp/Google review excerpts, listings, Caltrans, competitor_insights. Every key number/name MUST come from this block or anchors above; else tag [estimate] or data not retrieved. Cite as [Source · YYYY-MM-DD].\n'
+      ? '\n\n【全量证据块】以下 JSON 含 ACS 全表、具名竞品、Yelp/Google 评论摘录、商业租盘、Caltrans 车流、竞品洞察全文。每个关键数字/店名必须来自本块或上方锚点；否则标 [估算] 或 data not retrieved。引用格式：[来源 · YYYY-MM-DD]。\n'
+      : '\n\n[FULL EVIDENCE BLOCK] JSON below includes full ACS, named competitors, Yelp/Google review excerpts, listings, Caltrans, competitor_insights. Every key number/name MUST come from this block or anchors above; else tag [estimate] or data not retrieved. Cite as [Source · YYYY-MM-DD].\n'
     : '';
+
+  let jsonPayload = JSON.stringify(mdForJson, null, 2);
+  const maxJsonChars = fullContext ? 380_000 : 120_000;
+  if (jsonPayload.length > maxJsonChars) {
+    jsonPayload = `${jsonPayload.slice(0, maxJsonChars)}\n…(truncated)`;
+  }
 
   const jsonBlock =
     lang === 'zh'
-      ? `${evidencePreamble}\n\n【市场数据原始 JSON（Google Places / Yelp / ACS / Caltrans / 商业房源 / BrightData / 深度研究${fullContext ? ' 全文' : ' meta'}）】\n${JSON.stringify(mdForJson, null, 2)}`
-      : `${evidencePreamble}\n\nRAW MARKET DATA JSON (Google Places / Yelp / ACS / Caltrans / commercial listings / BrightData / deep research${fullContext ? ' full' : ' meta'}):\n${JSON.stringify(mdForJson, null, 2)}`;
+      ? `${evidencePreamble}\n\n【市场数据 JSON${fullContext ? '（全文）' : ''}】\n${jsonPayload}`
+      : `${evidencePreamble}\n\nMARKET DATA JSON${fullContext ? ' (full)' : ''}:\n${jsonPayload}`;
   return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${competitorInsightsBlock}${jsonBlock}`;
 }

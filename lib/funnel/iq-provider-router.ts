@@ -226,27 +226,33 @@ async function runOpenAiJson(
 ): Promise<Record<string, unknown> | null> {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) return null;
-  const client = new OpenAI({ apiKey: key });
-  const completion = await client.chat.completions.create({
-    model: route.model,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ],
-    response_format: { type: 'json_object' },
-    max_completion_tokens: route.maxTokens ?? 16_000,
-    temperature: route.temperature ?? 0.2,
-  });
-  const text = completion.choices[0]?.message?.content;
-  if (!text) return null;
   try {
-    return JSON.parse(text) as Record<string, unknown>;
-  } catch {
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      return JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
+    const client = new OpenAI({ apiKey: key });
+    const completion = await client.chat.completions.create({
+      model: route.model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      response_format: { type: 'json_object' },
+      max_completion_tokens: route.maxTokens ?? 16_000,
+      temperature: route.temperature ?? 0.2,
+    });
+    const text = completion.choices[0]?.message?.content;
+    if (!text) return null;
+    try {
+      return JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start >= 0 && end > start) {
+        return JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
+      }
+      return null;
     }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('[iq-openai] chat completion failed:', msg.slice(0, 400));
     return null;
   }
 }
@@ -265,18 +271,24 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
   let warning: string | undefined;
 
   const tryRun = async (route: IqRouteResolution): Promise<Record<string, unknown> | null> => {
-    if (route.provider === 'mimo') {
-      const out = await runMimoJson({
-        model: route.model,
-        system: opts.system,
-        user: opts.user,
-        thinking: route.thinking,
-        maxTokens: route.maxTokens,
-        temperature: route.temperature,
-      });
-      return out?.raw ?? null;
+    try {
+      if (route.provider === 'mimo') {
+        const out = await runMimoJson({
+          model: route.model,
+          system: opts.system,
+          user: opts.user,
+          thinking: route.thinking,
+          maxTokens: route.maxTokens,
+          temperature: route.temperature,
+        });
+        return out?.raw ?? null;
+      }
+      return runOpenAiJson(route, opts.system, opts.user);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[iq-provider] ${route.provider}/${route.model} threw:`, msg.slice(0, 400));
+      return null;
     }
-    return runOpenAiJson(route, opts.system, opts.user);
   };
 
   let raw = await tryRun(primary);
@@ -310,18 +322,24 @@ export async function runIqProviderJsonOnRoute<T extends Record<string, unknown>
   user: string;
 }): Promise<IqJsonRunResult<T> | null> {
   const tryRun = async (route: IqRouteResolution): Promise<Record<string, unknown> | null> => {
-    if (route.provider === 'mimo') {
-      const out = await runMimoJson({
-        model: route.model,
-        system: opts.system,
-        user: opts.user,
-        thinking: route.thinking,
-        maxTokens: route.maxTokens,
-        temperature: route.temperature,
-      });
-      return out?.raw ?? null;
+    try {
+      if (route.provider === 'mimo') {
+        const out = await runMimoJson({
+          model: route.model,
+          system: opts.system,
+          user: opts.user,
+          thinking: route.thinking,
+          maxTokens: route.maxTokens,
+          temperature: route.temperature,
+        });
+        return out?.raw ?? null;
+      }
+      return runOpenAiJson(route, opts.system, opts.user);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[iq-provider] ${route.provider}/${route.model} threw:`, msg.slice(0, 400));
+      return null;
     }
-    return runOpenAiJson(route, opts.system, opts.user);
   };
 
   const raw = await tryRun(opts.route);
@@ -334,19 +352,13 @@ export async function runIqProviderJsonOnRoute<T extends Record<string, unknown>
   };
 }
 
-/** Stamp LLM provider into report for data_sources_and_disclaimer. */
+/** Internal telemetry only — does not append provider/model names to user-facing disclaimer. */
 export function appendLlmProviderToDisclaimer(
   report: Record<string, unknown>,
   meta: { provider: string; model: string; task: IqLlmTask },
-  lang: 'en' | 'zh',
+  _lang: 'en' | 'zh',
 ): void {
-  const line =
-    lang === 'zh'
-      ? `\n- 报告主模型：${meta.provider} / ${meta.model}（任务 ${meta.task}，${new Date().toISOString().slice(0, 10)}）`
-      : `\n- Report LLM: ${meta.provider} / ${meta.model} (task ${meta.task}, ${new Date().toISOString().slice(0, 10)})`;
-  const existing =
-    typeof report.data_sources_and_disclaimer === 'string'
-      ? report.data_sources_and_disclaimer
-      : '';
-  report.data_sources_and_disclaimer = `${existing}${line}`.trim();
+  report._generation_provider = meta.provider;
+  report._generation_model = meta.model;
+  report._generation_task = meta.task;
 }

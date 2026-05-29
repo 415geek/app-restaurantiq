@@ -116,6 +116,15 @@ export function getFullReportWebhookUrl(): string | null {
   return envValue('N8N_IQ_FULL_REPORT_WEBHOOK_URL') || envValue('N8N_FULL_REPORT_WEBHOOK_URL');
 }
 
+/** When MiMo is the in-repo primary, prefer the app LLM pipeline over a legacy n8n full-report webhook. */
+export function shouldUseN8nForIqFullReport(): boolean {
+  if (isOpenAiForced()) return false;
+  if (!getFullReportWebhookUrl()) return false;
+  const primary = envValue('IQ_PRIMARY_PROVIDER')?.toLowerCase();
+  if (primary === 'mimo') return false;
+  return true;
+}
+
 export async function analyzeWithN8n(input: N8nAnalyzeInput): Promise<N8nAnalyzeOutput> {
   const webhookUrl = getAnalyzeWebhookUrl();
   if (!webhookUrl) {

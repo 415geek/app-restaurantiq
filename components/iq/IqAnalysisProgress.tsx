@@ -82,21 +82,21 @@ const FREE_ANALYZE_PHASES: PhaseTarget[] = [
 export function getFullReportStages(lang: 'en' | 'zh'): AnalysisProgressStage[] {
   if (lang === 'zh') {
     return [
-      { id: 'market', label: '拉取竞品、地图与人口数据' },
-      { id: 'research', label: '深度市场研究（Tavily / ACS）' },
-      { id: 'finance', label: '计算盈亏与安全营收模型' },
-      { id: 'llm', label: 'MiMo / OpenAI 撰写完整报告' },
-      { id: 'verify', label: '双模型交叉校验决策结论' },
-      { id: 'finalize', label: '整理报告与竞品白名单' },
+      { id: 'market', label: '采集周边竞争与客流数据' },
+      { id: 'research', label: '深化区域市场研究' },
+      { id: 'finance', label: '核算成本与营收情景' },
+      { id: 'llm', label: '撰写完整选址报告' },
+      { id: 'verify', label: '复核关键决策结论' },
+      { id: 'finalize', label: '汇总报告内容' },
     ];
   }
   return [
-    { id: 'market', label: 'Fetching competitors, maps & demographics' },
-    { id: 'research', label: 'Deep market research (Tavily / ACS)' },
-    { id: 'finance', label: 'Computing break-even & safe revenue' },
-    { id: 'llm', label: 'Drafting full report (MiMo / OpenAI)' },
-    { id: 'verify', label: 'Dual-model verification of verdict' },
-    { id: 'finalize', label: 'Finalizing report & competitor grounding' },
+    { id: 'market', label: 'Gathering competition and foot-traffic signals' },
+    { id: 'research', label: 'Deepening market analysis' },
+    { id: 'finance', label: 'Modeling costs and revenue scenarios' },
+    { id: 'llm', label: 'Drafting your full site report' },
+    { id: 'verify', label: 'Reviewing key decision conclusions' },
+    { id: 'finalize', label: 'Assembling the final report' },
   ];
 }
 

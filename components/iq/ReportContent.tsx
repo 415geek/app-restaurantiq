@@ -431,7 +431,9 @@ export function ReportContent({
         {dualVerifyStatus && (
           <div
             className={`mt-4 rounded-lg border px-3 py-2 text-sm ${
-              dualVerifyStatus.includes('✓') || /aligned/i.test(dualVerifyStatus)
+              dualVerifyStatus.includes('✓') ||
+                /reviewed/i.test(dualVerifyStatus) ||
+                /已复核/i.test(dualVerifyStatus)
                 ? 'border-emerald-800/60 bg-emerald-950/40 text-emerald-300'
                 : 'border-amber-800/60 bg-amber-950/40 text-amber-200'
             }`}

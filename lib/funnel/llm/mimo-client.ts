@@ -64,11 +64,17 @@ export async function runMimoJson(opts: {
     }).extra_body = { enable_thinking: opts.thinking };
   }
 
-  const completion = await client.chat.completions.create(body);
+  try {
+    const completion = await client.chat.completions.create(body);
 
-  const text = completion.choices[0]?.message?.content;
-  if (!text) return null;
-  const raw = parseJsonFromLlmText(text);
-  if (!raw) return null;
-  return { raw, model: opts.model };
+    const text = completion.choices[0]?.message?.content;
+    if (!text) return null;
+    const raw = parseJsonFromLlmText(text);
+    if (!raw) return null;
+    return { raw, model: opts.model };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('[mimo] chat completion failed:', msg.slice(0, 400));
+    return null;
+  }
 }

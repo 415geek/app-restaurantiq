@@ -150,8 +150,8 @@ function compareSnapshots(
     if (primary.decision_tier !== verify.decision_tier) {
       disagreements.push(
         lang === 'zh'
-          ? `决策档位：主模型 ${primary.decision_tier} vs 复核 ${verify.decision_tier}`
-          : `Decision tier: primary ${primary.decision_tier} vs verify ${verify.decision_tier}`,
+          ? '签租建议档位与独立复核不一致，建议结合现场调研再定'
+          : 'Sign/lease recommendation tier differs from independent review—confirm on site',
       );
     }
   }
@@ -161,8 +161,8 @@ function compareSnapshots(
     if (delta > 8) {
       disagreements.push(
         lang === 'zh'
-          ? `综合分差距 ${delta.toFixed(0)} 分（主 ${primary.overall_score} / 复核 ${verify.overall_score}）`
-          : `Overall score gap ${delta.toFixed(0)} pts (primary ${primary.overall_score} / verify ${verify.overall_score})`,
+          ? `综合评分差距较大（约 ${delta.toFixed(0)} 分），建议人工核对`
+          : `Overall score differs by ~${delta.toFixed(0)} points—manual review recommended`,
       );
     }
   }
@@ -174,8 +174,8 @@ function compareSnapshots(
     if (p !== undefined && row.score_100 !== undefined && Math.abs(p - row.score_100) > 12) {
       disagreements.push(
         lang === 'zh'
-          ? `维度「${row.dimension}」分差 >12（主 ${p} / 复核 ${row.score_100}）`
-          : `Dimension "${row.dimension}" gap >12 (primary ${p} / verify ${row.score_100})`,
+          ? `「${row.dimension}」维度评分差异明显，建议重点核实`
+          : `"${row.dimension}" scores differ materially—verify this dimension`,
       );
     }
   }
@@ -271,16 +271,14 @@ export async function applyDualModelVerification(
     const lang = opts.language;
     const status = aligned
       ? lang === 'zh'
-        ? '双模型一致 ✓'
-        : 'Dual-model aligned ✓'
+        ? '结论已复核 ✓'
+        : 'Conclusion reviewed ✓'
       : lang === 'zh'
-        ? '双模型存在分歧'
-        : 'Dual-model divergent';
+        ? '存在待核对项'
+        : 'Needs your review';
 
     report.dual_model_verification = {
       status,
-      primary_provider: opts.primaryProvider || String(report._generation_provider ?? 'openai'),
-      verify_provider: routed.provider,
       disagreements: disagreements.length > 0 ? disagreements : undefined,
     };
 
@@ -293,25 +291,14 @@ export async function applyDualModelVerification(
     report._verify_provider = routed.provider;
     report._verify_model = routed.model;
 
-    const note =
-      lang === 'zh'
-        ? `\n- 双模型复核：${status}（主 ${opts.primaryProvider ?? report._generation_provider}/${opts.primaryModel ?? report._generation_model ?? '—'} → 复核 ${routed.provider}/${routed.model}${opts.reportSource ? `，来源 ${opts.reportSource}` : ''}）`
-        : `\n- Dual-model review: ${status} (primary ${opts.primaryProvider ?? report._generation_provider}/${opts.primaryModel ?? report._generation_model ?? '—'} → verify ${routed.provider}/${routed.model}${opts.reportSource ? `, source ${opts.reportSource}` : ''})`;
-
-    const existing =
-      typeof report.data_sources_and_disclaimer === 'string'
-        ? report.data_sources_and_disclaimer
-        : '';
-    report.data_sources_and_disclaimer = `${existing}${note}`.trim();
-
     if (!aligned) {
       downgradeConfidence(report as Record<string, unknown>);
       const w = Array.isArray(report._warnings) ? (report._warnings as string[]) : [];
       report._warnings = [
         ...w,
         lang === 'zh'
-          ? '双模型对决策档位或分数存在分歧，已下调置信度；请结合分歧项人工复核。'
-          : 'Primary and verify models disagree on tier/scores; confidence lowered — review disagreements.',
+          ? '部分结论与独立复核不一致，已下调置信度；请结合报告中的待核对项人工确认。'
+          : 'Some conclusions differ from independent review; confidence lowered—confirm flagged items.',
       ];
     }
 

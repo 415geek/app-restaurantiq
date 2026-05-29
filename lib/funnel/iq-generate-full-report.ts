@@ -4,7 +4,8 @@
  * Stripe webhook, /api/funnel/full-report, and /iq/report/[id].
  */
 
-import { generateFullReportWithN8n, getFullReportWebhookUrl } from '@/lib/n8n';
+import { generateFullReportWithN8n, shouldUseN8nForIqFullReport } from '@/lib/n8n';
+import { stripInternalIqReportFields } from '@/lib/funnel/iq-report-sanitize';
 import {
   applyCompetitorWhitelist,
   applyFinanceModelOverride,
@@ -50,22 +51,23 @@ export async function generateIqFullReportWithN8nFallback(
     | DeterministicFinanceModel
     | null;
 
-  if (getFullReportWebhookUrl()) {
+  if (shouldUseN8nForIqFullReport()) {
     try {
       const raw = await generateFullReportWithN8n(payload);
       const parsed = parseIqFullReport(raw);
       const grounded = applyCompetitorWhitelist(parsed, whitelist);
       const withFinance = applyFinanceModelOverride(grounded, financeModel);
       logFullReportQuality(withFinance, `reportId=${input.reportId} n8n`);
-      return applyDualModelVerification(withFinance, {
+      const verified = await applyDualModelVerification(withFinance, {
         language: input.language,
         location: input.location,
         businessType: input.businessType,
         primaryProvider: 'n8n',
         reportSource: 'n8n',
       });
+      return stripInternalIqReportFields(verified);
     } catch (e) {
-      console.warn('[iq-generate-full-report] n8n failed, falling back to OpenAI:', e);
+      console.warn('[iq-generate-full-report] n8n failed, falling back to in-app LLM:', e);
     }
   }
 
@@ -79,7 +81,7 @@ export async function generateIqFullReportWithN8nFallback(
   });
   const withFinance = applyFinanceModelOverride(parsed, financeModel);
   logFullReportQuality(withFinance, `reportId=${input.reportId} llm`);
-  return applyDualModelVerification(withFinance, {
+  const verified = await applyDualModelVerification(withFinance, {
     language: input.language,
     location: input.location,
     businessType: input.businessType,
@@ -91,4 +93,5 @@ export async function generateIqFullReportWithN8nFallback(
       typeof parsed._generation_model === 'string' ? parsed._generation_model : undefined,
     reportSource: 'llm',
   });
+  return stripInternalIqReportFields(verified);
 }

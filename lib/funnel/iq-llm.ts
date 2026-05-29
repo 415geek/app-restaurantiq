@@ -229,19 +229,28 @@ async function callProviderForFullReport(
   });
 
   if (routed?.data) {
-    const report = parseIqFullReport(routed.data) as Record<string, unknown>;
-    appendLlmProviderToDisclaimer(report, {
-      provider: routed.provider,
-      model: routed.model,
-      task: 'iq_full',
-    }, language);
-    if (routed.warning) {
-      const w = Array.isArray(report._warnings) ? (report._warnings as string[]) : [];
-      report._warnings = [...w, routed.warning];
+    try {
+      const report = parseIqFullReport(routed.data) as Record<string, unknown>;
+      appendLlmProviderToDisclaimer(report, {
+        provider: routed.provider,
+        model: routed.model,
+        task: 'iq_full',
+      }, language);
+      if (routed.warning) {
+        const w = Array.isArray(report._warnings) ? (report._warnings as string[]) : [];
+        report._warnings = [
+          ...w,
+          language === 'zh'
+            ? '主生成路径暂不可用，已自动切换备用分析通道。'
+            : 'Primary analysis path was unavailable; an alternate channel was used.',
+        ];
+      }
+      report._generation_provider = routed.provider;
+      report._generation_model = routed.model;
+      return { report, provider: routed.provider, model: routed.model };
+    } catch (parseErr) {
+      console.warn('[iq-full-report] routed LLM JSON parse failed, trying fallback:', parseErr);
     }
-    report._generation_provider = routed.provider;
-    report._generation_model = routed.model;
-    return { report, provider: routed.provider, model: routed.model };
   }
 
   const client = getOpenAI();
@@ -325,7 +334,13 @@ export async function runFullPremiumReport(input: {
     return applyCompetitorWhitelist(report, whitelist);
   };
 
-  let grounded = await runOnce(false);
+  let grounded: IqReportWithGrounding;
+  try {
+    grounded = await runOnce(false);
+  } catch (e) {
+    console.error('[iq-full-report] primary generation failed:', e);
+    throw new Error('FULL_REPORT_GENERATION_FAILED');
+  }
   let completeness = scoreFullReportCompleteness(grounded);
   const minScore = minCompletenessForPaidReport();
 

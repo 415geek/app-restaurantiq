@@ -44,11 +44,13 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
           const raw = await res.text();
           let msg =
             lang === 'zh'
-              ? '完整报告生成失败，请刷新重试。'
-              : 'Full report generation failed. Please refresh.';
+              ? '完整报告生成失败，请稍后刷新重试。'
+              : 'Full report generation failed. Please refresh and try again.';
           try {
             const j = JSON.parse(raw) as { error?: string };
-            if (j.error) msg = j.error;
+            if (j.error && !/openai|mimo|tavily|n8n|gpt-/i.test(j.error)) {
+              msg = j.error;
+            }
           } catch {
             /* ignore */
           }
