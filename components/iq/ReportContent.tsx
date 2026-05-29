@@ -58,6 +58,8 @@ const translations = {
     reportId: 'Report ID',
     analyzeAnother: 'Analyze another location',
     contentNote: '',
+    langSwitchError: 'Could not generate the English version. Please try again in a moment.',
+    langSwitchErrorZh: 'Could not generate the Chinese version. Please try again in a moment.',
     overallScore: 'Overall',
     footTraffic: 'Foot traffic',
     competition: 'Competition',
@@ -105,6 +107,8 @@ const translations = {
     reportId: '报告编号',
     analyzeAnother: '分析其他地址',
     contentNote: '（部分段落含 Markdown 表格）',
+    langSwitchError: '无法生成英文版，请稍后重试。',
+    langSwitchErrorZh: '无法生成中文版，请稍后重试。',
     overallScore: '综合分',
     footTraffic: '客流指数',
     competition: '竞争强度',
@@ -244,11 +248,13 @@ export function ReportContent({
   const [lang, setLang] = useState<'en' | 'zh'>(initialLang);
   const [linkedLocally, setLinkedLocally] = useState(false);
   const handleReportLinked = useCallback(() => setLinkedLocally(true), []);
-  const [fullByLang, setFullByLang] = useState<Record<'en' | 'zh', FullReportView | null>>({
-    en: null,
-    zh: null,
-  });
+  const [fullByLang, setFullByLang] = useState<Record<'en' | 'zh', FullReportView | null>>(() => ({
+    en: initialLang === 'en' ? full : null,
+    zh: initialLang === 'zh' ? full : null,
+  }));
   const [isSwitchingLang, setIsSwitchingLang] = useState(false);
+  const [langSwitchError, setLangSwitchError] = useState<string | null>(null);
+  const [pendingLang, setPendingLang] = useState<'en' | 'zh' | null>(null);
 
   const clerkLinkEnabled =
     process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'true' &&
@@ -263,24 +269,56 @@ export function ReportContent({
 
   const handleSetLang = useCallback(
     async (next: 'en' | 'zh') => {
-      setLang(next);
-      if (fullByLang[next]) return;
+      if (next === lang) return;
+      if (fullByLang[next]) {
+        setLang(next);
+        setLangSwitchError(null);
+        return;
+      }
+      setPendingLang(next);
       setIsSwitchingLang(true);
+      setLangSwitchError(null);
       try {
         const res = await fetch('/api/funnel/full-report', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reportId: report.id, force: true, language: next, persist: false }),
+          body: JSON.stringify({
+            reportId: report.id,
+            language: next,
+            persist: false,
+            quality: false,
+          }),
         });
         if (res.ok) {
           const json = (await res.json()) as Record<string, unknown>;
           setFullByLang((prev) => ({ ...prev, [next]: json }));
+          setLang(next);
+          return;
         }
+        const raw = await res.text();
+        let msg = next === 'zh' ? translations.zh.langSwitchErrorZh : translations.en.langSwitchError;
+        try {
+          const j = JSON.parse(raw) as { error?: string };
+          if (j.error) msg = j.error;
+        } catch {
+          if (res.status === 504) {
+            msg =
+              next === 'zh'
+                ? '生成中文版超时，请稍后重试。'
+                : 'English generation timed out. Please try again.';
+          }
+        }
+        setLangSwitchError(msg);
+      } catch {
+        setLangSwitchError(
+          next === 'zh' ? translations.zh.langSwitchErrorZh : translations.en.langSwitchError,
+        );
       } finally {
         setIsSwitchingLang(false);
+        setPendingLang(null);
       }
     },
-    [fullByLang, report.id],
+    [fullByLang, lang, report.id],
   );
 
   const dashboard = fullView.dashboard as Record<string, unknown> | undefined;
@@ -400,9 +438,14 @@ export function ReportContent({
           </button>
         </div>
       </div>
-      {isSwitchingLang ? (
+      {isSwitchingLang && pendingLang ? (
         <div className="no-print mb-4 text-xs text-zinc-500">
-          {lang === 'zh' ? '正在生成中文版…' : 'Generating English version…'}
+          {pendingLang === 'zh' ? '正在生成中文版…' : 'Generating English version…'}
+        </div>
+      ) : null}
+      {langSwitchError ? (
+        <div className="no-print mb-4 text-xs text-amber-400/90" role="alert">
+          {langSwitchError}
         </div>
       ) : null}
 

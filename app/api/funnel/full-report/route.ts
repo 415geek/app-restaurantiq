@@ -64,7 +64,9 @@ export async function POST(req: Request) {
     targetLang =
       language === 'zh' || language === 'en' ? language : report.language === 'zh' ? 'zh' : 'en';
 
-    const qualityMode = quality === true || force === true;
+    // Language preview (persist: false) must stay lean — not a full quality regen.
+    const qualityMode = quality === true || (force === true && !isPreview);
+    const leanLangPreview = isPreview;
 
     let enrichedMd: Record<string, unknown> | null = null;
     try {
@@ -74,8 +76,8 @@ export async function POST(req: Request) {
         businessType: report.business_type || 'restaurant',
         isPremium: true,
         lang: targetLang,
-        skipDeepResearchFetch: !qualityMode,
-        leanResolve: !qualityMode,
+        skipDeepResearchFetch: leanLangPreview || !qualityMode,
+        leanResolve: leanLangPreview || !qualityMode,
       });
     } catch (enrichErr) {
       console.warn('[funnel/full-report] market enrich failed, using stored market_data', enrichErr);
@@ -97,8 +99,8 @@ export async function POST(req: Request) {
       reason: report.reason,
       marketData: marketForLlm,
       language: targetLang,
-      skipDualVerify: !qualityMode,
-      leanGeneration: !qualityMode,
+      skipDualVerify: leanLangPreview || !qualityMode,
+      leanGeneration: leanLangPreview || !qualityMode,
       qualityMode,
     });
 
