@@ -33,11 +33,13 @@ function fullReportErrorMessage(lang: 'en' | 'zh', code: string): string {
 export async function POST(req: Request) {
   let targetLang: 'en' | 'zh' = 'en';
   try {
-    const { reportId, force, language, persist } = (await req.json()) as {
+    const { reportId, force, language, persist, quality } = (await req.json()) as {
       reportId?: string;
       force?: boolean;
       language?: 'en' | 'zh';
       persist?: boolean;
+      /** Professional McKinsey-depth regen: fuller market context + no lean LLM shortcuts. */
+      quality?: boolean;
     };
     if (!reportId) {
       return NextResponse.json({ error: 'Missing reportId' }, { status: 400 });
@@ -62,6 +64,8 @@ export async function POST(req: Request) {
     targetLang =
       language === 'zh' || language === 'en' ? language : report.language === 'zh' ? 'zh' : 'en';
 
+    const qualityMode = quality === true || force === true;
+
     let enrichedMd: Record<string, unknown> | null = null;
     try {
       enrichedMd = await resolveMarketDataForIqReport({
@@ -70,9 +74,8 @@ export async function POST(req: Request) {
         businessType: report.business_type || 'restaurant',
         isPremium: true,
         lang: targetLang,
-        /** Client-triggered generation: do not block on a fresh Tavily deep-research run. */
-        skipDeepResearchFetch: true,
-        leanResolve: true,
+        skipDeepResearchFetch: !qualityMode,
+        leanResolve: !qualityMode,
       });
     } catch (enrichErr) {
       console.warn('[funnel/full-report] market enrich failed, using stored market_data', enrichErr);
@@ -94,8 +97,9 @@ export async function POST(req: Request) {
       reason: report.reason,
       marketData: marketForLlm,
       language: targetLang,
-      skipDualVerify: true,
-      leanGeneration: true,
+      skipDualVerify: !qualityMode,
+      leanGeneration: !qualityMode,
+      qualityMode,
     });
 
     const fullJson = full;

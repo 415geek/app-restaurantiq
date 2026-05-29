@@ -30,6 +30,8 @@ export type GenerateIqFullReportInput = {
   skipDualVerify?: boolean;
   /** Skip completeness/competitor regen retries (faster, single LLM pass). */
   leanGeneration?: boolean;
+  /** Full market enrich + single thorough LLM pass (use on force / professional regen). */
+  qualityMode?: boolean;
 };
 
 export async function generateIqFullReportWithN8nFallback(

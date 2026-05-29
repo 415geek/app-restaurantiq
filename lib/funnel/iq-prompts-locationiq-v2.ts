@@ -209,6 +209,40 @@ export function locationIqMcKinseyFreeConversionBlock(lang: 'zh' | 'en'): string
   ].join('\n');
 }
 
+/** Partner-grade evidence discipline — no speculation without label. */
+export function locationIqMcKinseyPartnerEvidenceBlock(lang: 'zh' | 'en'): string {
+  if (lang === 'zh') {
+    return [
+      '',
+      '【麦肯锡合伙人审核标准 — 证据优先，禁止猜想】',
+      '你是向创始人/加盟商交付签租决策的合伙人，不是写营销文案。',
+      '铁律：',
+      '1. 每一个定量判断必须附带来源标签：[ACS]、[Census]、[Places]、[Yelp]、[深度研究]、[检索]；无来源则整句标 [估算] 并写明验证动作（踩盘/问经纪/查租约）。',
+      '2. 禁止把猜想写成事实：不得写「预计」「可能」「一般来说」而不给依据；不得编造关店年份、营业额、翻台率精确值。',
+      '3. comparables / failure_scenarios：只写白名单或锚点中出现的店名；无案例则写「未检索到同走廊可查失败案例」并给验证路径。',
+      '4. 分析深度：每节至少 1 条「So what」——该事实如何改变月利润、回本周期或签租条件（美元量级）。',
+      '5. 禁止空洞套话：「加强营销」「注重差异化」「市场前景广阔」「交通便利」「竞争适中」。',
+      '6. 营收三情景必须写清公式（座位×翻台×客单价×营业日×入座率或客流×转化×复购），并与 D-4 盈亏锚点自洽。',
+      '7. 若数据矛盾（如车流高但步行低），必须解释机制，不得回避。',
+      '',
+    ].join('\n');
+  }
+  return [
+    '',
+    '[McKINSEY PARTNER BAR — evidence first, no speculation]',
+    'You deliver a lease decision to an owner, not marketing copy.',
+    'Rules:',
+    '1. Every quantitative claim needs a source tag: [ACS], [Census], [Places], [Yelp], [Deep research], [Search]; else label the whole sentence [estimate] + verification step.',
+    '2. Never state guesses as facts: no "likely/probably/typically" without anchors; no invented closure years or revenue.',
+    '3. comparables/failure_scenarios: only names from whitelist/anchors; if none, say so and give how to verify.',
+    '4. Depth: each section needs one "so what" tying facts to monthly profit, payback, or lease terms (USD).',
+    '5. Ban fluff: "improve marketing", "differentiation", "strong potential", "convenient location", "moderate competition".',
+    '6. Revenue scenarios must show the formula and align with deterministic break-even anchors.',
+    '7. Explain contradictions in data (e.g. high traffic vs low walkability), do not ignore.',
+    '',
+  ].join('\n');
+}
+
 /** Paid report density + anti-template rules. */
 export function locationIqMcKinseyPremiumDensityBlock(lang: 'zh' | 'en'): string {
   if (lang === 'zh') {
@@ -219,9 +253,10 @@ export function locationIqMcKinseyPremiumDensityBlock(lang: 'zh' | 'en'): string
       '1. executive_summary 用 SCR：情境→冲突（为何此址难/易）→建议（签/不签/条件 + 替代走廊）。',
       '2. 每节至少 1 条「反直觉发现」（非显而易见、但影响租约决策的洞察）。',
       '3. 禁止模板句：「建议加强营销」「注重差异化」「市场前景广阔」「竞争适中」。',
-      '4. key_evidence_points ≥8 条，每条「一个数字/店名/距离 + 来源标签」。',
+      '4. key_evidence_points ≥10 条，每条「一个数字/店名/距离 + 来源标签」。',
       '5. 无数据处单点 [估算] 并写「完整版需核实：___」；禁止用占位竞品 A/B/C。',
-      '6. opportunities 与 risks 不得重复同一论点；failure_scenarios 须引用真实或可查案例逻辑。',
+      '6. opportunities 与 risks 不得重复同一论点；failure_scenarios 须引用真实或可查案例逻辑（店名+区域+启示）。',
+      '7. trade_area_analysis 表格 ≥5 行；demographic_profile 首段必须是数字表格。',
       '',
     ].join('\n');
   }
@@ -403,11 +438,11 @@ export function locationIqV2PremiumSystemZh(): string {
     '好的写法："该地址位于19th Ave，属于6车道干道，限速35mph，日均车流38,000辆[Caltrans]。这种「飞驰型」路段的特点是车辆快速通过而非停留消费，不适合需要冲动型客流的快餐业态。"',
     '差的写法："该地址交通便利，客流量中等，适合开店。"',
     '',
-    '【Deep Research 数据使用】',
-    '当用户消息包含 [DeepRes] 标签的数据时，这是 Tavily 深度研究 API 返回的高质量数据。你必须：',
-    '- 优先引用 [DeepRes] 数据，它们已经过网络验证',
-    '- 在报告中保留 [DeepRes] 标签，让用户知道数据来源',
-    '- 如果 [DeepRes] 与 [ACS]/[Places] 数据冲突，说明差异并解释可能原因',
+    '【深度市场研究数据】',
+    '当用户消息包含 [深度研究] 或 [DeepRes] 标签的数据时，这是经网络核验的研究摘要。你必须：',
+    '- 优先引用 [深度研究] 数据',
+    '- 在报告中保留来源标签',
+    '- 若与 [ACS]/[Places] 冲突，说明差异并解释可能原因',
     '',
     '【内容要求】',
     '1. executive_summary：3-4段完整叙述，包含判定、关键数据点、建议行动',
@@ -430,6 +465,7 @@ export function locationIqV2PremiumSystemZh(): string {
     base +
     locationRiskAuditEngineBlock('zh') +
     cuisineKnowledgeBlock('zh') +
+    locationIqMcKinseyPartnerEvidenceBlock('zh') +
     locationIqMcKinseyPremiumDensityBlock('zh') +
     locationIqV3PremiumExtensionsBlock('zh')
   );
@@ -636,6 +672,7 @@ export function locationIqV2PremiumSystemEn(): string {
     base +
     locationRiskAuditEngineBlock('en') +
     cuisineKnowledgeBlock('en') +
+    locationIqMcKinseyPartnerEvidenceBlock('en') +
     locationIqMcKinseyPremiumDensityBlock('en') +
     locationIqV3PremiumExtensionsBlock('en')
   );

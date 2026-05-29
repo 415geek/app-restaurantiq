@@ -985,6 +985,7 @@ export function ReportContent({
           reportId={report.id}
           isLinkedToUser={Boolean(report.user_id) || linkedLocally}
           lang={lang}
+          isPaid
         />
       </div>
 

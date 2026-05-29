@@ -24,7 +24,7 @@ async function requestFullReport(
   const res = await fetch('/api/funnel/full-report', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reportId, force }),
+    body: JSON.stringify({ reportId, force, quality: force }),
   });
   if (res.ok) return { ok: true };
 

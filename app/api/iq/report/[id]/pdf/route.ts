@@ -13,7 +13,7 @@ import puppeteer from 'puppeteer-core';
 import type { Browser } from 'puppeteer-core';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const PDF_VIEWPORT = { width: 1200, height: 1600 };
 
@@ -40,7 +40,7 @@ async function loadCjkFontDataUri(): Promise<string | null> {
   cjkFontFetchPromise = (async () => {
     try {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8_000);
+      const timer = setTimeout(() => ctrl.abort(), 5_000);
       const res = await fetch(CJK_FONT_URL, { signal: ctrl.signal, cache: 'force-cache' });
       clearTimeout(timer);
       if (!res.ok) {
@@ -150,9 +150,30 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+const PDF_PROSE_MAX_CHARS = 14_000;
+
+function truncateProseForPdf(text: string): string {
+  const t = text.trim();
+  if (t.length <= PDF_PROSE_MAX_CHARS) return t;
+  return `${t.slice(0, PDF_PROSE_MAX_CHARS)}\n\n…`;
+}
+
+function hasExportableFullReport(full: FullShape): boolean {
+  if (!full || typeof full !== 'object') return false;
+  if (normalizeRiskAuditFromFull(full)) return true;
+  const summary = pickStr(full.executive_summary);
+  const one = pickStr(full.one_line_conclusion);
+  const comp = pickStr(full.competition_landscape);
+  return Boolean(
+    (summary && summary.length >= 40) ||
+      (one && one.length >= 20) ||
+      (comp && comp.length >= 40),
+  );
+}
+
 /** Preserve paragraphs for long prose fields (executive summary, etc.). */
 function proseToHtml(text: string): string {
-  const trimmed = text.trim();
+  const trimmed = truncateProseForPdf(text);
   if (!trimmed) return '';
   return trimmed
     .split(/\n\n+/)
@@ -1079,7 +1100,7 @@ function generatePdfHtml(input: {
       const claudeBlock = claudePara
         ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:12px;">
              <div style="font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#1d4ed8;margin-bottom:6px;">
-               ${lang === 'zh' ? 'MCKINSEY 风格人口与消费力简报 · CLAUDE · ACS B03002/B19001/B15003' : 'McKinsey-style Demographics Brief · Claude · ACS B03002/B19001/B15003'}
+               ${lang === 'zh' ? '人口与消费力数据简报 · ACS B03002/B19001/B15003' : 'Demographics & spending brief · ACS B03002/B19001/B15003'}
              </div>
              ${proseToHtml(claudePara)}
            </div>`
@@ -1193,6 +1214,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   let browser: Browser | null = null;
   try {
+    const fontPromise = lang === 'zh' ? loadCjkFontDataUri() : Promise.resolve(null);
     const report = await iqGetReport(id);
     if (!report) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
@@ -1203,9 +1225,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     const full = (report.full_report_json || {}) as FullShape;
-    // Only fetch CJK font when language requires it; English PDFs use the
-    // chromium-bundled Open Sans and stay fast.
-    const cjkUri = lang === 'zh' ? await loadCjkFontDataUri() : null;
+    if (!hasExportableFullReport(full)) {
+      const msg =
+        lang === 'zh'
+          ? '完整报告尚未生成或内容过短，请先在页面上等待「完整报告」生成完成后再下载 PDF。'
+          : 'Full report is not ready yet. Wait for on-page full report generation to finish, then download PDF.';
+      return NextResponse.json({ error: msg, code: 'REPORT_NOT_READY' }, { status: 422 });
+    }
+
+    const [cjkUri, launched] = await Promise.all([fontPromise, launchPdfBrowser()]);
+    browser = launched;
     const html = generatePdfHtml({
       location: report.location,
       business_type: report.business_type,
@@ -1216,13 +1245,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       cjkFontDataUri: cjkUri,
     });
 
+    if (html.length > 2_500_000) {
+      console.warn(`[api/iq/report/pdf] large html id=${id} bytes=${html.length}`);
+    }
+
     console.log(
       `[api/iq/report/pdf] start id=${id} lang=${lang} html_bytes=${html.length} on=${
         isVercelServerless() ? 'vercel' : 'local'
       }`,
     );
 
-    browser = await launchPdfBrowser();
     const page = await browser.newPage();
     // Static HTML: avoid networkidle0 (can hang); domcontentloaded is enough,
     // we don't have any remote fonts/scripts after the D-2 refactor.
