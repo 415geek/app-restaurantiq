@@ -5,6 +5,12 @@
     "app/api/iq/report/[id]/pdf/route.ts": {
       "memory": 1024,
       "maxDuration": 60
+    },
+    "app/api/funnel/full-report/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/funnel/redeem-access-code/route.ts": {
+      "maxDuration": 30
     }
   }
 }

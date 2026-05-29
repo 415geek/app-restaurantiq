@@ -10,7 +10,7 @@ export const runtime = 'nodejs';
  * Redeems a one-shared-secret access code that grants full-report access without
  * going through Stripe. Same fulfillment path as the paid flow:
  *   1. Mark the report row as paid.
- *   2. Generate (or reuse) full_report_json.
+ *   2. Generate full_report_json on the report page (deferred) unless already cached.
  * Rotate by setting IQ_ACCESS_CODE in the Vercel env. The compiled-in default is a
  * convenience for local dev; production should always set the env var.
  */
@@ -52,18 +52,26 @@ export async function POST(req: Request) {
 
     const lang = existing.language === 'zh' ? 'zh' : 'en';
 
+    const hasCachedFull =
+      existing.full_report_json &&
+      typeof existing.full_report_json === 'object' &&
+      Object.keys(existing.full_report_json as object).length > 0;
+
     if (!existing.paid) {
       const sentinel = `access_code:${Date.now()}:${reportId.slice(0, 8)}`;
       await fulfillIqPaidPurchase({
         reportId,
         stripeSessionId: sentinel,
         customerEmail: null,
+        // Avoid blocking this API on Tavily + MiMo + dual-verify (often 1–5+ min).
+        deferFullReportGeneration: !hasCachedFull,
       });
     }
 
     return NextResponse.json({
       ok: true,
       reportUrl: `/iq/report/${reportId}?lang=${lang}`,
+      generating: !hasCachedFull,
     });
   } catch (e) {
     console.error('[funnel/redeem-access-code]', e);

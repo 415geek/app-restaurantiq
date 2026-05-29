@@ -1,11 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { iqGetReport, iqSetFullReport, iqUpdateMarketDataJson } from '@/lib/funnel/iq-repository';
-import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
-import { generateIqFullReportWithN8nFallback } from '@/lib/funnel/iq-generate-full-report';
+import { iqGetReport } from '@/lib/funnel/iq-repository';
 import { buildCompetitorMapPins, buildGoogleStaticMapUrl } from '@/lib/funnel/iq-competitor-map';
 import { ReportShareSection } from '@/components/share/ReportShareSection';
 import { ReportContent } from '@/components/iq/ReportContent';
+import { IqFullReportGenerating } from '@/components/iq/IqFullReportGenerating';
 
 type FullShape = Record<string, unknown>;
 
@@ -42,37 +41,17 @@ export default async function IqReportPage({ params }: Props) {
   const reportLanguage = (report.language === 'zh' ? 'zh' : 'en') as 'en' | 'zh';
   
   let full = report.full_report_json as FullShape | null;
-  if (!full || Object.keys(full).length === 0) {
-    try {
-      console.log('[report page] Generating full report for:', id, 'language:', reportLanguage);
-      const enrichedMd = await resolveMarketDataForIqReport({
-        existing: report.market_data_json as Record<string, unknown> | null | undefined,
-        location: report.location,
-        businessType: report.business_type || 'restaurant',
-        isPremium: true,
-        lang: reportLanguage,
-      });
-      const marketData =
-        enrichedMd ?? (report.market_data_json as Record<string, unknown> | null) ?? undefined;
-      if (enrichedMd && Object.keys(enrichedMd).length > 0) {
-        await iqUpdateMarketDataJson(id, enrichedMd);
-      }
-      const generated = await generateIqFullReportWithN8nFallback({
-        reportId: id,
-        location: report.location,
-        businessType: report.business_type,
-        headline: report.headline,
-        reason: report.reason,
-        marketData,
-        language: reportLanguage,
-      });
-      await iqSetFullReport(id, generated);
-      full = generated as FullShape;
-      console.log('[report page] Full report generated successfully');
-    } catch (err) {
-      console.error('[report page] generateIqFullReportWithN8nFallback error:', err);
-      full = {};
-    }
+  const needsClientGeneration = !full || Object.keys(full).length === 0;
+
+  if (needsClientGeneration) {
+    return (
+      <IqFullReportGenerating
+        reportId={id}
+        location={report.location}
+        headline={report.headline}
+        lang={reportLanguage}
+      />
+    );
   }
 
   const marketData = (report.market_data_json as Record<string, unknown> | null) ?? null;

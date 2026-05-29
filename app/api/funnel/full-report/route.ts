@@ -4,6 +4,8 @@ import { generateIqFullReportWithN8nFallback } from '@/lib/funnel/iq-generate-fu
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 
 export const runtime = 'nodejs';
+/** Paid report pipeline (Tavily deep research + MiMo + dual-verify) can exceed default 10s. */
+export const maxDuration = 300;
 
 /**
  * Regenerate or fetch stored full report. Only allowed after payment (webhook sets paid).

@@ -1,12 +1,19 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ShareButton } from '@/components/share/ShareButton';
 import { SocialProofStats, SocialProofBadge } from '@/components/social-proof/Stats';
 import { getIqPaywallLockedItems } from '@/lib/funnel/iq-paywall-sections';
 import { RiskAuditScorecard } from '@/components/iq/RiskAuditScorecard';
 import { LeadCaptureModal, type LeadCaptureSubmit } from '@/components/iq/LeadCaptureModal';
+import {
+  FREE_ANALYZE_PHASES,
+  getFreeAnalyzeStages,
+  IqAnalysisProgressBar,
+  progressFromElapsed,
+  useAnalysisProgressTimer,
+} from '@/components/iq/IqAnalysisProgress';
 import {
   decisionTierDisplay,
   parseDecisionTier,
@@ -213,6 +220,8 @@ function ResultContent() {
   const t = resultCopy[locale];
   const [loading, setLoading] = useState(true);
   const [loadingStep, setLoadingStep] = useState(0);
+  const [analyzeDone, setAnalyzeDone] = useState(false);
+  const analyzeElapsedSec = useAnalysisProgressTimer(loading);
   const [data, setData] = useState<AnalyzeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -300,7 +309,8 @@ function ResultContent() {
       } finally {
         clearInterval(stepTimer);
         if (!cancelled) {
-          setTimeout(() => setLoading(false), 800);
+          setAnalyzeDone(true);
+          setTimeout(() => setLoading(false), 700);
         }
       }
     }
@@ -385,6 +395,15 @@ function ResultContent() {
     }
   }
 
+  const analyzeProgressPct = useMemo(() => {
+    const fromTime = progressFromElapsed(analyzeElapsedSec, FREE_ANALYZE_PHASES, {
+      done: analyzeDone,
+      maxPctUntilDone: 90,
+    });
+    const stepFloor = [10, 36, 58][loadingStep] ?? 58;
+    return Math.min(100, Math.max(fromTime, analyzeDone ? 100 : stepFloor));
+  }, [analyzeElapsedSec, analyzeDone, loadingStep]);
+
   const leadModal = (
     <LeadCaptureModal
       open={!unlocked}
@@ -397,22 +416,21 @@ function ResultContent() {
   );
 
   if (loading) {
+    const analyzeTitle =
+      locale === 'zh' ? '正在分析选址风险…' : 'Analyzing your location…';
     return (
       <>
         {leadModal}
-        <main className="flex min-h-screen items-center justify-center px-6">
-          <div className="space-y-4 text-center">
-            {t.loading.map((step, i) => (
-              <p
-                key={i}
-                className={`text-lg transition-opacity duration-500 ${
-                  i <= loadingStep ? 'opacity-100' : 'opacity-30'
-                }`}
-              >
-                {i <= loadingStep ? '✓ ' : '○ '}
-                {step}
-              </p>
-            ))}
+        <main className="flex min-h-screen items-center justify-center px-6 py-12">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8">
+            <IqAnalysisProgressBar
+              lang={locale}
+              title={analyzeTitle}
+              subtitle={location}
+              stages={getFreeAnalyzeStages(locale)}
+              percent={analyzeProgressPct}
+              elapsedSec={analyzeElapsedSec}
+            />
           </div>
         </main>
       </>
@@ -572,6 +590,16 @@ function ResultContent() {
                 {accessCodeLoading ? t.accessCodeSubmitting : t.accessCodeSubmit}
               </button>
             </form>
+            {accessCodeLoading ? (
+              <div className="mt-3">
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <div className="h-full w-2/5 animate-pulse rounded-full bg-gradient-to-r from-emerald-600 to-teal-400" />
+                </div>
+                <p className="mt-2 text-center text-xs text-white/50">
+                  {locale === 'zh' ? '验证成功，正在打开报告页…' : 'Verified — opening report…'}
+                </p>
+              </div>
+            ) : null}
             {accessCodeError && (
               <p className="mt-2 text-center text-sm text-rose-300">{accessCodeError}</p>
             )}
