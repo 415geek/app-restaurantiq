@@ -14,7 +14,8 @@ import {
 } from '@/lib/funnel/iq-full-report-schema';
 import type { DeterministicFinanceModel } from '@/lib/funnel/iq-finance-model';
 import { extractCompetitorWhitelist } from '@/lib/funnel/iq-market-signals';
-import { runFullPremiumReportOpenAI } from '@/lib/funnel/iq-llm';
+import { applyDualModelVerification } from '@/lib/funnel/iq-dual-model-verify';
+import { runFullPremiumReport } from '@/lib/funnel/iq-llm';
 
 export type GenerateIqFullReportInput = {
   reportId: string;
@@ -56,13 +57,19 @@ export async function generateIqFullReportWithN8nFallback(
       const grounded = applyCompetitorWhitelist(parsed, whitelist);
       const withFinance = applyFinanceModelOverride(grounded, financeModel);
       logFullReportQuality(withFinance, `reportId=${input.reportId} n8n`);
-      return withFinance;
+      return applyDualModelVerification(withFinance, {
+        language: input.language,
+        location: input.location,
+        businessType: input.businessType,
+        primaryProvider: 'n8n',
+        reportSource: 'n8n',
+      });
     } catch (e) {
       console.warn('[iq-generate-full-report] n8n failed, falling back to OpenAI:', e);
     }
   }
 
-  const parsed = await runFullPremiumReportOpenAI({
+  const parsed = await runFullPremiumReport({
     location: input.location,
     businessType: input.businessType,
     headline: input.headline,
@@ -71,6 +78,17 @@ export async function generateIqFullReportWithN8nFallback(
     language: input.language,
   });
   const withFinance = applyFinanceModelOverride(parsed, financeModel);
-  logFullReportQuality(withFinance, `reportId=${input.reportId} openai-fallback`);
-  return withFinance;
+  logFullReportQuality(withFinance, `reportId=${input.reportId} llm`);
+  return applyDualModelVerification(withFinance, {
+    language: input.language,
+    location: input.location,
+    businessType: input.businessType,
+    primaryProvider:
+      typeof parsed._generation_provider === 'string'
+        ? parsed._generation_provider
+        : undefined,
+    primaryModel:
+      typeof parsed._generation_model === 'string' ? parsed._generation_model : undefined,
+    reportSource: 'llm',
+  });
 }

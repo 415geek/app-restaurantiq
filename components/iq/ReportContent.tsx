@@ -306,6 +306,11 @@ export function ReportContent({
     normalizeRiskAuditFromFull(fullView)?.one_line_conclusion;
   const confRaw = str(fullView.confidence);
   const confRationale = str(fullView.confidence_rationale);
+  const dualVerify = fullView.dual_model_verification as Record<string, unknown> | undefined;
+  const dualVerifyStatus = str(dualVerify?.status);
+  const dualDisagreements = safeArr(dualVerify?.disagreements).filter(
+    (x): x is string => typeof x === 'string',
+  );
   const hasRiskAudit = Boolean(normalizeRiskAuditFromFull(fullView) ?? fullView.risk_audit);
 
   const showRevenueModelBlock =
@@ -422,6 +427,24 @@ export function ReportContent({
         <p className="mt-4 text-xs text-emerald-400/80">{productPositioningLine(lang)}</p>
         {heroLine && (
           <p className="mt-4 text-lg font-medium leading-relaxed text-zinc-200">{heroLine}</p>
+        )}
+        {dualVerifyStatus && (
+          <div
+            className={`mt-4 rounded-lg border px-3 py-2 text-sm ${
+              dualVerifyStatus.includes('✓') || /aligned/i.test(dualVerifyStatus)
+                ? 'border-emerald-800/60 bg-emerald-950/40 text-emerald-300'
+                : 'border-amber-800/60 bg-amber-950/40 text-amber-200'
+            }`}
+          >
+            <p className="font-medium">{dualVerifyStatus}</p>
+            {dualDisagreements.length > 0 && (
+              <ul className="mt-2 list-inside list-disc text-xs text-zinc-400">
+                {dualDisagreements.map((d, i) => (
+                  <li key={i}>{d}</li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </header>
 

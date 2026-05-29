@@ -119,6 +119,12 @@ export interface DeterministicFinanceModel {
 
   /** Pre-formatted markdown citations block (e.g. "[user-input]", "[ACS-2023]", "[LoopNet]", "[industry-benchmark]"). */
   citations: string[];
+
+  /** Occupancy cost % = monthly rent / safe revenue (NRA-style headline KPI). */
+  occupancy_cost_pct_at_safe: number;
+  occupancy_cost_pct_at_breakeven: number;
+  occupancy_nra_benchmark_note_en: string;
+  occupancy_nra_benchmark_note_zh: string;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -652,6 +658,14 @@ export function computeFinanceModel(input: FinanceModelInputs): DeterministicFin
     confidence_reasons,
     assumptions,
     citations,
+
+    occupancy_cost_pct_at_safe: safe > 0 ? Math.round((rent.monthly_rent_usd / safe) * 1000) / 10 : 0,
+    occupancy_cost_pct_at_breakeven:
+      break_even > 0 ? Math.round((rent.monthly_rent_usd / break_even) * 1000) / 10 : 0,
+    occupancy_nra_benchmark_note_en:
+      'NRA 2025 Restaurant Operations Data Abstract medians: full-service occupancy ~5.7% of revenue, limited-service ~5.2%, downtown ~6.0%; healthy band 5–8% (rent + CAM + tax + insurance + utilities as % of sales).',
+    occupancy_nra_benchmark_note_zh:
+      'NRA 2025 餐饮业数据摘要：全服务占比租金约 5.7% 营业额、有限服务约 5.2%、市中心约 6.0%；健康区间 5–8%（含租金+CAM+物业税+保险+水电）。',
   };
 }
 
@@ -679,6 +693,7 @@ export function formatFinanceModelForAnchors(
       `- 【硬约束 2】safe_revenue_monthly_usd 必须 = ${fm.safe_revenue_monthly_usd}（USD/月；保本 × ${(fm.safe_revenue_monthly_usd / Math.max(1, fm.break_even_revenue_monthly_usd)).toFixed(2)}）`,
       `- 【硬约束 3】cost_breakdown 至少包含以下 8 行（item / amount_usd / note 须一致）：Rent / Labor / Utilities / Insurance / POS / Marketing / Misc / Fixed total`,
       `- 【硬约束 4】revenue_model.breakeven 与 revenue_model.scenarios 的 key_assumptions 必须显式引用上述客单价 $${fm.avg_ticket_usd}、每日保本覆盖数 ${fm.daily_covers_needed_breakeven}、安全覆盖数 ${fm.daily_covers_needed_safe}；禁止使用与本表冲突的数字。`,
+      `- 【硬约束 5】dashboard.occupancy_cost_pct 必须 = ${fm.occupancy_cost_pct_at_safe}%（月租金/安全营收）；保本口径 ${fm.occupancy_cost_pct_at_breakeven}%。${fm.occupancy_nra_benchmark_note_zh}`,
       `- 引用标签建议：${fm.citations.join('、')}；模型置信度：${fm.confidence}（依据：${fm.confidence_reasons.join('；')}）`,
       '',
       '【写作铁律——D-4】',
@@ -704,6 +719,7 @@ export function formatFinanceModelForAnchors(
     `- [HARD RULE 2] risk_audit.safe_revenue_monthly_usd MUST equal ${fm.safe_revenue_monthly_usd} (USD/mo; break-even × ${(fm.safe_revenue_monthly_usd / Math.max(1, fm.break_even_revenue_monthly_usd)).toFixed(2)})`,
     `- [HARD RULE 3] cost_breakdown MUST contain at least these 8 rows (item / amount_usd / note must match): Rent / Labor / Utilities / Insurance / POS / Marketing / Misc / Fixed total`,
     `- [HARD RULE 4] revenue_model.breakeven AND every revenue_model.scenarios.key_assumptions MUST explicitly cite avg ticket $${fm.avg_ticket_usd}, daily breakeven covers ${fm.daily_covers_needed_breakeven}, daily safe covers ${fm.daily_covers_needed_safe}; NO numbers that contradict this table.`,
+    `- [HARD RULE 5] dashboard.occupancy_cost_pct MUST equal ${fm.occupancy_cost_pct_at_safe}% (rent / safe revenue); at break-even ${fm.occupancy_cost_pct_at_breakeven}%. ${fm.occupancy_nra_benchmark_note_en}`,
     `- Suggested citation tags: ${fm.citations.join(', ')}; model confidence: ${fm.confidence} (reasons: ${fm.confidence_reasons.join('; ')}).`,
     '',
     '[NARRATIVE RULES — D-4]',

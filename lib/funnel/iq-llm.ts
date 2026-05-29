@@ -14,10 +14,16 @@ import { getAnalyzeWebhookUrl } from '@/lib/n8n';
 import {
   applyCompetitorWhitelist,
   parseIqFullReport,
+  scoreFullReportCompleteness,
   shouldRetryForCompetitorGrounding,
   type IqReportWithGrounding,
 } from '@/lib/funnel/iq-full-report-schema';
 import { buildPremiumMarketDataSection } from '@/lib/funnel/iq-premium-anchors';
+import {
+  appendLlmProviderToDisclaimer,
+  runIqProviderJson,
+  shouldUseFullMarketContextForIqFull,
+} from '@/lib/funnel/iq-provider-router';
 import {
   buildCompetitorWhitelistPromptBlock,
   extractCompetitorWhitelist,
@@ -135,18 +141,28 @@ export async function runPartialAnalysis(input: {
           sqft: input.sqft,
         });
 
-  const completion = await client.chat.completions.create({
-    model: model(),
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
-    ],
-    response_format: { type: 'json_object' },
+  const routed = await runIqProviderJson<Record<string, unknown>>({
+    task: 'iq_partial',
+    system: systemPrompt,
+    user: userPrompt,
   });
 
-  const text = completion.choices[0]?.message?.content;
-  if (!text) throw new Error('Empty OpenAI response');
-  const parsed = partialSchema.parse(JSON.parse(text));
+  let parsed: z.infer<typeof partialSchema>;
+  if (routed?.data) {
+    parsed = partialSchema.parse(routed.data);
+  } else {
+    const completion = await client.chat.completions.create({
+      model: model(),
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      response_format: { type: 'json_object' },
+    });
+    const text = completion.choices[0]?.message?.content;
+    if (!text) throw new Error('Empty OpenAI response');
+    parsed = partialSchema.parse(JSON.parse(text));
+  }
   if (parsed.decision_tier) {
     parsed.verdict = decisionTierToVerdict(parsed.decision_tier);
   }
@@ -174,8 +190,9 @@ function buildPremiumPrompts(
       : '\n\n[RETRY NOTICE] The previous output included names NOT in the whitelist; they were dropped. This retry MUST use ONLY verbatim whitelist entries. Output fewer rows rather than fabricate.'
     : '';
 
+  const fullContext = shouldUseFullMarketContextForIqFull();
   const marketDataSection =
-    buildPremiumMarketDataSection(input.marketData ?? null, language) +
+    buildPremiumMarketDataSection(input.marketData ?? null, language, { fullContext }) +
     buildCompetitorWhitelistPromptBlock(whitelist, language) +
     stricterReminder;
 
@@ -199,12 +216,41 @@ function buildPremiumPrompts(
   return { systemPrompt: systemBase, userPrompt };
 }
 
-async function callOpenAiForFullReport(
-  client: OpenAI,
+async function callProviderForFullReport(
   systemPrompt: string,
   userPrompt: string,
   attemptLabel: string,
-): Promise<Record<string, unknown>> {
+  language: 'en' | 'zh',
+): Promise<{ report: Record<string, unknown>; provider: string; model: string }> {
+  const routed = await runIqProviderJson<Record<string, unknown>>({
+    task: 'iq_full',
+    system: systemPrompt,
+    user: userPrompt,
+  });
+
+  if (routed?.data) {
+    const report = parseIqFullReport(routed.data) as Record<string, unknown>;
+    appendLlmProviderToDisclaimer(report, {
+      provider: routed.provider,
+      model: routed.model,
+      task: 'iq_full',
+    }, language);
+    if (routed.warning) {
+      const w = Array.isArray(report._warnings) ? (report._warnings as string[]) : [];
+      report._warnings = [...w, routed.warning];
+    }
+    report._generation_provider = routed.provider;
+    report._generation_model = routed.model;
+    return { report, provider: routed.provider, model: routed.model };
+  }
+
+  const client = getOpenAI();
+  if (!client) {
+    throw new Error(
+      `Neither MiMo nor OPENAI_API_KEY is configured for full report (${attemptLabel})`,
+    );
+  }
+
   const completion = await client.chat.completions.create({
     model: modelFull(),
     messages: [
@@ -223,7 +269,19 @@ async function callOpenAiForFullReport(
   } catch {
     throw new Error(`OpenAI full report was not valid JSON (${attemptLabel})`);
   }
-  return parseIqFullReport(parsed);
+  const report = parseIqFullReport(parsed) as Record<string, unknown>;
+  appendLlmProviderToDisclaimer(
+    report,
+    { provider: 'openai', model: modelFull(), task: 'iq_full' },
+    language,
+  );
+  return { report, provider: 'openai', model: modelFull() };
+}
+
+function minCompletenessForPaidReport(): number {
+  const raw = process.env.IQ_FULL_REPORT_MIN_COMPLETENESS?.trim();
+  const n = raw ? Number(raw) : 60;
+  return Number.isFinite(n) && n > 0 && n <= 100 ? n : 60;
 }
 
 /**
@@ -240,7 +298,8 @@ async function callOpenAiForFullReport(
  *   5. Always return the report — never throw — but stamp grounding flags so
  *      the UI and downstream telemetry can show a "low confidence" state.
  */
-export async function runFullPremiumReportOpenAI(input: {
+/** Paid full report via IQ provider router (MiMo primary when configured). */
+export async function runFullPremiumReport(input: {
   location: string;
   businessType: string | null;
   headline: string;
@@ -249,20 +308,42 @@ export async function runFullPremiumReportOpenAI(input: {
   language?: 'en' | 'zh';
 }): Promise<IqReportWithGrounding> {
   const language = input.language === 'zh' ? 'zh' : 'en';
-  const client = getOpenAI();
-  if (!client) {
-    throw new Error('OPENAI_API_KEY is not configured (required for full report when n8n is unavailable)');
-  }
 
   const whitelist = extractCompetitorWhitelist(input.marketData ?? null);
   console.log(
     `[iq-full-report] whitelist size=${whitelist.total} (google=${whitelist.countsBySource.google}, yelp=${whitelist.countsBySource.yelp}, brightdata=${whitelist.countsBySource.brightdata})`,
   );
 
-  // First attempt.
-  const first = buildPremiumPrompts(input, language, whitelist);
-  const firstReport = await callOpenAiForFullReport(client, first.systemPrompt, first.userPrompt, 'attempt-1');
-  let grounded = applyCompetitorWhitelist(firstReport, whitelist);
+  const runOnce = async (stricter: boolean) => {
+    const prompts = buildPremiumPrompts(input, language, whitelist, { stricter });
+    const { report } = await callProviderForFullReport(
+      prompts.systemPrompt,
+      prompts.userPrompt,
+      stricter ? 'attempt-2' : 'attempt-1',
+      language,
+    );
+    return applyCompetitorWhitelist(report, whitelist);
+  };
+
+  let grounded = await runOnce(false);
+  let completeness = scoreFullReportCompleteness(grounded);
+  const minScore = minCompletenessForPaidReport();
+
+  if (completeness < minScore && shouldUseFullMarketContextForIqFull()) {
+    console.warn(
+      `[iq-full-report] completeness ${completeness} < ${minScore}; regenerating once (MiMo)`,
+    );
+    try {
+      const regen = await runOnce(true);
+      const regenScore = scoreFullReportCompleteness(regen);
+      if (regenScore > completeness) {
+        grounded = regen;
+        completeness = regenScore;
+      }
+    } catch (e) {
+      console.warn('[iq-full-report] completeness regen failed:', e);
+    }
+  }
 
   if (shouldRetryForCompetitorGrounding(grounded, whitelist)) {
     const droppedCount = grounded._dropped_competitor_names?.length ?? 0;
@@ -270,17 +351,9 @@ export async function runFullPremiumReportOpenAI(input: {
       `[iq-full-report] retrying due to ${droppedCount} hallucinated competitor(s); whitelist had ${whitelist.total}`,
     );
     try {
-      const retry = buildPremiumPrompts(input, language, whitelist, { stricter: true });
-      const retryReport = await callOpenAiForFullReport(
-        client,
-        retry.systemPrompt,
-        retry.userPrompt,
-        'attempt-2',
-      );
-      const retryGrounded = applyCompetitorWhitelist(retryReport, whitelist);
+      const retryGrounded = await runOnce(true);
       const retryKept = Array.isArray(retryGrounded.competitors) ? retryGrounded.competitors.length : 0;
       const firstKept = Array.isArray(grounded.competitors) ? grounded.competitors.length : 0;
-      // Keep whichever has more grounded competitors (and fewer drops as tie-break).
       if (
         retryKept > firstKept ||
         (retryKept === firstKept &&
@@ -290,12 +363,10 @@ export async function runFullPremiumReportOpenAI(input: {
         grounded = retryGrounded;
       }
     } catch (e) {
-      console.warn('[iq-full-report] retry attempt failed, keeping first attempt result:', e);
+      console.warn('[iq-full-report] grounding retry failed:', e);
     }
   }
 
-  // Degrade gracefully when whitelist is too thin: stamp warning + low-confidence
-  // but still return the report so the UI can show the rest of the analysis.
   if (whitelist.total < MIN_WHITELIST_FOR_GROUNDED_REPORT) {
     const existing = Array.isArray(grounded._warnings) ? grounded._warnings : [];
     grounded._warnings = [
@@ -303,12 +374,19 @@ export async function runFullPremiumReportOpenAI(input: {
       `Competitor analysis runs in degraded mode: only ${whitelist.total} named competitor(s) were retrieved (threshold ${MIN_WHITELIST_FOR_GROUNDED_REPORT}).`,
     ];
     if (typeof grounded.confidence === 'string') {
-      // Don't upgrade confidence; only downgrade if the LLM claimed High.
       if (/high/i.test(grounded.confidence)) grounded.confidence = 'Low';
     } else {
       grounded.confidence = 'Low';
     }
   }
 
+  grounded._llm_completeness_score = completeness;
   return grounded;
+}
+
+/** @deprecated Use runFullPremiumReport — kept for backward-compatible imports. */
+export async function runFullPremiumReportOpenAI(
+  input: Parameters<typeof runFullPremiumReport>[0],
+): Promise<IqReportWithGrounding> {
+  return runFullPremiumReport(input);
 }

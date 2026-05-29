@@ -430,7 +430,8 @@ export function locationIqV2PremiumSystemZh(): string {
     base +
     locationRiskAuditEngineBlock('zh') +
     cuisineKnowledgeBlock('zh') +
-    locationIqMcKinseyPremiumDensityBlock('zh')
+    locationIqMcKinseyPremiumDensityBlock('zh') +
+    locationIqV3PremiumExtensionsBlock('zh')
   );
 }
 
@@ -635,7 +636,8 @@ export function locationIqV2PremiumSystemEn(): string {
     base +
     locationRiskAuditEngineBlock('en') +
     cuisineKnowledgeBlock('en') +
-    locationIqMcKinseyPremiumDensityBlock('en')
+    locationIqMcKinseyPremiumDensityBlock('en') +
+    locationIqV3PremiumExtensionsBlock('en')
   );
 }
 
@@ -748,4 +750,40 @@ Return JSON shape (replace placeholders; satisfy array lengths above):
     }
   ]
 }`;
+}
+
+/** IQ v3 methodology extensions (B/C workflow) — appended to paid system prompts. */
+export function locationIqV3PremiumExtensionsBlock(lang: 'en' | 'zh'): string {
+  if (lang === 'zh') {
+    return [
+      '',
+      '【IQ v3 方法论扩展 — 必须填充对应 JSON 字段】',
+      '- 贸易区：优先 5/10/15 分钟驾车或步行等时圈（非纯半径）；无 isochrone 数据时写明「X 分钟车程近似」并降 confidence。',
+      '- dayparts：数组 ≥4（早/午/晚/夜宵 × 客流级别 + 客群类型 + 与本业态匹配度）；写字楼午市 vs 住宅晚市不匹配 = 红旗。',
+      '- occupancy_cost_pct：在 dashboard 输出占比租金（月占用成本/基准月营收）；NRA 2025 参考：全服务中位约 5.7%、有限服务 5.2%、健康区间 5–8%；须与 D-4 锚点一致。',
+      '- comparables：success_cases / failure_cases 各 ≥1，店名必须来自白名单或 Places/Yelp。',
+      '- site_history：prior_failures_detected + note（Google 永久关闭 + 反复挂牌信号）；多次餐饮失败 → decision_tier 至少 CAUTION。',
+      '- cannibalization：仅当用户有现有门店数据时填写；否则省略该键。',
+      '- revenue_model：除座位×翻台法外，用「客流×转化率(2–8%)×复购」交叉验证；偏差大则降 confidence。',
+      '- verdict_sensitivity：列出 2–4 条「若租金降至 $X / 晚市客流 +Y% / 免租 Z 月 →  verdict 如何变化」。',
+      '- deal_terms_guidance：基于 occupancy% 给出健康租金上限、免租期/TI/递增条款谈判要点。',
+      '- 营收三情景须给区间（如基准 $82k ±15%），禁止单点值冒充精确预测。',
+      '- data_sources_and_disclaimer：每条数据源带检索日期；区分实测 vs [估算]。',
+    ].join('\n');
+  }
+  return [
+    '',
+    '[IQ v3 METHODOLOGY — populate matching JSON keys]',
+    '- Trade area: prefer 5/10/15 min drive/walk isochrones, not radius-only; if missing, label drive-time proxy and lower confidence.',
+    '- dayparts: array ≥4 rows (daypart, traffic_level, audience_type, fit_for_concept); office lunch vs residential dinner mismatch = red flag.',
+    '- occupancy_cost_pct: in dashboard — occupancy cost / baseline monthly revenue; NRA 2025 medians ~5.7% full-service, ~5.2% limited-service; healthy band 5–8%; must align with D-4 anchors.',
+    '- comparables: ≥1 success_cases and ≥1 failure_cases from whitelist/Places/Yelp only.',
+    '- site_history: prior_failures_detected + note; repeated restaurant failures → at least CAUTION tier.',
+    '- cannibalization: only if user provided existing locations; else omit key.',
+    '- revenue_model: cross-check seat×turns with traffic×conversion(2–8%)×repeat; large gap → lower confidence.',
+    '- verdict_sensitivity: 2–4 flip conditions (rent $X, evening traffic +Y%, free rent Z months).',
+    '- deal_terms_guidance: healthy rent cap, free rent, TI, escalation from occupancy math.',
+    '- Three revenue scenarios must include bands (e.g. base $82k ±15%), not false precision point estimates.',
+    '- data_sources_and_disclaimer: sources with retrieval dates; separate measured vs [estimate].',
+  ].join('\n');
 }

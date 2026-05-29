@@ -479,7 +479,9 @@ export function buildCompetitorInsightsBlock(
 export function buildPremiumMarketDataSection(
   marketData: Record<string, unknown> | null | undefined,
   lang: Lang,
+  opts?: { fullContext?: boolean },
 ): string {
+  const fullContext = opts?.fullContext === true;
   const anchors = buildPremiumMarketAnchorsBlock(marketData, lang);
   const acsAnchors = buildAcsQuantAnchorsBlock(marketData, lang);
   
@@ -578,31 +580,37 @@ export function buildPremiumMarketDataSection(
   }
 
   const mdForJson = { ...marketData };
-  if (mdForJson.deep_research) {
-    const drObj = mdForJson.deep_research as Record<string, unknown>;
-    mdForJson.deep_research = {
-      status: drObj.status,
-      model: drObj.model,
-      response_time_sec: drObj.response_time_sec,
-      has_structured_report: Boolean(drObj.report),
-      sources_count: Array.isArray(drObj.sources) ? drObj.sources.length : 0,
-    };
+  if (!fullContext) {
+    if (mdForJson.deep_research) {
+      const drObj = mdForJson.deep_research as Record<string, unknown>;
+      mdForJson.deep_research = {
+        status: drObj.status,
+        model: drObj.model,
+        response_time_sec: drObj.response_time_sec,
+        has_structured_report: Boolean(drObj.report),
+        sources_count: Array.isArray(drObj.sources) ? drObj.sources.length : 0,
+      };
+    }
+    if (mdForJson.competitor_insights) {
+      const ciObj = mdForJson.competitor_insights as CompetitorInsights;
+      mdForJson.competitor_insights = {
+        provider: ciObj.provider,
+        model: ciObj.model,
+        per_competitor_count: ciObj.per_competitor?.length ?? 0,
+        total_review_excerpts: ciObj.reviews_fetched?.total_review_excerpts ?? 0,
+      } as unknown as CompetitorInsights;
+    }
   }
-  // D-5: competitor_insights is already rendered as a dedicated anchor block above.
-  // Drop it from the raw JSON dump to save 2-4k tokens per prompt.
-  if (mdForJson.competitor_insights) {
-    const ciObj = mdForJson.competitor_insights as CompetitorInsights;
-    mdForJson.competitor_insights = {
-      provider: ciObj.provider,
-      model: ciObj.model,
-      per_competitor_count: ciObj.per_competitor?.length ?? 0,
-      total_review_excerpts: ciObj.reviews_fetched?.total_review_excerpts ?? 0,
-    } as unknown as CompetitorInsights;
-  }
-  
+
+  const evidencePreamble = fullContext
+    ? lang === 'zh'
+      ? '\n\n【全量证据块 — MiMo 1M 上下文】以下 JSON 含 ACS 全表、具名竞品、Yelp/Google 评论摘录、商业租盘、Caltrans 车流、竞品洞察全文。每个关键数字/店名必须来自本块或上方锚点；否则标 [估算] 或 data not retrieved。引用格式：[来源 · YYYY-MM-DD]。\n'
+      : '\n\n[FULL EVIDENCE BLOCK — MiMo 1M context] JSON below includes full ACS, named competitors, Yelp/Google review excerpts, listings, Caltrans, competitor_insights. Every key number/name MUST come from this block or anchors above; else tag [estimate] or data not retrieved. Cite as [Source · YYYY-MM-DD].\n'
+    : '';
+
   const jsonBlock =
     lang === 'zh'
-      ? `\n\n【市场数据原始 JSON（Google Places / Yelp / ACS / Caltrans / 商业房源 / BrightData / 深度研究 meta）】\n${JSON.stringify(mdForJson, null, 2)}`
-      : `\n\nRAW MARKET DATA JSON (Google Places / Yelp / ACS / Caltrans / commercial listings / BrightData / deep research meta):\n${JSON.stringify(mdForJson, null, 2)}`;
+      ? `${evidencePreamble}\n\n【市场数据原始 JSON（Google Places / Yelp / ACS / Caltrans / 商业房源 / BrightData / 深度研究${fullContext ? ' 全文' : ' meta'}）】\n${JSON.stringify(mdForJson, null, 2)}`
+      : `${evidencePreamble}\n\nRAW MARKET DATA JSON (Google Places / Yelp / ACS / Caltrans / commercial listings / BrightData / deep research${fullContext ? ' full' : ' meta'}):\n${JSON.stringify(mdForJson, null, 2)}`;
   return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${competitorInsightsBlock}${jsonBlock}`;
 }

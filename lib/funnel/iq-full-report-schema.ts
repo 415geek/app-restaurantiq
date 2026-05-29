@@ -85,7 +85,41 @@ export const iqFullReportSchema = z
         foot_traffic_index: z.union([z.number(), z.string()]).optional(),
         competition_intensity: z.union([z.number(), z.string()]).optional(),
         payback_months: z.union([z.number(), z.string()]).optional(),
+        occupancy_cost_pct: z.union([z.number(), z.string()]).optional(),
         recommendation: optionalString,
+      })
+      .optional(),
+    dayparts: z
+      .array(
+        z.object({
+          daypart: z.string(),
+          traffic_level: optionalString,
+          audience_type: optionalString,
+          fit_for_concept: optionalString,
+        }),
+      )
+      .optional(),
+    site_history: z
+      .object({
+        prior_failures_detected: z.union([z.boolean(), z.string()]).optional(),
+        note: optionalString,
+      })
+      .optional(),
+    cannibalization: z
+      .object({
+        overlap_pct_estimate: optionalString,
+        affected_locations: z.array(z.string()).optional(),
+        net_new_demand_note: optionalString,
+      })
+      .optional(),
+    verdict_sensitivity: z.array(z.string()).optional(),
+    deal_terms_guidance: optionalString,
+    dual_model_verification: z
+      .object({
+        status: optionalString,
+        primary_provider: optionalString,
+        verify_provider: optionalString,
+        disagreements: z.array(z.string()).optional(),
       })
       .optional(),
     executive_summary: optionalString,
@@ -325,8 +359,17 @@ export function applyFinanceModelOverride(
       ? `Break-even and safe revenue are computed from the deterministic D-4 finance model with LOW confidence (only ${financeModel.confidence_reasons.join(', ')}). Numbers are bounded by archetype + city tier estimates; add real rent / sqft / lease terms to upgrade confidence.`
       : `Break-even and safe revenue are computed from the deterministic D-4 finance model (${financeModel.confidence} confidence): ${financeModel.confidence_reasons.join('; ')}.`;
 
+  const existingDashboard =
+    report.dashboard && typeof report.dashboard === 'object'
+      ? (report.dashboard as Record<string, unknown>)
+      : {};
+
   return {
     ...report,
+    dashboard: {
+      ...existingDashboard,
+      occupancy_cost_pct: financeModel.occupancy_cost_pct_at_safe,
+    },
     risk_audit: overriddenRiskAudit,
     _finance_model_applied: true,
     _finance_model_snapshot: financeModel,
