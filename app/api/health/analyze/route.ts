@@ -120,16 +120,61 @@ async function testOpenAi(): Promise<ServiceResult> {
   }
 }
 
-export async function GET() {
-  const [n8n, openai] = await Promise.all([testN8n(), testOpenAi()]);
+async function testAnthropic(): Promise<ServiceResult> {
+  const key = process.env.ANTHROPIC_API_KEY?.trim() || null;
 
-  const overallOk = (n8n.reachable === true) || (openai.reachable === true);
+  if (!key) {
+    return {
+      configured: false,
+      hint: 'Set ANTHROPIC_API_KEY in Vercel env vars (primary analysis provider)',
+    };
+  }
+
+  const start = Date.now();
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/models', {
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const latencyMs = Date.now() - start;
+
+    if (res.ok) return { configured: true, reachable: true, latencyMs };
+
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    return {
+      configured: true,
+      reachable: res.status !== 401 && res.status !== 403,
+      latencyMs,
+      error: body?.error?.message ?? `HTTP ${res.status}`,
+      hint:
+        res.status === 401
+          ? 'API key is invalid or revoked — regenerate it at console.anthropic.com'
+          : res.status === 429
+          ? 'Rate limited or quota exceeded'
+          : undefined,
+    };
+  } catch (e) {
+    return {
+      configured: true,
+      reachable: false,
+      latencyMs: Date.now() - start,
+      error: e instanceof Error ? e.message : String(e),
+      hint: 'Cannot reach api.anthropic.com — check Vercel outbound network policy',
+    };
+  }
+}
+
+export async function GET() {
+  const [n8n, openai, anthropic] = await Promise.all([testN8n(), testOpenAi(), testAnthropic()]);
+
+  const overallOk =
+    n8n.reachable === true || openai.reachable === true || anthropic.reachable === true;
 
   return NextResponse.json(
     {
       status: overallOk ? 'ok' : 'degraded',
       timestamp: new Date().toISOString(),
-      services: { n8n, openai },
+      services: { anthropic, n8n, openai },
       summary: overallOk
         ? 'At least one analysis provider is reachable.'
         : 'No analysis provider is reachable — requests to /api/funnel/analyze will fail.',

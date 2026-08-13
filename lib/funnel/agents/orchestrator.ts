@@ -12,10 +12,10 @@
  * anchors, and competitor tables come from the deterministic layer + specialists.
  */
 
-import OpenAI from 'openai';
 import { parseIqFullReport, logFullReportQuality } from '@/lib/funnel/iq-full-report-schema';
 import { computeSiteMetrics, formatMetricsDigest } from './metrics';
 import { SPECIALISTS, runSpecialist, type SpecialistInput } from './specialists';
+import { completeJson, hasAnyLlmKey } from './llm';
 import type { AgentTrace, CriticReview, Lang, SiteMetrics, SpecialistFinding } from './types';
 
 /** V2.0 weights — single source of truth for free AND premium tiers. */
@@ -33,28 +33,6 @@ export type DecisionMatrixRow = {
   weight_pct: number;
   weighted_score: number;
 };
-
-function client(): OpenAI {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error('OPENAI_API_KEY is not configured (multi-agent engine)');
-  return new OpenAI({ apiKey: key });
-}
-
-function synthesisModel(): string {
-  return (
-    process.env.OPENAI_IQ_FULL_MODEL?.trim() ||
-    process.env.OPENAI_IQ_MODEL?.trim() ||
-    'gpt-4o'
-  );
-}
-
-function criticModel(): string {
-  return (
-    process.env.OPENAI_IQ_AGENT_MODEL?.trim() ||
-    process.env.OPENAI_IQ_MODEL?.trim() ||
-    'gpt-4o-mini'
-  );
-}
 
 function clamp100(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)));
@@ -239,19 +217,15 @@ function synthesisUser(input: {
 async function runSynthesis(
   input: Parameters<typeof synthesisUser>[0],
 ): Promise<Record<string, unknown>> {
-  const c = client();
-  const completion = await c.chat.completions.create({
-    model: synthesisModel(),
-    messages: [
-      { role: 'system', content: synthesisSystem(input.language) },
-      { role: 'user', content: synthesisUser(input) },
-    ],
-    response_format: { type: 'json_object' },
-    max_completion_tokens: 16_000,
+  const raw = await completeJson({
+    system: synthesisSystem(input.language),
+    user: synthesisUser(input),
+    tier: 'full',
   });
-  const text = completion.choices[0]?.message?.content;
-  if (!text) throw new Error('Empty synthesis response');
-  return JSON.parse(text) as Record<string, unknown>;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Synthesis response was not a JSON object');
+  }
+  return raw as Record<string, unknown>;
 }
 
 async function runCritic(
@@ -261,7 +235,6 @@ async function runCritic(
   composite: number,
   lang: Lang,
 ): Promise<CriticReview> {
-  const c = client();
   const zh = lang === 'zh';
   const system = zh
     ? '你是报告质检官。只输出 JSON：{"passed": bool, "critical_issues": [...], "minor_issues": [...]}。critical=数字与计算指标矛盾、决策矩阵被改动、章节缺失、场景数≠3、竞对用了A/B/C占位名、风险矩阵<5行；minor=表述可改进。'
@@ -276,18 +249,11 @@ async function runCritic(
   ].join('\n');
 
   try {
-    const completion = await c.chat.completions.create({
-      model: criticModel(),
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      response_format: { type: 'json_object' },
-      max_completion_tokens: 1_500,
-    });
-    const text = completion.choices[0]?.message?.content;
-    if (!text) return { passed: true, critical_issues: [], minor_issues: [] };
-    const parsed = JSON.parse(text) as Partial<CriticReview>;
+    const parsed = (await completeJson({
+      system,
+      user,
+      tier: 'critic',
+    })) as Partial<CriticReview>;
     return {
       passed: parsed.passed !== false,
       critical_issues: Array.isArray(parsed.critical_issues) ? parsed.critical_issues.map(String) : [],

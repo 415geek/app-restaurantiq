@@ -11,6 +11,7 @@ import { generateFullReportWithN8n, getFullReportWebhookUrl } from '@/lib/n8n';
 import { parseIqFullReport, logFullReportQuality } from '@/lib/funnel/iq-full-report-schema';
 import { runFullPremiumReportOpenAI } from '@/lib/funnel/iq-llm';
 import { runMultiAgentFullReport } from '@/lib/funnel/agents/orchestrator';
+import { hasAnyLlmKey } from '@/lib/funnel/agents/llm';
 
 export type GenerateIqFullReportInput = {
   reportId: string;
@@ -26,8 +27,7 @@ export async function generateIqFullReportWithN8nFallback(
   input: GenerateIqFullReportInput,
 ): Promise<Record<string, unknown>> {
   const multiAgentEnabled =
-    process.env.IQ_ENGINE?.trim().toLowerCase() !== 'legacy' &&
-    Boolean(process.env.OPENAI_API_KEY?.trim());
+    process.env.IQ_ENGINE?.trim().toLowerCase() !== 'legacy' && hasAnyLlmKey();
 
   if (multiAgentEnabled) {
     try {

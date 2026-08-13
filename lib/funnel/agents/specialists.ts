@@ -11,10 +11,10 @@
  * - risk analyst        → no weight; produces the risk matrix + failure scenarios
  */
 
-import OpenAI from 'openai';
 import { z } from 'zod';
 import type { Lang, SiteMetrics, SpecialistFinding } from './types';
 import { formatMetricsDigest } from './metrics';
+import { completeJson } from './llm';
 
 const findingSchema = z.object({
   score_100: z.number().min(0).max(100),
@@ -32,20 +32,6 @@ export type SpecialistInput = {
   metrics: SiteMetrics;
   marketData: Record<string, unknown>;
 };
-
-function client(): OpenAI {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error('OPENAI_API_KEY is not configured (multi-agent engine)');
-  return new OpenAI({ apiKey: key });
-}
-
-function specialistModel(): string {
-  return (
-    process.env.OPENAI_IQ_AGENT_MODEL?.trim() ||
-    process.env.OPENAI_IQ_MODEL?.trim() ||
-    'gpt-4o-mini'
-  );
-}
 
 /** Shared grounding rules injected into every specialist system prompt. */
 function groundingRules(lang: Lang): string {
@@ -282,18 +268,11 @@ export async function runSpecialist(
   def: SpecialistDef,
   input: SpecialistInput,
 ): Promise<SpecialistFinding> {
-  const c = client();
-  const completion = await c.chat.completions.create({
-    model: specialistModel(),
-    messages: [
-      { role: 'system', content: def.system(input.language) },
-      { role: 'user', content: def.user(input) },
-    ],
-    response_format: { type: 'json_object' },
-    max_completion_tokens: 4_000,
+  const raw = await completeJson({
+    system: def.system(input.language),
+    user: def.user(input),
+    tier: 'agent',
   });
-  const text = completion.choices[0]?.message?.content;
-  if (!text) throw new Error(`Empty response from ${def.discipline} specialist`);
-  const parsed = findingSchema.parse(JSON.parse(text));
+  const parsed = findingSchema.parse(raw);
   return { discipline: def.discipline, ...parsed };
 }

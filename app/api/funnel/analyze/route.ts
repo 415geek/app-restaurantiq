@@ -3,6 +3,7 @@ import { iqInsertReport } from '@/lib/funnel/iq-repository';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { buildFreeTierMarketBrief } from '@/lib/funnel/iq-premium-anchors';
 import { computeSiteMetrics, formatMetricsDigest } from '@/lib/funnel/agents/metrics';
+import { hasAnyLlmKey } from '@/lib/funnel/agents/llm';
 import { runPartialAnalysis } from '@/lib/funnel/iq-llm';
 import { analyzeWithN8n } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
@@ -28,8 +29,8 @@ export async function POST(req: Request) {
     const hasN8nWebhook = Boolean(
       process.env.N8N_ANALYZE_WEBHOOK_URL?.trim() || process.env.N8N_IQ_ANALYZE_WEBHOOK_URL?.trim()
     );
-    const hasOpenAiKey = Boolean(process.env.OPENAI_API_KEY?.trim());
-    if (!hasN8nWebhook && !hasOpenAiKey) {
+    const hasLlmKey = hasAnyLlmKey();
+    if (!hasN8nWebhook && !hasLlmKey) {
       const isDevLike = process.env.NODE_ENV !== 'production';
       const allowMock = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true';
       if (isDevLike || allowMock) {
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            'Analysis is not configured. Set N8N_IQ_ANALYZE_WEBHOOK_URL (preferred) or OPENAI_API_KEY on the server, then retry.',
+            'Analysis is not configured. Set ANTHROPIC_API_KEY (preferred), OPENAI_API_KEY, or N8N_IQ_ANALYZE_WEBHOOK_URL on the server, then retry.',
         },
         { status: 503 }
       );
@@ -102,8 +103,8 @@ export async function POST(req: Request) {
         });
       }
     } catch (n8nErr) {
-      if (hasN8nWebhook && hasOpenAiKey) {
-        console.warn('[funnel/analyze] n8n analyze failed, falling back to OpenAI:', n8nErr);
+      if (hasN8nWebhook && hasLlmKey) {
+        console.warn('[funnel/analyze] n8n analyze failed, falling back to direct LLM:', n8nErr);
         parsed = await runPartialAnalysis({
           location,
           businessType,

@@ -1,5 +1,5 @@
-import OpenAI from 'openai';
 import { z } from 'zod';
+import { completeJson, hasAnyLlmKey } from '@/lib/funnel/agents/llm';
 import {
   locationIqV2FreeSystemEn,
   locationIqV2FreeSystemZh,
@@ -22,21 +22,6 @@ const partialSchema = z.object({
   paywall_teaser: z.string().optional(),
   reason: z.string().optional(),
 });
-
-function getOpenAI(): OpenAI | null {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) return null;
-  return new OpenAI({ apiKey: key });
-}
-
-function model() {
-  return process.env.OPENAI_IQ_MODEL?.trim() || 'gpt-4o-mini';
-}
-
-/** Paid full report: default to stronger model for structured, decision-grade output. */
-function modelFull() {
-  return process.env.OPENAI_IQ_FULL_MODEL?.trim() || process.env.OPENAI_IQ_MODEL?.trim() || 'gpt-4o';
-}
 
 async function postN8nJson<T>(url: string, body: unknown): Promise<T> {
   const secret =
@@ -75,8 +60,10 @@ export async function runPartialAnalysis(input: {
   reason?: string;
 }> {
   const language = input.language === 'zh' ? 'zh' : 'en';
+  // n8n only when no direct LLM key exists — otherwise callers falling back here
+  // after an n8n failure would loop straight back into the failing webhook.
   const n8nUrl = process.env.N8N_IQ_ANALYZE_WEBHOOK_URL?.trim();
-  if (n8nUrl) {
+  if (n8nUrl && !hasAnyLlmKey()) {
     const raw = await postN8nJson<unknown>(n8nUrl, {
       location: input.location,
       businessType: input.businessType || null,
@@ -85,9 +72,10 @@ export async function runPartialAnalysis(input: {
     return partialSchema.parse(raw);
   }
 
-  const client = getOpenAI();
-  if (!client) {
-    throw new Error('Neither N8N_IQ_ANALYZE_WEBHOOK_URL nor OPENAI_API_KEY is configured');
+  if (!hasAnyLlmKey()) {
+    throw new Error(
+      'No LLM provider configured: set ANTHROPIC_API_KEY (preferred), OPENAI_API_KEY, or N8N_IQ_ANALYZE_WEBHOOK_URL',
+    );
   }
 
   const systemPrompt = language === 'zh' ? locationIqV2FreeSystemZh() : locationIqV2FreeSystemEn();
@@ -105,18 +93,13 @@ export async function runPartialAnalysis(input: {
           marketDataBrief: input.marketDataBrief,
         });
 
-  const completion = await client.chat.completions.create({
-    model: model(),
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
-    ],
-    response_format: { type: 'json_object' },
+  const raw = await completeJson({
+    system: systemPrompt,
+    user: userPrompt,
+    tier: 'agent',
+    maxTokens: 6_000,
   });
-
-  const text = completion.choices[0]?.message?.content;
-  if (!text) throw new Error('Empty OpenAI response');
-  return partialSchema.parse(JSON.parse(text));
+  return partialSchema.parse(raw);
 }
 
 /**
@@ -132,9 +115,10 @@ export async function runFullPremiumReportOpenAI(input: {
   language?: 'en' | 'zh';
 }): Promise<Record<string, unknown>> {
   const language = input.language === 'zh' ? 'zh' : 'en';
-  const client = getOpenAI();
-  if (!client) {
-    throw new Error('OPENAI_API_KEY is not configured (required for full report when n8n is unavailable)');
+  if (!hasAnyLlmKey()) {
+    throw new Error(
+      'No LLM provider configured (ANTHROPIC_API_KEY or OPENAI_API_KEY required for full report when n8n is unavailable)',
+    );
   }
 
   const marketDataSection = buildPremiumMarketDataSection(input.marketData ?? null, language);
@@ -158,23 +142,11 @@ export async function runFullPremiumReportOpenAI(input: {
           marketDataSection,
         });
 
-  const completion = await client.chat.completions.create({
-    model: modelFull(),
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    response_format: { type: 'json_object' },
-    max_completion_tokens: 16_000,
+  const parsed = await completeJson({
+    system: systemPrompt,
+    user: userPrompt,
+    tier: 'full',
+    maxTokens: 16_000,
   });
-
-  const text = completion.choices[0]?.message?.content;
-  if (!text) throw new Error('Empty OpenAI response');
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new Error('OpenAI full report was not valid JSON');
-  }
   return parseIqFullReport(parsed);
 }
