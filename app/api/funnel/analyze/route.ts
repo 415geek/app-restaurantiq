@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { iqInsertReport } from '@/lib/funnel/iq-repository';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { buildFreeTierMarketBrief } from '@/lib/funnel/iq-premium-anchors';
+import { computeSiteMetrics, formatMetricsDigest } from '@/lib/funnel/agents/metrics';
 import { runPartialAnalysis } from '@/lib/funnel/iq-llm';
 import { analyzeWithN8n } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
@@ -69,7 +70,16 @@ export async function POST(req: Request) {
         isPremium: false,
         lang: language,
       })) ?? null;
-    const freeBrief = buildFreeTierMarketBrief(prefetchedMarket, language);
+    // Deterministic metrics (Huff share, saturation, demand pool, rent economics) are
+    // appended so even the free verdict is grounded in computed numbers, not vibes.
+    const siteMetrics = computeSiteMetrics({
+      marketData: prefetchedMarket,
+      businessType: businessType || 'restaurant',
+    });
+    const metricsDigest = formatMetricsDigest(siteMetrics, language);
+    const freeBrief = [buildFreeTierMarketBrief(prefetchedMarket, language), metricsDigest]
+      .filter(Boolean)
+      .join('\n\n');
 
     let parsed: Awaited<ReturnType<typeof analyzeWithN8n>>;
     try {
@@ -80,7 +90,7 @@ export async function POST(req: Request) {
           cuisine_type: businessType || undefined,
           language,
           ...(prefetchedMarket && Object.keys(prefetchedMarket).length > 0
-            ? { market_data: prefetchedMarket }
+            ? { market_data: { ...prefetchedMarket, computed_metrics: siteMetrics } }
             : {}),
         });
       } else {
