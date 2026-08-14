@@ -193,3 +193,9 @@
   - Prompts live in `lib/funnel/iq-prompts-locationiq-v2.ts`; OpenAI direct path and n8n `RestaurantIQ - Analyze` / `RestaurantIQ - Full Report` **Validate+Prompt** nodes stay semantically aligned (including `response_format: json_object`).
   - Paid full report: n8n webhook payload matches `runFullReport` (`headline`, `reason`, `language`, `market_data`); response keys match the report UI / `fullSchema` (e.g. `executive_summary`, `risks[5]`).
   - Related APIs: `/api/funnel/analyze`, `/api/funnel/full-report`, and post-checkout full-report generation.
+
+## Added in this update (2026-08-14)
+- **LocationIQ payment fulfillment fix: deferred full-report generation**
+  - The `/iq/success` return page and the Stripe webhook previously generated the full report synchronously before marking `paid`; under default function timeouts (~10-15s) the multi-minute generation was killed mid-flight, so paying users saw the report stay locked.
+  - Both paths now pass `deferFullReportGeneration: true` (matching the access-code redemption path): `paid=true` is written immediately, then the report page generates via `/api/funnel/full-report` (`maxDuration: 300`) with a progress UI.
+  - Files involved: `app/iq/success/page.tsx`, `app/api/funnel/stripe/webhook/route.ts`, `lib/funnel/iq-complete-purchase.ts` (existing parameter, unchanged).

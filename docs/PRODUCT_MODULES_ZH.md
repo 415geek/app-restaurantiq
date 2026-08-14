@@ -191,3 +191,9 @@
   - 提示词集中在 `lib/funnel/iq-prompts-locationiq-v2.ts`；OpenAI 直连与 n8n `RestaurantIQ - Analyze` / `RestaurantIQ - Full Report` 工作流 **Validate+Prompt** 节点保持语义对齐（`response_format: json_object`）。
   - 付费全量报告：n8n webhook 请求体与 `runFullReport` 一致，携带 `headline`、`reason`、`language`、`market_data`；返回 JSON 键与报告页 / `fullSchema` 一致（如 `executive_summary`、`risks[5]` 等）。
   - 相关接口：`/api/funnel/analyze`、`/api/funnel/full-report`、Stripe 支付完成后生成全量报告路径。
+
+## 本次新增（2026-08-14）
+- **LocationIQ 支付履约修复：延迟生成全量报告**
+  - `/iq/success` 返回页与 Stripe webhook 此前在标记 `paid` 之前同步生成全量报告（耗时数分钟），受默认函数超时（约 10–15 秒）限制会被中断，导致用户已付款但报告持续显示锁定。
+  - 两条路径现改为 `deferFullReportGeneration: true`（与访问码兑换路径一致）：先快速写入 `paid=true`，再由报告页通过 `/api/funnel/full-report`（`maxDuration: 300`）带进度条生成全量报告。
+  - 涉及文件：`app/iq/success/page.tsx`、`app/api/funnel/stripe/webhook/route.ts`、`lib/funnel/iq-complete-purchase.ts`（已有参数，无改动）。
