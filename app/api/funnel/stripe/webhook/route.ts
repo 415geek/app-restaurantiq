@@ -81,10 +81,14 @@ export async function POST(req: Request) {
         session.customer_details?.email ??
         (typeof session.customer_email === 'string' ? session.customer_email : null);
 
+      // Defer full-report generation: Stripe expects a fast 2xx and this route
+      // runs under the default function timeout. Mark paid immediately; the
+      // report page generates via /api/funnel/full-report (maxDuration 300).
       await fulfillIqPaidPurchase({
         reportId,
         stripeSessionId: session.id,
         customerEmail: email,
+        deferFullReportGeneration: true,
       });
     }
 
