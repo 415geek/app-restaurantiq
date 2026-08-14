@@ -110,6 +110,7 @@ const resultCopy: Record<
     footnote: string;
     checkoutFailed: string;
     paymentUnavailable: string;
+    reportNotSaved: string;
     fallbackLoadFailed: string;
     loadingPage: string;
     riskAudit: string;
@@ -135,6 +136,7 @@ const resultCopy: Record<
     footnote: 'Know before you invest. Avoid costly mistakes.',
     checkoutFailed: 'Checkout failed',
     paymentUnavailable: 'Payment is temporarily unavailable.',
+    reportNotSaved: 'Report was not saved — please rerun the analysis, then unlock.',
     fallbackLoadFailed: 'Failed to load result.',
     loadingPage: 'Loading…',
   },
@@ -158,6 +160,7 @@ const resultCopy: Record<
     footnote: '投资前先看清，避免高成本失误。',
     checkoutFailed: '支付会话创建失败',
     paymentUnavailable: '暂时无法支付，请稍后重试。',
+    reportNotSaved: '报告尚未保存成功，请重新运行分析后再解锁。',
     fallbackLoadFailed: '结果加载失败。',
     loadingPage: '加载中…',
   },
@@ -324,7 +327,7 @@ function ResultContent() {
 
   async function handleCheckout() {
     if (!data?.reportId) {
-      setCheckoutError(t.paymentUnavailable);
+      setCheckoutError(t.reportNotSaved);
       return;
     }
     setCheckoutLoading(true);
@@ -356,7 +359,7 @@ function ResultContent() {
 
   async function handleRedeemAccessCode() {
     if (!data?.reportId) {
-      setAccessCodeError(t.paymentUnavailable);
+      setAccessCodeError(t.reportNotSaved);
       return;
     }
     const trimmed = accessCode.trim();

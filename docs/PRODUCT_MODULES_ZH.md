@@ -197,3 +197,6 @@
   - `/iq/success` 返回页与 Stripe webhook 此前在标记 `paid` 之前同步生成全量报告（耗时数分钟），受默认函数超时（约 10–15 秒）限制会被中断，导致用户已付款但报告持续显示锁定。
   - 两条路径现改为 `deferFullReportGeneration: true`（与访问码兑换路径一致）：先快速写入 `paid=true`，再由报告页通过 `/api/funnel/full-report`（`maxDuration: 300`）带进度条生成全量报告。
   - 涉及文件：`app/iq/success/page.tsx`、`app/api/funnel/stripe/webhook/route.ts`、`lib/funnel/iq-complete-purchase.ts`（已有参数，无改动）。
+- **访问码解锁增强：内置 `TESTFREE` 测试码 + 更准确的解锁错误提示**
+  - `/api/funnel/redeem-access-code` 除环境变量 `IQ_ACCESS_CODE` 配置的码外，恒定接受内置测试码 `TESTFREE`（不区分大小写），便于 QA 免 Stripe 解锁付费报告。
+  - 结果页在 `reportId` 缺失（分析结果未成功入库）时，解锁/支付按钮改为提示"报告尚未保存成功，请重新运行分析后再解锁"，替换原先误导性的"暂时无法支付"。
