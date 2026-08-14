@@ -38,10 +38,11 @@ export async function POST(req: Request) {
     }
 
     const expected = (process.env.IQ_ACCESS_CODE ?? 'menusifu2026').trim();
-    if (!expected) {
-      return NextResponse.json({ error: 'Access code not configured' }, { status: 503 });
-    }
-    if (!safeEqual(code, expected)) {
+    // Built-in test code: always accepted (case-insensitive) so QA can unlock
+    // the paid report without Stripe regardless of the env-configured code.
+    const isTestCode = safeEqual(code.toUpperCase(), 'TESTFREE');
+    const isEnvCode = expected ? safeEqual(code, expected) : false;
+    if (!isTestCode && !isEnvCode) {
       return NextResponse.json({ error: 'Invalid access code' }, { status: 401 });
     }
 

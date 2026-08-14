@@ -199,3 +199,6 @@
   - The `/iq/success` return page and the Stripe webhook previously generated the full report synchronously before marking `paid`; under default function timeouts (~10-15s) the multi-minute generation was killed mid-flight, so paying users saw the report stay locked.
   - Both paths now pass `deferFullReportGeneration: true` (matching the access-code redemption path): `paid=true` is written immediately, then the report page generates via `/api/funnel/full-report` (`maxDuration: 300`) with a progress UI.
   - Files involved: `app/iq/success/page.tsx`, `app/api/funnel/stripe/webhook/route.ts`, `lib/funnel/iq-complete-purchase.ts` (existing parameter, unchanged).
+- **Access-code unlock enhancements: built-in `TESTFREE` test code + accurate unlock errors**
+  - `/api/funnel/redeem-access-code` now always accepts the built-in test code `TESTFREE` (case-insensitive) in addition to the env-configured `IQ_ACCESS_CODE`, so QA can unlock the paid report without Stripe.
+  - When `reportId` is missing on the result page (analysis was not persisted), unlock/checkout now shows "Report was not saved — please rerun the analysis" instead of the misleading "Payment is temporarily unavailable".
