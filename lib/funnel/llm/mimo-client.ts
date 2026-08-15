@@ -5,11 +5,13 @@
 import OpenAI from 'openai';
 
 const MIMO_BASE_URL = process.env.MIMO_API_BASE?.trim() || 'https://api.xiaomimimo.com/v1';
+/** Serverless budget is 300s total; a hung MiMo call must fail fast enough to leave room for the OpenAI fallback. */
+const MIMO_TIMEOUT_MS = Number(process.env.MIMO_TIMEOUT_MS?.trim() || '') || 120_000;
 
 export function getMimoClient(): OpenAI | null {
   const apiKey = process.env.MIMO_API_KEY?.trim();
   if (!apiKey) return null;
-  return new OpenAI({ apiKey, baseURL: MIMO_BASE_URL });
+  return new OpenAI({ apiKey, baseURL: MIMO_BASE_URL, timeout: MIMO_TIMEOUT_MS, maxRetries: 0 });
 }
 
 export function parseJsonFromLlmText(text: string): Record<string, unknown> | null {

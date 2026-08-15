@@ -51,7 +51,9 @@ const partialSchema = z.object({
 function getOpenAI(): OpenAI | null {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return null;
-  return new OpenAI({ apiKey: key });
+  // Explicit timeout: the SDK default (10 min + auto-retries) can eat the whole
+  // 300s serverless budget on a single hung request.
+  return new OpenAI({ apiKey: key, timeout: 120_000, maxRetries: 1 });
 }
 
 function model() {
@@ -179,7 +181,7 @@ function buildPremiumPrompts(
   },
   language: 'en' | 'zh',
   whitelist: CompetitorWhitelist,
-  opts: { stricter?: boolean } = {},
+  opts: { stricter?: boolean; lean?: boolean } = {},
 ): { systemPrompt: string; userPrompt: string } {
   const systemBase =
     language === 'zh' ? locationIqV2PremiumSystemZh() : locationIqV2PremiumSystemEn();
@@ -190,7 +192,8 @@ function buildPremiumPrompts(
       : '\n\n[RETRY NOTICE] The previous output included names NOT in the whitelist; they were dropped. This retry MUST use ONLY verbatim whitelist entries. Output fewer rows rather than fabricate.'
     : '';
 
-  const fullContext = shouldUseFullMarketContextForIqFull();
+  // Lean/browser path keeps the prompt compact so prefill + generation fit the serverless budget.
+  const fullContext = !opts.lean && shouldUseFullMarketContextForIqFull();
   const marketDataSection =
     buildPremiumMarketDataSection(input.marketData ?? null, language, { fullContext }) +
     buildCompetitorWhitelistPromptBlock(whitelist, language) +
@@ -221,11 +224,13 @@ async function callProviderForFullReport(
   userPrompt: string,
   attemptLabel: string,
   language: 'en' | 'zh',
+  lean = false,
 ): Promise<{ report: Record<string, unknown>; provider: string; model: string }> {
   const routed = await runIqProviderJson<Record<string, unknown>>({
     task: 'iq_full',
     system: systemPrompt,
     user: userPrompt,
+    fastModel: lean,
   });
 
   if (routed?.data) {
@@ -267,7 +272,7 @@ async function callProviderForFullReport(
       { role: 'user', content: userPrompt },
     ],
     response_format: { type: 'json_object' },
-    max_completion_tokens: 16_000,
+    max_completion_tokens: lean ? 10_000 : 16_000,
   });
 
   const text = completion.choices[0]?.message?.content;
@@ -326,12 +331,16 @@ export async function runFullPremiumReport(input: {
   );
 
   const runOnce = async (stricter: boolean) => {
-    const prompts = buildPremiumPrompts(input, language, whitelist, { stricter });
+    const prompts = buildPremiumPrompts(input, language, whitelist, {
+      stricter,
+      lean: input.leanGeneration === true,
+    });
     const { report } = await callProviderForFullReport(
       prompts.systemPrompt,
       prompts.userPrompt,
       stricter ? 'attempt-2' : 'attempt-1',
       language,
+      input.leanGeneration === true,
     );
     return applyCompetitorWhitelist(report, whitelist);
   };
