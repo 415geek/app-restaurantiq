@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { ReportActions } from './ReportActions';
 import { ReportMarkdown } from './ReportMarkdown';
 import { RiskAuditReportSections } from './RiskAuditReportSections';
+import { DataProvenance, ReportDataViz } from './ReportDataViz';
 import { normalizeConfidenceLevel } from '@/lib/funnel/iq-full-report-schema';
 import { normalizeRiskAuditFromFull, productPositioningLine } from '@/lib/funnel/iq-risk-audit-model';
 
@@ -256,6 +257,36 @@ export function ReportContent({
   const [langSwitchError, setLangSwitchError] = useState<string | null>(null);
   const [pendingLang, setPendingLang] = useState<'en' | 'zh' | null>(null);
 
+  // Auto-upgrade: a 'standard' (fast lean) report silently regenerates the
+  // professional-depth version in the background, then swaps it in on reload.
+  const generationTier = typeof full.generation_tier === 'string' ? full.generation_tier : null;
+  const [upgrading, setUpgrading] = useState(generationTier === 'standard');
+  const upgradeFired = useRef(false);
+  useEffect(() => {
+    if (generationTier !== 'standard' || upgradeFired.current) return;
+    upgradeFired.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/funnel/full-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reportId: report.id, force: true, quality: true }),
+        });
+        if (!cancelled && res.ok) {
+          window.location.reload();
+          return;
+        }
+      } catch {
+        /* keep the standard report; user can retry via regenerate */
+      }
+      if (!cancelled) setUpgrading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [generationTier, report.id]);
+
   const clerkLinkEnabled =
     process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'true' &&
     Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
@@ -448,6 +479,14 @@ export function ReportContent({
           {langSwitchError}
         </div>
       ) : null}
+      {upgrading ? (
+        <div className="no-print mb-4 flex items-center gap-2 rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+          {lang === 'zh'
+            ? '当前为快速版报告；专业深度版（完整市场数据 + 双模型交叉验证）正在后台生成，完成后将自动更新本页。'
+            : 'You are viewing the fast version; the professional-depth report (full market data + dual-model verification) is generating in the background and this page will refresh automatically.'}
+        </div>
+      ) : null}
 
       <div className="print-only mb-8 text-center">
         <h1 className="text-2xl font-bold text-zinc-900">RestaurantIQ</h1>
@@ -541,6 +580,8 @@ export function ReportContent({
           </div>
         </SectionShell>
       )}
+
+      <ReportDataViz marketData={marketData} full={fullView} lang={lang} />
 
       {str(fullView.executive_summary) && (
         <SectionShell title={t.executiveSummary} icon="📋">
@@ -1016,6 +1057,8 @@ export function ReportContent({
           </div>
         </SectionShell>
       )}
+
+      <DataProvenance marketData={marketData} lang={lang} />
 
       {str(fullView.data_sources_and_disclaimer) && (
         <SectionShell title={t.dataSources} icon="📎">

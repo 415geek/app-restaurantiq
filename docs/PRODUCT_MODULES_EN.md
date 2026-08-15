@@ -208,3 +208,8 @@
   - Explicit LLM client timeouts: MiMo 120s (tunable via `MIMO_TIMEOUT_MS`) with no auto-retry; OpenAI 120s with 1 retry. Previously the SDK default (10 min + auto-retries) let a single hung request eat the entire 300s serverless budget.
   - Browser-triggered lean generation (first report-page load) now uses the fast model: `mimo-v2-flash` when MiMo is primary (tunable via `MIMO_IQ_FULL_LEAN_MODEL`), 10K output cap, thinking off; prompts use the compact market-data digest instead of the full JSON blob.
   - "Retry generation" (quality mode) keeps the full `mimo-v2.5-pro` pipeline (deep market data + dual-model verification) unchanged.
+- **Report quality upgrade: data dashboard + full provenance + auto professional tier**
+  - New `ReportDataViz` dashboard: competitor traction (by review count, raw Google/Yelp values), ACS high-income household mix, revenue scenarios vs deterministic break-even/safe lines (D-4), and key stat tiles (population / median income / education / competitor counts / rating). Every chart value is read directly from `market_data_json` raw data — never LLM-generated numbers; missing data is labeled, never fabricated.
+  - New "Data Provenance" appendix: per-source status, coverage, and fetch time for Google Places / Yelp / Foursquare / Census ACS / the D-4 finance model.
+  - Tiered reports: the first generation is `standard` (fast); the page then silently regenerates `professional` (full market data + dual-model verification) in the background and auto-refreshes; a banner shows while upgrading.
+  - Deep-research polling cap reduced from 300s to 75s (tunable via `DEEP_RESEARCH_TIMEOUT_MS`) so the professional pipeline fits the serverless budget; on timeout it degrades to standard web research.
