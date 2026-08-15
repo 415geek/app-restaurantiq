@@ -202,3 +202,9 @@
 - **Access-code unlock enhancements: built-in `TESTFREE` test code + accurate unlock errors**
   - `/api/funnel/redeem-access-code` now always accepts the built-in test code `TESTFREE` (case-insensitive) in addition to the env-configured `IQ_ACCESS_CODE`, so QA can unlock the paid report without Stripe.
   - When `reportId` is missing on the result page (analysis was not persisted), unlock/checkout now shows "Report was not saved — please rerun the analysis" instead of the misleading "Payment is temporarily unavailable".
+
+## Added in this update (2026-08-15)
+- **Paid full-report generation speedup (fixes 89% timeout)**
+  - Explicit LLM client timeouts: MiMo 120s (tunable via `MIMO_TIMEOUT_MS`) with no auto-retry; OpenAI 120s with 1 retry. Previously the SDK default (10 min + auto-retries) let a single hung request eat the entire 300s serverless budget.
+  - Browser-triggered lean generation (first report-page load) now uses the fast model: `mimo-v2-flash` when MiMo is primary (tunable via `MIMO_IQ_FULL_LEAN_MODEL`), 10K output cap, thinking off; prompts use the compact market-data digest instead of the full JSON blob.
+  - "Retry generation" (quality mode) keeps the full `mimo-v2.5-pro` pipeline (deep market data + dual-model verification) unchanged.

@@ -231,7 +231,7 @@ async function runOpenAiJson(
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) return null;
   try {
-    const client = new OpenAI({ apiKey: key });
+    const client = new OpenAI({ apiKey: key, timeout: 120_000, maxRetries: 1 });
     const completion = await client.chat.completions.create({
       model: route.model,
       messages: [
@@ -261,6 +261,19 @@ async function runOpenAiJson(
   }
 }
 
+/** Speed-optimized route for browser-triggered lean generation: fast model, no thinking, tighter output cap. */
+function applyFastModelOverride(route: IqRouteResolution): IqRouteResolution {
+  if (route.provider === 'mimo') {
+    return {
+      ...route,
+      model: process.env.MIMO_IQ_FULL_LEAN_MODEL?.trim() || 'mimo-v2-flash',
+      thinking: false,
+      maxTokens: Math.min(route.maxTokens ?? 16_000, 10_000),
+    };
+  }
+  return { ...route, maxTokens: Math.min(route.maxTokens ?? 16_000, 10_000) };
+}
+
 /**
  * Run structured JSON generation for an IQ task with primary → fallback routing.
  */
@@ -268,9 +281,12 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
   task: IqLlmTask;
   system: string;
   user: string;
+  /** Lean/browser path: prefer the fast model so generation fits the serverless budget. */
+  fastModel?: boolean;
 }): Promise<IqJsonRunResult<T> | null> {
-  const primary = resolveIqRoute(opts.task, false);
+  let primary = resolveIqRoute(opts.task, false);
   if (!primary) return null;
+  if (opts.fastModel) primary = applyFastModelOverride(primary);
 
   let warning: string | undefined;
 
@@ -299,7 +315,8 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
   let used = primary;
 
   if (!raw) {
-    const fb = resolveIqRoute(opts.task, true);
+    let fb = resolveIqRoute(opts.task, true);
+    if (fb && opts.fastModel) fb = applyFastModelOverride(fb);
     if (fb && (fb.provider !== primary.provider || fb.model !== primary.model)) {
       raw = await tryRun(fb);
       if (raw) {
