@@ -70,7 +70,10 @@ export type DeepResearchPack = {
   error?: string;
 };
 
-const DEEP_RESEARCH_TIMEOUT_MS = 300_000; // 5 minutes for pro model deep research
+// Must leave room for LLM generation + dual verify inside the route's 300s
+// budget; on timeout the pipeline falls back to standard web research.
+const DEEP_RESEARCH_TIMEOUT_MS =
+  Number(process.env.DEEP_RESEARCH_TIMEOUT_MS?.trim() || '') || 75_000;
 const POLL_INTERVAL_MS = 5_000;
 
 function buildDeepResearchPrompt(location: string, businessType: string, lang: 'en' | 'zh'): string {

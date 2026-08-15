@@ -104,7 +104,10 @@ export async function POST(req: Request) {
       qualityMode,
     });
 
-    const fullJson = full;
+    const fullJson = full as Record<string, unknown>;
+    // Tier marker drives the client's silent background upgrade: 'standard'
+    // (fast lean pass) auto-regenerates as 'professional' (full pipeline).
+    fullJson.generation_tier = qualityMode ? 'professional' : 'standard';
     if (!isPreview) {
       await iqSetFullReport(reportId, fullJson);
     }

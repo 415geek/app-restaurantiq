@@ -206,3 +206,8 @@
   - LLM 客户端显式超时：MiMo 120 秒（`MIMO_TIMEOUT_MS` 可调）且不自动重试；OpenAI 120 秒、最多重试 1 次。此前 SDK 默认 10 分钟超时 + 自动重试，单次挂起请求即可耗尽 300 秒 serverless 预算。
   - 浏览器触发的精简生成路径（首次进入报告页）改用快速模型：MiMo 主路由时用 `mimo-v2-flash`（`MIMO_IQ_FULL_LEAN_MODEL` 可调），输出上限 10K token，关闭 thinking；提示词改用紧凑版市场数据摘要（不再注入完整大 JSON）。
   - 「重试生成」（quality 模式）保持 `mimo-v2.5-pro` 完整管线（深度市场数据 + 双模型校验）不变。
+- **报告质量升级：数据看板 + 全链路数据溯源 + 自动专业版**
+  - 新增 `ReportDataViz` 数据看板：竞对热度（按评论数，Google/Yelp 原始值）、ACS 高收入家庭结构、营收情景 vs 确定性盈亏平衡/安全线（D-4）、关键指标卡（人口/收入中位数/学历/竞对数/评分）。所有图表数值直接读取 `market_data_json` 原始数据，绝不使用 LLM 生成的数字；数据缺失时明确标注、不做虚构填充。
+  - 新增「数据溯源」附录：逐源列出 Google Places / Yelp / Foursquare / Census ACS / D-4 财务模型的状态、覆盖范围与获取时间。
+  - 报告分层：首次生成为 `standard`（快速版，秒级出报告）后，页面自动在后台重新生成 `professional`（完整市场数据 + 双模型交叉验证）并自动刷新替换；页面顶部有生成中提示。
+  - 深度研究轮询上限从 300 秒压缩至 75 秒（`DEEP_RESEARCH_TIMEOUT_MS` 可调），确保专业版整体管线可在 serverless 预算内完成，超时自动降级为普通检索。
