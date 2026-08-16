@@ -211,3 +211,8 @@
   - 新增「数据溯源」附录：逐源列出 Google Places / Yelp / Foursquare / Census ACS / D-4 财务模型的状态、覆盖范围与获取时间。
   - 报告分层：首次生成为 `standard`（快速版，秒级出报告）后，页面自动在后台重新生成 `professional`（完整市场数据 + 双模型交叉验证）并自动刷新替换；页面顶部有生成中提示。
   - 深度研究轮询上限从 300 秒压缩至 75 秒（`DEEP_RESEARCH_TIMEOUT_MS` 可调），确保专业版整体管线可在 serverless 预算内完成，超时自动降级为普通检索。
+- **LLM 主引擎切换为 Anthropic Claude**
+  - 新增 Anthropic 提供商（官方 `@anthropic-ai/sdk`，默认模型 `claude-opus-5`）：只要配置 `ANTHROPIC_API_KEY`，免费速评、付费全量报告、双模型交叉验证均默认由 Claude 生成；MiMo / OpenAI 自动降为备选链路。
+  - 路由规则：主提供商可用 `IQ_PRIMARY_PROVIDER=anthropic|mimo|openai` 覆盖；备选自动选择与主提供商不同且已配置密钥的引擎。修复了免费分析在 OpenAI 未配置时直接报错、不走路由器的问题（此前 OpenAI 额度耗尽即 429 全线失败）。
+  - Claude 路由带 120 秒超时、`output_config.effort` 分层（速评/精简 low、完整报告 high、验证 medium），thinking 预算计入 max_tokens 已按 1.5 倍留余量。
+  - 新增可选环境变量：`ANTHROPIC_IQ_PARTIAL_MODEL` / `ANTHROPIC_IQ_FULL_MODEL` / `ANTHROPIC_IQ_FULL_LEAN_MODEL` / `ANTHROPIC_IQ_VERIFY_MODEL` / `ANTHROPIC_TIMEOUT_MS`（均有默认值）。

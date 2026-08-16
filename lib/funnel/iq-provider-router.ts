@@ -4,8 +4,9 @@
  */
 import OpenAI from 'openai';
 import { runMimoJson, getMimoClient } from '@/lib/funnel/llm/mimo-client';
+import { anthropicAvailable, runAnthropicJson } from '@/lib/funnel/llm/anthropic-client';
 
-export type IqLlmProvider = 'openai' | 'mimo' | 'none';
+export type IqLlmProvider = 'openai' | 'mimo' | 'anthropic' | 'none';
 
 export type IqLlmTask = 'iq_partial' | 'iq_full' | 'iq_competitor_insights' | 'iq_verify';
 
@@ -15,6 +16,8 @@ export type IqRouteResolution = {
   thinking?: boolean;
   maxTokens?: number;
   temperature?: number;
+  /** Claude only: output_config.effort (thinking/output depth). */
+  effort?: 'low' | 'medium' | 'high';
 };
 
 export type IqJsonRunResult<T extends Record<string, unknown>> = {
@@ -24,9 +27,13 @@ export type IqJsonRunResult<T extends Record<string, unknown>> = {
   warning?: string;
 };
 
-function envPrimary(): 'openai' | 'mimo' {
+function envPrimary(): 'openai' | 'mimo' | 'anthropic' {
   const p = process.env.IQ_PRIMARY_PROVIDER?.trim().toLowerCase();
+  if (p === 'anthropic' && anthropicAvailable()) return 'anthropic';
   if (p === 'mimo' && process.env.MIMO_API_KEY?.trim()) return 'mimo';
+  if (p === 'openai' && openAiAvailable()) return 'openai';
+  // Default: Claude first when configured, then the legacy OpenAI default.
+  if (anthropicAvailable()) return 'anthropic';
   return 'openai';
 }
 
@@ -34,106 +41,106 @@ function openAiAvailable(): boolean {
   return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
-function routeConfig(task: IqLlmTask): {
-  primary: { provider: 'openai' | 'mimo'; model: string; thinking?: boolean; maxTokens?: number };
-  fallback: { provider: 'openai' | 'mimo'; model: string; thinking?: boolean; maxTokens?: number };
-} {
+type ConfiguredProvider = 'openai' | 'mimo' | 'anthropic';
+
+type RouteLeg = {
+  provider: ConfiguredProvider;
+  model: string;
+  thinking?: boolean;
+  maxTokens?: number;
+  effort?: 'low' | 'medium' | 'high';
+};
+
+function modelFor(provider: ConfiguredProvider, kind: 'partial' | 'full' | 'verify'): string {
+  if (provider === 'anthropic') {
+    if (kind === 'partial') {
+      return process.env.ANTHROPIC_IQ_PARTIAL_MODEL?.trim() || 'claude-opus-5';
+    }
+    return (
+      (kind === 'verify' ? process.env.ANTHROPIC_IQ_VERIFY_MODEL?.trim() : undefined) ||
+      process.env.ANTHROPIC_IQ_FULL_MODEL?.trim() ||
+      'claude-opus-5'
+    );
+  }
+  if (provider === 'mimo') {
+    if (kind === 'partial') return process.env.MIMO_IQ_PARTIAL_MODEL?.trim() || 'mimo-v2-flash';
+    return (
+      (kind === 'verify' ? process.env.MIMO_IQ_VERIFY_MODEL?.trim() : undefined) ||
+      process.env.MIMO_IQ_FULL_MODEL?.trim() ||
+      'mimo-v2.5-pro'
+    );
+  }
+  if (kind === 'partial') return process.env.OPENAI_IQ_MODEL?.trim() || 'gpt-4o-mini';
+  return (
+    process.env.OPENAI_IQ_FULL_MODEL?.trim() || process.env.OPENAI_IQ_MODEL?.trim() || 'gpt-4o'
+  );
+}
+
+/** Claude's thinking counts toward max_tokens — give its routes extra headroom. */
+function budgetFor(provider: ConfiguredProvider, base: number): number {
+  return provider === 'anthropic' ? Math.max(base, Math.round(base * 1.5)) : base;
+}
+
+function fallbackProviderFor(primary: ConfiguredProvider): ConfiguredProvider {
+  if (primary === 'anthropic') return openAiAvailable() ? 'openai' : 'mimo';
+  return anthropicAvailable() ? 'anthropic' : primary === 'openai' ? 'mimo' : 'openai';
+}
+
+function routeConfig(task: IqLlmTask): { primary: RouteLeg; fallback: RouteLeg } {
   const primaryProvider = envPrimary();
+  const fallbackProvider = fallbackProviderFor(primaryProvider);
 
-  const partialModel =
-    primaryProvider === 'mimo'
-      ? process.env.MIMO_IQ_PARTIAL_MODEL?.trim() || 'mimo-v2-flash'
-      : process.env.OPENAI_IQ_MODEL?.trim() || 'gpt-4o-mini';
-
-  const fullModel =
-    primaryProvider === 'mimo'
-      ? process.env.MIMO_IQ_FULL_MODEL?.trim() || 'mimo-v2.5-pro'
-      : process.env.OPENAI_IQ_FULL_MODEL?.trim() ||
-        process.env.OPENAI_IQ_MODEL?.trim() ||
-        'gpt-4o';
-
-  const verifyModel =
-    process.env.MIMO_IQ_VERIFY_MODEL?.trim() ||
-    process.env.MIMO_IQ_FULL_MODEL?.trim() ||
-    'mimo-v2.5-pro';
-
-  const openAiPartial = process.env.OPENAI_IQ_MODEL?.trim() || 'gpt-4o-mini';
-  const openAiFull =
-    process.env.OPENAI_IQ_FULL_MODEL?.trim() ||
-    process.env.OPENAI_IQ_MODEL?.trim() ||
-    'gpt-4o';
+  const leg = (
+    provider: ConfiguredProvider,
+    kind: 'partial' | 'full' | 'verify',
+    base: number,
+    opts: { thinking?: boolean; effort?: 'low' | 'medium' | 'high' } = {},
+  ): RouteLeg => ({
+    provider,
+    model: modelFor(provider, kind),
+    thinking: provider === 'mimo' ? (opts.thinking ?? false) : false,
+    maxTokens: budgetFor(provider, base),
+    effort: opts.effort,
+  });
 
   switch (task) {
     case 'iq_partial':
       return {
-        primary: {
-          provider: primaryProvider,
-          model: partialModel,
-          thinking: false,
-          maxTokens: 4_096,
-        },
-        fallback: {
-          provider: 'openai',
-          model: openAiPartial,
-          thinking: false,
-          maxTokens: 4_096,
-        },
+        primary: leg(primaryProvider, 'partial', 4_096, { effort: 'low' }),
+        fallback: leg(fallbackProvider, 'partial', 4_096, { effort: 'low' }),
       };
     case 'iq_full': {
       const fullThinking =
         primaryProvider === 'mimo' &&
         /^(1|true|yes|on)$/i.test(process.env.MIMO_IQ_FULL_THINKING?.trim() ?? '');
       return {
-        primary: {
-          provider: primaryProvider,
-          model: fullModel,
-          thinking: fullThinking,
-          maxTokens: 16_000,
-        },
-        fallback: {
-          provider: 'openai',
-          model: openAiFull,
-          thinking: false,
-          maxTokens: 16_000,
-        },
+        primary: leg(primaryProvider, 'full', 16_000, { thinking: fullThinking, effort: 'high' }),
+        fallback: leg(fallbackProvider, 'full', 16_000, { effort: 'high' }),
       };
     }
     case 'iq_verify':
       return {
-        primary: {
-          provider: process.env.MIMO_API_KEY?.trim() ? 'mimo' : 'openai',
-          model: verifyModel,
-          thinking: true,
-          maxTokens: 8_000,
-        },
-        fallback: {
-          provider: 'openai',
-          model: openAiFull,
-          thinking: false,
-          maxTokens: 8_000,
-        },
+        primary: leg(primaryProvider, 'verify', 8_000, { thinking: true, effort: 'medium' }),
+        fallback: leg(fallbackProvider, 'verify', 8_000, { effort: 'medium' }),
       };
     case 'iq_competitor_insights':
       return {
-        primary: {
-          provider: primaryProvider,
-          model: process.env.MIMO_IQ_PARTIAL_MODEL?.trim() || 'mimo-v2-flash',
-          thinking: false,
-          maxTokens: 2_000,
-        },
-        fallback: {
-          provider: 'openai',
-          model: openAiPartial,
-          thinking: false,
-          maxTokens: 2_000,
-        },
+        primary: leg(primaryProvider, 'partial', 2_000, { effort: 'low' }),
+        fallback: leg(fallbackProvider, 'partial', 2_000, { effort: 'low' }),
       };
     default:
       return {
-        primary: { provider: 'openai', model: openAiFull },
-        fallback: { provider: 'openai', model: openAiPartial },
+        primary: leg(primaryProvider, 'full', 8_000),
+        fallback: leg(fallbackProvider, 'partial', 8_000),
       };
   }
+}
+
+function providerAvailable(provider: IqLlmProvider): boolean {
+  if (provider === 'anthropic') return anthropicAvailable();
+  if (provider === 'mimo') return Boolean(getMimoClient());
+  if (provider === 'openai') return openAiAvailable();
+  return false;
 }
 
 /** Cross-provider verify route: opposite of primary when both keys exist (C-5). */
@@ -141,51 +148,35 @@ export function resolveIqCrossVerifyRoute(
   primaryProvider: IqLlmProvider,
 ): IqRouteResolution | null {
   const forced = process.env.IQ_VERIFY_PROVIDER?.trim().toLowerCase();
-  if (forced === 'openai' || forced === 'mimo') {
-    const model =
-      forced === 'mimo'
-        ? process.env.MIMO_IQ_VERIFY_MODEL?.trim() ||
-          process.env.MIMO_IQ_FULL_MODEL?.trim() ||
-          'mimo-v2.5-pro'
-        : process.env.OPENAI_IQ_FULL_MODEL?.trim() ||
-          process.env.OPENAI_IQ_MODEL?.trim() ||
-          'gpt-4o';
-    if (forced === 'mimo' && !getMimoClient()) return null;
-    if (forced === 'openai' && !openAiAvailable()) return null;
+  if (forced === 'openai' || forced === 'mimo' || forced === 'anthropic') {
+    if (!providerAvailable(forced)) return null;
     return {
       provider: forced,
-      model,
+      model: modelFor(forced, 'verify'),
       thinking: forced === 'mimo',
-      maxTokens: 8_000,
+      maxTokens: budgetFor(forced, 8_000),
+      effort: 'medium',
       temperature: 0.15,
     };
   }
 
-  const opposite: IqLlmProvider | null =
-    primaryProvider === 'mimo' && openAiAvailable()
-      ? 'openai'
-      : primaryProvider === 'openai' && getMimoClient()
-        ? 'mimo'
-        : null;
+  // Cross-verify with a different provider than the one that generated the report.
+  const candidates: ConfiguredProvider[] = ['anthropic', 'openai', 'mimo'];
+  const opposite =
+    candidates.find((p) => p !== primaryProvider && providerAvailable(p)) ?? null;
 
   if (!opposite) {
     return resolveIqRoute('iq_verify', false);
   }
 
-  const model =
-    opposite === 'mimo'
-      ? process.env.MIMO_IQ_VERIFY_MODEL?.trim() ||
-        process.env.MIMO_IQ_FULL_MODEL?.trim() ||
-        'mimo-v2.5-pro'
-      : process.env.OPENAI_IQ_FULL_MODEL?.trim() ||
-        process.env.OPENAI_IQ_MODEL?.trim() ||
-        'gpt-4o';
+  const model = modelFor(opposite, 'verify');
 
   return {
     provider: opposite,
     model,
     thinking: opposite === 'mimo',
-    maxTokens: 8_000,
+    maxTokens: budgetFor(opposite, 8_000),
+    effort: 'medium',
     temperature: 0.15,
   };
 }
@@ -195,14 +186,8 @@ export function resolveIqRoute(task: IqLlmTask, useFallback = false): IqRouteRes
   const cfg = routeConfig(task);
   const pick = useFallback ? cfg.fallback : cfg.primary;
 
-  if (pick.provider === 'mimo' && !getMimoClient()) {
-    if (!useFallback && openAiAvailable()) {
-      return resolveIqRoute(task, true);
-    }
-    return null;
-  }
-  if (pick.provider === 'openai' && !openAiAvailable()) {
-    if (!useFallback && getMimoClient()) {
+  if (!providerAvailable(pick.provider)) {
+    if (!useFallback) {
       return resolveIqRoute(task, true);
     }
     return null;
@@ -213,6 +198,7 @@ export function resolveIqRoute(task: IqLlmTask, useFallback = false): IqRouteRes
     model: pick.model,
     thinking: pick.thinking,
     maxTokens: pick.maxTokens,
+    effort: pick.effort,
     temperature: task === 'iq_full' ? 0.2 : 0.25,
   };
 }
@@ -271,6 +257,15 @@ function applyFastModelOverride(route: IqRouteResolution): IqRouteResolution {
       maxTokens: Math.min(route.maxTokens ?? 16_000, 10_000),
     };
   }
+  if (route.provider === 'anthropic') {
+    return {
+      ...route,
+      model: process.env.ANTHROPIC_IQ_FULL_LEAN_MODEL?.trim() || route.model,
+      // Low effort keeps thinking spend small so the 10K budget is mostly output.
+      effort: 'low',
+      maxTokens: Math.min(route.maxTokens ?? 16_000, 12_000),
+    };
+  }
   return { ...route, maxTokens: Math.min(route.maxTokens ?? 16_000, 10_000) };
 }
 
@@ -300,6 +295,16 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
           thinking: route.thinking,
           maxTokens: route.maxTokens,
           temperature: route.temperature,
+        });
+        return out?.raw ?? null;
+      }
+      if (route.provider === 'anthropic') {
+        const out = await runAnthropicJson({
+          model: route.model,
+          system: opts.system,
+          user: opts.user,
+          maxTokens: route.maxTokens,
+          effort: route.effort,
         });
         return out?.raw ?? null;
       }
@@ -352,6 +357,16 @@ export async function runIqProviderJsonOnRoute<T extends Record<string, unknown>
           thinking: route.thinking,
           maxTokens: route.maxTokens,
           temperature: route.temperature,
+        });
+        return out?.raw ?? null;
+      }
+      if (route.provider === 'anthropic') {
+        const out = await runAnthropicJson({
+          model: route.model,
+          system: opts.system,
+          user: opts.user,
+          maxTokens: route.maxTokens,
+          effort: route.effort,
         });
         return out?.raw ?? null;
       }
