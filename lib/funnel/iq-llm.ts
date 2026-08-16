@@ -119,11 +119,6 @@ export async function runPartialAnalysis(input: {
     return partialSchema.parse(raw);
   }
 
-  const client = getOpenAI();
-  if (!client) {
-    throw new Error('Neither N8N_IQ_ANALYZE_WEBHOOK_URL nor OPENAI_API_KEY is configured');
-  }
-
   const systemPrompt = language === 'zh' ? locationIqV2FreeSystemZh() : locationIqV2FreeSystemEn();
 
   const userPrompt =
@@ -153,6 +148,12 @@ export async function runPartialAnalysis(input: {
   if (routed?.data) {
     parsed = partialSchema.parse(routed.data);
   } else {
+    const client = getOpenAI();
+    if (!client) {
+      throw new Error(
+        'No LLM provider produced a result (configure ANTHROPIC_API_KEY, MIMO_API_KEY, or OPENAI_API_KEY, or N8N_IQ_ANALYZE_WEBHOOK_URL)',
+      );
+    }
     const completion = await client.chat.completions.create({
       model: model(),
       messages: [
@@ -261,7 +262,7 @@ async function callProviderForFullReport(
   const client = getOpenAI();
   if (!client) {
     throw new Error(
-      `Neither MiMo nor OPENAI_API_KEY is configured for full report (${attemptLabel})`,
+      `No LLM provider produced a full report (${attemptLabel}) — configure ANTHROPIC_API_KEY, MIMO_API_KEY, or OPENAI_API_KEY`,
     );
   }
 

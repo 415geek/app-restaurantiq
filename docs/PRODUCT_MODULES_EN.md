@@ -213,3 +213,8 @@
   - New "Data Provenance" appendix: per-source status, coverage, and fetch time for Google Places / Yelp / Foursquare / Census ACS / the D-4 finance model.
   - Tiered reports: the first generation is `standard` (fast); the page then silently regenerates `professional` (full market data + dual-model verification) in the background and auto-refreshes; a banner shows while upgrading.
   - Deep-research polling cap reduced from 300s to 75s (tunable via `DEEP_RESEARCH_TIMEOUT_MS`) so the professional pipeline fits the serverless budget; on timeout it degrades to standard web research.
+- **Primary LLM engine switched to Anthropic Claude**
+  - New Anthropic provider (official `@anthropic-ai/sdk`, default model `claude-opus-5`): once `ANTHROPIC_API_KEY` is set, the free quick assessment, paid full report, and dual-model cross-verification default to Claude; MiMo / OpenAI become the fallback chain.
+  - Routing: primary is overridable via `IQ_PRIMARY_PROVIDER=anthropic|mimo|openai`; the fallback auto-selects a different configured provider. Also fixed the free-analysis path throwing before consulting the router when OpenAI was unconfigured (previously an exhausted OpenAI account 429'd the whole funnel).
+  - Claude routes carry a 120s timeout and tiered `output_config.effort` (partial/lean low, full high, verify medium), with a 1.5x max_tokens headroom since thinking counts toward the budget.
+  - New optional env vars: `ANTHROPIC_IQ_PARTIAL_MODEL` / `ANTHROPIC_IQ_FULL_MODEL` / `ANTHROPIC_IQ_FULL_LEAN_MODEL` / `ANTHROPIC_IQ_VERIFY_MODEL` / `ANTHROPIC_TIMEOUT_MS` (all defaulted).
