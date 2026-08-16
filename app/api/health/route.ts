@@ -28,6 +28,32 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  if (probe === 'iq-llm') {
+    // Report resolved LLM routing (providers + models only — never secrets).
+    try {
+      const { resolveIqRoute } = await import('@/lib/funnel/iq-provider-router');
+      const partial = resolveIqRoute('iq_partial');
+      const full = resolveIqRoute('iq_full');
+      return NextResponse.json({
+        ok: Boolean(partial && full),
+        keys: {
+          anthropic: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
+          mimo: Boolean(process.env.MIMO_API_KEY?.trim()),
+          openai: Boolean(process.env.OPENAI_API_KEY?.trim()),
+        },
+        partial: partial ? { provider: partial.provider, model: partial.model } : null,
+        full: full ? { provider: full.provider, model: full.model } : null,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      return NextResponse.json({
+        ok: false,
+        error: unknownErrorMessage(e, 300),
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
   if (probe === 'iq-n8n') {
     const url = getAnalyzeWebhookUrl();
     if (!url) {

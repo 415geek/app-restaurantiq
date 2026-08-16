@@ -218,3 +218,4 @@
   - Routing: primary is overridable via `IQ_PRIMARY_PROVIDER=anthropic|mimo|openai`; the fallback auto-selects a different configured provider. Also fixed the free-analysis path throwing before consulting the router when OpenAI was unconfigured (previously an exhausted OpenAI account 429'd the whole funnel).
   - Claude routes carry a 120s timeout and tiered `output_config.effort` (partial/lean low, full high, verify medium), with a 1.5x max_tokens headroom since thinking counts toward the budget.
   - New optional env vars: `ANTHROPIC_IQ_PARTIAL_MODEL` / `ANTHROPIC_IQ_FULL_MODEL` / `ANTHROPIC_IQ_FULL_LEAN_MODEL` / `ANTHROPIC_IQ_VERIFY_MODEL` / `ANTHROPIC_TIMEOUT_MS` (all defaulted).
+- **New LLM routing probe**: `/api/health?probe=iq-llm` returns the resolved provider/model for partial and full generation (booleans and model names only — no secrets), to verify the Claude switch is live.
