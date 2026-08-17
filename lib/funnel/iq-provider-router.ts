@@ -18,6 +18,8 @@ export type IqRouteResolution = {
   temperature?: number;
   /** Claude only: output_config.effort (thinking/output depth). */
   effort?: 'low' | 'medium' | 'high';
+  /** Claude only: turn extended thinking off (fast path). */
+  disableThinking?: boolean;
 };
 
 export type IqJsonRunResult<T extends Record<string, unknown>> = {
@@ -49,6 +51,7 @@ type RouteLeg = {
   thinking?: boolean;
   maxTokens?: number;
   effort?: 'low' | 'medium' | 'high';
+  disableThinking?: boolean;
 };
 
 function modelFor(provider: ConfiguredProvider, kind: 'partial' | 'full' | 'verify'): string {
@@ -207,6 +210,7 @@ export function resolveIqRoute(task: IqLlmTask, useFallback = false): IqRouteRes
     thinking: pick.thinking,
     maxTokens: pick.maxTokens,
     effort: pick.effort,
+    disableThinking: pick.disableThinking,
     temperature: task === 'iq_full' ? 0.2 : 0.25,
   };
 }
@@ -268,10 +272,13 @@ function applyFastModelOverride(route: IqRouteResolution): IqRouteResolution {
   if (route.provider === 'anthropic') {
     return {
       ...route,
-      model: process.env.ANTHROPIC_IQ_FULL_LEAN_MODEL?.trim() || route.model,
-      // Low effort keeps thinking spend small so the 10K budget is mostly output.
+      // Sonnet is materially faster than Opus at near-Opus quality — the fast
+      // pass must land in ~1 minute; the background quality regen uses Opus.
+      model: process.env.ANTHROPIC_IQ_FULL_LEAN_MODEL?.trim() || 'claude-sonnet-5',
       effort: 'low',
-      maxTokens: Math.min(route.maxTokens ?? 16_000, 12_000),
+      // Thinking tokens count toward max_tokens and dominate latency here.
+      disableThinking: true,
+      maxTokens: Math.min(route.maxTokens ?? 16_000, 10_000),
     };
   }
   return { ...route, maxTokens: Math.min(route.maxTokens ?? 16_000, 10_000) };
@@ -286,6 +293,8 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
   user: string;
   /** Lean/browser path: prefer the fast model so generation fits the serverless budget. */
   fastModel?: boolean;
+  /** Hard per-call budget derived from the pipeline deadline. */
+  timeoutMs?: number;
 }): Promise<IqJsonRunResult<T> | null> {
   let primary = resolveIqRoute(opts.task, false);
   if (!primary) return null;
@@ -313,6 +322,8 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
           user: opts.user,
           maxTokens: route.maxTokens,
           effort: route.effort,
+          disableThinking: route.disableThinking,
+          timeoutMs: opts.timeoutMs,
         });
         return out?.raw ?? null;
       }
@@ -354,6 +365,7 @@ export async function runIqProviderJsonOnRoute<T extends Record<string, unknown>
   route: IqRouteResolution;
   system: string;
   user: string;
+  timeoutMs?: number;
 }): Promise<IqJsonRunResult<T> | null> {
   const tryRun = async (route: IqRouteResolution): Promise<Record<string, unknown> | null> => {
     try {
@@ -375,6 +387,8 @@ export async function runIqProviderJsonOnRoute<T extends Record<string, unknown>
           user: opts.user,
           maxTokens: route.maxTokens,
           effort: route.effort,
+          disableThinking: route.disableThinking,
+          timeoutMs: opts.timeoutMs,
         });
         return out?.raw ?? null;
       }

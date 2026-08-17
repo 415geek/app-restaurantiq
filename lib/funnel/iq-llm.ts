@@ -226,12 +226,14 @@ async function callProviderForFullReport(
   attemptLabel: string,
   language: 'en' | 'zh',
   lean = false,
+  timeoutMs?: number,
 ): Promise<{ report: Record<string, unknown>; provider: string; model: string }> {
   const routed = await runIqProviderJson<Record<string, unknown>>({
     task: 'iq_full',
     system: systemPrompt,
     user: userPrompt,
     fastModel: lean,
+    timeoutMs,
   });
 
   if (routed?.data) {
@@ -323,6 +325,8 @@ export async function runFullPremiumReport(input: {
   language?: 'en' | 'zh';
   /** Single-pass generation (no completeness/competitor regen) for serverless time limits. */
   leanGeneration?: boolean;
+  /** Hard budget for the LLM call, from the pipeline deadline. */
+  timeoutMs?: number;
 }): Promise<IqReportWithGrounding> {
   const language = input.language === 'zh' ? 'zh' : 'en';
 
@@ -342,6 +346,7 @@ export async function runFullPremiumReport(input: {
       stricter ? 'attempt-2' : 'attempt-1',
       language,
       input.leanGeneration === true,
+      input.timeoutMs,
     );
     return applyCompetitorWhitelist(report, whitelist);
   };

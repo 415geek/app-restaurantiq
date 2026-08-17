@@ -18,10 +18,14 @@ import { parseJsonFromLlmText } from '@/lib/funnel/llm/mimo-client';
 const ANTHROPIC_TIMEOUT_MS =
   Number(process.env.ANTHROPIC_TIMEOUT_MS?.trim() || '') || 240_000;
 
-export function getAnthropicClient(): Anthropic | null {
+export function getAnthropicClient(timeoutMs?: number): Anthropic | null {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) return null;
-  return new Anthropic({ apiKey, timeout: ANTHROPIC_TIMEOUT_MS, maxRetries: 0 });
+  return new Anthropic({
+    apiKey,
+    timeout: timeoutMs && timeoutMs > 0 ? timeoutMs : ANTHROPIC_TIMEOUT_MS,
+    maxRetries: 0,
+  });
 }
 
 export function anthropicAvailable(): boolean {
@@ -37,21 +41,38 @@ export async function runAnthropicJson(opts: {
   maxTokens?: number;
   /** Thinking/output depth. Lean paths use 'low'; quality regen uses 'high'. */
   effort?: AnthropicEffort;
+  /**
+   * Disable extended thinking. Claude Opus 5 thinks by default and those tokens
+   * count toward max_tokens, which is the dominant latency cost on the fast
+   * path. Only valid at effort 'high' or lower (xhigh/max reject it).
+   */
+  disableThinking?: boolean;
+  /** Hard per-call budget from the pipeline deadline. */
+  timeoutMs?: number;
 }): Promise<{ raw: Record<string, unknown>; model: string } | null> {
-  const client = getAnthropicClient();
+  const client = getAnthropicClient(opts.timeoutMs);
   if (!client) return null;
 
+  const startedAt = Date.now();
   try {
     const stream = client.messages.stream({
       model: opts.model,
       max_tokens: opts.maxTokens ?? 16_000,
       system:
         opts.system +
-        '\n\nOutput ONLY a single valid JSON object. No prose, no markdown fences, no comments before or after the JSON.',
+        '\n\nOutput ONLY a single valid JSON object. No prose, no markdown fences, no comments before or after the JSON. Do not include internal or system XML tags in your response.',
       messages: [{ role: 'user', content: opts.user }],
       ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
+      ...(opts.disableThinking ? { thinking: { type: 'disabled' as const } } : {}),
     });
     const response = await stream.finalMessage();
+    console.log(
+      `[anthropic] ${opts.model} effort=${opts.effort ?? 'default'} thinking=${
+        opts.disableThinking ? 'off' : 'on'
+      } took ${Math.round((Date.now() - startedAt) / 1000)}s out=${
+        response.usage?.output_tokens ?? '?'
+      }`,
+    );
 
     if (response.stop_reason === 'refusal') {
       console.warn('[anthropic] request refused by safety classifiers');

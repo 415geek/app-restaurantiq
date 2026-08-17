@@ -218,3 +218,8 @@
   - 新增可选环境变量：`ANTHROPIC_IQ_PARTIAL_MODEL` / `ANTHROPIC_IQ_FULL_MODEL` / `ANTHROPIC_IQ_FULL_LEAN_MODEL` / `ANTHROPIC_IQ_VERIFY_MODEL` / `ANTHROPIC_TIMEOUT_MS`（均有默认值）。
 - **新增 LLM 路由诊断探针**：`/api/health?probe=iq-llm` 返回当前解析出的主/备 LLM 提供商与模型（仅布尔与模型名，不含密钥），用于验证 Claude 切换是否生效。
 - **修复 Claude 完整报告二次超时**：Anthropic 客户端改为流式输出（长 JSON 生成不再被固定请求超时掐断），总预算 240 秒（`ANTHROPIC_TIMEOUT_MS`）且不自动重试；完整报告推理深度调为 medium（Opus 5 的 medium ≈ 上代 high，速度更快），输出预算上限 16K token。
+- **付费报告管线加入硬性时间预算（根治反复超时）**
+  - 新增 `lib/funnel/iq-deadline.ts`：路由入口按 300 秒 maxDuration 建立 wall-clock 预算（预留 20 秒收尾），各阶段按剩余时间自我裁剪。深度研究（最长 75 秒）仅在剩余 ≥150 秒时执行；双模型验证仅在剩余 ≥90 秒时执行；剩余不足 25 秒直接快速返回可重试提示，而不是撞破 300 秒上限。
+  - LLM 调用改为接收剩余预算作为硬超时（Anthropic 客户端支持按调用传入 timeout），并新增耗时/输出 token 日志（`[anthropic]`、`[funnel/full-report]`）便于定位瓶颈。
+  - 快速路径改用 `claude-sonnet-5`（`ANTHROPIC_IQ_FULL_LEAN_MODEL` 可调）并**关闭 extended thinking**：Opus 5 的思考默认开启且计入 max_tokens，是首屏延迟的主因。
+  - 「重试生成」按钮改为重跑快速路径（此前送 `quality: force`，一点重试就触发深度研究+完整生成+双验证三重串行，必然超时）；专业深度版仍由报告页后台自动升级触发（`quality: true` 显式指定）。
