@@ -76,9 +76,15 @@ function modelFor(provider: ConfiguredProvider, kind: 'partial' | 'full' | 'veri
   );
 }
 
-/** Claude's thinking counts toward max_tokens — give its routes extra headroom. */
+/**
+ * Claude's thinking counts toward max_tokens — give its routes extra headroom,
+ * but cap at 16K: generation time scales with output budget and the paid
+ * report must finish inside the 300s serverless window.
+ */
 function budgetFor(provider: ConfiguredProvider, base: number): number {
-  return provider === 'anthropic' ? Math.max(base, Math.round(base * 1.5)) : base;
+  return provider === 'anthropic'
+    ? Math.min(Math.max(base, Math.round(base * 1.5)), 16_000)
+    : base;
 }
 
 function fallbackProviderFor(primary: ConfiguredProvider): ConfiguredProvider {
@@ -113,9 +119,11 @@ function routeConfig(task: IqLlmTask): { primary: RouteLeg; fallback: RouteLeg }
       const fullThinking =
         primaryProvider === 'mimo' &&
         /^(1|true|yes|on)$/i.test(process.env.MIMO_IQ_FULL_THINKING?.trim() ?? '');
+      // Claude Opus 5 at medium ≈ prior-generation high, at much lower latency —
+      // the quality path must still fit the 300s serverless budget.
       return {
-        primary: leg(primaryProvider, 'full', 16_000, { thinking: fullThinking, effort: 'high' }),
-        fallback: leg(fallbackProvider, 'full', 16_000, { effort: 'high' }),
+        primary: leg(primaryProvider, 'full', 16_000, { thinking: fullThinking, effort: 'medium' }),
+        fallback: leg(fallbackProvider, 'full', 16_000, { effort: 'medium' }),
       };
     }
     case 'iq_verify':

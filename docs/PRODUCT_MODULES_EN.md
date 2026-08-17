@@ -219,3 +219,4 @@
   - Claude routes carry a 120s timeout and tiered `output_config.effort` (partial/lean low, full high, verify medium), with a 1.5x max_tokens headroom since thinking counts toward the budget.
   - New optional env vars: `ANTHROPIC_IQ_PARTIAL_MODEL` / `ANTHROPIC_IQ_FULL_MODEL` / `ANTHROPIC_IQ_FULL_LEAN_MODEL` / `ANTHROPIC_IQ_VERIFY_MODEL` / `ANTHROPIC_TIMEOUT_MS` (all defaulted).
 - **New LLM routing probe**: `/api/health?probe=iq-llm` returns the resolved provider/model for partial and full generation (booleans and model names only — no secrets), to verify the Claude switch is live.
+- **Fix repeated Claude full-report timeouts**: the Anthropic client now streams (long JSON generation is no longer cut off by a fixed request timeout), with a 240s overall budget (`ANTHROPIC_TIMEOUT_MS`) and no auto-retry; full-report effort lowered to medium (Opus 5 medium ≈ prior-gen high, much faster) with a 16K output cap.
