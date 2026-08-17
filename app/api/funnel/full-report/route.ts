@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { iqGetReport, iqSetFullReport, iqUpdateMarketDataJson } from '@/lib/funnel/iq-repository';
 import { generateIqFullReportWithN8nFallback } from '@/lib/funnel/iq-generate-full-report';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
+import {
+  createIqDeadline,
+  DEEP_RESEARCH_MIN_BUDGET_MS,
+  GENERATION_MIN_BUDGET_MS,
+} from '@/lib/funnel/iq-deadline';
 
 export const runtime = 'nodejs';
 /** Paid report pipeline can exceed default 10s — allow up to 5 minutes. */
@@ -30,8 +35,12 @@ function fullReportErrorMessage(lang: 'en' | 'zh', code: string): string {
     : 'Full report generation failed. Tap Retry or refresh later.';
 }
 
+/** Must match the route's maxDuration so stages can budget against it. */
+const ROUTE_BUDGET_MS = 300_000;
+
 export async function POST(req: Request) {
   let targetLang: 'en' | 'zh' = 'en';
+  const deadline = createIqDeadline(ROUTE_BUDGET_MS);
   try {
     const { reportId, force, language, persist, quality } = (await req.json()) as {
       reportId?: string;
@@ -65,7 +74,10 @@ export async function POST(req: Request) {
       language === 'zh' || language === 'en' ? language : report.language === 'zh' ? 'zh' : 'en';
 
     // Language preview (persist: false) must stay lean — not a full quality regen.
-    const qualityMode = quality === true || (force === true && !isPreview);
+    // Explicit opt-in only: `force` means "regenerate", not "run the heavy
+    // pipeline". The professional path is requested by the report page's
+    // background upgrade, which passes quality: true.
+    const qualityMode = quality === true && !isPreview;
     const leanLangPreview = isPreview;
 
     let enrichedMd: Record<string, unknown> | null = null;
@@ -76,7 +88,12 @@ export async function POST(req: Request) {
         businessType: report.business_type || 'restaurant',
         isPremium: true,
         lang: targetLang,
-        skipDeepResearchFetch: leanLangPreview || !qualityMode,
+        // Deep research polls for up to ~75s; only run it when the remaining
+        // budget can absorb that plus generation.
+        skipDeepResearchFetch:
+          leanLangPreview ||
+          !qualityMode ||
+          !deadline.hasBudget(DEEP_RESEARCH_MIN_BUDGET_MS),
         leanResolve: leanLangPreview || !qualityMode,
       });
     } catch (enrichErr) {
@@ -91,6 +108,15 @@ export async function POST(req: Request) {
       await iqUpdateMarketDataJson(reportId, enrichedMd);
     }
 
+    console.log(
+      `[funnel/full-report] market data resolved in ${Math.round(deadline.elapsedMs() / 1000)}s; ` +
+        `${Math.round(deadline.remainingMs() / 1000)}s left for generation`,
+    );
+
+    if (!deadline.hasBudget(GENERATION_MIN_BUDGET_MS)) {
+      throw new Error('FULL_REPORT_TIMEOUT');
+    }
+
     const full = await generateIqFullReportWithN8nFallback({
       reportId: report.id,
       location: report.location,
@@ -102,7 +128,13 @@ export async function POST(req: Request) {
       skipDualVerify: leanLangPreview || !qualityMode,
       leanGeneration: leanLangPreview || !qualityMode,
       qualityMode,
+      timeoutMs: deadline.remainingMs(),
+      deadline,
     });
+
+    console.log(
+      `[funnel/full-report] generation complete at ${Math.round(deadline.elapsedMs() / 1000)}s`,
+    );
 
     const fullJson = full as Record<string, unknown>;
     // Tier marker drives the client's silent background upgrade: 'standard'

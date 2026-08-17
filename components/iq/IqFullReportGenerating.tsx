@@ -24,7 +24,9 @@ async function requestFullReport(
   const res = await fetch('/api/funnel/full-report', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reportId, force, quality: force }),
+    // Retry re-runs the fast path: the goal is to get the user a report.
+    // Professional depth is handled by the background upgrade on the report page.
+    body: JSON.stringify({ reportId, force, quality: false }),
   });
   if (res.ok) return { ok: true };
 
