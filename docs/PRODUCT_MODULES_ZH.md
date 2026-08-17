@@ -217,3 +217,4 @@
   - Claude 路由带 120 秒超时、`output_config.effort` 分层（速评/精简 low、完整报告 high、验证 medium），thinking 预算计入 max_tokens 已按 1.5 倍留余量。
   - 新增可选环境变量：`ANTHROPIC_IQ_PARTIAL_MODEL` / `ANTHROPIC_IQ_FULL_MODEL` / `ANTHROPIC_IQ_FULL_LEAN_MODEL` / `ANTHROPIC_IQ_VERIFY_MODEL` / `ANTHROPIC_TIMEOUT_MS`（均有默认值）。
 - **新增 LLM 路由诊断探针**：`/api/health?probe=iq-llm` 返回当前解析出的主/备 LLM 提供商与模型（仅布尔与模型名，不含密钥），用于验证 Claude 切换是否生效。
+- **修复 Claude 完整报告二次超时**：Anthropic 客户端改为流式输出（长 JSON 生成不再被固定请求超时掐断），总预算 240 秒（`ANTHROPIC_TIMEOUT_MS`）且不自动重试；完整报告推理深度调为 medium（Opus 5 的 medium ≈ 上代 high，速度更快），输出预算上限 16K token。

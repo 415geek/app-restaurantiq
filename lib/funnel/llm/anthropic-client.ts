@@ -7,14 +7,21 @@ import Anthropic from '@anthropic-ai/sdk';
 
 import { parseJsonFromLlmText } from '@/lib/funnel/llm/mimo-client';
 
-/** Serverless budget is 300s total; a hung call must fail fast enough for fallbacks. */
+/**
+ * Full-report JSON runs 6-10K output tokens, which takes minutes on Opus-tier
+ * models — a single non-streaming call would be killed by a short client
+ * timeout before finishing. We stream (so generation is never cut off by a
+ * fixed request timeout) and cap the whole call at this budget, sized to fit
+ * inside the route's 300s serverless limit. No auto-retry: a second attempt
+ * could never finish within the remaining budget anyway.
+ */
 const ANTHROPIC_TIMEOUT_MS =
-  Number(process.env.ANTHROPIC_TIMEOUT_MS?.trim() || '') || 120_000;
+  Number(process.env.ANTHROPIC_TIMEOUT_MS?.trim() || '') || 240_000;
 
 export function getAnthropicClient(): Anthropic | null {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) return null;
-  return new Anthropic({ apiKey, timeout: ANTHROPIC_TIMEOUT_MS, maxRetries: 1 });
+  return new Anthropic({ apiKey, timeout: ANTHROPIC_TIMEOUT_MS, maxRetries: 0 });
 }
 
 export function anthropicAvailable(): boolean {
@@ -35,7 +42,7 @@ export async function runAnthropicJson(opts: {
   if (!client) return null;
 
   try {
-    const response = await client.messages.create({
+    const stream = client.messages.stream({
       model: opts.model,
       max_tokens: opts.maxTokens ?? 16_000,
       system:
@@ -44,6 +51,7 @@ export async function runAnthropicJson(opts: {
       messages: [{ role: 'user', content: opts.user }],
       ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
     });
+    const response = await stream.finalMessage();
 
     if (response.stop_reason === 'refusal') {
       console.warn('[anthropic] request refused by safety classifiers');
