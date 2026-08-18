@@ -309,10 +309,17 @@ function applyFastModelOverride(route: IqRouteResolution): IqRouteResolution {
       // 'mimo-v2-flash', is rejected by the API ('400 Unsupported model'), so
       // the fallback leg failed instantly on every paid report — leaving only
       // an out-of-credit OpenAI behind it. Override with MIMO_IQ_FULL_LEAN_MODEL.
+<<<<<<< HEAD
       model: mimoModel(
         process.env.MIMO_IQ_FULL_LEAN_MODEL || process.env.MIMO_IQ_FULL_MODEL,
         'mimo-v2.5-pro',
       ),
+=======
+      model:
+        process.env.MIMO_IQ_FULL_LEAN_MODEL?.trim() ||
+        process.env.MIMO_IQ_FULL_MODEL?.trim() ||
+        'mimo-v2.5-pro',
+>>>>>>> origin/main
       thinking: false,
       maxTokens: Math.min(route.maxTokens ?? 16_000, 10_000),
     };
