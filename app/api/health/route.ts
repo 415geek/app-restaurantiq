@@ -302,6 +302,14 @@ export async function GET(req: NextRequest) {
       }
       const marketData =
         (report.market_data_json as Record<string, unknown> | null) ?? undefined;
+      // Budget is settable so the whole pipeline can be exercised inside a
+      // client timeout: a smaller budget yields a smaller derived token cap, so
+      // the run completes rather than being cut off with nothing to show.
+      const budgetParam = Number(req.nextUrl.searchParams.get('budgetMs') ?? '');
+      const budgetMs =
+        Number.isFinite(budgetParam) && budgetParam > 0
+          ? Math.min(budgetParam, 240_000)
+          : 240_000;
       const out = await runFullPremiumReport({
         location: report.location,
         businessType: report.business_type,
@@ -310,10 +318,11 @@ export async function GET(req: NextRequest) {
         marketData,
         language: report.language === 'zh' ? 'zh' : 'en',
         leanGeneration: true,
-        timeoutMs: 240_000,
+        timeoutMs: budgetMs,
       });
       const success = {
         ok: true,
+        budgetMs,
         durationMs: Date.now() - startedAt,
         marketDataChars: marketData ? JSON.stringify(marketData).length : 0,
         provider: (out as Record<string, unknown>)._generation_provider ?? null,

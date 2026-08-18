@@ -4,6 +4,8 @@
  */
 import OpenAI from 'openai';
 
+import { repairTruncatedJson } from '@/lib/funnel/llm/json-repair';
+
 const MIMO_BASE_URL = process.env.MIMO_API_BASE?.trim() || 'https://api.xiaomimimo.com/v1';
 /** Serverless budget is 300s total; a hung MiMo call must fail fast enough to leave room for the OpenAI fallback. */
 const MIMO_TIMEOUT_MS = Number(process.env.MIMO_TIMEOUT_MS?.trim() || '') || 120_000;
@@ -47,7 +49,7 @@ export type MimoDiagnostic = {
   finishReason?: string | null;
   outputTokens?: number | null;
   textLength?: number;
-  parsed?: 'ok' | 'failed';
+  parsed?: 'ok' | 'repaired' | 'failed';
   error?: string;
 };
 
@@ -104,12 +106,26 @@ export async function runMimoJson(opts: {
     }
     if (d) d.textLength = text.length;
     const raw = parseJsonFromLlmText(text);
-    if (!raw) {
-      if (d) d.parsed = 'failed';
-      return null;
+    if (raw) {
+      if (d) d.parsed = 'ok';
+      return { raw, model: opts.model };
     }
-    if (d) d.parsed = 'ok';
-    return { raw, model: opts.model };
+    // Same salvage the Anthropic client does: running out of output budget cuts
+    // the JSON mid-object. Without this, MiMo as the fallback leg throws away a
+    // nearly complete report over its last few characters.
+    if (completion.choices[0]?.finish_reason === 'length') {
+      const repaired = repairTruncatedJson(text);
+      console.warn(
+        `[mimo] output truncated at max_tokens (${opts.maxTokens ?? 16_000}); ` +
+          (repaired ? 'recovered partial JSON' : 'could not recover JSON'),
+      );
+      if (repaired) {
+        if (d) d.parsed = 'repaired';
+        return { raw: repaired, model: opts.model };
+      }
+    }
+    if (d) d.parsed = 'failed';
+    return null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn('[mimo] chat completion failed:', msg.slice(0, 400));
