@@ -5,6 +5,8 @@ import { unknownErrorMessage } from '@/lib/unknown-error-message';
 import type { AnthropicDiagnostic } from '@/lib/funnel/llm/anthropic-client';
 
 export const runtime = 'nodejs';
+/** The iq-full-report probe runs the real generation pipeline. */
+export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
   const service = req.nextUrl.searchParams.get('service') as keyof typeof integrationEnvStatus | null;
@@ -139,6 +141,56 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         ok: false,
         error: unknownErrorMessage(e, 400),
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  if (probe === 'iq-full-report') {
+    // Reproduce the paid pipeline against a stored report and return the real
+    // failure. The iq-claude matrix proves the API and parameters are fine, so
+    // whatever breaks only shows up with the actual prompt — which means the
+    // actual prompt has to be run.
+    const reportId = req.nextUrl.searchParams.get('reportId');
+    if (!reportId) {
+      return NextResponse.json({ ok: false, error: 'Missing reportId' }, { status: 400 });
+    }
+    const startedAt = Date.now();
+    try {
+      const { iqGetReport } = await import('@/lib/funnel/iq-repository');
+      const { runFullPremiumReport } = await import('@/lib/funnel/iq-llm');
+      const report = await iqGetReport(reportId);
+      if (!report) {
+        return NextResponse.json({ ok: false, error: 'Report not found' }, { status: 404 });
+      }
+      const marketData =
+        (report.market_data_json as Record<string, unknown> | null) ?? undefined;
+      const out = await runFullPremiumReport({
+        location: report.location,
+        businessType: report.business_type,
+        headline: report.headline,
+        reason: report.reason,
+        marketData,
+        language: report.language === 'zh' ? 'zh' : 'en',
+        leanGeneration: true,
+        timeoutMs: 240_000,
+      });
+      return NextResponse.json({
+        ok: true,
+        durationMs: Date.now() - startedAt,
+        marketDataChars: marketData ? JSON.stringify(marketData).length : 0,
+        provider: (out as Record<string, unknown>)._generation_provider ?? null,
+        model: (out as Record<string, unknown>)._generation_model ?? null,
+        reportChars: JSON.stringify(out).length,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      return NextResponse.json({
+        ok: false,
+        durationMs: Date.now() - startedAt,
+        // The whole point of this probe: the unmasked provider-level cause.
+        error: unknownErrorMessage(e, 1200),
+        stack: e instanceof Error ? (e.stack ?? '').split('\n').slice(0, 6).join(' | ') : null,
         timestamp: new Date().toISOString(),
       });
     }
