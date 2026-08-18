@@ -24,6 +24,7 @@ import {
   runIqProviderJson,
   shouldUseFullMarketContextForIqFull,
 } from '@/lib/funnel/iq-provider-router';
+import type { IqRouteAttempt } from '@/lib/funnel/iq-provider-router';
 import {
   buildCompetitorWhitelistPromptBlock,
   extractCompetitorWhitelist,
@@ -228,13 +229,17 @@ async function callProviderForFullReport(
   lean = false,
   timeoutMs?: number,
 ): Promise<{ report: Record<string, unknown>; provider: string; model: string }> {
+  const attempts: IqRouteAttempt[] = [];
   const routed = await runIqProviderJson<Record<string, unknown>>({
     task: 'iq_full',
     system: systemPrompt,
     user: userPrompt,
     fastModel: lean,
     timeoutMs,
+    attempts,
   });
+  const attemptSummary = () =>
+    attempts.map((a) => `${a.provider}/${a.model}: ${a.ok ? 'ok' : a.reason ?? 'failed'}`).join(' | ');
 
   if (routed?.data) {
     try {
@@ -264,22 +269,30 @@ async function callProviderForFullReport(
   const client = getOpenAI();
   if (!client) {
     throw new Error(
-      `No LLM provider produced a full report (${attemptLabel}) — configure ANTHROPIC_API_KEY, MIMO_API_KEY, or OPENAI_API_KEY`,
+      `No LLM provider produced a full report (${attemptLabel}) [${attemptSummary()}]`,
     );
   }
 
-  const completion = await client.chat.completions.create({
-    model: modelFull(),
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    response_format: { type: 'json_object' },
-    max_completion_tokens: lean ? 10_000 : 16_000,
-  });
+  let completion;
+  try {
+    completion = await client.chat.completions.create({
+      model: modelFull(),
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      response_format: { type: 'json_object' },
+      max_completion_tokens: lean ? 10_000 : 16_000,
+    });
+  } catch (e) {
+    // Last-resort leg. Report why every routed provider failed too, otherwise
+    // the surfaced error is only ever OpenAI's (typically a quota 429).
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`openai/${modelFull()}: ${msg.slice(0, 200)} [${attemptSummary()}]`);
+  }
 
   const text = completion.choices[0]?.message?.content;
-  if (!text) throw new Error(`Empty OpenAI response (${attemptLabel})`);
+  if (!text) throw new Error(`Empty OpenAI response (${attemptLabel}) [${attemptSummary()}]`);
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -356,7 +369,10 @@ export async function runFullPremiumReport(input: {
     grounded = await runOnce(false);
   } catch (e) {
     console.error('[iq-full-report] primary generation failed:', e);
-    throw new Error('FULL_REPORT_GENERATION_FAILED');
+    // Keep the underlying provider message on the error: a bare sentinel makes
+    // the failure indistinguishable from a timeout and unfixable from outside.
+    const cause = e instanceof Error ? e.message : String(e);
+    throw new Error(`FULL_REPORT_GENERATION_FAILED: ${cause.slice(0, 300)}`);
   }
   let completeness = scoreFullReportCompleteness(grounded);
   const minScore = minCompletenessForPaidReport();
