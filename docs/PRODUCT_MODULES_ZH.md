@@ -223,3 +223,7 @@
   - LLM 调用改为接收剩余预算作为硬超时（Anthropic 客户端支持按调用传入 timeout），并新增耗时/输出 token 日志（`[anthropic]`、`[funnel/full-report]`）便于定位瓶颈。
   - 快速路径改用 `claude-sonnet-5`（`ANTHROPIC_IQ_FULL_LEAN_MODEL` 可调）并**关闭 extended thinking**：Opus 5 的思考默认开启且计入 max_tokens，是首屏延迟的主因。
   - 「重试生成」按钮改为重跑快速路径（此前送 `quality: force`，一点重试就触发深度研究+完整生成+双验证三重串行，必然超时）；专业深度版仍由报告页后台自动升级触发（`quality: true` 显式指定）。
+- **修复快速版报告"生成失败"（输出被截断）**
+  - 快速路径输出上限从 10K 提到 16K token：完整报告 JSON 装不下 10K，会在中途被截断导致解析失败（表现为约 130 秒后「完整报告生成失败」）。
+  - 新增 `lib/funnel/llm/json-repair.ts`：当响应因 `max_tokens` 截断时，自动闭合未完成的结构、抢救出模型已写完的章节，而不是整份报告作废（已用 6 个截断点单测验证）。
+  - 备选提供商顺序调整：Claude 为主时优先回落 MiMo 而非 OpenAI（OpenAI 账户额度耗尽会立刻 429，等于没有兜底）。
