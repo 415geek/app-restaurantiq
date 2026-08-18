@@ -173,7 +173,7 @@ export async function runPartialAnalysis(input: {
   return parsed;
 }
 
-function buildPremiumPrompts(
+export function buildPremiumPrompts(
   input: {
     location: string;
     businessType: string | null;

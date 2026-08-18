@@ -233,3 +233,4 @@
   - 新增 `/api/health?probe=iq-claude` 实时探针：并行发起 4 组极小的 Claude 调用矩阵（免费速评等效配置、快速完整报告配置、关闭 thinking 的对照组、专业版模型），返回每组的模型、耗时、stop_reason、输出 token 数与原始报错，用于区分「模型不可用」「参数组合被拒」「输出被截断」三类原因；同时返回备选提供商密钥是否配置。
   - 新增 `/api/health?probe=iq-full-report&reportId=<id>` 复现探针（`maxDuration=300`）：用数据库中真实报告的 `market_data_json` 跑一遍快速路径生成管线，成功时返回耗时/提供商/模型/报告长度，失败时返回**未经掩盖的原始错误与调用栈**。iq-claude 矩阵已证明 API 与参数本身正常，因此只有用真实 prompt 才能复现故障。
   - 复现探针的结果同时写入新表 `iq_diagnostics`（service role 写入，deny-all RLS，不对客户端开放）：完整报告生成通常超过 HTTP 客户端的 60 秒上限，把结果落库后即使调用方已经放弃响应，也仍能读到真实错误。
+  - 新增 `/api/health?probe=iq-full-prompt&reportId=<id>`：用真实报告的完整 prompt（与快速路径逐字一致）同时调用 Claude 与 MiMo 备选链路，但把输出上限压到 1.2K token，因此可在 HTTP 超时之内返回。返回 prompt 各部分字符数（market_data / system / user / 白名单条数）与两条链路各自的结果与原始报错——用于区分「输入本身有问题」与「生成太长/太慢」。
