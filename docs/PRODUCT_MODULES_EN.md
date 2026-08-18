@@ -193,3 +193,16 @@
   - Prompts live in `lib/funnel/iq-prompts-locationiq-v2.ts`; OpenAI direct path and n8n `RestaurantIQ - Analyze` / `RestaurantIQ - Full Report` **Validate+Prompt** nodes stay semantically aligned (including `response_format: json_object`).
   - Paid full report: n8n webhook payload matches `runFullReport` (`headline`, `reason`, `language`, `market_data`); response keys match the report UI / `fullSchema` (e.g. `executive_summary`, `risks[5]`).
   - Related APIs: `/api/funnel/analyze`, `/api/funnel/full-report`, and post-checkout full-report generation.
+
+## Added in this update (2026-08-18)
+- **LocationIQ multi-agent analysis engine V3 (professional site-selection methodology)**
+  - New `lib/funnel/agents/` engine: deterministic metrics layer → five specialist agents in parallel (market/demographics, competitive intel, site & access, financial modeling, risk) → decision matrix computed in code → partner-level synthesis → QA critic with one forced revision pass.
+  - Deterministic metrics (`metrics.ts`, formula-derived, LLM may not alter numbers): trade-area demand pool (BLS CEX 2024 $3,945/household FAFH, income elasticity 0.8), saturation vs the 2.2-per-1k-residents US norm, fair-share revenue model (pool ÷ trade-area restaurant count × attractiveness multiplier capped 0.5–2.0x), 8% occupancy-ratio line with breakeven covers/day, Caltrans AADT traffic.
+  - V2.0 five-dimension weights (traffic 25% / demographics 20% / competition 20% / access 20% / rent 15%) are computed and locked in code; `dashboard.overall_score` always equals the weighted composite; the free tier receives the computed-metrics digest too.
+  - Financial model ships industry benchmarks: three-scenario method (pessimistic = revenue −20% & costs +5%), ramp curve (month 1 at 40–50%), prime cost (QSR 55–60%), revenue triangulation.
+  - Backward compatible wiring: paid-report chain is multi-agent → n8n → single-call fallback; `IQ_ENGINE=legacy` reverts instantly.
+- **Analysis engine switched to Claude (Anthropic SDK)**
+  - New `lib/funnel/agents/llm.ts` provider layer: with `ANTHROPIC_API_KEY` set, Claude (default `claude-opus-5`) is primary and OpenAI is fallback; `IQ_LLM_PROVIDER` forces either; per-tier models via `ANTHROPIC_IQ_MODEL / _AGENT_MODEL / _FULL_MODEL`.
+  - Handles Claude `refusal` stop reason, markdown-fence stripping, and one automatic JSON repair retry.
+  - Fixes: the n8n failure fallback no longer loops back into the failing webhook; `gatherIqMarketDataFromGoogle` now populates `geocode.city/state` (unlocks Caltrans traffic and city-scoped commercial listings).
+- **New diagnostic endpoint `/api/health/analyze`**: live connectivity probes for Anthropic / OpenAI / N8N (latency, reachability, actionable hints) to quickly triage "Failed to analyze location" incidents.
