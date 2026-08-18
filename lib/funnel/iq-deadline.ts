@@ -30,8 +30,52 @@ export function createIqDeadline(totalMs: number): IqDeadline {
   };
 }
 
-/** Budget floors for the optional stages, in milliseconds. */
-export const DEEP_RESEARCH_MIN_BUDGET_MS = 150_000;
-export const DUAL_VERIFY_MIN_BUDGET_MS = 90_000;
+/**
+ * Generation cost, measured on production against a real report prompt
+ * (~30K input tokens) via /api/health?probe=iq-full-prompt:
+ *
+ *   claude-sonnet-5, thinking off, effort low
+ *     cap 1200 -> 21,994ms      cap 2400 -> 32,995ms
+ *
+ * The 1200-token delta costs 11,001ms, so decode runs at ~9.2ms/token and
+ * everything else (prefill of the 30K-token prompt, network, TLS) is ~11s.
+ * Rounded up for headroom below. Thinking-on routes also spend max_tokens on
+ * reasoning, so they are charged at roughly double the per-token rate.
+ */
+const PREFILL_RESERVE_MS = 15_000;
+const MS_PER_OUTPUT_TOKEN = 10;
+const MS_PER_OUTPUT_TOKEN_THINKING = 20;
+
+/** Never ask for less than this — a report below it is not worth returning. */
+const MIN_OUTPUT_TOKENS = 2_000;
+
+/**
+ * Largest output budget that can actually finish in `remainingMs`.
+ *
+ * A fixed 16K cap was the real defect: at the measured rate that is ~160s of
+ * decode, and with thinking on it does not fit in the route's window at all,
+ * so the call was aborted mid-generation and the whole report failed. Sizing
+ * the cap to the time left means generation always completes; if the model
+ * wanted more room the JSON is truncated at a known point and repaired.
+ */
+export function outputTokenBudget(
+  remainingMs: number,
+  opts: { thinking?: boolean; ceiling?: number } = {},
+): number {
+  const rate = opts.thinking ? MS_PER_OUTPUT_TOKEN_THINKING : MS_PER_OUTPUT_TOKEN;
+  const usable = remainingMs - PREFILL_RESERVE_MS;
+  const affordable = Math.floor(usable / rate);
+  return Math.max(MIN_OUTPUT_TOKENS, Math.min(affordable, opts.ceiling ?? 16_000));
+}
+
+/**
+ * Budget floors for the optional stages, in milliseconds.
+ *
+ * Deep research polls for up to 75s and generation needs PREFILL_RESERVE_MS
+ * plus decode time, so running research with less than ~200s left guarantees a
+ * starved generation afterwards. Dual verify is a second full LLM round trip.
+ */
+export const DEEP_RESEARCH_MIN_BUDGET_MS = 200_000;
+export const DUAL_VERIFY_MIN_BUDGET_MS = 120_000;
 /** Below this the LLM cannot plausibly finish a full report — fail fast instead. */
-export const GENERATION_MIN_BUDGET_MS = 25_000;
+export const GENERATION_MIN_BUDGET_MS = 35_000;

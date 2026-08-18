@@ -25,6 +25,7 @@ import {
   shouldUseFullMarketContextForIqFull,
 } from '@/lib/funnel/iq-provider-router';
 import type { IqRouteAttempt } from '@/lib/funnel/iq-provider-router';
+import { outputTokenBudget } from '@/lib/funnel/iq-deadline';
 import {
   buildCompetitorWhitelistPromptBlock,
   extractCompetitorWhitelist,
@@ -228,6 +229,7 @@ async function callProviderForFullReport(
   language: 'en' | 'zh',
   lean = false,
   timeoutMs?: number,
+  maxTokens?: number,
 ): Promise<{ report: Record<string, unknown>; provider: string; model: string }> {
   const attempts: IqRouteAttempt[] = [];
   const routed = await runIqProviderJson<Record<string, unknown>>({
@@ -236,6 +238,7 @@ async function callProviderForFullReport(
     user: userPrompt,
     fastModel: lean,
     timeoutMs,
+    maxTokens,
     attempts,
   });
   const attemptSummary = () =>
@@ -342,6 +345,12 @@ export async function runFullPremiumReport(input: {
   timeoutMs?: number;
 }): Promise<IqReportWithGrounding> {
   const language = input.language === 'zh' ? 'zh' : 'en';
+  // Ask only for as many output tokens as the remaining time can decode. The
+  // lean route runs with thinking off; the quality route pays for reasoning
+  // tokens out of the same budget, so it is charged at the slower rate.
+  const maxTokens = input.timeoutMs
+    ? outputTokenBudget(input.timeoutMs, { thinking: input.leanGeneration !== true })
+    : undefined;
 
   const whitelist = extractCompetitorWhitelist(input.marketData ?? null);
   console.log(
@@ -360,6 +369,7 @@ export async function runFullPremiumReport(input: {
       language,
       input.leanGeneration === true,
       input.timeoutMs,
+      maxTokens,
     );
     return applyCompetitorWhitelist(report, whitelist);
   };
