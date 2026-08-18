@@ -243,3 +243,7 @@
   - 阶段预算门槛按实测重算：深度研究 150s → **200s**，双模型验证 90s → **120s**，生成下限 25s → **35s**。
   - **修复 MiMo 备选链路完全失效**：快速路径此前硬编码 `mimo-v2-flash`，接口返回 `400 Unsupported model`，即备选链路每次都瞬间失败，背后只剩已无额度的 OpenAI——这正是「主链路一旦没跑完就整单失败」的原因。默认改为与非精简路线一致的模型，并可用 `MIMO_IQ_FULL_LEAN_MODEL` 覆盖。
   - 新增 `/api/health?probe=iq-mimo-models`：列出该账号实际可调用的 MiMo 模型，避免再用猜测的模型名。
+- **清除重复的模型默认值（此前正是这个重复让已修好的路由看起来仍未修好）**
+  - `mimo-v2-flash` 同时是免费速评（`MIMO_IQ_PARTIAL_MODEL`）与快速完整报告的默认模型，两处都已失效；改为 `mimo-v2.5` / `mimo-v2.5-pro`（由 `probe=iq-mimo-models` 实测确认账号可调用：`mimo-v2.5`、`mimo-v2.5-pro`）。
+  - 新增 `RETIRED_MIMO_MODELS` 白名单校验：环境变量若仍指向已下线的模型 id，按未设置处理并回落到有效默认值，避免一个陈旧的 Vercel 环境变量再次让整条备选链路瞬间失败。
+  - 新增 `resolveIqRouteResolved(task, {useFallback, fastModel})`：探针与诊断一律走它解析主/备链路，不再各自复制模型字面量。

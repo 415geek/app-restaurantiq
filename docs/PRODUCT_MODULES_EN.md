@@ -245,3 +245,7 @@
   - Stage budget floors recomputed from the measurement: deep research 150s → **200s**, dual verify 90s → **120s**, generation floor 25s → **35s**.
   - **Fixed a completely dead MiMo fallback**: the fast path hardcoded `mimo-v2-flash`, which the API rejects with `400 Unsupported model`, so the fallback leg failed instantly on every paid report and only an out-of-credit OpenAI stood behind it — this is why a single primary miss killed the whole report. It now defaults to the same model as the non-lean route, overridable via `MIMO_IQ_FULL_LEAN_MODEL`.
   - New `/api/health?probe=iq-mimo-models` lists the models the account can actually call, so the replacement is a fact rather than a guess.
+- **Removed duplicated model defaults (the duplication is what made an already-fixed router still look broken)**
+  - `mimo-v2-flash` was the default for the free quick assessment (`MIMO_IQ_PARTIAL_MODEL`) as well as the fast full report, and is retired in both places; they now default to `mimo-v2.5` / `mimo-v2.5-pro`, confirmed callable for this account by `probe=iq-mimo-models` (`mimo-v2.5`, `mimo-v2.5-pro`).
+  - New `RETIRED_MIMO_MODELS` guard: an env var still pointing at a retired model id is treated as unset and falls back to a valid default, so one stale Vercel variable cannot silently kill the fallback leg again.
+  - New `resolveIqRouteResolved(task, {useFallback, fastModel})`: probes and diagnostics resolve the primary and fallback legs through it instead of each repeating model literals.

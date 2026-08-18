@@ -186,7 +186,7 @@ export async function GET(req: NextRequest) {
       const { extractCompetitorWhitelist } = await import('@/lib/funnel/iq-market-signals');
       const { runAnthropicJson } = await import('@/lib/funnel/llm/anthropic-client');
       const { runMimoJson } = await import('@/lib/funnel/llm/mimo-client');
-      const { resolveIqRoute } = await import('@/lib/funnel/iq-provider-router');
+      const { resolveIqRouteResolved } = await import('@/lib/funnel/iq-provider-router');
 
       const report = await iqGetReport(reportId);
       if (!report) {
@@ -208,7 +208,10 @@ export async function GET(req: NextRequest) {
         { lean: true },
       );
 
-      const route = resolveIqRoute('iq_full');
+      // Resolve both legs exactly as the pipeline does — no model literals here,
+      // or the probe reports its own defaults instead of production's.
+      const primaryRoute = resolveIqRouteResolved('iq_full', { fastModel: true });
+      const fallbackRoute = resolveIqRouteResolved('iq_full', { fastModel: true, useFallback: true });
       // Varying the cap gives two timing points, which separate the fixed
       // prefill cost of this ~30K-token prompt from the per-token decode rate.
       // That rate is what decides whether a 16K-token report can finish inside
@@ -219,17 +222,17 @@ export async function GET(req: NextRequest) {
       const mimoDiag: MimoDiagnostic = {};
       const [claude, mimo] = await Promise.all([
         runAnthropicJson({
-          model: process.env.ANTHROPIC_IQ_FULL_LEAN_MODEL?.trim() || 'claude-sonnet-5',
+          model: primaryRoute?.model ?? 'claude-sonnet-5',
           system: prompts.systemPrompt,
           user: prompts.userPrompt,
           maxTokens,
-          effort: 'low',
-          disableThinking: true,
+          effort: primaryRoute?.effort ?? 'low',
+          disableThinking: primaryRoute?.disableThinking ?? true,
           timeoutMs: 55_000,
           diag,
         }).then((r) => Boolean(r)),
         runMimoJson({
-          model: process.env.MIMO_IQ_FULL_LEAN_MODEL?.trim() || 'mimo-v2-flash',
+          model: fallbackRoute?.model ?? 'mimo-v2.5-pro',
           system: prompts.systemPrompt,
           user: prompts.userPrompt,
           thinking: false,
@@ -240,7 +243,12 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json({
         ok: claude,
-        resolvedFullRoute: route ? { provider: route.provider, model: route.model } : null,
+        primaryRoute: primaryRoute
+          ? { provider: primaryRoute.provider, model: primaryRoute.model }
+          : null,
+        fallbackRoute: fallbackRoute
+          ? { provider: fallbackRoute.provider, model: fallbackRoute.model }
+          : null,
         maxTokens,
         prompt: {
           marketDataChars: marketData ? JSON.stringify(marketData).length : 0,
