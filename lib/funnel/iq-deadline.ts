@@ -45,21 +45,28 @@ export function createIqDeadline(totalMs: number): IqDeadline {
  * fixed cost (prefill of the 30K-token prompt, network, TLS) is a few seconds;
  * the reserve below is deliberately larger to absorb the variance.
  *
- * The thinking-on rate is measured separately, not assumed. A professional-tier
- * run (claude-opus-5, thinking on, effort medium) given a 240s budget took
- * 296,334ms — it overran, which at the route's 300s ceiling means death. Its
- * derived cap was 8,653 tokens, so the cost is *at most* ~34ms/token — and only
- * exactly that if the run consumed its whole cap. If it stopped earlier the
- * real rate is higher, so 40 is used rather than a value fitted to the
- * optimistic reading. The earlier value of 26 was extrapolated as "double
- * Sonnet" and was simply wrong.
+ * Per-leg telemetry then confirmed it and corrected an earlier mistake:
+ *
+ *   claude-sonnet-5  13,885 tokens in 180,384ms  -> 13.0ms/token
+ *   claude-opus-5     5,625 tokens in  96,909ms  -> 17.2ms/token
+ *
+ * The rate is a property of the MODEL, not of whether thinking is on. Thinking
+ * tokens are ordinary output tokens billed against max_tokens; they do not make
+ * each token slower, they just spend budget on reasoning instead of report. An
+ * earlier constant of 40ms/token for "thinking" came from dividing a run's
+ * total duration by a single call's cap — but the professional path issues a
+ * *second* generation (the competitor-grounding retry), so that total covered
+ * two calls and the rate was inflated roughly twofold.
  *
  * Under-estimating these rates is what breaks reports: the budget then buys
  * more tokens than the time can decode, and the call is cut off mid-generation.
  */
 const PREFILL_RESERVE_MS = 15_000;
-const MS_PER_OUTPUT_TOKEN = 13;
-const MS_PER_OUTPUT_TOKEN_THINKING = 40;
+/** claude-sonnet-5 and similar fast models. Measured 13.0ms/token. */
+export const MS_PER_TOKEN_FAST = 13;
+/** claude-opus-5 and similar deep models. Measured 17.2ms/token; 19 leaves
+ * real margin at the 16K ceiling, where a 1ms error costs 16s. */
+export const MS_PER_TOKEN_DEEP = 19;
 
 /** Never ask for less than this — a report below it is not worth returning. */
 const MIN_OUTPUT_TOKENS = 2_000;
@@ -75,9 +82,9 @@ const MIN_OUTPUT_TOKENS = 2_000;
  */
 export function outputTokenBudget(
   remainingMs: number,
-  opts: { thinking?: boolean; ceiling?: number } = {},
+  opts: { msPerToken?: number; ceiling?: number } = {},
 ): number {
-  const rate = opts.thinking ? MS_PER_OUTPUT_TOKEN_THINKING : MS_PER_OUTPUT_TOKEN;
+  const rate = opts.msPerToken ?? MS_PER_TOKEN_FAST;
   const usable = remainingMs - PREFILL_RESERVE_MS;
   const affordable = Math.floor(usable / rate);
   return Math.max(MIN_OUTPUT_TOKENS, Math.min(affordable, opts.ceiling ?? 16_000));

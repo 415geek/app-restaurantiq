@@ -25,7 +25,12 @@ import {
   shouldUseFullMarketContextForIqFull,
 } from '@/lib/funnel/iq-provider-router';
 import type { IqRouteAttempt } from '@/lib/funnel/iq-provider-router';
-import { outputTokenBudget } from '@/lib/funnel/iq-deadline';
+import {
+  GENERATION_MIN_BUDGET_MS,
+  MS_PER_TOKEN_DEEP,
+  MS_PER_TOKEN_FAST,
+  outputTokenBudget,
+} from '@/lib/funnel/iq-deadline';
 import {
   buildCompetitorWhitelistPromptBlock,
   extractCompetitorWhitelist,
@@ -349,11 +354,17 @@ export async function runFullPremiumReport(input: {
 }): Promise<IqReportWithGrounding> {
   const language = input.language === 'zh' ? 'zh' : 'en';
   // Ask only for as many output tokens as the remaining time can decode. The
-  // lean route runs with thinking off; the quality route pays for reasoning
-  // tokens out of the same budget, so it is charged at the slower rate.
-  const maxTokens = input.timeoutMs
-    ? outputTokenBudget(input.timeoutMs, { thinking: input.leanGeneration !== true })
-    : undefined;
+  // rate is a property of the model: the lean path runs claude-sonnet-5
+  // (~13ms/token), the quality path claude-opus-5 (~17ms/token).
+  const msPerToken =
+    input.leanGeneration === true ? MS_PER_TOKEN_FAST : MS_PER_TOKEN_DEEP;
+  const startedAt = Date.now();
+  const remainingMs = () =>
+    input.timeoutMs ? Math.max(input.timeoutMs - (Date.now() - startedAt), 0) : undefined;
+  const capForNow = () => {
+    const left = remainingMs();
+    return left === undefined ? undefined : outputTokenBudget(left, { msPerToken });
+  };
 
   const whitelist = extractCompetitorWhitelist(input.marketData ?? null);
   console.log(
@@ -365,14 +376,16 @@ export async function runFullPremiumReport(input: {
       stricter,
       lean: input.leanGeneration === true,
     });
+    // Re-derive on every attempt: a retry starts with whatever the first
+    // generation left, not with the original budget.
     const { report } = await callProviderForFullReport(
       prompts.systemPrompt,
       prompts.userPrompt,
       stricter ? 'attempt-2' : 'attempt-1',
       language,
       input.leanGeneration === true,
-      input.timeoutMs,
-      maxTokens,
+      remainingMs(),
+      capForNow(),
     );
     return applyCompetitorWhitelist(report, whitelist);
   };
@@ -390,10 +403,19 @@ export async function runFullPremiumReport(input: {
   let completeness = scoreFullReportCompleteness(grounded);
   const minScore = minCompletenessForPaidReport();
 
+  // Each retry below is a full second generation. Nothing used to budget them,
+  // which is how a professional run overran its window: one call fit, two did
+  // not. Skip a retry outright when the time left cannot pay for it.
+  const canRetry = () => {
+    const left = remainingMs();
+    return left === undefined || left >= GENERATION_MIN_BUDGET_MS;
+  };
+
   if (
     !input.leanGeneration &&
     completeness < minScore &&
-    shouldUseFullMarketContextForIqFull()
+    shouldUseFullMarketContextForIqFull() &&
+    canRetry()
   ) {
     console.warn(
       `[iq-full-report] completeness ${completeness} < ${minScore}; regenerating once (MiMo)`,
@@ -410,7 +432,7 @@ export async function runFullPremiumReport(input: {
     }
   }
 
-  if (!input.leanGeneration && shouldRetryForCompetitorGrounding(grounded, whitelist)) {
+  if (!input.leanGeneration && shouldRetryForCompetitorGrounding(grounded, whitelist) && canRetry()) {
     const droppedCount = grounded._dropped_competitor_names?.length ?? 0;
     console.warn(
       `[iq-full-report] retrying due to ${droppedCount} hallucinated competitor(s); whitelist had ${whitelist.total}`,
