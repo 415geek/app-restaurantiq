@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { integrationEnvStatus } from '@/lib/env';
 import { getAnalyzeWebhookUrl } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
@@ -310,16 +310,60 @@ export async function GET(req: NextRequest) {
         Number.isFinite(budgetParam) && budgetParam > 0
           ? Math.min(budgetParam, 240_000)
           : 240_000;
-      const out = await runFullPremiumReport({
-        location: report.location,
-        businessType: report.business_type,
-        headline: report.headline,
-        reason: report.reason,
-        marketData,
-        language: report.language === 'zh' ? 'zh' : 'en',
-        leanGeneration: true,
-        timeoutMs: budgetMs,
-      });
+      const deferred = req.nextUrl.searchParams.get('defer') === '1';
+      const quality = req.nextUrl.searchParams.get('quality') === '1';
+      const run = () =>
+        runFullPremiumReport({
+          location: report.location,
+          businessType: report.business_type,
+          headline: report.headline,
+          reason: report.reason,
+          marketData,
+          language: report.language === 'zh' ? 'zh' : 'en',
+          leanGeneration: quality !== true,
+          timeoutMs: budgetMs,
+        });
+
+      // A full-budget run takes minutes — longer than any HTTP client will
+      // wait, and an aborted request kills the lambda with it, which is why
+      // earlier attempts left no trace at all. after() keeps the work alive
+      // past the response, so the result reaches iq_diagnostics either way.
+      if (deferred) {
+        after(async () => {
+          const t0 = Date.now();
+          try {
+            const deferredOut = await run();
+            await record({
+              ok: true,
+              mode: 'deferred',
+              quality: quality === true,
+              budgetMs,
+              durationMs: Date.now() - t0,
+              provider: (deferredOut as Record<string, unknown>)._generation_provider ?? null,
+              model: (deferredOut as Record<string, unknown>)._generation_model ?? null,
+              reportChars: JSON.stringify(deferredOut).length,
+            });
+          } catch (deferredErr) {
+            await record({
+              ok: false,
+              mode: 'deferred',
+              quality: quality === true,
+              budgetMs,
+              durationMs: Date.now() - t0,
+              error: unknownErrorMessage(deferredErr, 1200),
+            });
+          }
+        });
+        return NextResponse.json({
+          ok: true,
+          mode: 'deferred',
+          budgetMs,
+          note: 'running in background; read the result from iq_diagnostics',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const out = await run();
       const success = {
         ok: true,
         budgetMs,
