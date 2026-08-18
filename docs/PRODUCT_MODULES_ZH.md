@@ -236,3 +236,10 @@
   - 新增 `/api/health?probe=iq-full-prompt&reportId=<id>`：用真实报告的完整 prompt（与快速路径逐字一致）同时调用 Claude 与 MiMo 备选链路，但把输出上限压到 1.2K token，因此可在 HTTP 超时之内返回。返回 prompt 各部分字符数（market_data / system / user / 白名单条数）与两条链路各自的结果与原始报错——用于区分「输入本身有问题」与「生成太长/太慢」。
 - **MiMo 备选链路失败原因可观测**：`runMimoJson` 此前对任何失败（HTTP 报错、空响应、JSON 解析失败）一律返回 null，备选链路为什么没兜住完全不可见。现在新增 `MimoDiagnostic`（model / maxTokens / 耗时 / finish_reason / 输出 token 数 / 文本长度 / 解析结果 / 原始报错），并接入路由器的 `attempts` 汇总。
 - **`iq-full-prompt` 探针支持 `&maxTokens=`**（上限 8K，默认 1.2K）：用两个不同输出上限各测一次，即可把这条 ~3 万 token prompt 的固定预填充耗时与逐 token 解码速率分离出来——这个速率决定了 16K token 的完整报告在路由预算内到底能不能生成完。
+- **根因修复：备选链路模型失效 + 输出预算与剩余时间脱节**
+  - 生产实测（`probe=iq-full-prompt`，真实报告 prompt 约 3 万输入 token）：`claude-sonnet-5` 关闭 thinking 时，1200 token 上限耗时 21,994ms，2400 token 上限耗时 32,995ms。即**解码约 9.2ms/token（≈109 token/s）**，预填充+网络固定开销约 11 秒。
+  - 由此得出：固定 16K 输出上限意味着约 160 秒纯解码；若开启 thinking（专业深度版走 Opus + thinking）则根本装不进 300 秒窗口，调用会在生成中途被硬超时掐断，整份报告失败。
+  - 新增 `outputTokenBudget(remainingMs, {thinking})`：按剩余时间反推本次真正付得起的输出 token 数（预留 15 秒预填充，非 thinking 按 10ms/token、thinking 按 20ms/token 计，下限 2000、上限 16000）。生成因此总能跑完；模型若还想写更多，则在已知位置被截断并由 json-repair 修复。
+  - 阶段预算门槛按实测重算：深度研究 150s → **200s**，双模型验证 90s → **120s**，生成下限 25s → **35s**。
+  - **修复 MiMo 备选链路完全失效**：快速路径此前硬编码 `mimo-v2-flash`，接口返回 `400 Unsupported model`，即备选链路每次都瞬间失败，背后只剩已无额度的 OpenAI——这正是「主链路一旦没跑完就整单失败」的原因。默认改为与非精简路线一致的模型，并可用 `MIMO_IQ_FULL_LEAN_MODEL` 覆盖。
+  - 新增 `/api/health?probe=iq-mimo-models`：列出该账号实际可调用的 MiMo 模型，避免再用猜测的模型名。

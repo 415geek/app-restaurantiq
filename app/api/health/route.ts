@@ -147,6 +147,30 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  if (probe === 'iq-mimo-models') {
+    // The fallback leg died on '400 Unsupported model mimo-v2-flash'. List what
+    // the account can actually call so the replacement is a fact, not a guess.
+    try {
+      const { getMimoClient } = await import('@/lib/funnel/llm/mimo-client');
+      const client = getMimoClient();
+      if (!client) {
+        return NextResponse.json({ ok: false, error: 'MIMO_API_KEY not configured' });
+      }
+      const list = await client.models.list();
+      return NextResponse.json({
+        ok: true,
+        models: list.data.map((m) => m.id),
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      return NextResponse.json({
+        ok: false,
+        error: unknownErrorMessage(e, 400),
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
   if (probe === 'iq-full-prompt') {
     // The iq-claude matrix passes with a trivial prompt, so the untested
     // variable is the real full-report prompt. Run exactly that prompt but cap

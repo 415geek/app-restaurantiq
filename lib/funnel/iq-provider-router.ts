@@ -276,7 +276,14 @@ function applyFastModelOverride(route: IqRouteResolution): IqRouteResolution {
   if (route.provider === 'mimo') {
     return {
       ...route,
-      model: process.env.MIMO_IQ_FULL_LEAN_MODEL?.trim() || 'mimo-v2-flash',
+      // Default to the same model as the non-lean route. The previous default,
+      // 'mimo-v2-flash', is rejected by the API ('400 Unsupported model'), so
+      // the fallback leg failed instantly on every paid report — leaving only
+      // an out-of-credit OpenAI behind it. Override with MIMO_IQ_FULL_LEAN_MODEL.
+      model:
+        process.env.MIMO_IQ_FULL_LEAN_MODEL?.trim() ||
+        process.env.MIMO_IQ_FULL_MODEL?.trim() ||
+        'mimo-v2.5-pro',
       thinking: false,
       maxTokens: Math.min(route.maxTokens ?? 16_000, 10_000),
     };
@@ -290,9 +297,6 @@ function applyFastModelOverride(route: IqRouteResolution): IqRouteResolution {
       effort: 'low',
       // Thinking tokens count toward max_tokens and dominate latency here.
       disableThinking: true,
-      // The full-report schema needs real room — a 10K cap truncated the JSON
-      // mid-object and failed the parse. Thinking is off, so this is all output.
-      maxTokens: Math.max(route.maxTokens ?? 16_000, 16_000),
     };
   }
   return { ...route, maxTokens: Math.min(route.maxTokens ?? 16_000, 10_000) };
@@ -309,12 +313,24 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
   fastModel?: boolean;
   /** Hard per-call budget derived from the pipeline deadline. */
   timeoutMs?: number;
+  /**
+   * Output cap the remaining time can actually pay for (see outputTokenBudget).
+   * Without it a route asks for a fixed 16K tokens regardless of how long is
+   * left, and the call gets aborted mid-generation.
+   */
+  maxTokens?: number;
   /** Optional sink recording why each leg failed (surfaced in error messages). */
   attempts?: IqRouteAttempt[];
 }): Promise<IqJsonRunResult<T> | null> {
+  const withBudget = (route: IqRouteResolution): IqRouteResolution =>
+    opts.maxTokens && opts.maxTokens > 0
+      ? { ...route, maxTokens: Math.min(route.maxTokens ?? 16_000, opts.maxTokens) }
+      : route;
+
   let primary = resolveIqRoute(opts.task, false);
   if (!primary) return null;
   if (opts.fastModel) primary = applyFastModelOverride(primary);
+  primary = withBudget(primary);
 
   let warning: string | undefined;
 
@@ -385,6 +401,7 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
   if (!raw) {
     let fb = resolveIqRoute(opts.task, true);
     if (fb && opts.fastModel) fb = applyFastModelOverride(fb);
+    if (fb) fb = withBudget(fb);
     if (fb && (fb.provider !== primary.provider || fb.model !== primary.model)) {
       raw = await tryRun(fb);
       if (raw) {
