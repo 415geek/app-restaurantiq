@@ -254,3 +254,10 @@
 - **复现探针支持后台模式（`&defer=1`）与专业深度模式（`&quality=1`）**
   - 完整预算下的一次生成耗时以分钟计，超过任何 HTTP 客户端的等待时间；而请求一旦中断，serverless 函数会随之被终止——这正是此前两次复现尝试连一行诊断都没留下的原因。现改用 Next.js `after()`：响应先返回，生成在后台继续，结果无论成败都写入 `iq_diagnostics`（含 mode / quality / budgetMs / 耗时 / 提供商 / 模型 / 报告长度 / 原始错误）。
   - `&quality=1` 走非精简（专业深度）路径，用于验证 Opus + thinking 这条真正出问题的链路能否在预算内跑完。
+- **真正的根因（已由生产诊断记录确认）：Claude 正常生成完毕，但 JSON 无法解析，而修复逻辑只在 `max_tokens` 时才触发**
+  - `iq_diagnostics` 中 09:57 的记录还原了用户遇到的那次失败：`anthropic/claude-sonnet-5: stop=end_turn out=15530 parsed=failed | mimo/mimo-v2-flash: no parseable JSON returned`，最后 `openai/gpt-4o: 429 无额度` → 整单失败（耗时 201,590ms）。
+  - 关键点：`stop_reason=end_turn` 表示模型是**正常写完**的，并非被截断；但输出的 JSON 无法解析。而截断修复此前被限定在 `stop_reason === 'max_tokens'` 分支内，因此救援逻辑根本没有执行——一份 15,530 token 的完整报告，因为格式问题被整份丢弃。
+  - 修复：只要解析失败就尝试修复（Anthropic 与 MiMo 两个客户端一致），不再看 stop_reason。
+  - 新增 `sanitizeJsonControlChars`：转义字符串字面量内部的裸控制字符（换行/制表符等）。中文长段落输出最容易出现这种情况，且文档结构是完整闭合的，单纯补括号救不回来——这才是真正能还原它的变换。修复逻辑同时尝试「裁剪到最后一个 `}`」，以覆盖「markdown 代码围栏 + 内嵌换行」这种两条路径都失效的组合。已用 9 个用例验证（含中文换行、制表符、截断、围栏、尾随散文、嵌套数组截断、无花括号）。
+  - 顺带确认：201,590ms / 15,530 token ≈ 13ms/token，与本次设定的解码速率常数一致。
+- **备选链路不再无视剩余预算**：实测一次 `budgetMs=68000` 的运行实际耗时 148,449ms——Claude 用完 68 秒后，MiMo 又以自己全新的 120 秒超时重新开始。现在 `runMimoJson` 接受 `timeoutMs`，路由器按「总预算 − 已耗时」把剩余时间交给备选链路。

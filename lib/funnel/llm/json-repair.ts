@@ -5,10 +5,70 @@
  * most sections as optional, so closing the open structures recovers every
  * section the model finished writing.
  */
+/**
+ * Escape raw control characters that appear *inside* string literals.
+ *
+ * A literal newline or tab in a JSON string is invalid, and models emit them
+ * regularly when writing prose — especially multi-paragraph CJK content. The
+ * document is otherwise complete and balanced, so bracket-closing repair does
+ * nothing for it; this is the transformation that actually recovers it.
+ */
+export function sanitizeJsonControlChars(text: string): string {
+  let out = '';
+  let inString = false;
+  let escaped = false;
+  for (const ch of text) {
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        out += ch;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        out += ch;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+        out += ch;
+        continue;
+      }
+      if (ch === '\n') out += '\\n';
+      else if (ch === '\r') out += '\\r';
+      else if (ch === '\t') out += '\\t';
+      else if (ch < ' ') out += `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`;
+      else out += ch;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    out += ch;
+  }
+  return out;
+}
+
 export function repairTruncatedJson(text: string): Record<string, unknown> | null {
   const start = text.indexOf('{');
   if (start < 0) return null;
-  const body = text.slice(start);
+  const body = sanitizeJsonControlChars(text.slice(start));
+
+  // A balanced document that still would not parse is usually malformed rather
+  // than cut short — raw control characters inside strings being the common
+  // case. Try the sanitized text as-is before any structural surgery, and also
+  // trimmed to its last closing brace: the plain parser strips markdown fences
+  // by slicing to that brace, but it cannot also fix control characters, so
+  // fenced output containing a newline fails both paths unless combined here.
+  const lastBrace = body.lastIndexOf('}');
+  for (const candidate of lastBrace > 0 ? [body, body.slice(0, lastBrace + 1)] : [body]) {
+    try {
+      const direct = JSON.parse(candidate) as unknown;
+      if (direct && typeof direct === 'object' && !Array.isArray(direct)) {
+        return direct as Record<string, unknown>;
+      }
+    } catch {
+      /* fall through to structural repair */
+    }
+  }
 
   // Scan once to learn the open-structure stack and whether we ended in a string.
   const stack: string[] = [];
