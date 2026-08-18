@@ -232,3 +232,4 @@
   - LLM 路由器新增 `attempts` 诊断：记录主/备每一条链路的 provider、model 与失败原因（超时、模型不可用、JSON 不可解析、配额 429 等），并汇总进错误信息。此前路由器对所有失败一律返回 null，主备两条链路的失败原因全部丢失。
   - 新增 `/api/health?probe=iq-claude` 实时探针：并行发起 4 组极小的 Claude 调用矩阵（免费速评等效配置、快速完整报告配置、关闭 thinking 的对照组、专业版模型），返回每组的模型、耗时、stop_reason、输出 token 数与原始报错，用于区分「模型不可用」「参数组合被拒」「输出被截断」三类原因；同时返回备选提供商密钥是否配置。
   - 新增 `/api/health?probe=iq-full-report&reportId=<id>` 复现探针（`maxDuration=300`）：用数据库中真实报告的 `market_data_json` 跑一遍快速路径生成管线，成功时返回耗时/提供商/模型/报告长度，失败时返回**未经掩盖的原始错误与调用栈**。iq-claude 矩阵已证明 API 与参数本身正常，因此只有用真实 prompt 才能复现故障。
+  - 复现探针的结果同时写入新表 `iq_diagnostics`（service role 写入，deny-all RLS，不对客户端开放）：完整报告生成通常超过 HTTP 客户端的 60 秒上限，把结果落库后即使调用方已经放弃响应，也仍能读到真实错误。
