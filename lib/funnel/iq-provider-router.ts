@@ -91,7 +91,9 @@ function budgetFor(provider: ConfiguredProvider, base: number): number {
 }
 
 function fallbackProviderFor(primary: ConfiguredProvider): ConfiguredProvider {
-  if (primary === 'anthropic') return openAiAvailable() ? 'openai' : 'mimo';
+  // MiMo before OpenAI: OpenAI is the account most likely to be out of credit,
+  // and a fallback that 429s immediately is no fallback at all.
+  if (primary === 'anthropic') return getMimoClient() ? 'mimo' : 'openai';
   return anthropicAvailable() ? 'anthropic' : primary === 'openai' ? 'mimo' : 'openai';
 }
 
@@ -278,7 +280,9 @@ function applyFastModelOverride(route: IqRouteResolution): IqRouteResolution {
       effort: 'low',
       // Thinking tokens count toward max_tokens and dominate latency here.
       disableThinking: true,
-      maxTokens: Math.min(route.maxTokens ?? 16_000, 10_000),
+      // The full-report schema needs real room — a 10K cap truncated the JSON
+      // mid-object and failed the parse. Thinking is off, so this is all output.
+      maxTokens: Math.max(route.maxTokens ?? 16_000, 16_000),
     };
   }
   return { ...route, maxTokens: Math.min(route.maxTokens ?? 16_000, 10_000) };

@@ -6,6 +6,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 import { parseJsonFromLlmText } from '@/lib/funnel/llm/mimo-client';
+import { repairTruncatedJson } from '@/lib/funnel/llm/json-repair';
 
 /**
  * Full-report JSON runs 6-10K output tokens, which takes minutes on Opus-tier
@@ -86,8 +87,21 @@ export async function runAnthropicJson(opts: {
     if (!text) return null;
 
     const raw = parseJsonFromLlmText(text);
-    if (!raw) return null;
-    return { raw, model: opts.model };
+    if (raw) return { raw, model: opts.model };
+
+    // Hitting max_tokens truncates the JSON mid-object. Salvage the sections
+    // the model did finish rather than failing the whole report.
+    if (response.stop_reason === 'max_tokens') {
+      const repaired = repairTruncatedJson(text);
+      console.warn(
+        `[anthropic] output truncated at max_tokens (${opts.maxTokens ?? 16_000}); ` +
+          (repaired ? 'recovered partial JSON' : 'could not recover JSON'),
+      );
+      if (repaired) return { raw: repaired, model: opts.model };
+    } else {
+      console.warn('[anthropic] response was not parseable JSON');
+    }
+    return null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn('[anthropic] messages.create failed:', msg.slice(0, 400));

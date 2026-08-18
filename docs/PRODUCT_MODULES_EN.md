@@ -225,3 +225,7 @@
   - LLM calls now receive the remaining budget as a hard per-call timeout (the Anthropic client accepts a per-call timeout), plus duration/output-token logging (`[anthropic]`, `[funnel/full-report]`) for bottleneck attribution.
   - Fast path switched to `claude-sonnet-5` (`ANTHROPIC_IQ_FULL_LEAN_MODEL`) with **extended thinking disabled**: Opus 5 thinks by default and those tokens count toward max_tokens, which dominated first-load latency.
   - The "Retry generation" button now re-runs the fast path (it previously sent `quality: force`, so one tap triggered deep research + full generation + dual verification serially — a guaranteed timeout); professional depth still comes from the report page's background upgrade, which passes `quality: true` explicitly.
+- **Fix fast-version "generation failed" (truncated output)**
+  - Fast-path output cap raised 10K → 16K tokens: the full-report JSON does not fit in 10K, so it was cut off mid-object and failed to parse (surfacing as "generation failed" at ~130s).
+  - New `lib/funnel/llm/json-repair.ts`: when a response is truncated at `max_tokens`, open structures are closed and the sections the model finished are salvaged instead of discarding the whole report (unit-verified across 6 truncation points).
+  - Fallback order: with Claude primary, fall back to MiMo before OpenAI — an out-of-credit OpenAI account 429s instantly, which is no fallback at all.
