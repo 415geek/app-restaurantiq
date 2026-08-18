@@ -247,3 +247,7 @@
   - `mimo-v2-flash` 同时是免费速评（`MIMO_IQ_PARTIAL_MODEL`）与快速完整报告的默认模型，两处都已失效；改为 `mimo-v2.5` / `mimo-v2.5-pro`（由 `probe=iq-mimo-models` 实测确认账号可调用：`mimo-v2.5`、`mimo-v2.5-pro`）。
   - 新增 `RETIRED_MIMO_MODELS` 白名单校验：环境变量若仍指向已下线的模型 id，按未设置处理并回落到有效默认值，避免一个陈旧的 Vercel 环境变量再次让整条备选链路瞬间失败。
   - 新增 `resolveIqRouteResolved(task, {useFallback, fastModel})`：探针与诊断一律走它解析主/备链路，不再各自复制模型字面量。
+- **MiMo 也支持截断修复 + 解码速率常数按三点实测修正**
+  - MiMo 此前没有截断修复：作为备选链路时，只要输出触到上限，一份几乎写完的报告会因最后几个字符而整份作废（实测 `finish_reason=length` → `parsed=failed`）。现在与 Anthropic 客户端一致，触顶时调用 `repairTruncatedJson` 抢救。
+  - 解码速率按三个实测点（700 / 1200 / 2400 token 上限）重新拟合：同一配置两次 2400 的耗时相差约 2.4 秒，因此改用最宽跨度（700→2400）得出的 ~12.3ms/token，并留出余量取 **13ms/token**（thinking 路线 26ms）。低估这个速率正是报告失败的机制——预算会买下超过时间所能解码的 token 数，调用随即在生成中途被掐断。
+  - `probe=iq-full-report` 新增 `&budgetMs=`（上限 240s）：预算调小则推导出的 token 上限同步变小，因而整条管线可以在 HTTP 客户端超时之内完整跑完并验证。
