@@ -35,6 +35,20 @@ export function anthropicAvailable(): boolean {
 
 export type AnthropicEffort = 'low' | 'medium' | 'high';
 
+/** Filled in by runAnthropicJson so callers/probes can see what actually happened. */
+export type AnthropicDiagnostic = {
+  model?: string;
+  maxTokens?: number;
+  effort?: string;
+  thinking?: 'on' | 'off';
+  durationMs?: number;
+  stopReason?: string | null;
+  outputTokens?: number | null;
+  textLength?: number;
+  parsed?: 'ok' | 'repaired' | 'failed';
+  error?: string;
+};
+
 export async function runAnthropicJson(opts: {
   model: string;
   system: string;
@@ -50,9 +64,21 @@ export async function runAnthropicJson(opts: {
   disableThinking?: boolean;
   /** Hard per-call budget from the pipeline deadline. */
   timeoutMs?: number;
+  /** Optional sink for call diagnostics (health probe / debugging). */
+  diag?: AnthropicDiagnostic;
 }): Promise<{ raw: Record<string, unknown>; model: string } | null> {
+  const d = opts.diag;
+  if (d) {
+    d.model = opts.model;
+    d.maxTokens = opts.maxTokens ?? 16_000;
+    d.effort = opts.effort ?? 'default';
+    d.thinking = opts.disableThinking ? 'off' : 'on';
+  }
   const client = getAnthropicClient(opts.timeoutMs);
-  if (!client) return null;
+  if (!client) {
+    if (d) d.error = 'ANTHROPIC_API_KEY not configured';
+    return null;
+  }
 
   const startedAt = Date.now();
   try {
@@ -67,6 +93,11 @@ export async function runAnthropicJson(opts: {
       ...(opts.disableThinking ? { thinking: { type: 'disabled' as const } } : {}),
     });
     const response = await stream.finalMessage();
+    if (d) {
+      d.durationMs = Date.now() - startedAt;
+      d.stopReason = response.stop_reason ?? null;
+      d.outputTokens = response.usage?.output_tokens ?? null;
+    }
     console.log(
       `[anthropic] ${opts.model} effort=${opts.effort ?? 'default'} thinking=${
         opts.disableThinking ? 'off' : 'on'
@@ -86,8 +117,13 @@ export async function runAnthropicJson(opts: {
       .join('');
     if (!text) return null;
 
+    if (d) d.textLength = text.length;
+
     const raw = parseJsonFromLlmText(text);
-    if (raw) return { raw, model: opts.model };
+    if (raw) {
+      if (d) d.parsed = 'ok';
+      return { raw, model: opts.model };
+    }
 
     // Hitting max_tokens truncates the JSON mid-object. Salvage the sections
     // the model did finish rather than failing the whole report.
@@ -97,14 +133,22 @@ export async function runAnthropicJson(opts: {
         `[anthropic] output truncated at max_tokens (${opts.maxTokens ?? 16_000}); ` +
           (repaired ? 'recovered partial JSON' : 'could not recover JSON'),
       );
-      if (repaired) return { raw: repaired, model: opts.model };
+      if (repaired) {
+        if (d) d.parsed = 'repaired';
+        return { raw: repaired, model: opts.model };
+      }
     } else {
       console.warn('[anthropic] response was not parseable JSON');
     }
+    if (d) d.parsed = 'failed';
     return null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn('[anthropic] messages.create failed:', msg.slice(0, 400));
+    if (d) {
+      d.durationMs = Date.now() - startedAt;
+      d.error = msg.slice(0, 500);
+    }
     return null;
   }
 }

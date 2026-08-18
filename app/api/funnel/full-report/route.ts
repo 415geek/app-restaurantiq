@@ -25,7 +25,7 @@ function fullReportErrorMessage(lang: 'en' | 'zh', code: string): string {
       ? '生成时间较长已超时，请点击下方「重试生成」再试一次。'
       : 'Generation timed out. Tap Retry below to try again.';
   }
-  if (code === 'FULL_REPORT_GENERATION_FAILED') {
+  if (code.startsWith('FULL_REPORT_GENERATION_FAILED')) {
     return lang === 'zh'
       ? '完整报告生成失败，请点击「重试生成」或稍后刷新。'
       : 'Full report generation failed. Tap Retry or refresh later.';
@@ -155,7 +155,10 @@ export async function POST(req: Request) {
       {
         error: fullReportErrorMessage(targetLang, code),
         retryable: true,
-        ...(process.env.NODE_ENV === 'development' ? { detail: msg.slice(0, 300) } : {}),
+        // Provider-level cause, always returned: without it a production
+        // failure is indistinguishable from a timeout and cannot be diagnosed.
+        // Contains provider/model names and API error text only — no secrets.
+        detail: msg.slice(0, 400),
       },
       { status: isTimeout ? 504 : 500 },
     );

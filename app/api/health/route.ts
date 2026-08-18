@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { integrationEnvStatus } from '@/lib/env';
 import { getAnalyzeWebhookUrl } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
+import type { AnthropicDiagnostic } from '@/lib/funnel/llm/anthropic-client';
 
 export const runtime = 'nodejs';
 
@@ -49,6 +50,95 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         ok: false,
         error: unknownErrorMessage(e, 300),
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  if (probe === 'iq-claude') {
+    // Live Claude call matrix. The free/partial path works while the paid full
+    // path fails, and the two differ only in model, thinking flag and token
+    // cap — so probe those axes directly instead of guessing. Prompts are
+    // trivial (a few tokens) so this is cheap; max_tokens is only a ceiling.
+    try {
+      const { runAnthropicJson } = await import('@/lib/funnel/llm/anthropic-client');
+      const { resolveIqRoute } = await import('@/lib/funnel/iq-provider-router');
+      const fullRoute = resolveIqRoute('iq_full');
+
+      const variants: Array<{
+        label: string;
+        model: string;
+        effort: 'low' | 'medium' | 'high';
+        disableThinking: boolean;
+        maxTokens: number;
+      }> = [
+        // Mirrors the working partial path — the control.
+        {
+          label: 'partial-equivalent',
+          model: process.env.ANTHROPIC_IQ_PARTIAL_MODEL?.trim() || 'claude-opus-5',
+          effort: 'low',
+          disableThinking: false,
+          maxTokens: 4_096,
+        },
+        // Mirrors the failing lean full-report path exactly.
+        {
+          label: 'full-lean',
+          model: process.env.ANTHROPIC_IQ_FULL_LEAN_MODEL?.trim() || 'claude-sonnet-5',
+          effort: 'low',
+          disableThinking: true,
+          maxTokens: 16_000,
+        },
+        // Same as full-lean but with thinking left on — isolates the flag.
+        {
+          label: 'full-lean-thinking-on',
+          model: process.env.ANTHROPIC_IQ_FULL_LEAN_MODEL?.trim() || 'claude-sonnet-5',
+          effort: 'low',
+          disableThinking: false,
+          maxTokens: 16_000,
+        },
+        // The quality path's model/effort — isolates the model.
+        {
+          label: 'full-quality',
+          model: fullRoute?.model || 'claude-opus-5',
+          effort: 'medium',
+          disableThinking: false,
+          maxTokens: 16_000,
+        },
+      ];
+
+      const results = await Promise.all(
+        variants.map(async (v) => {
+          const diag: AnthropicDiagnostic = {};
+          const out = await runAnthropicJson({
+            model: v.model,
+            system: 'You are a JSON generator.',
+            user: 'Return {"ok":true}',
+            maxTokens: v.maxTokens,
+            effort: v.effort,
+            disableThinking: v.disableThinking,
+            timeoutMs: 45_000,
+            diag,
+          });
+          return { label: v.label, returned: Boolean(out), diag };
+        }),
+      );
+
+      return NextResponse.json({
+        ok: results.every((r) => r.returned),
+        resolvedFullRoute: fullRoute
+          ? { provider: fullRoute.provider, model: fullRoute.model }
+          : null,
+        fallbackKeys: {
+          mimo: Boolean(process.env.MIMO_API_KEY?.trim()),
+          openai: Boolean(process.env.OPENAI_API_KEY?.trim()),
+        },
+        results,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      return NextResponse.json({
+        ok: false,
+        error: unknownErrorMessage(e, 400),
         timestamp: new Date().toISOString(),
       });
     }

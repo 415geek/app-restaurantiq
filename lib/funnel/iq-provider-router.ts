@@ -5,6 +5,7 @@
 import OpenAI from 'openai';
 import { runMimoJson, getMimoClient } from '@/lib/funnel/llm/mimo-client';
 import { anthropicAvailable, runAnthropicJson } from '@/lib/funnel/llm/anthropic-client';
+import type { AnthropicDiagnostic } from '@/lib/funnel/llm/anthropic-client';
 
 export type IqLlmProvider = 'openai' | 'mimo' | 'anthropic' | 'none';
 
@@ -27,6 +28,14 @@ export type IqJsonRunResult<T extends Record<string, unknown>> = {
   provider: IqLlmProvider;
   model: string;
   warning?: string;
+};
+
+/** Why each routed leg produced nothing — the router itself never throws. */
+export type IqRouteAttempt = {
+  provider: IqLlmProvider;
+  model: string;
+  ok: boolean;
+  reason?: string;
 };
 
 function envPrimary(): 'openai' | 'mimo' | 'anthropic' {
@@ -299,6 +308,8 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
   fastModel?: boolean;
   /** Hard per-call budget derived from the pipeline deadline. */
   timeoutMs?: number;
+  /** Optional sink recording why each leg failed (surfaced in error messages). */
+  attempts?: IqRouteAttempt[];
 }): Promise<IqJsonRunResult<T> | null> {
   let primary = resolveIqRoute(opts.task, false);
   if (!primary) return null;
@@ -307,6 +318,9 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
   let warning: string | undefined;
 
   const tryRun = async (route: IqRouteResolution): Promise<Record<string, unknown> | null> => {
+    const record = (ok: boolean, reason?: string) => {
+      opts.attempts?.push({ provider: route.provider, model: route.model, ok, reason });
+    };
     try {
       if (route.provider === 'mimo') {
         const out = await runMimoJson({
@@ -317,9 +331,11 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
           maxTokens: route.maxTokens,
           temperature: route.temperature,
         });
+        record(Boolean(out?.raw), out?.raw ? undefined : 'no parseable JSON returned');
         return out?.raw ?? null;
       }
       if (route.provider === 'anthropic') {
+        const diag: AnthropicDiagnostic = {};
         const out = await runAnthropicJson({
           model: route.model,
           system: opts.system,
@@ -328,13 +344,26 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
           effort: route.effort,
           disableThinking: route.disableThinking,
           timeoutMs: opts.timeoutMs,
+          diag,
         });
+        record(
+          Boolean(out?.raw),
+          out?.raw
+            ? undefined
+            : diag.error ??
+                `stop=${diag.stopReason ?? '?'} out=${diag.outputTokens ?? '?'} parsed=${
+                  diag.parsed ?? '?'
+                }`,
+        );
         return out?.raw ?? null;
       }
-      return runOpenAiJson(route, opts.system, opts.user);
+      const openAiOut = await runOpenAiJson(route, opts.system, opts.user);
+      record(Boolean(openAiOut), openAiOut ? undefined : 'no parseable JSON returned');
+      return openAiOut;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(`[iq-provider] ${route.provider}/${route.model} threw:`, msg.slice(0, 400));
+      record(false, msg.slice(0, 200));
       return null;
     }
   };
