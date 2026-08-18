@@ -263,6 +263,9 @@ async function callProviderForFullReport(
       }
       report._generation_provider = routed.provider;
       report._generation_model = routed.model;
+      // Surface the routed leg's own telemetry so callers can report the
+      // measured cost of a run, not just its outcome.
+      report._generation_attempts = attempts;
       return { report, provider: routed.provider, model: routed.model };
     } catch (parseErr) {
       console.warn('[iq-full-report] routed LLM JSON parse failed, trying fallback:', parseErr);

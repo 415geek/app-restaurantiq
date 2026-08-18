@@ -341,6 +341,9 @@ export async function GET(req: NextRequest) {
               durationMs: Date.now() - t0,
               provider: (deferredOut as Record<string, unknown>)._generation_provider ?? null,
               model: (deferredOut as Record<string, unknown>)._generation_model ?? null,
+              // Per-leg telemetry: without stop reason and token counts the
+              // measured duration cannot be turned into a per-token rate.
+              attempts: (deferredOut as Record<string, unknown>)._generation_attempts ?? null,
               reportChars: JSON.stringify(deferredOut).length,
             });
           } catch (deferredErr) {
