@@ -9,9 +9,27 @@ export const runtime = 'nodejs';
 /** The iq-full-report probe runs the real generation pipeline. */
 export const maxDuration = 300;
 
+/**
+ * Probes that spend real LLM credit on each request. They are gated behind
+ * IQ_DIAG_KEY and disabled entirely when it is unset: a full-report probe costs
+ * a paid generation per call, and the route is public, so leaving it open would
+ * let anyone with a report id burn provider credit.
+ */
+const BILLED_PROBES = new Set(['iq-claude', 'iq-full-prompt', 'iq-full-report']);
+
 export async function GET(req: NextRequest) {
   const service = req.nextUrl.searchParams.get('service') as keyof typeof integrationEnvStatus | null;
   const probe = req.nextUrl.searchParams.get('probe');
+
+  if (probe && BILLED_PROBES.has(probe)) {
+    const expected = process.env.IQ_DIAG_KEY?.trim();
+    if (!expected || req.nextUrl.searchParams.get('key') !== expected) {
+      return NextResponse.json(
+        { ok: false, error: 'Diagnostic probe disabled. Set IQ_DIAG_KEY and pass ?key=.' },
+        { status: 404 },
+      );
+    }
+  }
 
   if (probe === 'iq-supabase') {
     try {
