@@ -64,6 +64,20 @@ type RouteLeg = {
   disableThinking?: boolean;
 };
 
+/**
+ * Retired MiMo model ids. The API answers `400 Unsupported model` for these,
+ * which failed the whole leg instantly — so a stale env var pointing at one is
+ * treated as unset rather than propagated. Callable ids are listed by
+ * /api/health?probe=iq-mimo-models.
+ */
+const RETIRED_MIMO_MODELS = new Set(['mimo-v2-flash', 'mimo-v2', 'mimo-v2-pro']);
+
+function mimoModel(configured: string | undefined, fallback: string): string {
+  const id = configured?.trim();
+  if (!id || RETIRED_MIMO_MODELS.has(id)) return fallback;
+  return id;
+}
+
 function modelFor(provider: ConfiguredProvider, kind: 'partial' | 'full' | 'verify'): string {
   if (provider === 'anthropic') {
     if (kind === 'partial') {
@@ -76,11 +90,11 @@ function modelFor(provider: ConfiguredProvider, kind: 'partial' | 'full' | 'veri
     );
   }
   if (provider === 'mimo') {
-    if (kind === 'partial') return process.env.MIMO_IQ_PARTIAL_MODEL?.trim() || 'mimo-v2-flash';
-    return (
-      (kind === 'verify' ? process.env.MIMO_IQ_VERIFY_MODEL?.trim() : undefined) ||
-      process.env.MIMO_IQ_FULL_MODEL?.trim() ||
-      'mimo-v2.5-pro'
+    if (kind === 'partial') return mimoModel(process.env.MIMO_IQ_PARTIAL_MODEL, 'mimo-v2.5');
+    return mimoModel(
+      (kind === 'verify' ? process.env.MIMO_IQ_VERIFY_MODEL : undefined) ||
+        process.env.MIMO_IQ_FULL_MODEL,
+      'mimo-v2.5-pro',
     );
   }
   if (kind === 'partial') return process.env.OPENAI_IQ_MODEL?.trim() || 'gpt-4o-mini';
@@ -227,6 +241,21 @@ export function resolveIqRoute(task: IqLlmTask, useFallback = false): IqRouteRes
   };
 }
 
+/**
+ * Resolve a route exactly as runIqProviderJson would, including the fast-model
+ * override. Probes and diagnostics must go through this rather than repeating
+ * model literals — a duplicated default is what kept the dead `mimo-v2-flash`
+ * alive in the health probe after the router had already been fixed.
+ */
+export function resolveIqRouteResolved(
+  task: IqLlmTask,
+  opts: { useFallback?: boolean; fastModel?: boolean } = {},
+): IqRouteResolution | null {
+  const route = resolveIqRoute(task, opts.useFallback ?? false);
+  if (!route) return null;
+  return opts.fastModel ? applyFastModelOverride(route) : route;
+}
+
 /** Whether paid report prompts should inject full marketData (MiMo 1M path). */
 export function shouldUseFullMarketContextForIqFull(): boolean {
   const route = resolveIqRoute('iq_full');
@@ -280,10 +309,10 @@ function applyFastModelOverride(route: IqRouteResolution): IqRouteResolution {
       // 'mimo-v2-flash', is rejected by the API ('400 Unsupported model'), so
       // the fallback leg failed instantly on every paid report — leaving only
       // an out-of-credit OpenAI behind it. Override with MIMO_IQ_FULL_LEAN_MODEL.
-      model:
-        process.env.MIMO_IQ_FULL_LEAN_MODEL?.trim() ||
-        process.env.MIMO_IQ_FULL_MODEL?.trim() ||
+      model: mimoModel(
+        process.env.MIMO_IQ_FULL_LEAN_MODEL || process.env.MIMO_IQ_FULL_MODEL,
         'mimo-v2.5-pro',
+      ),
       thinking: false,
       maxTokens: Math.min(route.maxTokens ?? 16_000, 10_000),
     };
