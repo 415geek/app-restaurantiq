@@ -43,15 +43,23 @@ export function createIqDeadline(totalMs: number): IqDeadline {
  * conservatively rather than exactly: the widest span (700 -> 2400) gives
  * ~12.3ms/token, which is the figure used here plus a little headroom. The
  * fixed cost (prefill of the 30K-token prompt, network, TLS) is a few seconds;
- * the reserve below is deliberately larger to absorb the variance. Thinking-on
- * routes also spend max_tokens on reasoning, so they are charged double.
+ * the reserve below is deliberately larger to absorb the variance.
  *
- * Under-estimating this rate is what breaks reports: the budget then buys more
- * tokens than the time can decode, and the call is aborted mid-generation.
+ * The thinking-on rate is measured separately, not assumed. A professional-tier
+ * run (claude-opus-5, thinking on, effort medium) given a 240s budget took
+ * 296,334ms — it overran, which at the route's 300s ceiling means death. Its
+ * derived cap was 8,653 tokens, so the cost is *at most* ~34ms/token — and only
+ * exactly that if the run consumed its whole cap. If it stopped earlier the
+ * real rate is higher, so 40 is used rather than a value fitted to the
+ * optimistic reading. The earlier value of 26 was extrapolated as "double
+ * Sonnet" and was simply wrong.
+ *
+ * Under-estimating these rates is what breaks reports: the budget then buys
+ * more tokens than the time can decode, and the call is cut off mid-generation.
  */
 const PREFILL_RESERVE_MS = 15_000;
 const MS_PER_OUTPUT_TOKEN = 13;
-const MS_PER_OUTPUT_TOKEN_THINKING = 26;
+const MS_PER_OUTPUT_TOKEN_THINKING = 40;
 
 /** Never ask for less than this — a report below it is not worth returning. */
 const MIN_OUTPUT_TOKENS = 2_000;

@@ -37,6 +37,12 @@ export type IqRouteAttempt = {
   model: string;
   ok: boolean;
   reason?: string;
+  /** Recorded on success too: duration and token count are what turn an
+   * observed wall-clock time into a per-token rate. */
+  durationMs?: number;
+  outputTokens?: number | null;
+  stopReason?: string | null;
+  maxTokens?: number;
 };
 
 function envPrimary(): 'openai' | 'mimo' | 'anthropic' {
@@ -373,8 +379,19 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
     route: IqRouteResolution,
     budgetMs = opts.timeoutMs,
   ): Promise<Record<string, unknown> | null> => {
-    const record = (ok: boolean, reason?: string) => {
-      opts.attempts?.push({ provider: route.provider, model: route.model, ok, reason });
+    const record = (
+      ok: boolean,
+      reason?: string,
+      telemetry: Partial<IqRouteAttempt> = {},
+    ) => {
+      opts.attempts?.push({
+        provider: route.provider,
+        model: route.model,
+        ok,
+        reason,
+        maxTokens: route.maxTokens,
+        ...telemetry,
+      });
     };
     try {
       if (route.provider === 'mimo') {
@@ -397,6 +414,11 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
                 `finish=${mdiag.finishReason ?? '?'} out=${mdiag.outputTokens ?? '?'} parsed=${
                   mdiag.parsed ?? '?'
                 }`,
+          {
+            durationMs: mdiag.durationMs,
+            outputTokens: mdiag.outputTokens,
+            stopReason: mdiag.finishReason,
+          },
         );
         return out?.raw ?? null;
       }
@@ -420,6 +442,11 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
                 `stop=${diag.stopReason ?? '?'} out=${diag.outputTokens ?? '?'} parsed=${
                   diag.parsed ?? '?'
                 }`,
+          {
+            durationMs: diag.durationMs,
+            outputTokens: diag.outputTokens,
+            stopReason: diag.stopReason,
+          },
         );
         return out?.raw ?? null;
       }
