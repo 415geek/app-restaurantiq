@@ -362,8 +362,17 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
   primary = withBudget(primary);
 
   let warning: string | undefined;
+  // The fallback runs *after* the primary, so it must be charged against what
+  // is left, not handed a fresh budget: a 68s-budget run was observed taking
+  // 148s because MiMo started its own 120s timeout once Claude had finished.
+  const startedAt = Date.now();
+  const remainingMs = (): number | undefined =>
+    opts.timeoutMs ? Math.max(opts.timeoutMs - (Date.now() - startedAt), 5_000) : undefined;
 
-  const tryRun = async (route: IqRouteResolution): Promise<Record<string, unknown> | null> => {
+  const tryRun = async (
+    route: IqRouteResolution,
+    budgetMs = opts.timeoutMs,
+  ): Promise<Record<string, unknown> | null> => {
     const record = (ok: boolean, reason?: string) => {
       opts.attempts?.push({ provider: route.provider, model: route.model, ok, reason });
     };
@@ -377,6 +386,7 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
           thinking: route.thinking,
           maxTokens: route.maxTokens,
           temperature: route.temperature,
+          timeoutMs: budgetMs,
           diag: mdiag,
         });
         record(
@@ -399,7 +409,7 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
           maxTokens: route.maxTokens,
           effort: route.effort,
           disableThinking: route.disableThinking,
-          timeoutMs: opts.timeoutMs,
+          timeoutMs: budgetMs,
           diag,
         });
         record(
@@ -432,7 +442,7 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
     if (fb && opts.fastModel) fb = applyFastModelOverride(fb);
     if (fb) fb = withBudget(fb);
     if (fb && (fb.provider !== primary.provider || fb.model !== primary.model)) {
-      raw = await tryRun(fb);
+      raw = await tryRun(fb, remainingMs());
       if (raw) {
         warning = `Primary ${primary.provider}/${primary.model} failed; used fallback ${fb.provider}/${fb.model}.`;
         used = fb;

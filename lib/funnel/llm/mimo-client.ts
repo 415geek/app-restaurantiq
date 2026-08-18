@@ -10,10 +10,15 @@ const MIMO_BASE_URL = process.env.MIMO_API_BASE?.trim() || 'https://api.xiaomimi
 /** Serverless budget is 300s total; a hung MiMo call must fail fast enough to leave room for the OpenAI fallback. */
 const MIMO_TIMEOUT_MS = Number(process.env.MIMO_TIMEOUT_MS?.trim() || '') || 120_000;
 
-export function getMimoClient(): OpenAI | null {
+export function getMimoClient(timeoutMs?: number): OpenAI | null {
   const apiKey = process.env.MIMO_API_KEY?.trim();
   if (!apiKey) return null;
-  return new OpenAI({ apiKey, baseURL: MIMO_BASE_URL, timeout: MIMO_TIMEOUT_MS, maxRetries: 0 });
+  return new OpenAI({
+    apiKey,
+    baseURL: MIMO_BASE_URL,
+    timeout: timeoutMs && timeoutMs > 0 ? timeoutMs : MIMO_TIMEOUT_MS,
+    maxRetries: 0,
+  });
 }
 
 export function parseJsonFromLlmText(text: string): Record<string, unknown> | null {
@@ -50,6 +55,9 @@ export type MimoDiagnostic = {
   outputTokens?: number | null;
   textLength?: number;
   parsed?: 'ok' | 'repaired' | 'failed';
+  /** First/last characters of an unparseable payload — where the defect shows. */
+  textHead?: string;
+  textTail?: string;
   error?: string;
 };
 
@@ -60,6 +68,10 @@ export async function runMimoJson(opts: {
   thinking?: boolean;
   maxTokens?: number;
   temperature?: number;
+  /** Remaining pipeline budget. Without it the fallback leg starts a fresh
+   * 120s timeout on top of whatever the primary already spent — observed as a
+   * 68s-budget run taking 148s. */
+  timeoutMs?: number;
   /** Optional sink for call diagnostics — this client never throws. */
   diag?: MimoDiagnostic;
 }): Promise<{ raw: Record<string, unknown>; model: string } | null> {
@@ -68,7 +80,7 @@ export async function runMimoJson(opts: {
     d.model = opts.model;
     d.maxTokens = opts.maxTokens ?? 16_000;
   }
-  const client = getMimoClient();
+  const client = getMimoClient(opts.timeoutMs);
   if (!client) {
     if (d) d.error = 'MIMO_API_KEY not configured';
     return null;
@@ -110,21 +122,22 @@ export async function runMimoJson(opts: {
       if (d) d.parsed = 'ok';
       return { raw, model: opts.model };
     }
-    // Same salvage the Anthropic client does: running out of output budget cuts
-    // the JSON mid-object. Without this, MiMo as the fallback leg throws away a
-    // nearly complete report over its last few characters.
-    if (completion.choices[0]?.finish_reason === 'length') {
-      const repaired = repairTruncatedJson(text);
-      console.warn(
-        `[mimo] output truncated at max_tokens (${opts.maxTokens ?? 16_000}); ` +
-          (repaired ? 'recovered partial JSON' : 'could not recover JSON'),
-      );
-      if (repaired) {
-        if (d) d.parsed = 'repaired';
-        return { raw: repaired, model: opts.model };
-      }
+    // Salvage on ANY parse failure, matching the Anthropic client: a clean
+    // finish_reason is no guarantee the document is well formed.
+    const repaired = repairTruncatedJson(text);
+    console.warn(
+      `[mimo] unparseable JSON (finish=${completion.choices[0]?.finish_reason}, len=${text.length}); ` +
+        (repaired ? 'recovered partial JSON' : 'could not recover JSON'),
+    );
+    if (repaired) {
+      if (d) d.parsed = 'repaired';
+      return { raw: repaired, model: opts.model };
     }
-    if (d) d.parsed = 'failed';
+    if (d) {
+      d.parsed = 'failed';
+      d.textHead = text.slice(0, 300);
+      d.textTail = text.slice(-300);
+    }
     return null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

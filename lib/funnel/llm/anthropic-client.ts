@@ -46,6 +46,9 @@ export type AnthropicDiagnostic = {
   outputTokens?: number | null;
   textLength?: number;
   parsed?: 'ok' | 'repaired' | 'failed';
+  /** First/last characters of an unparseable payload — where the defect shows. */
+  textHead?: string;
+  textTail?: string;
   error?: string;
 };
 
@@ -125,22 +128,27 @@ export async function runAnthropicJson(opts: {
       return { raw, model: opts.model };
     }
 
-    // Hitting max_tokens truncates the JSON mid-object. Salvage the sections
-    // the model did finish rather than failing the whole report.
-    if (response.stop_reason === 'max_tokens') {
-      const repaired = repairTruncatedJson(text);
-      console.warn(
-        `[anthropic] output truncated at max_tokens (${opts.maxTokens ?? 16_000}); ` +
-          (repaired ? 'recovered partial JSON' : 'could not recover JSON'),
-      );
-      if (repaired) {
-        if (d) d.parsed = 'repaired';
-        return { raw: repaired, model: opts.model };
-      }
-    } else {
-      console.warn('[anthropic] response was not parseable JSON');
+    // Attempt salvage on ANY parse failure, not just max_tokens. A production
+    // report failed with stop_reason=end_turn and 15,530 output tokens whose
+    // JSON still would not parse — the model stopped cleanly but the document
+    // was malformed. Gating repair on max_tokens meant the recovery path never
+    // ran, and the whole paid report was lost over a formatting defect.
+    const repaired = repairTruncatedJson(text);
+    console.warn(
+      `[anthropic] unparseable JSON (stop=${response.stop_reason}, len=${text.length}); ` +
+        (repaired ? 'recovered partial JSON' : 'could not recover JSON'),
+    );
+    if (repaired) {
+      if (d) d.parsed = 'repaired';
+      return { raw: repaired, model: opts.model };
     }
-    if (d) d.parsed = 'failed';
+    if (d) {
+      d.parsed = 'failed';
+      // Keep the edges of the payload: the reason a 15K-token document will not
+      // parse is almost always visible at its head or tail.
+      d.textHead = text.slice(0, 300);
+      d.textTail = text.slice(-300);
+    }
     return null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
