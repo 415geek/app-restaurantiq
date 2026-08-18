@@ -146,6 +146,90 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  if (probe === 'iq-full-prompt') {
+    // The iq-claude matrix passes with a trivial prompt, so the untested
+    // variable is the real full-report prompt. Run exactly that prompt but cap
+    // the output hard: whatever the input does to the call shows up in
+    // seconds, and the answer fits inside a normal HTTP client timeout.
+    const reportId = req.nextUrl.searchParams.get('reportId');
+    if (!reportId) {
+      return NextResponse.json({ ok: false, error: 'Missing reportId' }, { status: 400 });
+    }
+    try {
+      const { iqGetReport } = await import('@/lib/funnel/iq-repository');
+      const { buildPremiumPrompts } = await import('@/lib/funnel/iq-llm');
+      const { extractCompetitorWhitelist } = await import('@/lib/funnel/iq-market-signals');
+      const { runAnthropicJson } = await import('@/lib/funnel/llm/anthropic-client');
+      const { runMimoJson } = await import('@/lib/funnel/llm/mimo-client');
+      const { resolveIqRoute } = await import('@/lib/funnel/iq-provider-router');
+
+      const report = await iqGetReport(reportId);
+      if (!report) {
+        return NextResponse.json({ ok: false, error: 'Report not found' }, { status: 404 });
+      }
+      const marketData = (report.market_data_json as Record<string, unknown> | null) ?? undefined;
+      const language = report.language === 'zh' ? 'zh' : 'en';
+      const whitelist = extractCompetitorWhitelist(marketData ?? null);
+      const prompts = buildPremiumPrompts(
+        {
+          location: report.location,
+          businessType: report.business_type,
+          headline: report.headline,
+          reason: report.reason,
+          marketData,
+        },
+        language,
+        whitelist,
+        { lean: true },
+      );
+
+      const route = resolveIqRoute('iq_full');
+      const diag: AnthropicDiagnostic = {};
+      const [claude, mimo] = await Promise.all([
+        runAnthropicJson({
+          model: process.env.ANTHROPIC_IQ_FULL_LEAN_MODEL?.trim() || 'claude-sonnet-5',
+          system: prompts.systemPrompt,
+          user: prompts.userPrompt,
+          maxTokens: 1_200,
+          effort: 'low',
+          disableThinking: true,
+          timeoutMs: 45_000,
+          diag,
+        }).then((r) => Boolean(r)),
+        runMimoJson({
+          model: process.env.MIMO_IQ_FULL_LEAN_MODEL?.trim() || 'mimo-v2-flash',
+          system: prompts.systemPrompt,
+          user: prompts.userPrompt,
+          thinking: false,
+          maxTokens: 1_200,
+        })
+          .then((r) => ({ ok: Boolean(r?.raw) }))
+          .catch((e) => ({ ok: false, error: unknownErrorMessage(e, 300) })),
+      ]);
+
+      return NextResponse.json({
+        ok: claude,
+        resolvedFullRoute: route ? { provider: route.provider, model: route.model } : null,
+        prompt: {
+          marketDataChars: marketData ? JSON.stringify(marketData).length : 0,
+          whitelistTotal: whitelist.total,
+          systemChars: prompts.systemPrompt.length,
+          userChars: prompts.userPrompt.length,
+          totalChars: prompts.systemPrompt.length + prompts.userPrompt.length,
+        },
+        claude: { returned: claude, diag },
+        mimoFallback: mimo,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      return NextResponse.json({
+        ok: false,
+        error: unknownErrorMessage(e, 800),
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
   if (probe === 'iq-full-report') {
     // Reproduce the paid pipeline against a stored report and return the real
     // failure. The iq-claude matrix proves the API and parameters are fine, so
