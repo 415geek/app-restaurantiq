@@ -156,6 +156,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Missing reportId' }, { status: 400 });
     }
     const startedAt = Date.now();
+    // Generation outlives most HTTP clients, so the outcome is persisted as
+    // well as returned — the result is readable afterwards even if the caller
+    // has already given up on the response.
+    const record = async (payload: Record<string, unknown>) => {
+      try {
+        const { supabaseAdmin } = await import('@/lib/server/supabase-admin');
+        await supabaseAdmin()
+          .from('iq_diagnostics')
+          .insert({ label: `iq-full-report:${reportId}`, payload });
+      } catch (writeErr) {
+        console.warn('[health/iq-full-report] could not persist diagnostic', writeErr);
+      }
+    };
     try {
       const { iqGetReport } = await import('@/lib/funnel/iq-repository');
       const { runFullPremiumReport } = await import('@/lib/funnel/iq-llm');
@@ -175,7 +188,7 @@ export async function GET(req: NextRequest) {
         leanGeneration: true,
         timeoutMs: 240_000,
       });
-      return NextResponse.json({
+      const success = {
         ok: true,
         durationMs: Date.now() - startedAt,
         marketDataChars: marketData ? JSON.stringify(marketData).length : 0,
@@ -183,16 +196,20 @@ export async function GET(req: NextRequest) {
         model: (out as Record<string, unknown>)._generation_model ?? null,
         reportChars: JSON.stringify(out).length,
         timestamp: new Date().toISOString(),
-      });
+      };
+      await record(success);
+      return NextResponse.json(success);
     } catch (e) {
-      return NextResponse.json({
+      const failure = {
         ok: false,
         durationMs: Date.now() - startedAt,
         // The whole point of this probe: the unmasked provider-level cause.
         error: unknownErrorMessage(e, 1200),
         stack: e instanceof Error ? (e.stack ?? '').split('\n').slice(0, 6).join(' | ') : null,
         timestamp: new Date().toISOString(),
-      });
+      };
+      await record(failure);
+      return NextResponse.json(failure);
     }
   }
 
