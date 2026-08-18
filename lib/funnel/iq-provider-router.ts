@@ -6,6 +6,7 @@ import OpenAI from 'openai';
 import { runMimoJson, getMimoClient } from '@/lib/funnel/llm/mimo-client';
 import { anthropicAvailable, runAnthropicJson } from '@/lib/funnel/llm/anthropic-client';
 import type { AnthropicDiagnostic } from '@/lib/funnel/llm/anthropic-client';
+import type { MimoDiagnostic } from '@/lib/funnel/llm/mimo-client';
 
 export type IqLlmProvider = 'openai' | 'mimo' | 'anthropic' | 'none';
 
@@ -323,6 +324,7 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
     };
     try {
       if (route.provider === 'mimo') {
+        const mdiag: MimoDiagnostic = {};
         const out = await runMimoJson({
           model: route.model,
           system: opts.system,
@@ -330,8 +332,17 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
           thinking: route.thinking,
           maxTokens: route.maxTokens,
           temperature: route.temperature,
+          diag: mdiag,
         });
-        record(Boolean(out?.raw), out?.raw ? undefined : 'no parseable JSON returned');
+        record(
+          Boolean(out?.raw),
+          out?.raw
+            ? undefined
+            : mdiag.error ??
+                `finish=${mdiag.finishReason ?? '?'} out=${mdiag.outputTokens ?? '?'} parsed=${
+                  mdiag.parsed ?? '?'
+                }`,
+        );
         return out?.raw ?? null;
       }
       if (route.provider === 'anthropic') {

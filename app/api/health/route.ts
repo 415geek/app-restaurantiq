@@ -3,6 +3,7 @@ import { integrationEnvStatus } from '@/lib/env';
 import { getAnalyzeWebhookUrl } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
 import type { AnthropicDiagnostic } from '@/lib/funnel/llm/anthropic-client';
+import type { MimoDiagnostic } from '@/lib/funnel/llm/mimo-client';
 
 export const runtime = 'nodejs';
 /** The iq-full-report probe runs the real generation pipeline. */
@@ -184,16 +185,23 @@ export async function GET(req: NextRequest) {
       );
 
       const route = resolveIqRoute('iq_full');
+      // Varying the cap gives two timing points, which separate the fixed
+      // prefill cost of this ~30K-token prompt from the per-token decode rate.
+      // That rate is what decides whether a 16K-token report can finish inside
+      // the route's budget at all.
+      const capParam = Number(req.nextUrl.searchParams.get('maxTokens') ?? '');
+      const maxTokens = Number.isFinite(capParam) && capParam > 0 ? Math.min(capParam, 8_000) : 1_200;
       const diag: AnthropicDiagnostic = {};
+      const mimoDiag: MimoDiagnostic = {};
       const [claude, mimo] = await Promise.all([
         runAnthropicJson({
           model: process.env.ANTHROPIC_IQ_FULL_LEAN_MODEL?.trim() || 'claude-sonnet-5',
           system: prompts.systemPrompt,
           user: prompts.userPrompt,
-          maxTokens: 1_200,
+          maxTokens,
           effort: 'low',
           disableThinking: true,
-          timeoutMs: 45_000,
+          timeoutMs: 55_000,
           diag,
         }).then((r) => Boolean(r)),
         runMimoJson({
@@ -201,15 +209,15 @@ export async function GET(req: NextRequest) {
           system: prompts.systemPrompt,
           user: prompts.userPrompt,
           thinking: false,
-          maxTokens: 1_200,
-        })
-          .then((r) => ({ ok: Boolean(r?.raw) }))
-          .catch((e) => ({ ok: false, error: unknownErrorMessage(e, 300) })),
+          maxTokens,
+          diag: mimoDiag,
+        }).then((r) => Boolean(r?.raw)),
       ]);
 
       return NextResponse.json({
         ok: claude,
         resolvedFullRoute: route ? { provider: route.provider, model: route.model } : null,
+        maxTokens,
         prompt: {
           marketDataChars: marketData ? JSON.stringify(marketData).length : 0,
           whitelistTotal: whitelist.total,
@@ -218,7 +226,7 @@ export async function GET(req: NextRequest) {
           totalChars: prompts.systemPrompt.length + prompts.userPrompt.length,
         },
         claude: { returned: claude, diag },
-        mimoFallback: mimo,
+        mimoFallback: { returned: mimo, diag: mimoDiag },
         timestamp: new Date().toISOString(),
       });
     } catch (e) {
