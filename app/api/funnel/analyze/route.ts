@@ -3,19 +3,88 @@ import { iqInsertReport } from '@/lib/funnel/iq-repository';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { buildFreeTierMarketBrief } from '@/lib/funnel/iq-premium-anchors';
 import { computeSiteMetrics, formatMetricsDigest } from '@/lib/funnel/agents/metrics';
-import { hasAnyLlmKey } from '@/lib/funnel/agents/llm';
 import { runPartialAnalysis } from '@/lib/funnel/iq-llm';
-import { analyzeWithN8n } from '@/lib/n8n';
+import { analyzeWithN8n, getAnalyzeWebhookUrl } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
 
 export const runtime = 'nodejs';
 type AnalysisLanguage = 'en' | 'zh';
 
+/**
+ * Free-tier provider prompts (especially the n8n analyze workflow) don't read
+ * `market_data.user_inputs.*`, so the LLM happily lists `monthly_rent` /
+ * `sqft` in `missing_data` even when the user supplied them on the lead form.
+ * After every LLM reply we scrub `missing_data` for any field the user
+ * actually provided and add it to `acquired_data` so the scorecard shows the
+ * right picture regardless of which provider answered.
+ */
+const RENT_MISSING_KEYS = new Set(['monthly_rent', 'monthly_rent_usd', 'rent', 'rent_usd', 'rent_monthly']);
+const SQFT_MISSING_KEYS = new Set(['sqft', 'size_sqft', 'square_feet', 'square_footage']);
+const RENT_ACQUIRED_LABEL = 'User-provided rent';
+const SQFT_ACQUIRED_LABEL = 'User-provided sqft';
+
+function reconcileRiskAuditPreviewWithUserInputs(
+  preview: unknown,
+  userInputs: { monthly_rent_usd?: number; sqft?: number } | undefined,
+): Record<string, unknown> | undefined {
+  if (!preview || typeof preview !== 'object' || Array.isArray(preview)) {
+    return preview && typeof preview === 'object' ? (preview as Record<string, unknown>) : undefined;
+  }
+  if (!userInputs) return preview as Record<string, unknown>;
+
+  const obj = { ...(preview as Record<string, unknown>) };
+  const hasRent = typeof userInputs.monthly_rent_usd === 'number' && userInputs.monthly_rent_usd > 0;
+  const hasSqft = typeof userInputs.sqft === 'number' && userInputs.sqft > 0;
+
+  // missing_data: drop fields the user actually supplied.
+  const rawMissing = obj.missing_data;
+  if (Array.isArray(rawMissing)) {
+    const filtered = rawMissing.filter((entry) => {
+      if (typeof entry !== 'string') return true;
+      const key = entry.trim().toLowerCase();
+      if (hasRent && RENT_MISSING_KEYS.has(key)) return false;
+      if (hasSqft && SQFT_MISSING_KEYS.has(key)) return false;
+      return true;
+    });
+    obj.missing_data = filtered;
+  }
+
+  // acquired_data: credit the user inputs (idempotent against repeated calls).
+  const rawAcquired = obj.acquired_data;
+  const acquired = Array.isArray(rawAcquired)
+    ? rawAcquired.filter((x): x is string => typeof x === 'string').map((x) => x.trim()).filter(Boolean)
+    : [];
+  const acquiredSet = new Set(acquired.map((x) => x.toLowerCase()));
+  if (hasRent && !acquiredSet.has(RENT_ACQUIRED_LABEL.toLowerCase())) acquired.push(RENT_ACQUIRED_LABEL);
+  if (hasSqft && !acquiredSet.has(SQFT_ACQUIRED_LABEL.toLowerCase())) acquired.push(SQFT_ACQUIRED_LABEL);
+  obj.acquired_data = acquired;
+
+  return obj;
+}
+
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { location?: string; businessType?: string; language?: string };
+    const body = (await req.json()) as {
+      location?: string;
+      businessType?: string;
+      language?: string;
+      monthlyRentUsd?: number | string;
+      sqft?: number | string;
+    };
     const location = String(body.location ?? '').trim();
     const businessType = String(body.businessType ?? '').trim();
+    const monthlyRentUsd = body.monthlyRentUsd != null ? Number(body.monthlyRentUsd) : undefined;
+    const sqft = body.sqft != null ? Number(body.sqft) : undefined;
+    const userInputs =
+      (Number.isFinite(monthlyRentUsd) && monthlyRentUsd! > 0) ||
+      (Number.isFinite(sqft) && sqft! > 0)
+        ? {
+            ...(Number.isFinite(monthlyRentUsd) && monthlyRentUsd! > 0
+              ? { monthly_rent_usd: monthlyRentUsd }
+              : {}),
+            ...(Number.isFinite(sqft) && sqft! > 0 ? { sqft } : {}),
+          }
+        : undefined;
     const language: AnalysisLanguage = String(body.language ?? 'en').toLowerCase() === 'zh' ? 'zh' : 'en';
 
     if (!location) {
@@ -26,11 +95,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Location is too long' }, { status: 400 });
     }
 
-    const hasN8nWebhook = Boolean(
-      process.env.N8N_ANALYZE_WEBHOOK_URL?.trim() || process.env.N8N_IQ_ANALYZE_WEBHOOK_URL?.trim()
+    const hasN8nWebhook = Boolean(getAnalyzeWebhookUrl());
+    const hasOpenAiKey = Boolean(
+      process.env.OPENAI_API_KEY?.trim() ||
+        process.env.ANTHROPIC_API_KEY?.trim() ||
+        process.env.MIMO_API_KEY?.trim(),
     );
-    const hasLlmKey = hasAnyLlmKey();
-    if (!hasN8nWebhook && !hasLlmKey) {
+    if (!hasN8nWebhook && !hasOpenAiKey) {
       const isDevLike = process.env.NODE_ENV !== 'production';
       const allowMock = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true';
       if (isDevLike || allowMock) {
@@ -57,22 +128,27 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            'Analysis is not configured. Set ANTHROPIC_API_KEY (preferred), OPENAI_API_KEY, or N8N_IQ_ANALYZE_WEBHOOK_URL on the server, then retry.',
+            'Analysis is not configured. Set N8N_IQ_ANALYZE_WEBHOOK_URL (preferred) or OPENAI_API_KEY on the server, then retry.',
         },
         { status: 503 }
       );
     }
 
-    const prefetchedMarket =
-      (await resolveMarketDataForIqReport({
-        existing: null,
-        location,
-        businessType: businessType || 'restaurant',
-        isPremium: false,
-        lang: language,
-      })) ?? null;
-    // Deterministic metrics (Huff share, saturation, demand pool, rent economics) are
-    // appended so even the free verdict is grounded in computed numbers, not vibes.
+    let prefetchedMarket: Record<string, unknown> | null = null;
+    try {
+      prefetchedMarket =
+        (await resolveMarketDataForIqReport({
+          existing: null,
+          location,
+          businessType: businessType || 'restaurant',
+          isPremium: false,
+          lang: language,
+        })) ?? null;
+    } catch (prefetchErr) {
+      console.warn('[funnel/analyze] market prefetch failed, continuing:', prefetchErr);
+    }
+    // Deterministic metrics (fair-share revenue, saturation, demand pool, rent
+    // economics) are appended so the free verdict is grounded in computed numbers.
     const siteMetrics = computeSiteMetrics({
       marketData: prefetchedMarket,
       businessType: businessType || 'restaurant',
@@ -91,8 +167,16 @@ export async function POST(req: Request) {
           cuisine_type: businessType || undefined,
           language,
           ...(prefetchedMarket && Object.keys(prefetchedMarket).length > 0
-            ? { market_data: { ...prefetchedMarket, computed_metrics: siteMetrics } }
-            : {}),
+            ? {
+                market_data: {
+                  ...prefetchedMarket,
+                  computed_metrics: siteMetrics,
+                  ...(userInputs ? { user_inputs: userInputs } : {}),
+                },
+              }
+            : userInputs
+              ? { market_data: { user_inputs: userInputs } }
+              : {}),
         });
       } else {
         parsed = await runPartialAnalysis({
@@ -100,16 +184,23 @@ export async function POST(req: Request) {
           businessType,
           language,
           marketDataBrief: freeBrief,
+          monthlyRentUsd:
+            Number.isFinite(monthlyRentUsd) && monthlyRentUsd! > 0 ? monthlyRentUsd : undefined,
+          sqft: Number.isFinite(sqft) && sqft! > 0 ? sqft : undefined,
         });
       }
     } catch (n8nErr) {
-      if (hasN8nWebhook && hasLlmKey) {
-        console.warn('[funnel/analyze] n8n analyze failed, falling back to direct LLM:', n8nErr);
+      if (hasN8nWebhook && hasOpenAiKey) {
+        console.warn('[funnel/analyze] n8n analyze failed, falling back to OpenAI:', n8nErr);
         parsed = await runPartialAnalysis({
           location,
           businessType,
           language,
           marketDataBrief: freeBrief,
+          monthlyRentUsd:
+            Number.isFinite(monthlyRentUsd) && monthlyRentUsd! > 0 ? monthlyRentUsd : undefined,
+          sqft: Number.isFinite(sqft) && sqft! > 0 ? sqft : undefined,
+          openAiOnly: true,
         });
       } else {
         throw n8nErr;
@@ -137,14 +228,24 @@ export async function POST(req: Request) {
       marketSeed = { ...prefetchedMarket };
     }
 
-    const marketDataJson = await resolveMarketDataForIqReport({
-      existing: marketSeed,
-      location,
-      businessType: businessType || 'restaurant',
-      isPremium: false,
-      lang: language,
-    });
-
+    let marketDataJson: Record<string, unknown> | null = null;
+    try {
+      marketDataJson = await resolveMarketDataForIqReport({
+        existing:
+          userInputs && marketSeed
+            ? { ...marketSeed, user_inputs: userInputs }
+            : userInputs
+              ? { user_inputs: userInputs }
+              : marketSeed,
+        location,
+        businessType: businessType || 'restaurant',
+        isPremium: false,
+        lang: language,
+      });
+    } catch (mergeErr) {
+      console.warn('[funnel/analyze] post-analyze market merge failed:', mergeErr);
+      marketDataJson = marketSeed;
+    }
     let reportId = '';
     try {
       reportId = await iqInsertReport({
@@ -157,12 +258,21 @@ export async function POST(req: Request) {
         marketDataJson: marketDataJson ?? undefined,
       });
     } catch (err) {
-      const isDevLike = process.env.NODE_ENV !== 'production';
       const message = err instanceof Error ? err.message : String(err);
-      if (!isDevLike || !message.includes('Supabase admin env is not configured')) {
+      const missingAdmin = message.includes('Supabase admin env is not configured');
+      if (process.env.NODE_ENV === 'production' && !missingAdmin) {
+        console.error('[funnel/analyze] iqInsertReport failed (non-fatal):', message);
+        // Analysis already succeeded — do not fail the user-facing response when persistence fails.
+        reportId = '';
+      } else if (process.env.NODE_ENV !== 'production' && missingAdmin) {
+        reportId = '';
+      } else {
         throw err;
       }
     }
+    const decisionTier = String((parsed as { decision_tier?: string }).decision_tier ?? '').trim();
+    const rawRiskAuditPreview = (parsed as { risk_audit_preview?: unknown }).risk_audit_preview;
+    const riskAuditPreview = reconcileRiskAuditPreviewWithUserInputs(rawRiskAuditPreview, userInputs);
 
     return NextResponse.json({
       reportId,
@@ -172,13 +282,20 @@ export async function POST(req: Request) {
       market_snapshot: marketSnapshot,
       hidden_risk: hiddenRisk,
       paywall_teaser: paywallTeaser,
+      ...(decisionTier ? { decision_tier: decisionTier } : {}),
+      ...(riskAuditPreview && typeof riskAuditPreview === 'object'
+        ? { risk_audit_preview: riskAuditPreview }
+        : {}),
     });
   } catch (e) {
-    console.error('[funnel/analyze]', e);
+    const cause =
+      e instanceof Error && e.cause !== undefined ? unknownErrorMessage(e.cause, 300) : undefined;
+    console.error('[funnel/analyze]', e, cause ? { cause } : '');
     return NextResponse.json(
       {
         error: 'Failed to analyze location',
         detail: unknownErrorMessage(e, 500),
+        ...(cause ? { cause } : {}),
       },
       { status: 500 },
     );

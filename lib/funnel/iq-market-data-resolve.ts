@@ -9,6 +9,9 @@
  */
 
 import { enrichMarketDataWithAcs } from '@/lib/funnel/iq-acs-enrichment';
+import { enrichMarketDataWithDemographicNarrative } from '@/lib/funnel/iq-demographic-narrative';
+import { enrichMarketDataWithCompetitorInsights } from '@/lib/funnel/iq-deepseek-competitor-insights';
+import { computeFinanceModel } from '@/lib/funnel/iq-finance-model';
 import { gatherIqMarketDataFromGoogle } from '@/lib/funnel/iq-market-data';
 import { extractMarketSummary } from '@/lib/funnel/iq-premium-anchors';
 import {
@@ -89,8 +92,22 @@ export async function resolveMarketDataForIqReport(input: {
   businessType: string;
   isPremium?: boolean;
   lang?: 'en' | 'zh';
+  /** When true, reuse cached deep_research only — do not start a new Tavily deep-research job. */
+  skipDeepResearchFetch?: boolean;
+  /**
+   * Client-side full-report generation: reuse stored market_data, skip slow optional enrichments
+   * (DeepSeek insights, BrightData, new Tavily jobs) to stay under serverless time limits.
+   */
+  leanResolve?: boolean;
 }): Promise<Record<string, unknown> | null> {
-  const { location, businessType, isPremium = false, lang = 'en' } = input;
+  const {
+    location,
+    businessType,
+    isPremium = false,
+    lang = 'en',
+    skipDeepResearchFetch = false,
+    leanResolve = false,
+  } = input;
   let base: Record<string, unknown> =
     input.existing && typeof input.existing === 'object' && !Array.isArray(input.existing)
       ? { ...input.existing }
@@ -108,6 +125,26 @@ export async function resolveMarketDataForIqReport(input: {
 
   base = await enrichMarketDataWithAcs(base);
 
+  if (isPremium && !leanResolve) {
+    try {
+      base = await enrichMarketDataWithDemographicNarrative(base, {
+        cuisine: businessType,
+        address: location,
+      });
+    } catch (err) {
+      console.warn('[resolve-market-data] demographic narrative enrichment failed', err);
+    }
+
+    try {
+      base = await enrichMarketDataWithCompetitorInsights(base, {
+        cuisine: businessType,
+        address: location,
+      });
+    } catch (err) {
+      console.warn('[resolve-market-data] competitor insights enrichment failed', err);
+    }
+  }
+
   if (isPremium) {
     const existingDeep = base.deep_research as DeepResearchPack | undefined;
     const hasCompletedDeepResearch =
@@ -120,7 +157,7 @@ export async function resolveMarketDataForIqReport(input: {
       console.log('[resolve-market-data] previous deep research failed, will retry');
     }
 
-    if (!hasCompletedDeepResearch) {
+    if (!hasCompletedDeepResearch && !skipDeepResearchFetch) {
       console.log('[resolve-market-data] fetching Tavily Deep Research (pro model) for premium report...');
       const deepRes = await fetchTavilyDeepResearch({
         location,
@@ -140,9 +177,8 @@ export async function resolveMarketDataForIqReport(input: {
       console.log('[resolve-market-data] deep_research already present, skipping');
     }
 
-    // Fetch Caltrans traffic data if geocode available and in California
     const geo = base.geocode as { lat?: number; lng?: number; state?: string } | undefined;
-    if (geo?.lat && geo?.lng && !base.caltrans_traffic) {
+    if (!leanResolve && geo?.lat && geo?.lng && !base.caltrans_traffic) {
       const stateStr = String(geo.state || '').toLowerCase();
       if (stateStr.includes('california') || stateStr === 'ca') {
         console.log('[resolve-market-data] fetching Caltrans traffic data...');
@@ -154,8 +190,7 @@ export async function resolveMarketDataForIqReport(input: {
       }
     }
 
-    // Fetch commercial listings if not already present
-    if (!base.commercial_listings) {
+    if (!leanResolve && !base.commercial_listings) {
       const geoObj = base.geocode as { city?: string; state?: string } | undefined;
       const city = geoObj?.city || extractCityFromLocation(location);
       const state = geoObj?.state || 'CA';
@@ -172,8 +207,7 @@ export async function resolveMarketDataForIqReport(input: {
       }
     }
 
-    // Bright Data enhanced market research (if API token configured)
-    if (!base.brightdata_research && process.env.BRIGHTDATA_API_TOKEN) {
+    if (!leanResolve && !base.brightdata_research && process.env.BRIGHTDATA_API_TOKEN) {
       console.log('[resolve-market-data] fetching Bright Data enhanced research...');
       try {
         const bdResearch = await conductMarketResearch({
@@ -197,8 +231,8 @@ export async function resolveMarketDataForIqReport(input: {
   const deepStatus = (base.deep_research as DeepResearchPack | undefined)?.status;
   const needsWebFallback = isPremium && deepStatus !== 'completed';
   const hasWeb = base.web_research && typeof base.web_research === 'object';
-  
-  if (!hasWeb || needsWebFallback) {
+
+  if (!leanResolve && (!hasWeb || needsWebFallback)) {
     const tavily = await fetchTavilyMarketResearch({
       location,
       businessType: businessType || 'restaurant',
@@ -206,6 +240,20 @@ export async function resolveMarketDataForIqReport(input: {
     if (tavily) {
       base = { ...base, web_research: tavily };
     }
+  }
+
+  // D-4: deterministic break-even / safe-revenue model. Cheap (no API), runs for
+  // every report so /api/funnel/full-report can use it without recomputing. Free
+  // tier ignores it; paid prompt + applyFinanceModelOverride pick it up later.
+  try {
+    const finance_model = computeFinanceModel({
+      marketData: base,
+      businessType,
+      location,
+    });
+    base = { ...base, finance_model };
+  } catch (err) {
+    console.warn('[resolve-market-data] finance_model compute failed (non-fatal)', err);
   }
 
   if (!base || Object.keys(base).length === 0) return null;

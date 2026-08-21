@@ -71,6 +71,10 @@ next-env.d.ts
 n8nac-skills
 n8nac-skills.cmd
 
+# n8nac local workspace state (per-machine, do not commit)
+workflows/**/.n8n-state.json
+workflows/**/.n8n-sync-events.jsonl
+
 # Supabase CLI local cache (do not commit)
 supabase/.temp/
 

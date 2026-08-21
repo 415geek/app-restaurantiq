@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { envValue } from '@/lib/env-value';
 
 type Env = {
   SUPABASE_URL?: string;
@@ -6,8 +7,8 @@ type Env = {
 };
 
 function getEnv(): Required<Env> {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = envValue('SUPABASE_URL');
+  const key = envValue('SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !key) {
     throw new Error('Supabase admin env is not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).');
   }

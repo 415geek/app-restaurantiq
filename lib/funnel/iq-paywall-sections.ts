@@ -7,20 +7,20 @@ export type IqLocale = 'en' | 'zh';
 export function getIqPaywallLockedItems(locale: IqLocale): string[] {
   if (locale === 'zh') {
     return [
-      '📊 关键指标仪表板、执行摘要与最终判定',
-      '🗺️ 贸易区分析、人口统计与消费力画像',
-      '🎯 竞争对手矩阵与竞争格局深度叙述',
-      '💰 三场景营收模型、回本与风险矩阵（含财务量级）',
-      '🚀 差异化策略、获客渠道优先级与90天结构化作战表',
-      '📋 可比成败案例、加权决策矩阵与备选商业走廊/在租线索',
+      '保本营业额与三场景月营收（含翻台/客单价假设，可核对公式）',
+      '1 英里内真店名竞对 + 威胁等级 + 空白地图',
+      '签租前 10+ 项合规清单（排 hood / 燃气 / ADA 等致命项）',
+      '风险概率 × 美元影响 × 触发条件 × 对冲动作（5 条）',
+      '替代走廊具体铺位（地址、面积、月租、亮点）',
+      'PDF 导出 + 完整六层风险审计与 90 天作战图',
     ];
   }
   return [
-    '📊 Dashboard metrics, executive summary & final verdict',
-    '🗺️ Trade-area analysis, demographics & spending-power profile',
-    '🎯 Competitor matrix & full competitive landscape narrative',
-    '💰 Three-scenario revenue model, payback & risk matrix (with $ impact)',
-    '🚀 Differentiation, acquisition priorities & structured 90-day roadmap',
-    '📋 Comparable success/failure cases, weighted decision matrix & alternative listings',
+    'Break-even monthly sales + 3 revenue scenarios (turns/ticket math shown)',
+    'Named competitors within ~1 mi + threat tiers + whitespace map',
+    '10+ pre-lease checklist items (hood, gas, ADA, grease trap, etc.)',
+    'Risk matrix: probability × $ impact × trigger × mitigation (5 rows)',
+    'Alternative corridors with specific listings (address, sqft, rent)',
+    'PDF export + full six-layer risk audit & 90-day action plan',
   ];
 }

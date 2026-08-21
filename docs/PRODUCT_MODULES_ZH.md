@@ -192,6 +192,89 @@
   - 付费全量报告：n8n webhook 请求体与 `runFullReport` 一致，携带 `headline`、`reason`、`language`、`market_data`；返回 JSON 键与报告页 / `fullSchema` 一致（如 `executive_summary`、`risks[5]` 等）。
   - 相关接口：`/api/funnel/analyze`、`/api/funnel/full-report`、Stripe 支付完成后生成全量报告路径。
 
+## 本次新增（2026-08-14）
+- **LocationIQ 支付履约修复：延迟生成全量报告**
+  - `/iq/success` 返回页与 Stripe webhook 此前在标记 `paid` 之前同步生成全量报告（耗时数分钟），受默认函数超时（约 10–15 秒）限制会被中断，导致用户已付款但报告持续显示锁定。
+  - 两条路径现改为 `deferFullReportGeneration: true`（与访问码兑换路径一致）：先快速写入 `paid=true`，再由报告页通过 `/api/funnel/full-report`（`maxDuration: 300`）带进度条生成全量报告。
+  - 涉及文件：`app/iq/success/page.tsx`、`app/api/funnel/stripe/webhook/route.ts`、`lib/funnel/iq-complete-purchase.ts`（已有参数，无改动）。
+- **访问码解锁增强：内置 `TESTFREE` 测试码 + 更准确的解锁错误提示**
+  - `/api/funnel/redeem-access-code` 除环境变量 `IQ_ACCESS_CODE` 配置的码外，恒定接受内置测试码 `TESTFREE`（不区分大小写），便于 QA 免 Stripe 解锁付费报告。
+  - 结果页在 `reportId` 缺失（分析结果未成功入库）时，解锁/支付按钮改为提示"报告尚未保存成功，请重新运行分析后再解锁"，替换原先误导性的"暂时无法支付"。
+
+## 本次新增（2026-08-15）
+- **付费全量报告生成提速（修复 89% 超时）**
+  - LLM 客户端显式超时：MiMo 120 秒（`MIMO_TIMEOUT_MS` 可调）且不自动重试；OpenAI 120 秒、最多重试 1 次。此前 SDK 默认 10 分钟超时 + 自动重试，单次挂起请求即可耗尽 300 秒 serverless 预算。
+  - 浏览器触发的精简生成路径（首次进入报告页）改用快速模型：MiMo 主路由时用 `mimo-v2-flash`（`MIMO_IQ_FULL_LEAN_MODEL` 可调），输出上限 10K token，关闭 thinking；提示词改用紧凑版市场数据摘要（不再注入完整大 JSON）。
+  - 「重试生成」（quality 模式）保持 `mimo-v2.5-pro` 完整管线（深度市场数据 + 双模型校验）不变。
+- **报告质量升级：数据看板 + 全链路数据溯源 + 自动专业版**
+  - 新增 `ReportDataViz` 数据看板：竞对热度（按评论数，Google/Yelp 原始值）、ACS 高收入家庭结构、营收情景 vs 确定性盈亏平衡/安全线（D-4）、关键指标卡（人口/收入中位数/学历/竞对数/评分）。所有图表数值直接读取 `market_data_json` 原始数据，绝不使用 LLM 生成的数字；数据缺失时明确标注、不做虚构填充。
+  - 新增「数据溯源」附录：逐源列出 Google Places / Yelp / Foursquare / Census ACS / D-4 财务模型的状态、覆盖范围与获取时间。
+  - 报告分层：首次生成为 `standard`（快速版，秒级出报告）后，页面自动在后台重新生成 `professional`（完整市场数据 + 双模型交叉验证）并自动刷新替换；页面顶部有生成中提示。
+  - 深度研究轮询上限从 300 秒压缩至 75 秒（`DEEP_RESEARCH_TIMEOUT_MS` 可调），确保专业版整体管线可在 serverless 预算内完成，超时自动降级为普通检索。
+- **LLM 主引擎切换为 Anthropic Claude**
+  - 新增 Anthropic 提供商（官方 `@anthropic-ai/sdk`，默认模型 `claude-opus-5`）：只要配置 `ANTHROPIC_API_KEY`，免费速评、付费全量报告、双模型交叉验证均默认由 Claude 生成；MiMo / OpenAI 自动降为备选链路。
+  - 路由规则：主提供商可用 `IQ_PRIMARY_PROVIDER=anthropic|mimo|openai` 覆盖；备选自动选择与主提供商不同且已配置密钥的引擎。修复了免费分析在 OpenAI 未配置时直接报错、不走路由器的问题（此前 OpenAI 额度耗尽即 429 全线失败）。
+  - Claude 路由带 120 秒超时、`output_config.effort` 分层（速评/精简 low、完整报告 high、验证 medium），thinking 预算计入 max_tokens 已按 1.5 倍留余量。
+  - 新增可选环境变量：`ANTHROPIC_IQ_PARTIAL_MODEL` / `ANTHROPIC_IQ_FULL_MODEL` / `ANTHROPIC_IQ_FULL_LEAN_MODEL` / `ANTHROPIC_IQ_VERIFY_MODEL` / `ANTHROPIC_TIMEOUT_MS`（均有默认值）。
+- **新增 LLM 路由诊断探针**：`/api/health?probe=iq-llm` 返回当前解析出的主/备 LLM 提供商与模型（仅布尔与模型名，不含密钥），用于验证 Claude 切换是否生效。
+- **修复 Claude 完整报告二次超时**：Anthropic 客户端改为流式输出（长 JSON 生成不再被固定请求超时掐断），总预算 240 秒（`ANTHROPIC_TIMEOUT_MS`）且不自动重试；完整报告推理深度调为 medium（Opus 5 的 medium ≈ 上代 high，速度更快），输出预算上限 16K token。
+- **付费报告管线加入硬性时间预算（根治反复超时）**
+  - 新增 `lib/funnel/iq-deadline.ts`：路由入口按 300 秒 maxDuration 建立 wall-clock 预算（预留 20 秒收尾），各阶段按剩余时间自我裁剪。深度研究（最长 75 秒）仅在剩余 ≥150 秒时执行；双模型验证仅在剩余 ≥90 秒时执行；剩余不足 25 秒直接快速返回可重试提示，而不是撞破 300 秒上限。
+  - LLM 调用改为接收剩余预算作为硬超时（Anthropic 客户端支持按调用传入 timeout），并新增耗时/输出 token 日志（`[anthropic]`、`[funnel/full-report]`）便于定位瓶颈。
+  - 快速路径改用 `claude-sonnet-5`（`ANTHROPIC_IQ_FULL_LEAN_MODEL` 可调）并**关闭 extended thinking**：Opus 5 的思考默认开启且计入 max_tokens，是首屏延迟的主因。
+  - 「重试生成」按钮改为重跑快速路径（此前送 `quality: force`，一点重试就触发深度研究+完整生成+双验证三重串行，必然超时）；专业深度版仍由报告页后台自动升级触发（`quality: true` 显式指定）。
+- **修复快速版报告"生成失败"（输出被截断）**
+  - 快速路径输出上限从 10K 提到 16K token：完整报告 JSON 装不下 10K，会在中途被截断导致解析失败（表现为约 130 秒后「完整报告生成失败」）。
+  - 新增 `lib/funnel/llm/json-repair.ts`：当响应因 `max_tokens` 截断时，自动闭合未完成的结构、抢救出模型已写完的章节，而不是整份报告作废（已用 6 个截断点单测验证）。
+  - 备选提供商顺序调整：Claude 为主时优先回落 MiMo 而非 OpenAI（OpenAI 账户额度耗尽会立刻 429，等于没有兜底）。
+- **完整报告失败原因可观测（不再被吞掉）**
+  - 此前无论真实原因是什么，付费报告失败都统一抛出 `FULL_REPORT_GENERATION_FAILED`，前端只看到「完整报告生成失败」，线上无法定位。现在提供商的原始错误会随错误一并抛出，并通过 `/api/funnel/full-report` 响应的 `detail` 字段返回（仅含提供商/模型名与 API 错误文本，不含任何密钥）。
+  - LLM 路由器新增 `attempts` 诊断：记录主/备每一条链路的 provider、model 与失败原因（超时、模型不可用、JSON 不可解析、配额 429 等），并汇总进错误信息。此前路由器对所有失败一律返回 null，主备两条链路的失败原因全部丢失。
+  - 新增 `/api/health?probe=iq-claude` 实时探针：并行发起 4 组极小的 Claude 调用矩阵（免费速评等效配置、快速完整报告配置、关闭 thinking 的对照组、专业版模型），返回每组的模型、耗时、stop_reason、输出 token 数与原始报错，用于区分「模型不可用」「参数组合被拒」「输出被截断」三类原因；同时返回备选提供商密钥是否配置。
+  - 新增 `/api/health?probe=iq-full-report&reportId=<id>` 复现探针（`maxDuration=300`）：用数据库中真实报告的 `market_data_json` 跑一遍快速路径生成管线，成功时返回耗时/提供商/模型/报告长度，失败时返回**未经掩盖的原始错误与调用栈**。iq-claude 矩阵已证明 API 与参数本身正常，因此只有用真实 prompt 才能复现故障。
+  - 复现探针的结果同时写入新表 `iq_diagnostics`（service role 写入，deny-all RLS，不对客户端开放）：完整报告生成通常超过 HTTP 客户端的 60 秒上限，把结果落库后即使调用方已经放弃响应，也仍能读到真实错误。
+  - 新增 `/api/health?probe=iq-full-prompt&reportId=<id>`：用真实报告的完整 prompt（与快速路径逐字一致）同时调用 Claude 与 MiMo 备选链路，但把输出上限压到 1.2K token，因此可在 HTTP 超时之内返回。返回 prompt 各部分字符数（market_data / system / user / 白名单条数）与两条链路各自的结果与原始报错——用于区分「输入本身有问题」与「生成太长/太慢」。
+- **MiMo 备选链路失败原因可观测**：`runMimoJson` 此前对任何失败（HTTP 报错、空响应、JSON 解析失败）一律返回 null，备选链路为什么没兜住完全不可见。现在新增 `MimoDiagnostic`（model / maxTokens / 耗时 / finish_reason / 输出 token 数 / 文本长度 / 解析结果 / 原始报错），并接入路由器的 `attempts` 汇总。
+- **`iq-full-prompt` 探针支持 `&maxTokens=`**（上限 8K，默认 1.2K）：用两个不同输出上限各测一次，即可把这条 ~3 万 token prompt 的固定预填充耗时与逐 token 解码速率分离出来——这个速率决定了 16K token 的完整报告在路由预算内到底能不能生成完。
+- **根因修复：备选链路模型失效 + 输出预算与剩余时间脱节**
+  - 生产实测（`probe=iq-full-prompt`，真实报告 prompt 约 3 万输入 token）：`claude-sonnet-5` 关闭 thinking 时，1200 token 上限耗时 21,994ms，2400 token 上限耗时 32,995ms。即**解码约 9.2ms/token（≈109 token/s）**，预填充+网络固定开销约 11 秒。
+  - 由此得出：固定 16K 输出上限意味着约 160 秒纯解码；若开启 thinking（专业深度版走 Opus + thinking）则根本装不进 300 秒窗口，调用会在生成中途被硬超时掐断，整份报告失败。
+  - 新增 `outputTokenBudget(remainingMs, {thinking})`：按剩余时间反推本次真正付得起的输出 token 数（预留 15 秒预填充，非 thinking 按 10ms/token、thinking 按 20ms/token 计，下限 2000、上限 16000）。生成因此总能跑完；模型若还想写更多，则在已知位置被截断并由 json-repair 修复。
+  - 阶段预算门槛按实测重算：深度研究 150s → **200s**，双模型验证 90s → **120s**，生成下限 25s → **35s**。
+  - **修复 MiMo 备选链路完全失效**：快速路径此前硬编码 `mimo-v2-flash`，接口返回 `400 Unsupported model`，即备选链路每次都瞬间失败，背后只剩已无额度的 OpenAI——这正是「主链路一旦没跑完就整单失败」的原因。默认改为与非精简路线一致的模型，并可用 `MIMO_IQ_FULL_LEAN_MODEL` 覆盖。
+  - 新增 `/api/health?probe=iq-mimo-models`：列出该账号实际可调用的 MiMo 模型，避免再用猜测的模型名。
+- **清除重复的模型默认值（此前正是这个重复让已修好的路由看起来仍未修好）**
+  - `mimo-v2-flash` 同时是免费速评（`MIMO_IQ_PARTIAL_MODEL`）与快速完整报告的默认模型，两处都已失效；改为 `mimo-v2.5` / `mimo-v2.5-pro`（由 `probe=iq-mimo-models` 实测确认账号可调用：`mimo-v2.5`、`mimo-v2.5-pro`）。
+  - 新增 `RETIRED_MIMO_MODELS` 白名单校验：环境变量若仍指向已下线的模型 id，按未设置处理并回落到有效默认值，避免一个陈旧的 Vercel 环境变量再次让整条备选链路瞬间失败。
+  - 新增 `resolveIqRouteResolved(task, {useFallback, fastModel})`：探针与诊断一律走它解析主/备链路，不再各自复制模型字面量。
+- **MiMo 也支持截断修复 + 解码速率常数按三点实测修正**
+  - MiMo 此前没有截断修复：作为备选链路时，只要输出触到上限，一份几乎写完的报告会因最后几个字符而整份作废（实测 `finish_reason=length` → `parsed=failed`）。现在与 Anthropic 客户端一致，触顶时调用 `repairTruncatedJson` 抢救。
+  - 解码速率按三个实测点（700 / 1200 / 2400 token 上限）重新拟合：同一配置两次 2400 的耗时相差约 2.4 秒，因此改用最宽跨度（700→2400）得出的 ~12.3ms/token，并留出余量取 **13ms/token**（thinking 路线 26ms）。低估这个速率正是报告失败的机制——预算会买下超过时间所能解码的 token 数，调用随即在生成中途被掐断。
+  - `probe=iq-full-report` 新增 `&budgetMs=`（上限 240s）：预算调小则推导出的 token 上限同步变小，因而整条管线可以在 HTTP 客户端超时之内完整跑完并验证。
+- **复现探针支持后台模式（`&defer=1`）与专业深度模式（`&quality=1`）**
+  - 完整预算下的一次生成耗时以分钟计，超过任何 HTTP 客户端的等待时间；而请求一旦中断，serverless 函数会随之被终止——这正是此前两次复现尝试连一行诊断都没留下的原因。现改用 Next.js `after()`：响应先返回，生成在后台继续，结果无论成败都写入 `iq_diagnostics`（含 mode / quality / budgetMs / 耗时 / 提供商 / 模型 / 报告长度 / 原始错误）。
+  - `&quality=1` 走非精简（专业深度）路径，用于验证 Opus + thinking 这条真正出问题的链路能否在预算内跑完。
+- **真正的根因（已由生产诊断记录确认）：Claude 正常生成完毕，但 JSON 无法解析，而修复逻辑只在 `max_tokens` 时才触发**
+  - `iq_diagnostics` 中 09:57 的记录还原了用户遇到的那次失败：`anthropic/claude-sonnet-5: stop=end_turn out=15530 parsed=failed | mimo/mimo-v2-flash: no parseable JSON returned`，最后 `openai/gpt-4o: 429 无额度` → 整单失败（耗时 201,590ms）。
+  - 关键点：`stop_reason=end_turn` 表示模型是**正常写完**的，并非被截断；但输出的 JSON 无法解析。而截断修复此前被限定在 `stop_reason === 'max_tokens'` 分支内，因此救援逻辑根本没有执行——一份 15,530 token 的完整报告，因为格式问题被整份丢弃。
+  - 修复：只要解析失败就尝试修复（Anthropic 与 MiMo 两个客户端一致），不再看 stop_reason。
+  - 新增 `sanitizeJsonControlChars`：转义字符串字面量内部的裸控制字符（换行/制表符等）。中文长段落输出最容易出现这种情况，且文档结构是完整闭合的，单纯补括号救不回来——这才是真正能还原它的变换。修复逻辑同时尝试「裁剪到最后一个 `}`」，以覆盖「markdown 代码围栏 + 内嵌换行」这种两条路径都失效的组合。已用 9 个用例验证（含中文换行、制表符、截断、围栏、尾随散文、嵌套数组截断、无花括号）。
+  - 顺带确认：201,590ms / 15,530 token ≈ 13ms/token，与本次设定的解码速率常数一致。
+- **备选链路不再无视剩余预算**：实测一次 `budgetMs=68000` 的运行实际耗时 148,449ms——Claude 用完 68 秒后，MiMo 又以自己全新的 120 秒超时重新开始。现在 `runMimoJson` 接受 `timeoutMs`，路由器按「总预算 − 已耗时」把剩余时间交给备选链路。
+- **专业深度版的 thinking 解码速率改为实测值（此前是推测，且推测错了）**
+  - 后台实测：`claude-opus-5`（thinking 开、effort medium）在 240 秒预算下实际耗时 **296,334ms** —— 超预算 56 秒。虽然报告本身生成成功（8,966 字符），但在真实路由的 300 秒上限下这就是失败。
+  - 其推导出的输出上限为 8,653 token，故单 token 成本**至多** ~34ms；且只有在「跑满了整个上限」时才恰好是 34ms，若提前结束则真实速率更高。因此常数取 **40ms/token**（而非按乐观读数拟合的 36），此前的 26ms/token 是按「Sonnet 的两倍」推测出来的，纯属错误。
+  - 按实测速率复核各阶段：标准版满预算余量 104s、专业版不跑深度研究余量 42s、跑完 75s 深度研究后余量 32s、剩余 160s 时余量 25s——全部可在预算内跑完。
+  - `IqRouteAttempt` 现在在**成功时**也记录耗时 / 输出 token 数 / stop_reason / maxTokens：只有拿到 token 数，观测到的墙钟时间才能换算成单 token 速率。结果通过 `_generation_attempts` 一并写入诊断记录。
+- **两条链路端到端验证通过，并据此纠正解码速率模型**
+  - 后台实测（预算均为 240 秒）：标准版 `claude-sonnet-5` 耗时 **180,450ms**、输出 13,885 token、`stop=end_turn`、报告 17,697 字符；专业版 `claude-opus-5` 耗时 **194,023ms**、报告生成成功。两者均在预算内完成。
+  - 关键验证点：标准版这次正是此前失败的同一形态——`stop_reason=end_turn` 且输出上万 token——现在解析成功并产出完整报告。
+  - 单次调用的实测速率：sonnet **13.0ms/token**、opus **17.2ms/token**。据此纠正了「thinking 使速率翻倍」的错误模型：thinking token 本身就是计入 max_tokens 的普通输出 token，并不会让每个 token 变慢，只是把预算花在推理而非报告上。此前 40ms/token 的常数，是用「一次运行的总耗时」除以「单次调用的上限」得出的——而专业路径实际会发起**第二次生成**（竞品白名单校正重试），所以那个总耗时涵盖了两次调用，速率被放大了约一倍。
+  - 速率改为按模型区分：`MS_PER_TOKEN_FAST=13`、`MS_PER_TOKEN_DEEP=19`（在 16K 上限处 1ms 误差即 16 秒，故留足余量）。
+  - **重试也纳入预算**：`shouldRetryForCompetitorGrounding` 与完整度重生成此前完全不看剩余时间——一次调用装得下、两次就装不下，这正是专业版跑到 296 秒的原因。现在每次尝试都按「剩余时间」重新推导输出上限，剩余不足 35 秒则直接跳过重试。
+  - 复核结果：标准版满预算余量 61s、专业版满预算余量 29s、专业版跑完深度研究后余量 22s。专业版输出上限也从 5,625 提升到 13,947 token（此前因速率高估，专业版反而比标准版更短）。
+- **专业深度版最终验证通过**：预算 240 秒、实际 **201,169ms**（余量 39 秒），`claude-opus-5` 输出 11,840 token，报告 **13,047 字符**（修正速率前仅 4,440）。单次调用实测 17.0ms/token，低于配置的 19ms/token，余量真实存在；重试因预算已用尽而被正确跳过。
+- **计费型探针改为默认关闭**：`iq-claude` / `iq-full-prompt` / `iq-full-report` 每次调用都会真实消耗 LLM 额度，而 `/api/health` 是公开路由——此前任何人拿到一个 report id 就能持续烧额度。现在这三个探针需要 `IQ_DIAG_KEY` 且必须以 `?key=` 匹配；未设置该环境变量时直接返回 404。其余只读探针（`iq-supabase` / `iq-llm` / `iq-n8n` / `iq-mimo-models`）不受影响。
 ## 本次新增（2026-08-18）
 - **LocationIQ 多 Agent 分析引擎 V3（对标专业选址机构方法论）**
   - 新增 `lib/funnel/agents/` 引擎：确定性指标层 → 五位专家 Agent 并行（市场人口 / 竞争情报 / 场址可达 / 财务建模 / 风控）→ 代码计算决策矩阵 → 合伙人综合撰写 → QA 质检（不通过强制修订一轮）。

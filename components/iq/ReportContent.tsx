@@ -6,7 +6,10 @@ import { useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { ReportActions } from './ReportActions';
 import { ReportMarkdown } from './ReportMarkdown';
+import { RiskAuditReportSections } from './RiskAuditReportSections';
+import { DataProvenance, ReportDataViz } from './ReportDataViz';
 import { normalizeConfidenceLevel } from '@/lib/funnel/iq-full-report-schema';
+import { normalizeRiskAuditFromFull, productPositioningLine } from '@/lib/funnel/iq-risk-audit-model';
 
 type FullReportView = Record<string, unknown>;
 
@@ -20,6 +23,8 @@ type Props = {
   };
   full: FullReportView;
   initialLang?: 'en' | 'zh';
+  marketData?: Record<string, unknown> | null;
+  staticMapUrl?: string | null;
 };
 
 const translations = {
@@ -54,11 +59,23 @@ const translations = {
     reportId: 'Report ID',
     analyzeAnother: 'Analyze another location',
     contentNote: '',
+    langSwitchError: 'Could not generate the English version. Please try again in a moment.',
+    langSwitchErrorZh: 'Could not generate the Chinese version. Please try again in a moment.',
     overallScore: 'Overall',
     footTraffic: 'Foot traffic',
     competition: 'Competition',
     payback: 'Payback (mo)',
     recommendation: 'Recommendation',
+    riskAudit: 'Location risk audit',
+    auditTopRisks: 'Top 3 risks',
+    playbook: 'Recommended playbook',
+    leaseChecklist: 'Pre-lease checklist',
+    costModel: 'Cost & break-even model',
+    breakEven: 'Break-even revenue',
+    safeRevenue: 'Safer target revenue',
+    competitorTiers: 'Competitor tiers',
+    competitorMap: 'Competitor map',
+    competitorInsights: 'Competitor deep insights',
   },
   zh: {
     fullReport: 'RestaurantIQ 付费深度分析',
@@ -91,11 +108,23 @@ const translations = {
     reportId: '报告编号',
     analyzeAnother: '分析其他地址',
     contentNote: '（部分段落含 Markdown 表格）',
+    langSwitchError: '无法生成英文版，请稍后重试。',
+    langSwitchErrorZh: '无法生成中文版，请稍后重试。',
     overallScore: '综合分',
     footTraffic: '客流指数',
     competition: '竞争强度',
     payback: '回收期(月)',
     recommendation: '建议等级',
+    riskAudit: '选址风险审计',
+    auditTopRisks: '三大核心风险',
+    playbook: '最佳打法建议',
+    leaseChecklist: '签 lease 前清单',
+    costModel: '成本与打平模型',
+    breakEven: '盈亏平衡营业额',
+    safeRevenue: '安全营收线',
+    competitorTiers: '竞品分层说明',
+    competitorMap: '竞品分布地图',
+    competitorInsights: '竞品深度洞察',
   },
 };
 
@@ -210,15 +239,53 @@ function IqReportAutoLink({
   return null;
 }
 
-export function ReportContent({ report, full, initialLang = 'en' }: Props) {
+export function ReportContent({
+  report,
+  full,
+  initialLang = 'en',
+  marketData = null,
+  staticMapUrl = null,
+}: Props) {
   const [lang, setLang] = useState<'en' | 'zh'>(initialLang);
   const [linkedLocally, setLinkedLocally] = useState(false);
   const handleReportLinked = useCallback(() => setLinkedLocally(true), []);
-  const [fullByLang, setFullByLang] = useState<Record<'en' | 'zh', FullReportView | null>>({
-    en: null,
-    zh: null,
-  });
+  const [fullByLang, setFullByLang] = useState<Record<'en' | 'zh', FullReportView | null>>(() => ({
+    en: initialLang === 'en' ? full : null,
+    zh: initialLang === 'zh' ? full : null,
+  }));
   const [isSwitchingLang, setIsSwitchingLang] = useState(false);
+  const [langSwitchError, setLangSwitchError] = useState<string | null>(null);
+  const [pendingLang, setPendingLang] = useState<'en' | 'zh' | null>(null);
+
+  // Auto-upgrade: a 'standard' (fast lean) report silently regenerates the
+  // professional-depth version in the background, then swaps it in on reload.
+  const generationTier = typeof full.generation_tier === 'string' ? full.generation_tier : null;
+  const [upgrading, setUpgrading] = useState(generationTier === 'standard');
+  const upgradeFired = useRef(false);
+  useEffect(() => {
+    if (generationTier !== 'standard' || upgradeFired.current) return;
+    upgradeFired.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/funnel/full-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reportId: report.id, force: true, quality: true }),
+        });
+        if (!cancelled && res.ok) {
+          window.location.reload();
+          return;
+        }
+      } catch {
+        /* keep the standard report; user can retry via regenerate */
+      }
+      if (!cancelled) setUpgrading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [generationTier, report.id]);
 
   const clerkLinkEnabled =
     process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'true' &&
@@ -233,24 +300,56 @@ export function ReportContent({ report, full, initialLang = 'en' }: Props) {
 
   const handleSetLang = useCallback(
     async (next: 'en' | 'zh') => {
-      setLang(next);
-      if (fullByLang[next]) return;
+      if (next === lang) return;
+      if (fullByLang[next]) {
+        setLang(next);
+        setLangSwitchError(null);
+        return;
+      }
+      setPendingLang(next);
       setIsSwitchingLang(true);
+      setLangSwitchError(null);
       try {
         const res = await fetch('/api/funnel/full-report', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reportId: report.id, force: true, language: next, persist: false }),
+          body: JSON.stringify({
+            reportId: report.id,
+            language: next,
+            persist: false,
+            quality: false,
+          }),
         });
         if (res.ok) {
           const json = (await res.json()) as Record<string, unknown>;
           setFullByLang((prev) => ({ ...prev, [next]: json }));
+          setLang(next);
+          return;
         }
+        const raw = await res.text();
+        let msg = next === 'zh' ? translations.zh.langSwitchErrorZh : translations.en.langSwitchError;
+        try {
+          const j = JSON.parse(raw) as { error?: string };
+          if (j.error) msg = j.error;
+        } catch {
+          if (res.status === 504) {
+            msg =
+              next === 'zh'
+                ? '生成中文版超时，请稍后重试。'
+                : 'English generation timed out. Please try again.';
+          }
+        }
+        setLangSwitchError(msg);
+      } catch {
+        setLangSwitchError(
+          next === 'zh' ? translations.zh.langSwitchErrorZh : translations.en.langSwitchError,
+        );
       } finally {
         setIsSwitchingLang(false);
+        setPendingLang(null);
       }
     },
-    [fullByLang, report.id],
+    [fullByLang, lang, report.id],
   );
 
   const dashboard = fullView.dashboard as Record<string, unknown> | undefined;
@@ -271,8 +370,17 @@ export function ReportContent({ report, full, initialLang = 'en' }: Props) {
   const failureCases = safeArr(comparables?.failure_cases);
 
   const displayTitle = str(fullView.report_title) || report.headline;
+  const heroLine =
+    str(fullView.one_line_conclusion) ||
+    normalizeRiskAuditFromFull(fullView)?.one_line_conclusion;
   const confRaw = str(fullView.confidence);
   const confRationale = str(fullView.confidence_rationale);
+  const dualVerify = fullView.dual_model_verification as Record<string, unknown> | undefined;
+  const dualVerifyStatus = str(dualVerify?.status);
+  const dualDisagreements = safeArr(dualVerify?.disagreements).filter(
+    (x): x is string => typeof x === 'string',
+  );
+  const hasRiskAudit = Boolean(normalizeRiskAuditFromFull(fullView) ?? fullView.risk_audit);
 
   const showRevenueModelBlock =
     !!revenueModel &&
@@ -361,9 +469,22 @@ export function ReportContent({ report, full, initialLang = 'en' }: Props) {
           </button>
         </div>
       </div>
-      {isSwitchingLang ? (
+      {isSwitchingLang && pendingLang ? (
         <div className="no-print mb-4 text-xs text-zinc-500">
-          {lang === 'zh' ? '正在生成中文版…' : 'Generating English version…'}
+          {pendingLang === 'zh' ? '正在生成中文版…' : 'Generating English version…'}
+        </div>
+      ) : null}
+      {langSwitchError ? (
+        <div className="no-print mb-4 text-xs text-amber-400/90" role="alert">
+          {langSwitchError}
+        </div>
+      ) : null}
+      {upgrading ? (
+        <div className="no-print mb-4 flex items-center gap-2 rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+          {lang === 'zh'
+            ? '当前为快速版报告；专业深度版（完整市场数据 + 双模型交叉验证）正在后台生成，完成后将自动更新本页。'
+            : 'You are viewing the fast version; the professional-depth report (full market data + dual-model verification) is generating in the background and this page will refresh automatically.'}
         </div>
       ) : null}
 
@@ -385,7 +506,53 @@ export function ReportContent({ report, full, initialLang = 'en' }: Props) {
             {t.businessType}: {report.business_type}
           </p>
         )}
+        <p className="mt-4 text-xs text-emerald-400/80">{productPositioningLine(lang)}</p>
+        {heroLine && (
+          <p className="mt-4 text-lg font-medium leading-relaxed text-zinc-200">{heroLine}</p>
+        )}
+        {dualVerifyStatus && (
+          <div
+            className={`mt-4 rounded-lg border px-3 py-2 text-sm ${
+              dualVerifyStatus.includes('✓') ||
+                /reviewed/i.test(dualVerifyStatus) ||
+                /已复核/i.test(dualVerifyStatus)
+                ? 'border-emerald-800/60 bg-emerald-950/40 text-emerald-300'
+                : 'border-amber-800/60 bg-amber-950/40 text-amber-200'
+            }`}
+          >
+            <p className="font-medium">{dualVerifyStatus}</p>
+            {dualDisagreements.length > 0 && (
+              <ul className="mt-2 list-inside list-disc text-xs text-zinc-400">
+                {dualDisagreements.map((d, i) => (
+                  <li key={i}>{d}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </header>
+
+      {hasRiskAudit && (
+        <RiskAuditReportSections
+          full={fullView}
+          lang={lang}
+          businessType={report.business_type}
+          marketData={marketData}
+          staticMapUrl={staticMapUrl}
+          t={{
+            riskAudit: t.riskAudit,
+            topRisks: t.auditTopRisks,
+            playbook: t.playbook,
+            leaseChecklist: t.leaseChecklist,
+            costModel: t.costModel,
+            breakEven: t.breakEven,
+            safeRevenue: t.safeRevenue,
+            competitorTiers: t.competitorTiers,
+            competitorMap: t.competitorMap,
+            competitorInsights: t.competitorInsights,
+          }}
+        />
+      )}
 
       {/* Dashboard */}
       {dashboard && Object.keys(dashboard).length > 0 && (
@@ -413,6 +580,8 @@ export function ReportContent({ report, full, initialLang = 'en' }: Props) {
           </div>
         </SectionShell>
       )}
+
+      <ReportDataViz marketData={marketData} full={fullView} lang={lang} />
 
       {str(fullView.executive_summary) && (
         <SectionShell title={t.executiveSummary} icon="📋">
@@ -506,11 +675,35 @@ export function ReportContent({ report, full, initialLang = 'en' }: Props) {
             <ReportMarkdown>{fullView.trade_area_analysis as string}</ReportMarkdown>
           </SectionShell>
         )}
-        {str(fullView.demographic_profile) && (
-          <SectionShell title={t.demographicProfile} icon="👥">
-            <ReportMarkdown>{fullView.demographic_profile as string}</ReportMarkdown>
-          </SectionShell>
-        )}
+        {(() => {
+          const demoNarrative = (marketData?.demographic_narrative ?? null) as
+            | { paragraph_zh?: string; paragraph_en?: string; model?: string; generated_at?: string }
+            | null;
+          const claudePara =
+            demoNarrative && typeof demoNarrative === 'object'
+              ? lang === 'zh'
+                ? demoNarrative.paragraph_zh
+                : demoNarrative.paragraph_en
+              : null;
+          const hasLlm = str(fullView.demographic_profile);
+          if (!hasLlm && !claudePara) return null;
+          return (
+            <SectionShell title={t.demographicProfile} icon="👥">
+              {claudePara && (
+                <div className="mb-4 rounded-lg border border-blue-700/40 bg-blue-950/30 p-4 text-sm leading-relaxed text-blue-100">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-blue-300">
+                    <span>{lang === 'zh' ? 'McKinsey 风格人口与消费力简报' : 'McKinsey-style Demographics Brief'}</span>
+                    <span className="rounded bg-blue-800/40 px-1.5 py-0.5 text-[10px] text-blue-200">
+                      Claude · ACS B03002/B19001/B15003
+                    </span>
+                  </div>
+                  <p className="whitespace-pre-line">{claudePara}</p>
+                </div>
+              )}
+              {hasLlm && <ReportMarkdown>{fullView.demographic_profile as string}</ReportMarkdown>}
+            </SectionShell>
+          );
+        })()}
       </div>
 
       {competitors.length > 0 && (
@@ -865,6 +1058,8 @@ export function ReportContent({ report, full, initialLang = 'en' }: Props) {
         </SectionShell>
       )}
 
+      <DataProvenance marketData={marketData} lang={lang} />
+
       {str(fullView.data_sources_and_disclaimer) && (
         <SectionShell title={t.dataSources} icon="📎">
           <ReportMarkdown>{fullView.data_sources_and_disclaimer as string}</ReportMarkdown>
@@ -876,6 +1071,7 @@ export function ReportContent({ report, full, initialLang = 'en' }: Props) {
           reportId={report.id}
           isLinkedToUser={Boolean(report.user_id) || linkedLocally}
           lang={lang}
+          isPaid
         />
       </div>
 

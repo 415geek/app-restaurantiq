@@ -13,6 +13,11 @@ import {
 import { formatCaltransForAnchors, type CaltransAADTResult } from '@/lib/funnel/external-data/caltrans';
 import { formatListingsForAnchors, type CommercialListingsResult } from '@/lib/funnel/external-data/commercial-listings';
 import { formatBrightDataForAnchors, type MarketResearchResult } from '@/lib/funnel/external-data/brightdata';
+import {
+  formatFinanceModelForAnchors,
+  type DeterministicFinanceModel,
+} from '@/lib/funnel/iq-finance-model';
+import type { CompetitorInsights } from '@/lib/funnel/iq-deepseek-competitor-insights';
 
 type Lang = 'en' | 'zh';
 
@@ -26,6 +31,17 @@ function fmtQty(v: unknown, lang: Lang): string {
 function fmtUsd(v: unknown, lang: Lang): string {
   if (typeof v === 'number' && Number.isFinite(v)) return lang === 'zh' ? `约 $${v.toLocaleString('en-US')}` : `~$${v.toLocaleString('en-US')}`;
   return lang === 'zh' ? '（数据抑制或缺失）' : '(suppressed or missing)';
+}
+
+function fmtPct(v: unknown, lang: Lang): string {
+  if (typeof v === 'number' && Number.isFinite(v)) return `${Math.round(v)}%`;
+  return lang === 'zh' ? '（数据抑制或缺失）' : '(suppressed or missing)';
+}
+
+type _AcsShareLike = { pct?: unknown; count?: unknown } | undefined | null;
+function pickPct(v: _AcsShareLike): unknown {
+  if (!v || typeof v !== 'object') return null;
+  return (v as Record<string, unknown>).pct;
 }
 
 /** Census ACS pack → prompt block forcing quantitative demographic + trade-area prose. */
@@ -49,6 +65,13 @@ export function buildAcsQuantAnchorsBlock(
   const tractName = typeof tract.name === 'string' ? tract.name : '';
   const countyName = typeof county.name === 'string' ? county.name : '';
 
+  const tractRace = (tract.race_ethnicity as Record<string, unknown> | undefined) ?? {};
+  const tractInc = (tract.income_brackets as Record<string, unknown> | undefined) ?? {};
+  const tractEdu = (tract.education as Record<string, unknown> | undefined) ?? {};
+  const countyRace = (county.race_ethnicity as Record<string, unknown> | undefined) ?? {};
+  const countyInc = (county.income_brackets as Record<string, unknown> | undefined) ?? {};
+  const countyEdu = (county.education as Record<string, unknown> | undefined) ?? {};
+
   if (lang === 'zh') {
     const lines = [
       '\n\n【人口与消费力——官方统计锚点（必须在 demographic_profile 最前面用 Markdown 表格或有序列表逐行引用；禁止用散文吞掉数字）】',
@@ -61,11 +84,25 @@ export function buildAcsQuantAnchorsBlock(
       tractAvail ? `- 片区人均收入 B19301（USD）：${fmtUsd(tract.per_capita_income_usd, 'zh')}` : '',
       tractAvail ? `- 片区年龄中位数 B01002：${fmtQty(tract.median_age, 'zh')}` : '',
       tractAvail ? `- 片区自有住房价值中位数 B25077（USD）：${fmtUsd(tract.median_home_value_usd, 'zh')}` : '',
-      `- 所在县总人口 B01003：${fmtQty(county.population, 'zh')}`,
+      tractAvail ? `- 片区租金中位数 B25064（USD/月）：${fmtUsd(tract.median_gross_rent_usd, 'zh')}` : '',
+      tractAvail ? `- 片区种族与西班牙裔 B03002（占比）：白人(NH) ${fmtPct(pickPct(tractRace.white_nh as _AcsShareLike), 'zh')}；亚裔(NH) ${fmtPct(pickPct(tractRace.asian_nh as _AcsShareLike), 'zh')}；黑人(NH) ${fmtPct(pickPct(tractRace.black_nh as _AcsShareLike), 'zh')}；西班牙裔(任何种族) ${fmtPct(pickPct(tractRace.hispanic_any_race as _AcsShareLike), 'zh')}` : '',
+      tractAvail ? `- 片区家庭收入分布 B19001：≥$100k 占比 ${fmtPct(tractInc.pct_100k_plus, 'zh')}；≥$200k 占比 ${fmtPct(tractInc.pct_200k_plus, 'zh')}` : '',
+      tractAvail ? `- 片区学历 B15003：本科及以上(25 岁+) 占比 ${fmtPct(tractEdu.bachelors_plus_pct, 'zh')}` : '',
+      `- 所在县名称：${countyName || '（见 ACS NAME 字段）'}`,
+      `- 县总人口 B01003：${fmtQty(county.population, 'zh')}`,
       `- 县家庭收入中位数 B19013（USD）：${fmtUsd(county.median_household_income_usd, 'zh')}`,
       `- 县人均收入 B19301（USD）：${fmtUsd(county.per_capita_income_usd, 'zh')}`,
       `- 县年龄中位数 B01002：${fmtQty(county.median_age, 'zh')}`,
       `- 县自有住房价值中位数 B25077（USD）：${fmtUsd(county.median_home_value_usd, 'zh')}`,
+      `- 县租金中位数 B25064（USD/月）：${fmtUsd(county.median_gross_rent_usd, 'zh')}`,
+      `- 县种族与西班牙裔 B03002（占比）：白人(NH) ${fmtPct(pickPct(countyRace.white_nh as _AcsShareLike), 'zh')}；亚裔(NH) ${fmtPct(pickPct(countyRace.asian_nh as _AcsShareLike), 'zh')}；黑人(NH) ${fmtPct(pickPct(countyRace.black_nh as _AcsShareLike), 'zh')}；西班牙裔(任何种族) ${fmtPct(pickPct(countyRace.hispanic_any_race as _AcsShareLike), 'zh')}`,
+      `- 县家庭收入分布 B19001：≥$100k 占比 ${fmtPct(countyInc.pct_100k_plus, 'zh')}；≥$200k 占比 ${fmtPct(countyInc.pct_200k_plus, 'zh')}`,
+      `- 县学历 B15003：本科及以上(25 岁+) 占比 ${fmtPct(countyEdu.bachelors_plus_pct, 'zh')}`,
+      '',
+      '【人口叙事写作铁律——D-3】',
+      '- 任何「亚裔比例 / 西班牙裔比例 / 高收入家庭占比 / 本科及以上比例」等定量结论，**必须**直接引用上表中的具体百分比；若该数字为「数据抑制或缺失」，须明文写「ACS 该字段不可获取」并改用县级或附近片区数据替代，**禁止编造或写"数据抑制"作为结论**。',
+      '- demographic_profile 必须新增 1 段「目标客群与消费力推演」：基于 ≥$100k / ≥$200k 家庭占比 + 本科以上学历占比 + 该业态(cuisine)的人均客单价区间，给出周中午餐 / 周末晚餐两个时段的可承受客单价区间（USD），并写明所引用的具体 ACS 字段。',
+      '- 若 marketData.demographic_narrative 存在（Claude 预先生成的 McKinsey 风格段落），可作为参考结构与措辞，但不得复制超过 30 个连续汉字；最终段落须由你重新组织语言并补充与本店 cuisine 的关联。',
       '',
       '【贸易区与客流——量化要求】',
       '- trade_area_analysis 必须包含 **至少 5 行** 的 Markdown 表格，建议列：「范围/半径」「时段/日型（工作日午/工作日晚/周末）」「客流或需求假设」「依据」。',
@@ -87,11 +124,25 @@ export function buildAcsQuantAnchorsBlock(
     tractAvail ? `- Tract per capita income B19301 (USD): ${fmtUsd(tract.per_capita_income_usd, 'en')}` : '',
     tractAvail ? `- Tract median age B01002: ${fmtQty(tract.median_age, 'en')}` : '',
     tractAvail ? `- Tract median owner home value B25077 (USD): ${fmtUsd(tract.median_home_value_usd, 'en')}` : '',
+    tractAvail ? `- Tract median gross rent B25064 (USD/mo): ${fmtUsd(tract.median_gross_rent_usd, 'en')}` : '',
+    tractAvail ? `- Tract race & Hispanic B03002 (share): White(NH) ${fmtPct(pickPct(tractRace.white_nh as _AcsShareLike), 'en')}; Asian(NH) ${fmtPct(pickPct(tractRace.asian_nh as _AcsShareLike), 'en')}; Black(NH) ${fmtPct(pickPct(tractRace.black_nh as _AcsShareLike), 'en')}; Hispanic(any race) ${fmtPct(pickPct(tractRace.hispanic_any_race as _AcsShareLike), 'en')}` : '',
+    tractAvail ? `- Tract HH income brackets B19001: share >= $100k ${fmtPct(tractInc.pct_100k_plus, 'en')}; share >= $200k ${fmtPct(tractInc.pct_200k_plus, 'en')}` : '',
+    tractAvail ? `- Tract education B15003: bachelor's+ share of pop 25+ ${fmtPct(tractEdu.bachelors_plus_pct, 'en')}` : '',
+    `- County NAME: ${countyName || '(ACS NAME)'}`,
     `- County population B01003: ${fmtQty(county.population, 'en')}`,
     `- County median household income B19013 (USD): ${fmtUsd(county.median_household_income_usd, 'en')}`,
     `- County per capita income B19301 (USD): ${fmtUsd(county.per_capita_income_usd, 'en')}`,
     `- County median age B01002: ${fmtQty(county.median_age, 'en')}`,
     `- County median owner home value B25077 (USD): ${fmtUsd(county.median_home_value_usd, 'en')}`,
+    `- County median gross rent B25064 (USD/mo): ${fmtUsd(county.median_gross_rent_usd, 'en')}`,
+    `- County race & Hispanic B03002 (share): White(NH) ${fmtPct(pickPct(countyRace.white_nh as _AcsShareLike), 'en')}; Asian(NH) ${fmtPct(pickPct(countyRace.asian_nh as _AcsShareLike), 'en')}; Black(NH) ${fmtPct(pickPct(countyRace.black_nh as _AcsShareLike), 'en')}; Hispanic(any race) ${fmtPct(pickPct(countyRace.hispanic_any_race as _AcsShareLike), 'en')}`,
+    `- County HH income brackets B19001: share >= $100k ${fmtPct(countyInc.pct_100k_plus, 'en')}; share >= $200k ${fmtPct(countyInc.pct_200k_plus, 'en')}`,
+    `- County education B15003: bachelor's+ share of pop 25+ ${fmtPct(countyEdu.bachelors_plus_pct, 'en')}`,
+    '',
+    '[DEMOGRAPHIC NARRATIVE RULES — D-3]',
+    '- Any quantitative claim about Asian / Hispanic / high-income / bachelor\'s+ share MUST cite the percentage above; if a field shows "suppressed or missing", explicitly say so and fall back to county or nearby-tract data. Do NOT fabricate Census-style precision or just write "suppressed" as a conclusion.',
+    '- demographic_profile MUST include a "target customer & purchasing power" paragraph that ties the >= $100k / >= $200k HH shares + bachelor\'s+ share + cuisine to a defensible weekday-lunch and weekend-dinner ticket band (USD), citing the exact ACS fields used.',
+    '- If marketData.demographic_narrative exists (Claude-generated McKinsey-style paragraph), use it as a reference for structure/tone but do NOT copy more than ~20 contiguous words; you must rewrite and tie it to this specific cuisine.',
     '',
     '[TRADE AREA — QUANT RULES]',
     '- trade_area_analysis MUST include a Markdown table with **≥5 rows** (suggested columns: radius/range, daypart, demand/foot-traffic assumption, evidence).',
@@ -325,10 +376,112 @@ export function buildPremiumMarketAnchorsBlock(
   return lines.join('\n');
 }
 
+/**
+ * D-5: formats DeepSeek competitor insights into a prompt anchor block.
+ * Forces the paid-report LLM to cite per-competitor positioning, complaints, and
+ * gaps that DeepSeek already grounded in real review excerpts.
+ */
+export function buildCompetitorInsightsBlock(
+  insights: CompetitorInsights | null | undefined,
+  lang: Lang,
+): string {
+  if (
+    !insights ||
+    !Array.isArray(insights.per_competitor) ||
+    insights.per_competitor.length === 0
+  ) {
+    return '';
+  }
+
+  const isZh = lang === 'zh';
+  const lines: string[] = [];
+
+  lines.push(
+    isZh
+      ? '\n\n【竞品深度洞察（DeepSeek-V3 基于 Google + Yelp 真实评论摘要——必须在 competition_landscape / competitors / opportunities 中引用，禁止抛弃）】'
+      : '\n\n[COMPETITOR INSIGHTS — DeepSeek-V3 grounded summary of Google + Yelp reviews — MUST appear in competition_landscape / competitors / opportunities; do NOT discard]',
+  );
+  lines.push(
+    isZh
+      ? `- 评论摘要覆盖：Google ${insights.reviews_fetched.google_competitors} 家、Yelp ${insights.reviews_fetched.yelp_competitors} 家、共 ${insights.reviews_fetched.total_review_excerpts} 条评论片段。`
+      : `- Review coverage: ${insights.reviews_fetched.google_competitors} Google + ${insights.reviews_fetched.yelp_competitors} Yelp, ${insights.reviews_fetched.total_review_excerpts} review excerpts total.`,
+  );
+
+  insights.per_competitor.forEach((row, i) => {
+    const threatLabel = isZh
+      ? row.threat_level === 'high'
+        ? '高威胁'
+        : row.threat_level === 'low'
+          ? '低威胁'
+          : '中等威胁'
+      : row.threat_level;
+    const ratingPart =
+      row.rating != null && row.review_count != null
+        ? ` ${row.rating}/5 · ${row.review_count} ${isZh ? '条评论' : 'reviews'}`
+        : '';
+    lines.push('');
+    lines.push(
+      `[#${i + 1}] ${row.name}${ratingPart}${row.price_tier ? ` · ${row.price_tier}` : ''} — ${threatLabel}`,
+    );
+    if (row.positioning) {
+      lines.push(`  ${isZh ? '定位' : 'positioning'}: ${row.positioning}`);
+    }
+    if (row.signature_items.length) {
+      lines.push(
+        `  ${isZh ? '代表产品（来自评论/简介）' : 'signature items (from reviews/editorial)'}: ${row.signature_items.join(', ')}`,
+      );
+    }
+    if (row.top_complaints.length) {
+      lines.push(
+        `  ${isZh ? '高频差评' : 'top complaints'}: ${row.top_complaints.join('; ')}`,
+      );
+    }
+    if (row.top_praise.length) {
+      lines.push(
+        `  ${isZh ? '高频好评' : 'top praise'}: ${row.top_praise.join('; ')}`,
+      );
+    }
+    if (row.pricing_perception) {
+      lines.push(
+        `  ${isZh ? '价格感知' : 'pricing perception'}: ${row.pricing_perception}`,
+      );
+    }
+    const takeaway = isZh ? row.ai_takeaway_zh : row.ai_takeaway_en;
+    if (takeaway) {
+      lines.push(`  ${isZh ? '判断' : 'takeaway'}: ${takeaway}`);
+    }
+  });
+
+  const cluster = isZh ? insights.cluster_summary_zh : insights.cluster_summary_en;
+  if (cluster) {
+    lines.push('');
+    lines.push(isZh ? `【竞品集群总结】${cluster}` : `[CLUSTER SUMMARY] ${cluster}`);
+  }
+  const gaps = isZh ? insights.gaps_and_openings_zh : insights.gaps_and_openings_en;
+  if (gaps) {
+    lines.push(
+      isZh
+        ? `【市场缺口（必须在 opportunities 至少 1 条引用并扩写）】${gaps}`
+        : `[GAPS & OPENINGS — must surface in at least 1 opportunity bullet, expanded with cuisine fit] ${gaps}`,
+    );
+  }
+
+  lines.push('');
+  lines.push(
+    isZh
+      ? '【硬性写作要求】(a) competitors 字段前 3 行必须从上方 [#1]/[#2]/[#3] 取真名，店名一字不改；(b) 「top_complaints / top_praise / signature_items」可作为 differentiators 与 opportunities 的事实依据；(c) cluster_summary 与 gaps 不得复制超过 30 个连续字符，须改写后融入对应段落。'
+      : '[WRITING RULES] (a) The first 3 competitors[] rows MUST quote names verbatim from [#1]/[#2]/[#3] above; (b) Use top_complaints / top_praise / signature_items as evidence in differentiators + opportunities; (c) Do NOT copy more than ~20 contiguous words from cluster_summary or gaps — rewrite and tie to this cuisine.',
+  );
+
+  return lines.join('\n');
+}
+
 export function buildPremiumMarketDataSection(
   marketData: Record<string, unknown> | null | undefined,
   lang: Lang,
+  opts?: { fullContext?: boolean },
 ): string {
+  const fullContext = opts?.fullContext === true;
   const anchors = buildPremiumMarketAnchorsBlock(marketData, lang);
   const acsAnchors = buildAcsQuantAnchorsBlock(marketData, lang);
   
@@ -339,8 +492,8 @@ export function buildPremiumMarketDataSection(
     if (digest) {
       deepResearchBlock =
         lang === 'zh'
-          ? `\n\n【Tavily 深度研究报告（麦肯锡级选址分析 — 必须参考并整合到报告各个部分；引用具体数据时标注 [DeepRes]）】\n${digest}`
-          : `\n\n[TAVILY DEEP RESEARCH REPORT — McKinsey-level site analysis — integrate findings throughout report; cite with [DeepRes]]\n${digest}`;
+          ? `\n\n【深度市场研究报告 — 必须参考并整合到报告各个部分；引用具体数据时标注 [DeepRes]】\n${digest}`
+          : `\n\n[DEEP MARKET RESEARCH REPORT — integrate findings throughout report; cite with [DeepRes]]\n${digest}`;
     }
   }
   
@@ -392,25 +545,78 @@ export function buildPremiumMarketDataSection(
     }
   }
 
+  let userInputsBlock = '';
+  const ui = marketData?.user_inputs;
+  if (ui && typeof ui === 'object') {
+    const u = ui as Record<string, unknown>;
+    const rent = u.monthly_rent_usd;
+    const sq = u.sqft;
+    if (rent != null || sq != null) {
+      userInputsBlock =
+        lang === 'zh'
+          ? `\n\n【用户补充输入（必须用于 cost_pressure、break_even、rent 敏感性；勿忽略）】\n月租金 USD: ${rent ?? '未提供'}\n面积 sqft: ${sq ?? '未提供'}`
+          : `\n\n[USER INPUTS — MUST use in cost_pressure, break_even, rent sensitivity]\nMonthly rent USD: ${rent ?? 'not provided'}\nSqft: ${sq ?? 'not provided'}`;
+    }
+  }
+
+  // D-4: deterministic break-even / safe-revenue anchors. Must appear AFTER user
+  // inputs so the LLM sees the resolved numbers (which already factor in those
+  // inputs) and is forbidden to deviate.
+  let financeModelBlock = '';
+  const fm = marketData?.finance_model as DeterministicFinanceModel | undefined;
+  if (fm && typeof fm === 'object' && typeof fm.break_even_revenue_monthly_usd === 'number') {
+    financeModelBlock = formatFinanceModelForAnchors(fm, lang);
+  }
+
+  // D-5: DeepSeek competitor insights block (per-comp + cluster + gaps).
+  let competitorInsightsBlock = '';
+  const ci = marketData?.competitor_insights as CompetitorInsights | undefined;
+  if (ci && typeof ci === 'object' && Array.isArray(ci.per_competitor) && ci.per_competitor.length) {
+    competitorInsightsBlock = buildCompetitorInsightsBlock(ci, lang);
+  }
+
   if (!marketData || typeof marketData !== 'object') {
-    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}`;
+    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${competitorInsightsBlock}`;
   }
 
   const mdForJson = { ...marketData };
-  if (mdForJson.deep_research) {
-    const drObj = mdForJson.deep_research as Record<string, unknown>;
-    mdForJson.deep_research = {
-      status: drObj.status,
-      model: drObj.model,
-      response_time_sec: drObj.response_time_sec,
-      has_structured_report: Boolean(drObj.report),
-      sources_count: Array.isArray(drObj.sources) ? drObj.sources.length : 0,
-    };
+  if (!fullContext) {
+    if (mdForJson.deep_research) {
+      const drObj = mdForJson.deep_research as Record<string, unknown>;
+      mdForJson.deep_research = {
+        status: drObj.status,
+        model: drObj.model,
+        response_time_sec: drObj.response_time_sec,
+        has_structured_report: Boolean(drObj.report),
+        sources_count: Array.isArray(drObj.sources) ? drObj.sources.length : 0,
+      };
+    }
+    if (mdForJson.competitor_insights) {
+      const ciObj = mdForJson.competitor_insights as CompetitorInsights;
+      mdForJson.competitor_insights = {
+        provider: ciObj.provider,
+        model: ciObj.model,
+        per_competitor_count: ciObj.per_competitor?.length ?? 0,
+        total_review_excerpts: ciObj.reviews_fetched?.total_review_excerpts ?? 0,
+      } as unknown as CompetitorInsights;
+    }
   }
-  
+
+  const evidencePreamble = fullContext
+    ? lang === 'zh'
+      ? '\n\n【全量证据块】以下 JSON 含 ACS 全表、具名竞品、Yelp/Google 评论摘录、商业租盘、Caltrans 车流、竞品洞察全文。每个关键数字/店名必须来自本块或上方锚点；否则标 [估算] 或 data not retrieved。引用格式：[来源 · YYYY-MM-DD]。\n'
+      : '\n\n[FULL EVIDENCE BLOCK] JSON below includes full ACS, named competitors, Yelp/Google review excerpts, listings, Caltrans, competitor_insights. Every key number/name MUST come from this block or anchors above; else tag [estimate] or data not retrieved. Cite as [Source · YYYY-MM-DD].\n'
+    : '';
+
+  let jsonPayload = JSON.stringify(mdForJson, null, 2);
+  const maxJsonChars = fullContext ? 380_000 : 120_000;
+  if (jsonPayload.length > maxJsonChars) {
+    jsonPayload = `${jsonPayload.slice(0, maxJsonChars)}\n…(truncated)`;
+  }
+
   const jsonBlock =
     lang === 'zh'
-      ? `\n\n【市场数据原始 JSON（Google Places / Yelp / ACS / Caltrans / 商业房源 / BrightData / 深度研究 meta）】\n${JSON.stringify(mdForJson, null, 2)}`
-      : `\n\nRAW MARKET DATA JSON (Google Places / Yelp / ACS / Caltrans / commercial listings / BrightData / deep research meta):\n${JSON.stringify(mdForJson, null, 2)}`;
-  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${jsonBlock}`;
+      ? `${evidencePreamble}\n\n【市场数据 JSON${fullContext ? '（全文）' : ''}】\n${jsonPayload}`
+      : `${evidencePreamble}\n\nMARKET DATA JSON${fullContext ? ' (full)' : ''}:\n${jsonPayload}`;
+  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${competitorInsightsBlock}${jsonBlock}`;
 }

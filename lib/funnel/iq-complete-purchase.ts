@@ -12,6 +12,8 @@ export type FulfillIqPurchaseInput = {
   reportId: string;
   stripeSessionId: string;
   customerEmail: string | null;
+  /** When true, only mark paid; caller generates full_report_json later (faster access-code UX). */
+  deferFullReportGeneration?: boolean;
 };
 
 export async function fulfillIqPaidPurchase(input: FulfillIqPurchaseInput): Promise<void> {
@@ -22,7 +24,19 @@ export async function fulfillIqPaidPurchase(input: FulfillIqPurchaseInput): Prom
   }
 
   let fullJson = existing.full_report_json as Record<string, unknown> | null;
-  if (!fullJson || Object.keys(fullJson).length === 0) {
+  const needsGeneration = !fullJson || Object.keys(fullJson).length === 0;
+
+  if (input.deferFullReportGeneration && needsGeneration) {
+    await iqMarkPaidAndReport({
+      reportId: input.reportId,
+      stripeSessionId: input.stripeSessionId,
+      customerEmail: input.customerEmail,
+      fullReportJson: null,
+    });
+    return;
+  }
+
+  if (needsGeneration) {
     try {
       const payLang = existing.language === 'zh' ? 'zh' : 'en';
       const enrichedMd = await resolveMarketDataForIqReport({

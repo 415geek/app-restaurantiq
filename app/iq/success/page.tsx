@@ -131,10 +131,14 @@ export default async function IqSuccessPage({ searchParams }: Props) {
   /** Stripe redirects here before webhooks; mark paid in DB so /iq/report/[id] does not show locked. */
   if (checkoutPaymentSucceeded(paymentStatus, checkoutStatus)) {
     try {
+      // Defer full-report generation: this page runs under the default function
+      // timeout, far shorter than report generation. Mark paid fast, then the
+      // report page generates via /api/funnel/full-report (maxDuration 300).
       await fulfillIqPaidPurchase({
         reportId,
         stripeSessionId: sessionId,
         customerEmail,
+        deferFullReportGeneration: true,
       });
     } catch (e) {
       console.error('[success] fulfillIqPaidPurchase error:', e);

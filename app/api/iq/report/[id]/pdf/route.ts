@@ -1,13 +1,66 @@
 import { NextResponse } from 'next/server';
 import { iqGetReport } from '@/lib/funnel/iq-repository';
+import { buildCompetitorMapPins, buildGoogleStaticMapUrl } from '@/lib/funnel/iq-competitor-map';
+import {
+  decisionTierDisplay,
+  layerLabel,
+  normalizeRiskAuditFromFull,
+  numScore,
+  parseDecisionTier,
+} from '@/lib/funnel/iq-risk-audit-model';
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import type { Browser } from 'puppeteer-core';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const PDF_VIEWPORT = { width: 1200, height: 1600 };
+
+/**
+ * D-2: cold-start font cache.
+ *
+ * @sparticuz/chromium v143 only bundles Open Sans (Latin). Without a CJK font,
+ * zh PDFs render as tofu boxes. We fetch a tiny Noto Sans SC subset from the
+ * @fontsource CDN once per Lambda cold-start, base64-encode it, and inline it
+ * into the HTML as a data URI. Subsequent invocations on the same hot Lambda
+ * reuse the in-memory cache, so Puppeteer never makes a network call mid-render
+ * (which is what caused the previous flakes with @import url(...)).
+ *
+ * If the fetch fails we still try to render — the route is best-effort.
+ */
+let cjkFontDataUri: string | null = null;
+let cjkFontFetchPromise: Promise<string | null> | null = null;
+const CJK_FONT_URL =
+  'https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-sc@latest/chinese-simplified-400-normal.woff2';
+
+async function loadCjkFontDataUri(): Promise<string | null> {
+  if (cjkFontDataUri) return cjkFontDataUri;
+  if (cjkFontFetchPromise) return cjkFontFetchPromise;
+  cjkFontFetchPromise = (async () => {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 5_000);
+      const res = await fetch(CJK_FONT_URL, { signal: ctrl.signal, cache: 'force-cache' });
+      clearTimeout(timer);
+      if (!res.ok) {
+        console.warn(`[api/iq/report/pdf] CJK font HTTP ${res.status}`);
+        return null;
+      }
+      const buf = Buffer.from(await res.arrayBuffer());
+      const dataUri = `data:font/woff2;base64,${buf.toString('base64')}`;
+      cjkFontDataUri = dataUri;
+      console.log(`[api/iq/report/pdf] CJK font cached, bytes=${buf.length}`);
+      return dataUri;
+    } catch (err) {
+      console.warn('[api/iq/report/pdf] CJK font fetch failed (non-fatal):', err);
+      return null;
+    } finally {
+      cjkFontFetchPromise = null;
+    }
+  })();
+  return cjkFontFetchPromise;
+}
 
 function isVercelServerless(): boolean {
   return (
@@ -22,8 +75,20 @@ function isVercelServerless(): boolean {
  */
 async function launchPdfBrowser(): Promise<Browser> {
   if (isVercelServerless()) {
+    // D-2: drop the graphics stack (no GPU on Lambda). This also avoids
+    // extracting swiftshader.tar.br at runtime, shaving ~15MB off cold-start.
+    try {
+      (chromium as unknown as { setGraphicsMode: boolean }).setGraphicsMode = false;
+    } catch {
+      /* older versions ignore */
+    }
+    const args = [
+      ...chromium.args,
+      '--font-render-hinting=none',
+      '--disable-font-subpixel-positioning',
+    ];
     return puppeteer.launch({
-      args: chromium.args,
+      args,
       defaultViewport: PDF_VIEWPORT,
       executablePath: await chromium.executablePath(),
       headless: true,
@@ -85,9 +150,30 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+const PDF_PROSE_MAX_CHARS = 14_000;
+
+function truncateProseForPdf(text: string): string {
+  const t = text.trim();
+  if (t.length <= PDF_PROSE_MAX_CHARS) return t;
+  return `${t.slice(0, PDF_PROSE_MAX_CHARS)}\n\n…`;
+}
+
+function hasExportableFullReport(full: FullShape): boolean {
+  if (!full || typeof full !== 'object') return false;
+  if (normalizeRiskAuditFromFull(full)) return true;
+  const summary = pickStr(full.executive_summary);
+  const one = pickStr(full.one_line_conclusion);
+  const comp = pickStr(full.competition_landscape);
+  return Boolean(
+    (summary && summary.length >= 40) ||
+      (one && one.length >= 20) ||
+      (comp && comp.length >= 40),
+  );
+}
+
 /** Preserve paragraphs for long prose fields (executive summary, etc.). */
 function proseToHtml(text: string): string {
-  const trimmed = text.trim();
+  const trimmed = truncateProseForPdf(text);
   if (!trimmed) return '';
   return trimmed
     .split(/\n\n+/)
@@ -160,6 +246,16 @@ function labels(lang: Lang) {
       channel: '渠道',
       pri: '优先级',
       rationale: '理由',
+      riskAudit: '选址风险审计',
+      oneLineConclusion: '一句话结论',
+      breakEven: '打平月营收',
+      safeRevenue: '安全月营收',
+      leaseChecklist: '签租前清单',
+      playbook: '打法建议',
+      competitorMap: '竞品分布',
+      competitorInsights: '竞品深度洞察',
+      dataConfidence: '数据置信度',
+      layer: '维度',
     };
   }
   return {
@@ -223,7 +319,139 @@ function labels(lang: Lang) {
     channel: 'Channel',
     pri: 'Pri.',
     rationale: 'Rationale',
+    riskAudit: 'Location risk audit',
+    oneLineConclusion: 'One-line conclusion',
+    breakEven: 'Break-even revenue / mo',
+    safeRevenue: 'Safe revenue / mo',
+    leaseChecklist: 'Pre-lease checklist',
+    playbook: 'Playbook',
+    competitorMap: 'Competitor map',
+    competitorInsights: 'Competitor deep insights',
+    dataConfidence: 'Data confidence',
+    layer: 'Layer',
   };
+}
+
+function pdfRiskAuditBlock(
+  full: FullShape,
+  lang: Lang,
+  marketData: Record<string, unknown> | null,
+): string {
+  const L = labels(lang);
+  const audit = normalizeRiskAuditFromFull(full);
+  if (!audit) return '';
+
+  const tier = parseDecisionTier(audit.decision_tier ?? full.decision_tier);
+  const tierCopy = decisionTierDisplay(tier, lang);
+  const overall = numScore(audit.overall_score);
+  const breakEven = numScore(audit.break_even_revenue_monthly_usd);
+  const safeRev = numScore(audit.safe_revenue_monthly_usd);
+  const conf = numScore(audit.data_confidence_pct);
+
+  const layers = (audit.layers ?? []).slice(0, 6);
+  const layerRows = layers
+    .map((row) => {
+      const sc = numScore(row.score);
+      return `<tr>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${escapeHtml(layerLabel(String(row.id), lang))}</td>
+        <td style="padding:6px;border:1px solid #e2e8f0;text-align:center;">${sc ?? '—'}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const topRisks = (audit.top_risks ?? pickStrArr(full.risks)).slice(0, 5);
+  const playbook = (audit.playbook ?? []).slice(0, 5);
+  const checklist = (audit.lease_checklist ?? []).slice(0, 12);
+
+  const mapPins = buildCompetitorMapPins({
+    marketData,
+    reportCompetitors: Array.isArray(full.competitors) ? full.competitors : [],
+  });
+  const mapUrl =
+    mapPins.center && mapPins.pins.length > 0
+      ? buildGoogleStaticMapUrl({ center: mapPins.center, pins: mapPins.pins, width: 600, height: 280 })
+      : null;
+
+  const costs = audit.cost_breakdown ?? [];
+  const costRows = costs
+    .map((c) => {
+      const amt = numScore(c.amount_usd);
+      return `<tr>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${escapeHtml(c.item)}</td>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${amt != null ? `$${amt.toLocaleString()}` : '—'}</td>
+        <td style="padding:6px;border:1px solid #e2e8f0;">${escapeHtml(c.note ?? '')}</td>
+      </tr>`;
+    })
+    .join('');
+
+  // D-4: deterministic finance-model evidence block in the PDF.
+  const financeApplied = (full as Record<string, unknown>)._finance_model_applied === true;
+  const financeSnapshot =
+    (full as Record<string, unknown>)._finance_model_snapshot &&
+    typeof (full as Record<string, unknown>)._finance_model_snapshot === 'object'
+      ? ((full as Record<string, unknown>)._finance_model_snapshot as {
+          confidence: 'high' | 'medium' | 'low';
+          confidence_reasons: string[];
+          avg_ticket_usd: number;
+          break_even_daily_revenue_usd: number;
+          safe_daily_revenue_usd: number;
+          daily_covers_needed_breakeven: number;
+          daily_covers_needed_safe: number;
+          cuisine_archetype_label_en: string;
+          cuisine_archetype_label_zh: string;
+          assumptions: string[];
+          citations: string[];
+        })
+      : null;
+  const calcBadge = lang === 'zh' ? '公式计算' : 'Calculated';
+  const calcBadgeHtml = financeApplied
+    ? `<span style="display:inline-block;margin-left:6px;padding:1px 6px;font-size:8pt;background:#dcfce7;color:#166534;border-radius:8px;border:1px solid #86efac;">${escapeHtml(calcBadge)}</span>`
+    : '';
+  const dailyBreakHint = financeSnapshot && breakEven != null
+    ? (lang === 'zh'
+        ? `（约 $${financeSnapshot.break_even_daily_revenue_usd.toLocaleString()}/天 · ${financeSnapshot.daily_covers_needed_breakeven} 单@$${financeSnapshot.avg_ticket_usd}）`
+        : `(~$${financeSnapshot.break_even_daily_revenue_usd.toLocaleString()}/day · ${financeSnapshot.daily_covers_needed_breakeven} covers @ $${financeSnapshot.avg_ticket_usd})`)
+    : '';
+  const dailySafeHint = financeSnapshot && safeRev != null
+    ? (lang === 'zh'
+        ? `（约 $${financeSnapshot.safe_daily_revenue_usd.toLocaleString()}/天 · ${financeSnapshot.daily_covers_needed_safe} 单@$${financeSnapshot.avg_ticket_usd}）`
+        : `(~$${financeSnapshot.safe_daily_revenue_usd.toLocaleString()}/day · ${financeSnapshot.daily_covers_needed_safe} covers @ $${financeSnapshot.avg_ticket_usd})`)
+    : '';
+
+  const financeNoteHtml = financeApplied && financeSnapshot
+    ? `<div style="margin:8px 0 14px;padding:10px 12px;border-left:3px solid #16a34a;background:#f0fdf4;font-size:9pt;color:#14532d;">
+        <div style="font-weight:600;margin-bottom:4px;">
+          ${escapeHtml(lang === 'zh' ? '盈亏平衡计算方法（D-4 确定性模型）' : 'How break-even was calculated (D-4 deterministic model)')}
+          · ${escapeHtml(financeSnapshot.confidence === 'high' ? (lang === 'zh' ? '高置信度' : 'High confidence') : financeSnapshot.confidence === 'medium' ? (lang === 'zh' ? '中等置信度' : 'Medium confidence') : (lang === 'zh' ? '低置信度' : 'Low confidence'))}
+        </div>
+        <div style="margin-bottom:6px;font-size:8.5pt;">
+          ${escapeHtml(lang === 'zh' ? '业态原型：' : 'Archetype: ')}${escapeHtml(lang === 'zh' ? financeSnapshot.cuisine_archetype_label_zh : financeSnapshot.cuisine_archetype_label_en)}
+        </div>
+        <ul style="margin:0 0 0 16px;padding:0;font-size:8.5pt;line-height:1.45;">
+          ${financeSnapshot.assumptions.map((a) => `<li>${escapeHtml(a)}</li>`).join('')}
+        </ul>
+        <div style="margin-top:6px;font-size:8pt;color:#15803d;">
+          ${escapeHtml(lang === 'zh' ? '引用：' : 'Citations: ')}${escapeHtml(financeSnapshot.citations.join(' · '))}
+        </div>
+      </div>`
+    : '';
+
+  return `
+  <div class="section">
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.riskAudit)}</h2>
+    ${tierCopy ? `<p style="font-weight:700;color:#1a365d;margin-bottom:8px;">${escapeHtml(tierCopy.label)} — ${escapeHtml(tierCopy.desc)}</p>` : ''}
+    ${overall != null ? `<p style="margin-bottom:8px;"><strong>${lang === 'zh' ? '综合分' : 'Overall'}:</strong> ${overall}/100${conf != null ? ` · ${escapeHtml(L.dataConfidence)}: ${conf}%` : ''}</p>` : ''}
+    ${audit.one_line_conclusion || pickStr(full.one_line_conclusion) ? `<p style="margin-bottom:12px;font-style:italic;">${escapeHtml(audit.one_line_conclusion || pickStr(full.one_line_conclusion) || '')}</p>` : ''}
+    ${layerRows ? `<table style="width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:14px;"><tr style="background:#1a365d;color:#fff;"><th style="padding:8px;text-align:left;">${escapeHtml(L.layer)}</th><th style="padding:8px;">${escapeHtml(L.score)}</th></tr>${layerRows}</table>` : ''}
+    ${breakEven != null || safeRev != null ? `<p style="margin-bottom:10px;">${breakEven != null ? `<strong>${escapeHtml(L.breakEven)}:</strong> $${breakEven.toLocaleString()}${calcBadgeHtml} <span style="color:#92400e;font-size:8.5pt;">${dailyBreakHint}</span>` : ''}${safeRev != null ? `<br /><strong>${escapeHtml(L.safeRevenue)}:</strong> $${safeRev.toLocaleString()}${calcBadgeHtml} <span style="color:#15803d;font-size:8.5pt;">${dailySafeHint}</span>` : ''}</p>` : ''}
+    ${financeNoteHtml}
+    ${costRows ? `<table style="width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:14px;">${costRows}</table>` : ''}
+    ${mapUrl ? `<div style="margin:14px 0;"><h3 style="font-size:10pt;margin-bottom:8px;">${escapeHtml(L.competitorMap)}</h3><img src="${escapeHtml(mapUrl)}" alt="map" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0;" /></div>` : ''}
+    ${audit.competitor_tiers_note ? `<p style="margin-bottom:12px;font-size:10pt;">${escapeHtml(audit.competitor_tiers_note)}</p>` : ''}
+    ${topRisks.length ? `<h3 style="font-size:10pt;margin:12px 0 6px;">${escapeHtml(L.topRisks)}</h3><ul style="margin-left:18px;">${topRisks.map((r) => `<li style="margin-bottom:6px;">${escapeHtml(r)}</li>`).join('')}</ul>` : ''}
+    ${playbook.length ? `<h3 style="font-size:10pt;margin:12px 0 6px;">${escapeHtml(L.playbook)}</h3><ul style="margin-left:18px;">${playbook.map((r) => `<li style="margin-bottom:6px;">${escapeHtml(r)}</li>`).join('')}</ul>` : ''}
+    ${checklist.length ? `<h3 style="font-size:10pt;margin:12px 0 6px;">${escapeHtml(L.leaseChecklist)}</h3><ol style="margin-left:18px;">${checklist.map((r) => `<li style="margin-bottom:4px;">${escapeHtml(r)}</li>`).join('')}</ol>` : ''}
+  </div>`;
 }
 
 function dashKeyLabel(key: string, lang: Lang): string {
@@ -260,6 +488,131 @@ function pdfDashboardTable(full: FullShape, lang: Lang): string {
     .join('');
   if (!cells) return '';
   return `<div class="section"><h2>${escapeHtml(L.keyMetrics)}</h2><table style="width:100%;border-collapse:collapse;font-size:10pt;">${cells}</table></div>`;
+}
+
+type CompetitorInsightsForPdf = {
+  provider: string;
+  model: string;
+  reviews_fetched: {
+    google_competitors: number;
+    yelp_competitors: number;
+    total_review_excerpts: number;
+  };
+  per_competitor: Array<{
+    name: string;
+    rating: number | null;
+    review_count: number | null;
+    price_tier: string | null;
+    positioning: string;
+    signature_items: string[];
+    top_complaints: string[];
+    top_praise: string[];
+    pricing_perception: string;
+    threat_level: 'high' | 'medium' | 'low';
+    ai_takeaway_zh: string;
+    ai_takeaway_en: string;
+  }>;
+  cluster_summary_zh: string;
+  cluster_summary_en: string;
+  gaps_and_openings_zh: string;
+  gaps_and_openings_en: string;
+};
+
+function pdfCompetitorInsightsBlock(
+  marketData: Record<string, unknown> | null | undefined,
+  lang: Lang,
+): string {
+  const ci = (marketData?.competitor_insights as CompetitorInsightsForPdf | undefined) ?? undefined;
+  if (!ci || !Array.isArray(ci.per_competitor) || ci.per_competitor.length === 0) return '';
+  const L = labels(lang);
+  const isZh = lang === 'zh';
+
+  const intro = isZh
+    ? `<p style="margin:4px 0 12px;font-size:9pt;color:#475569;">${escapeHtml(`AI 评论分析 · 基于 ${ci.reviews_fetched.total_review_excerpts} 条 Google + Yelp 评论摘要`)}</p>`
+    : `<p style="margin:4px 0 12px;font-size:9pt;color:#475569;">${escapeHtml(`AI review analysis · grounded in ${ci.reviews_fetched.total_review_excerpts} Google + Yelp review excerpts`)}</p>`;
+
+  const rowHtml = ci.per_competitor
+    .map((row) => {
+      const threatColor =
+        row.threat_level === 'high'
+          ? { border: '#fda4af', bg: '#fff1f2', text: '#9f1239' }
+          : row.threat_level === 'low'
+            ? { border: '#86efac', bg: '#f0fdf4', text: '#166534' }
+            : { border: '#fcd34d', bg: '#fffbeb', text: '#92400e' };
+      const threatLabel = isZh
+        ? row.threat_level === 'high'
+          ? '高威胁'
+          : row.threat_level === 'low'
+            ? '低威胁'
+            : '中等威胁'
+        : row.threat_level.toUpperCase();
+      const meta = [
+        row.rating != null ? `${row.rating}/5` : null,
+        row.review_count != null
+          ? `${row.review_count.toLocaleString(isZh ? 'zh-CN' : 'en-US')} ${isZh ? '条评论' : 'reviews'}`
+          : null,
+        row.price_tier ?? null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      const items = row.signature_items
+        .slice(0, 5)
+        .map(
+          (it) =>
+            `<span style="display:inline-block;margin:2px 4px 0 0;padding:1px 6px;background:#e2e8f0;color:#1e293b;border-radius:6px;font-size:8pt;">${escapeHtml(it)}</span>`,
+        )
+        .join('');
+      const praise = row.top_praise.length
+        ? `<div style="margin-top:4px;font-size:8.5pt;color:#15803d;"><strong>${escapeHtml(isZh ? '高频好评：' : 'Top praise: ')}</strong>${escapeHtml(row.top_praise.join(' · '))}</div>`
+        : '';
+      const complaints = row.top_complaints.length
+        ? `<div style="margin-top:2px;font-size:8.5pt;color:#9f1239;"><strong>${escapeHtml(isZh ? '高频差评：' : 'Top complaints: ')}</strong>${escapeHtml(row.top_complaints.join(' · '))}</div>`
+        : '';
+      const pricing = row.pricing_perception
+        ? `<div style="margin-top:2px;font-size:8.5pt;color:#475569;"><strong>${escapeHtml(isZh ? '价格感知：' : 'Pricing: ')}</strong>${escapeHtml(row.pricing_perception)}</div>`
+        : '';
+      const takeaway = isZh ? row.ai_takeaway_zh : row.ai_takeaway_en;
+      const takeawayHtml = takeaway
+        ? `<div style="margin-top:6px;padding:6px 8px;background:#fffbeb;border-left:3px solid #f59e0b;font-size:8.5pt;color:#78350f;">${escapeHtml(takeaway)}</div>`
+        : '';
+      const positioning = row.positioning
+        ? `<div style="margin-top:6px;font-size:9pt;color:#334155;line-height:1.45;">${escapeHtml(row.positioning)}</div>`
+        : '';
+      return `<div style="margin-bottom:10px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;background:#fafafa;page-break-inside:avoid;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div style="min-width:0;flex:1;">
+            <div style="font-weight:600;color:#0f172a;font-size:10pt;">${escapeHtml(row.name)}</div>
+            <div style="font-size:8.5pt;color:#64748b;margin-top:2px;">${escapeHtml(meta)}</div>
+          </div>
+          <span style="flex-shrink:0;padding:1px 6px;font-size:8pt;border:1px solid ${threatColor.border};background:${threatColor.bg};color:${threatColor.text};border-radius:8px;font-weight:600;">${escapeHtml(threatLabel)}</span>
+        </div>
+        ${positioning}
+        ${items ? `<div style="margin-top:6px;"><div style="font-size:7.5pt;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">${escapeHtml(isZh ? '代表产品' : 'Signature items')}</div><div style="margin-top:3px;">${items}</div></div>` : ''}
+        ${praise}
+        ${complaints}
+        ${pricing}
+        ${takeawayHtml}
+      </div>`;
+    })
+    .join('');
+
+  const cluster = isZh ? ci.cluster_summary_zh : ci.cluster_summary_en;
+  const clusterHtml = cluster
+    ? `<div style="margin-top:8px;padding:10px 12px;background:#f1f5f9;border-left:3px solid #475569;font-size:9pt;color:#1e293b;line-height:1.5;"><div style="font-size:7.5pt;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">${escapeHtml(isZh ? '竞品集群总结' : 'Cluster summary')}</div>${escapeHtml(cluster)}</div>`
+    : '';
+
+  const gaps = isZh ? ci.gaps_and_openings_zh : ci.gaps_and_openings_en;
+  const gapsHtml = gaps
+    ? `<div style="margin-top:8px;padding:10px 12px;background:#f0fdf4;border-left:3px solid #16a34a;font-size:9pt;color:#14532d;line-height:1.5;"><div style="font-size:7.5pt;color:#15803d;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">${escapeHtml(isZh ? '可切入的市场缺口' : 'Gaps & openings')}</div>${escapeHtml(gaps)}</div>`
+    : '';
+
+  const footer = `<div style="margin-top:10px;font-size:7.5pt;color:#94a3b8;">${escapeHtml(
+    isZh
+      ? `由 ${ci.provider} (${ci.model}) 基于 Google Place Details + Yelp Fusion 评论摘要生成`
+      : `Generated by ${ci.provider} (${ci.model}) from Google Place Details + Yelp Fusion review excerpts`,
+  )}</div>`;
+
+  return `<div class="section"><h2><span class="head-mark">■</span> ${escapeHtml(L.competitorInsights)}</h2>${intro}${rowHtml}${clusterHtml}${gapsHtml}${footer}</div>`;
 }
 
 function pdfCompetitorsTable(full: FullShape, lang: Lang): string {
@@ -432,7 +785,7 @@ function pdfSiteAccess(full: FullShape, lang: Lang): string {
   const L = labels(lang);
   const t = pickStr(full.site_and_access_assessment);
   if (!t) return '';
-  return `<div class="section"><h2>🛣 ${escapeHtml(L.siteAccess)}</h2><div class="prose">${proseToHtml(t)}</div></div>`;
+  return `<div class="section"><h2><span class="head-mark">■</span> ${escapeHtml(L.siteAccess)}</h2><div class="prose">${proseToHtml(t)}</div></div>`;
 }
 
 function pdfKeyEvidencePoints(full: FullShape, lang: Lang): string {
@@ -448,7 +801,7 @@ function pdfKeyEvidencePoints(full: FullShape, lang: Lang): string {
       </div>`,
     )
     .join('');
-  return `<div class="section"><h2>📌 ${escapeHtml(L.evidencePoints)}</h2><div class="list">${items}</div></div>`;
+  return `<div class="section"><h2><span class="head-mark">■</span> ${escapeHtml(L.evidencePoints)}</h2><div class="list">${items}</div></div>`;
 }
 
 function pdfAlternativeCorridors(full: FullShape, lang: Lang): string {
@@ -491,7 +844,7 @@ function pdfAlternativeCorridors(full: FullShape, lang: Lang): string {
     </div>`;
     })
     .join('');
-  return `<div class="section"><h2>🗺 ${escapeHtml(L.alternativeCorridors)}</h2>${blocks}</div>`;
+  return `<div class="section"><h2><span class="head-mark">■</span> ${escapeHtml(L.alternativeCorridors)}</h2>${blocks}</div>`;
 }
 
 function generatePdfHtml(input: {
@@ -500,8 +853,10 @@ function generatePdfHtml(input: {
   headline: string;
   full: FullShape;
   lang: Lang;
+  marketData?: Record<string, unknown> | null;
+  cjkFontDataUri?: string | null;
 }): string {
-  const { location, business_type, headline, full, lang } = input;
+  const { location, business_type, headline, full, lang, marketData = null, cjkFontDataUri: cjkUri = null } = input;
   const L = labels(lang);
   const dateStr =
     lang === 'zh'
@@ -510,15 +865,28 @@ function generatePdfHtml(input: {
 
   const title = pickStr(full.report_title) || headline;
 
+  const cjkFontFace = cjkUri
+    ? `@font-face {
+        font-family: 'Noto Sans SC';
+        font-weight: 400 700;
+        font-style: normal;
+        font-display: block;
+        src: url('${cjkUri}') format('woff2');
+      }`
+    : '';
+
   return `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
   <meta charset="UTF-8">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+    /* D-2: no remote @import here. CJK is injected as base64 data URI above
+       (see generatePdfHtml -> cjkFontDataUri) so Puppeteer never makes a
+       network call during setContent. */
+    ${cjkFontFace}
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: 'Noto Sans SC', 'Open Sans', 'PingFang SC', 'Microsoft YaHei', 'Inter', -apple-system, BlinkMacSystemFont, 'Liberation Sans', Arial, sans-serif;
       font-size: 11pt;
       line-height: 1.55;
       color: #1e293b;
@@ -602,6 +970,15 @@ function generatePdfHtml(input: {
       padding-bottom: 6px;
       margin-bottom: 14px;
     }
+    /* D-2: replace emoji glyphs (which Lambda has no font for) with a
+       brand-gold square mark that any font can render. */
+    .head-mark {
+      display: inline-block;
+      color: #d69e2e;
+      font-size: 0.9em;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
     .column-box {
       background: #f8fafc;
       border: 1px solid #e2e8f0;
@@ -669,14 +1046,22 @@ function generatePdfHtml(input: {
     <div class="subtitle">${escapeHtml(L.subtitle)}</div>
     <h1 class="report-title">${escapeHtml(title)}</h1>
     <div class="meta">
-      <span>📍 ${escapeHtml(location)}</span>
-      ${business_type ? `<span>🍽️ ${escapeHtml(business_type)}</span>` : ''}
-      <span>📅 ${escapeHtml(dateStr)}</span>
+      <span>${escapeHtml(location)}</span>
+      ${business_type ? `<span>· ${escapeHtml(business_type)}</span>` : ''}
+      <span>· ${escapeHtml(dateStr)}</span>
     </div>
   </div>
 
   ${pdfDashboardTable(full, lang)}
+  ${pdfRiskAuditBlock(full, lang, marketData)}
+  ${pdfCompetitorInsightsBlock(marketData, lang)}
   ${pdfCompetitorsTable(full, lang)}
+
+  ${pickStr(full.one_line_conclusion) && !normalizeRiskAuditFromFull(full) ? `
+  <div class="executive-box">
+    <h2>${escapeHtml(L.oneLineConclusion)}</h2>
+    <p style="line-height:1.55;">${escapeHtml(pickStr(full.one_line_conclusion)!)}</p>
+  </div>` : ''}
 
   ${pickStr(full.executive_summary) ? `
   <div class="executive-box">
@@ -686,7 +1071,7 @@ function generatePdfHtml(input: {
 
   ${pickStr(full.final_verdict) ? `
   <div class="verdict-box">
-    <h3>✓ ${escapeHtml(L.finalVerdict)}</h3>
+    <h3>${escapeHtml(L.finalVerdict)}</h3>
     <div style="margin-top:10px;text-align:left;" class="prose">${proseToHtml(pickStr(full.final_verdict)!)}</div>
   </div>` : ''}
 
@@ -697,25 +1082,47 @@ function generatePdfHtml(input: {
   <div class="two-column">
     ${pickStr(full.trade_area_analysis) ? `
     <div class="column-box">
-      <h3>📍 ${escapeHtml(L.tradeArea)}</h3>
+      <h3><span class="head-mark">■</span> ${escapeHtml(L.tradeArea)}</h3>
       <div class="prose">${proseToHtml(pickStr(full.trade_area_analysis)!)}</div>
     </div>` : ''}
-    ${pickStr(full.demographic_profile) ? `
-    <div class="column-box">
-      <h3>👥 ${escapeHtml(L.demographic)}</h3>
-      <div class="prose">${proseToHtml(pickStr(full.demographic_profile)!)}</div>
-    </div>` : ''}
+    ${(() => {
+      const narr = (marketData && typeof marketData === 'object'
+        ? (marketData as Record<string, unknown>).demographic_narrative
+        : null) as { paragraph_zh?: string; paragraph_en?: string } | null;
+      const claudePara =
+        narr && typeof narr === 'object'
+          ? lang === 'zh'
+            ? (narr.paragraph_zh || '').trim()
+            : (narr.paragraph_en || '').trim()
+          : '';
+      const hasLlm = !!pickStr(full.demographic_profile);
+      if (!claudePara && !hasLlm) return '';
+      const claudeBlock = claudePara
+        ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:12px;">
+             <div style="font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#1d4ed8;margin-bottom:6px;">
+               ${lang === 'zh' ? '人口与消费力数据简报 · ACS B03002/B19001/B15003' : 'Demographics & spending brief · ACS B03002/B19001/B15003'}
+             </div>
+             ${proseToHtml(claudePara)}
+           </div>`
+        : '';
+      const llmBlock = hasLlm ? `<div class="prose">${proseToHtml(pickStr(full.demographic_profile)!)}</div>` : '';
+      return `<div class="column-box">
+        <h3><span class="head-mark">■</span> ${escapeHtml(L.demographic)}</h3>
+        ${claudeBlock}
+        ${llmBlock}
+      </div>`;
+    })()}
   </div>
 
   ${pickStr(full.competition_landscape) ? `
   <div class="section">
-    <h2>🏪 ${escapeHtml(L.competition)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.competition)}</h2>
     <div class="prose">${proseToHtml(pickStr(full.competition_landscape)!)}</div>
   </div>` : ''}
 
   ${pickStr(full.revenue_estimate) ? `
   <div class="revenue-box">
-    <h3>💰 ${escapeHtml(L.revenueEstimate)}</h3>
+    <h3>${escapeHtml(L.revenueEstimate)}</h3>
     <div class="prose">${proseToHtml(pickStr(full.revenue_estimate)!)}</div>
   </div>` : ''}
 
@@ -724,7 +1131,7 @@ function generatePdfHtml(input: {
 
   ${pickStrArr(full.risks).length > 0 ? `
   <div class="section">
-    <h2>⚠ ${escapeHtml(L.topRisks)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.topRisks)}</h2>
     <div class="list">
       ${pickStrArr(full.risks).map((r, i) => `
       <div class="list-item">
@@ -736,7 +1143,7 @@ function generatePdfHtml(input: {
 
   ${pickStrArr(full.opportunities).length > 0 ? `
   <div class="section">
-    <h2>💡 ${escapeHtml(L.opportunities)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.opportunities)}</h2>
     <div class="list">
       ${pickStrArr(full.opportunities).map((o, i) => `
       <div class="list-item">
@@ -748,7 +1155,7 @@ function generatePdfHtml(input: {
 
   ${pickStrArr(full.failure_scenarios).length > 0 ? `
   <div class="section">
-    <h2>⚡ ${escapeHtml(L.failureScenarios)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.failureScenarios)}</h2>
     <div class="list">
       ${pickStrArr(full.failure_scenarios).map((f, i) => `
       <div class="list-item">
@@ -760,13 +1167,13 @@ function generatePdfHtml(input: {
 
   ${pickStr(full.differentiation_strategy) ? `
   <div class="section">
-    <h2>🎯 ${escapeHtml(L.differentiation)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.differentiation)}</h2>
     <div class="prose">${proseToHtml(pickStr(full.differentiation_strategy)!)}</div>
   </div>` : ''}
 
   ${pickStrArr(full.action_plan).length > 0 ? `
   <div class="section">
-    <h2>📝 ${escapeHtml(L.actionPlan)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.actionPlan)}</h2>
     <div class="list">
       ${pickStrArr(full.action_plan).map((a, i) => `
       <div class="list-item">
@@ -783,7 +1190,7 @@ function generatePdfHtml(input: {
 
   ${pickStr(full.data_sources_and_disclaimer) ? `
   <div class="section">
-    <h2>📎 ${escapeHtml(L.dataSources)}</h2>
+    <h2><span class="head-mark">■</span> ${escapeHtml(L.dataSources)}</h2>
     <div class="prose">${proseToHtml(pickStr(full.data_sources_and_disclaimer)!)}</div>
   </div>` : ''}
 
@@ -801,52 +1208,105 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id } = await params;
   const url = new URL(req.url);
   const lang: Lang = url.searchParams.get('lang') === 'zh' ? 'zh' : 'en';
+  // Allow ?debug=1 to bypass auth gate locally and emit detailed error JSON.
+  const debug = url.searchParams.get('debug') === '1' && process.env.NODE_ENV !== 'production';
+  const t0 = Date.now();
 
+  let browser: Browser | null = null;
   try {
+    const fontPromise = lang === 'zh' ? loadCjkFontDataUri() : Promise.resolve(null);
     const report = await iqGetReport(id);
     if (!report) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
-    if (!report.paid) {
+    if (!report.paid && !debug) {
       return NextResponse.json({ error: 'Report not paid' }, { status: 403 });
     }
 
     const full = (report.full_report_json || {}) as FullShape;
+    if (!hasExportableFullReport(full)) {
+      const msg =
+        lang === 'zh'
+          ? '完整报告尚未生成或内容过短，请先在页面上等待「完整报告」生成完成后再下载 PDF。'
+          : 'Full report is not ready yet. Wait for on-page full report generation to finish, then download PDF.';
+      return NextResponse.json({ error: msg, code: 'REPORT_NOT_READY' }, { status: 422 });
+    }
+
+    const [cjkUri, launched] = await Promise.all([fontPromise, launchPdfBrowser()]);
+    browser = launched;
     const html = generatePdfHtml({
       location: report.location,
       business_type: report.business_type,
       headline: report.headline,
       full,
       lang,
+      marketData: (report.market_data_json as Record<string, unknown> | null) ?? null,
+      cjkFontDataUri: cjkUri,
     });
 
-    const browser = await launchPdfBrowser();
-    try {
-      const page = await browser.newPage();
-      // Static HTML: avoid networkidle0 (can hang); load is enough for print.
-      await page.setContent(html, { waitUntil: 'load', timeout: 45_000 });
+    if (html.length > 2_500_000) {
+      console.warn(`[api/iq/report/pdf] large html id=${id} bytes=${html.length}`);
+    }
 
-      const pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: { top: '12mm', right: '12mm', bottom: '14mm', left: '12mm' },
-      });
+    console.log(
+      `[api/iq/report/pdf] start id=${id} lang=${lang} html_bytes=${html.length} on=${
+        isVercelServerless() ? 'vercel' : 'local'
+      }`,
+    );
 
-      const suffix = lang === 'zh' ? '-zh' : '';
-      const filename = `RestaurantIQ-Report-${id.slice(0, 8)}${suffix}.pdf`;
+    const page = await browser.newPage();
+    // Static HTML: avoid networkidle0 (can hang); domcontentloaded is enough,
+    // we don't have any remote fonts/scripts after the D-2 refactor.
+    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    // Wait one paint cycle so layout settles before pdf() captures it.
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
 
-      return new NextResponse(Buffer.from(pdfBuffer), {
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="${filename}"`,
-        },
-      });
-    } finally {
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '12mm', right: '12mm', bottom: '14mm', left: '12mm' },
+      preferCSSPageSize: false,
+      timeout: 45_000,
+    });
+
+    const suffix = lang === 'zh' ? '-zh' : '';
+    const filename = `RestaurantIQ-Report-${id.slice(0, 8)}${suffix}.pdf`;
+
+    console.log(
+      `[api/iq/report/pdf] done id=${id} bytes=${pdfBuffer.length} elapsed_ms=${Date.now() - t0}`,
+    );
+
+    return new NextResponse(Buffer.from(pdfBuffer), {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'private, max-age=0, must-revalidate',
+      },
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+    console.error('[api/iq/report/pdf] FAIL', {
+      id,
+      lang,
+      elapsed_ms: Date.now() - t0,
+      message: msg,
+      stack,
+    });
+    if (debug) {
+      return NextResponse.json(
+        { error: 'pdf_generation_failed', message: msg, stack, elapsed_ms: Date.now() - t0 },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json(
+      { error: 'Failed to generate PDF', detail: msg.slice(0, 280) },
+      { status: 500 },
+    );
+  } finally {
+    if (browser) {
       await browser.close().catch(() => {});
     }
-  } catch (error) {
-    console.error('[api/iq/report/pdf]', error);
-    return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 });
   }
 }
