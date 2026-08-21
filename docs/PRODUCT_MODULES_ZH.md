@@ -275,3 +275,15 @@
   - 复核结果：标准版满预算余量 61s、专业版满预算余量 29s、专业版跑完深度研究后余量 22s。专业版输出上限也从 5,625 提升到 13,947 token（此前因速率高估，专业版反而比标准版更短）。
 - **专业深度版最终验证通过**：预算 240 秒、实际 **201,169ms**（余量 39 秒），`claude-opus-5` 输出 11,840 token，报告 **13,047 字符**（修正速率前仅 4,440）。单次调用实测 17.0ms/token，低于配置的 19ms/token，余量真实存在；重试因预算已用尽而被正确跳过。
 - **计费型探针改为默认关闭**：`iq-claude` / `iq-full-prompt` / `iq-full-report` 每次调用都会真实消耗 LLM 额度，而 `/api/health` 是公开路由——此前任何人拿到一个 report id 就能持续烧额度。现在这三个探针需要 `IQ_DIAG_KEY` 且必须以 `?key=` 匹配；未设置该环境变量时直接返回 404。其余只读探针（`iq-supabase` / `iq-llm` / `iq-n8n` / `iq-mimo-models`）不受影响。
+## 本次新增（2026-08-18）
+- **LocationIQ 多 Agent 分析引擎 V3（对标专业选址机构方法论）**
+  - 新增 `lib/funnel/agents/` 引擎：确定性指标层 → 五位专家 Agent 并行（市场人口 / 竞争情报 / 场址可达 / 财务建模 / 风控）→ 代码计算决策矩阵 → 合伙人综合撰写 → QA 质检（不通过强制修订一轮）。
+  - 确定性指标层（`metrics.ts`，公式可复算、禁止 LLM 改数）：贸易区需求池（BLS CEX 2024 户均外出就餐 $3,945/年、收入弹性 0.8）、饱和度（对标美国 2.2 家/千人）、公平份额营收模型（需求池÷贸易区餐厅数×吸引力乘数 0.5–2.0x 封顶）、8% 租售比红线与日均单数盈亏点、Caltrans AADT 车流。
+  - V2.0 五维权重（客流 25% / 人群 20% / 竞争 20% / 可达 20% / 租金 15%）由代码计算并锁定，`dashboard.overall_score` 恒等于加权综合分；免费版速评同样注入计算指标摘要。
+  - 财务模型内置行业基准：三场景法（悲观=营收-20%/成本+5%）、爬坡曲线（首月 40-50%）、Prime Cost（快餐 55-60%）、营收三角验证。
+  - 接入方式向后兼容：付费报告链路为 多Agent → n8n → 单次调用降级；`IQ_ENGINE=legacy` 一键回退。
+- **分析引擎切换至 Claude（Anthropic SDK）**
+  - 新增 `lib/funnel/agents/llm.ts` 提供方层：设 `ANTHROPIC_API_KEY` 后 Claude（默认 `claude-opus-5`）为主引擎，OpenAI 为备用；`IQ_LLM_PROVIDER` 可强制指定；`ANTHROPIC_IQ_MODEL / _AGENT_MODEL / _FULL_MODEL` 分层配置。
+  - 处理 Claude `refusal` 停止原因、Markdown 围栏剥离、JSON 解析失败自动修复重试一次。
+  - 修复：n8n 失败降级不再回环调用失败的 webhook；`gatherIqMarketDataFromGoogle` 现在填充 `geocode.city/state`（解锁 Caltrans 车流与商业挂牌城市检索）。
+- **新增诊断接口 `/api/health/analyze`**：实测 Anthropic / OpenAI / N8N 三通道连通性（延迟、可达性、可操作提示），用于快速定位 "Failed to analyze location" 类故障。

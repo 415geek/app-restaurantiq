@@ -28,7 +28,21 @@ type GeocodeResult = {
   lat: number;
   lng: number;
   place_id?: string;
+  /** From address_components — gates Caltrans (CA-only) and scopes listings search. */
+  city?: string;
+  state?: string;
 };
+
+type AddressComponent = {
+  long_name?: string;
+  short_name?: string;
+  types?: string[];
+};
+
+function componentOfType(components: AddressComponent[] | undefined, type: string): string | undefined {
+  const c = components?.find((x) => Array.isArray(x.types) && x.types.includes(type));
+  return c?.long_name || c?.short_name || undefined;
+}
 
 function num(v: unknown): number | null {
   const n = Number(v);
@@ -95,7 +109,7 @@ export async function gatherIqMarketDataFromGoogle(input: {
         const geocodeData = (await geocodeRes.json()) as {
           status?: string;
           error_message?: string;
-          results?: Array<{ formatted_address?: string; geometry?: { location?: { lat: number; lng: number } }; place_id?: string }>;
+          results?: Array<{ formatted_address?: string; geometry?: { location?: { lat: number; lng: number } }; place_id?: string; address_components?: AddressComponent[] }>;
         };
         if (geocodeData.status === 'OK' && geocodeData.results?.length) {
           const top = geocodeData.results[0];
@@ -104,6 +118,8 @@ export async function gatherIqMarketDataFromGoogle(input: {
             lat: top.geometry?.location?.lat ?? 0,
             lng: top.geometry?.location?.lng ?? 0,
             place_id: top.place_id,
+            city: componentOfType(top.address_components, 'locality'),
+            state: componentOfType(top.address_components, 'administrative_area_level_1'),
           };
         } else {
           console.warn(

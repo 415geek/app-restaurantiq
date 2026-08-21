@@ -40,7 +40,7 @@ export default async function IqReportPage({ params }: Props) {
 
   const reportLanguage = (report.language === 'zh' ? 'zh' : 'en') as 'en' | 'zh';
   
-  let full = report.full_report_json as FullShape | null;
+  const full = report.full_report_json as FullShape | null;
   const needsClientGeneration = !full || Object.keys(full).length === 0;
 
   if (needsClientGeneration) {

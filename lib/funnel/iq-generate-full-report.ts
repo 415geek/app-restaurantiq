@@ -18,6 +18,7 @@ import { extractCompetitorWhitelist } from '@/lib/funnel/iq-market-signals';
 import { applyDualModelVerification } from '@/lib/funnel/iq-dual-model-verify';
 import { DUAL_VERIFY_MIN_BUDGET_MS, type IqDeadline } from '@/lib/funnel/iq-deadline';
 import { runFullPremiumReport } from '@/lib/funnel/iq-llm';
+import { runMultiAgentFullReport } from '@/lib/funnel/agents/orchestrator';
 
 export type GenerateIqFullReportInput = {
   reportId: string;
@@ -70,6 +71,30 @@ export async function generateIqFullReportWithN8nFallback(
   const financeModel = (input.marketData?.finance_model ?? null) as
     | DeterministicFinanceModel
     | null;
+
+  // Opt-in multi-agent engine (IQ_ENGINE=multi_agent): deterministic metrics →
+  // 5 specialist analysts → coded decision matrix → synthesis → QA critic.
+  // Kept opt-in so the tuned router/grounding pipeline below stays the default;
+  // on any failure we fall through to that pipeline.
+  if (process.env.IQ_ENGINE?.trim().toLowerCase() === 'multi_agent') {
+    try {
+      const parsed = await runMultiAgentFullReport({
+        location: input.location,
+        businessType: input.businessType,
+        headline: input.headline,
+        reason: input.reason,
+        marketData: input.marketData,
+        language: input.language,
+        reportId: input.reportId,
+      });
+      const grounded = applyCompetitorWhitelist(parseIqFullReport(parsed), whitelist);
+      const withFinance = applyFinanceModelOverride(grounded, financeModel);
+      logFullReportQuality(withFinance, `reportId=${input.reportId} multi-agent`);
+      return stripInternalIqReportFields(withFinance);
+    } catch (e) {
+      console.warn('[iq-generate-full-report] multi-agent engine failed, falling back:', e);
+    }
+  }
 
   if (shouldUseN8nForIqFullReport()) {
     try {
