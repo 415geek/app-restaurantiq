@@ -15,7 +15,7 @@
 import { parseIqFullReport, logFullReportQuality } from '@/lib/funnel/iq-full-report-schema';
 import { computeSiteMetrics, formatMetricsDigest } from './metrics';
 import { SPECIALISTS, runSpecialist, type SpecialistInput } from './specialists';
-import { completeJson, hasAnyLlmKey } from './llm';
+import { completeJson } from './llm';
 import type { AgentTrace, CriticReview, Lang, SiteMetrics, SpecialistFinding } from './types';
 
 /** V2.0 weights — single source of truth for free AND premium tiers. */
