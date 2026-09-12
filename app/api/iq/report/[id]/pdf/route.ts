@@ -8,14 +8,13 @@ import {
   numScore,
   parseDecisionTier,
 } from '@/lib/funnel/iq-risk-audit-model';
-import chromium from '@sparticuz/chromium';
-import puppeteer from 'puppeteer-core';
 import type { Browser } from 'puppeteer-core';
+import { isVercelServerless, launchPdfBrowser } from '@/lib/iq/render/chromium';
+import { renderReportPdf } from '@/lib/iq/render/pdf';
+import { getPublicBaseUrl } from '@/lib/funnel/base-url';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
-
-const PDF_VIEWPORT = { width: 1200, height: 1600 };
 
 /**
  * D-2: cold-start font cache.
@@ -62,72 +61,32 @@ async function loadCjkFontDataUri(): Promise<string | null> {
   return cjkFontFetchPromise;
 }
 
-function isVercelServerless(): boolean {
-  return (
-    process.env.VERCEL === '1' ||
-    process.env.VERCEL === 'true' ||
-    Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME)
-  );
-}
+/**
+ * Chromium launch lives in lib/iq/render/chromium.ts (shared with the Phase 5
+ * /print renderer). Vercel: @sparticuz/chromium; local: env path → bundled →
+ * system Chrome.
+ */
 
 /**
- * Vercel: always @sparticuz/chromium. Local: PUPPETEER_EXECUTABLE_PATH / CHROME_PATH, then bundled chromium, then common Chrome paths.
+ * Phase 5: base URL the serverless function uses to reach its own /print page.
+ * Configured public URL first (NEXT_PUBLIC_APP_URL / NEXT_PUBLIC_BASE_URL /
+ * VERCEL_URL), otherwise the origin of the incoming request (local dev on any port).
  */
-async function launchPdfBrowser(): Promise<Browser> {
-  if (isVercelServerless()) {
-    // D-2: drop the graphics stack (no GPU on Lambda). This also avoids
-    // extracting swiftshader.tar.br at runtime, shaving ~15MB off cold-start.
-    try {
-      (chromium as unknown as { setGraphicsMode: boolean }).setGraphicsMode = false;
-    } catch {
-      /* older versions ignore */
-    }
-    const args = [
-      ...chromium.args,
-      '--font-render-hinting=none',
-      '--disable-font-subpixel-positioning',
-    ];
-    return puppeteer.launch({
-      args,
-      defaultViewport: PDF_VIEWPORT,
-      executablePath: await chromium.executablePath(),
-      headless: true,
-    });
-  }
+function resolvePrintBaseUrl(req: Request): string {
+  const configured =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.NEXT_PUBLIC_BASE_URL?.trim() || process.env.VERCEL_URL?.trim();
+  if (configured) return getPublicBaseUrl();
+  return new URL(req.url).origin;
+}
 
-  const envPath =
-    process.env.PUPPETEER_EXECUTABLE_PATH?.trim() || process.env.CHROME_PATH?.trim();
-  if (envPath) {
-    return puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-      defaultViewport: PDF_VIEWPORT,
-      executablePath: envPath,
-      headless: true,
-    });
-  }
-
-  try {
-    return await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: PDF_VIEWPORT,
-      executablePath: await chromium.executablePath(),
-      headless: true,
-    });
-  } catch (e) {
-    console.warn('[api/iq/report/pdf] @sparticuz/chromium launch failed, trying system Chrome:', e);
-    const sys =
-      process.platform === 'darwin'
-        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-        : process.platform === 'win32'
-          ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-          : '/usr/bin/google-chrome-stable';
-    return puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-      defaultViewport: PDF_VIEWPORT,
-      executablePath: sys,
-      headless: true,
-    });
-  }
+function pdfResponse(bytes: Uint8Array, filename: string): NextResponse {
+  return new NextResponse(Buffer.from(bytes), {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Cache-Control': 'private, max-age=0, must-revalidate',
+    },
+  });
 }
 
 type FullShape = Record<string, unknown>;
@@ -1212,8 +1171,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const debug = url.searchParams.get('debug') === '1' && process.env.NODE_ENV !== 'production';
   const t0 = Date.now();
 
+  // Phase 5 dev aid: ?fixture=millbrae renders qa/fixtures/report_model_millbrae.json
+  // through the /print page without a database row. Never honoured in production.
+  const fixture = process.env.NODE_ENV !== 'production' ? url.searchParams.get('fixture')?.trim() || null : null;
+
   let browser: Browser | null = null;
   try {
+    if (fixture) {
+      if (req.headers.get('x-iq-pdf-probe') === '1') {
+        return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
+      }
+      const bytes = await renderReportPdf({ reportId: id, baseUrl: resolvePrintBaseUrl(req), fixture });
+      console.log(`[api/iq/report/pdf] fixture=${fixture} bytes=${bytes.length} elapsed_ms=${Date.now() - t0}`);
+      return pdfResponse(bytes, `RestaurantIQ-Report-${fixture}.pdf`);
+    }
+
     const fontPromise = lang === 'zh' ? loadCjkFontDataUri() : Promise.resolve(null);
     const report = await iqGetReport(id);
     if (!report) {
@@ -1222,6 +1194,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     if (!report.paid && !debug) {
       return NextResponse.json({ error: 'Report not paid' }, { status: 403 });
+    }
+
+    // Phase 5: reports carrying a 360° report_model render through the light
+    // /print page (14 fixed pages). Legacy full_report_json reports fall through
+    // to the HTML-string generator below, unchanged.
+    if (report.report_model_json && typeof report.report_model_json === 'object') {
+      if (req.headers.get('x-iq-pdf-probe') === '1') {
+        return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
+      }
+      const baseUrl = resolvePrintBaseUrl(req);
+      console.log(`[api/iq/report/pdf] start id=${id} path=print base=${baseUrl} on=${isVercelServerless() ? 'vercel' : 'local'}`);
+      const bytes = await renderReportPdf({ reportId: id, baseUrl });
+      console.log(`[api/iq/report/pdf] done id=${id} path=print bytes=${bytes.length} elapsed_ms=${Date.now() - t0}`);
+      return pdfResponse(bytes, `RestaurantIQ-Report-${id.slice(0, 8)}-360.pdf`);
     }
 
     const full = (report.full_report_json || {}) as FullShape;
@@ -1285,13 +1271,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       `[api/iq/report/pdf] done id=${id} bytes=${pdfBuffer.length} elapsed_ms=${Date.now() - t0}`,
     );
 
-    return new NextResponse(Buffer.from(pdfBuffer), {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-        'Cache-Control': 'private, max-age=0, must-revalidate',
-      },
-    });
+    return pdfResponse(pdfBuffer, filename);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     const stack = error instanceof Error ? error.stack : undefined;

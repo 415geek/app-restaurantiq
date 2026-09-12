@@ -347,3 +347,9 @@
 - 运营脚本：`scripts/load_overture.py`（月）、`scripts/snapshot-reviews.ts`（月）、`scripts/refresh-hubs.ts`（月）、`scripts/load-lodes.ts`（年）、`scripts/refresh-cex.ts`（年）、`scripts/backtest-golden.ts`（每次参数变更）。
 - 降级策略均落在 `sources[]`：Google 配额耗尽 → 只用 Overture、评分类指标「未获取」、置信度自动下调；Mapbox 耗尽 → 直线半径；LLM 失败 → 模板句；任何降级都出现在第 14 页来源表。
 - 「连续 20 份报告平均成本 ≤ $0.50、P95 ≤ 90 秒」需在有网环境用 `replay:golden --engine v360` 循环验证；离线重放的数据成本为 $0.06。
+
+## 360° 升级 · Phase 5b 报告信息架构与渲染（2026-09-12）
+- 新增 `/print/[reportId]`（`app/print/`）：服务端读取 `report_model_json` + `narrative_json` 渲染 **浅色打印版 14 页**（US Letter、18 mm 页边距、页脚 = 报告编号 · 数据截至 · 页码），强制浅色 token（`prefers-color-scheme` 无效），Noto Sans SC + Inter，Lucide 线性图标，无 emoji；每页固定结构：action title（含判断）→ 英文小标题 → 一个核心图表 / 表格 → ≤ 120 字解读 → 数据来源 chip（官方统计 / 平台数据 / 用户输入 / 模型估算 / 联网检索，状态取自 `sources[]`）。非生产环境 `?fixture=millbrae` 可用离线模型预览。
+- 页面：封面 / 执行摘要（结论徽章 + 三支撑 + 三风险 + 保本 vs 捕获双柱 + 签约前条件）/ 商圈地图（SVG：四圈层等时圈 + L1/L2 竞品 + L4 锚点 + 拟选址，仅 Overture 与自算图层，不含 Google 底图）/ Esri 式四圈层表 / 客群画像 / 竞争格局（L1–L4、价格阶梯、集聚曲线位置、关店率）/ 直接竞品卡片 + 标杆营收带 / 品类缺口与替代菜系 / Huff 需求捕获（圈层堆叠、午晚拆分、覆盖比仪表）/ 财务模型（成本表、三情景、敏感性瀑布，无 CapEx 不显示回收期）/ 六维评分 / 风险矩阵 / 签约核查与 90 天计划 / 方法与数据来源（`sources[]` 表 + 公式）。缺失值一律「未获取」。
+- `lib/iq/render/pdf.ts`：服务端 Chromium 打开 `/print`，等待 `window.__REPORT_READY__`，`page.pdf({ format: 'Letter', printBackground: true, preferCSSPageSize: true })`；`GET /api/iq/report/[id]/pdf` 在存在 `report_model_json` 时自动走该路径（否则沿用旧模板），彻底替代浏览器打印深色页面（R3）。`/print` 在生产环境要求已付费或 `IQ_PRINT_TOKEN`。
+- 视觉回归（门槛 7）：`npx tsx scripts/smoke-print.ts`（需 `next dev -p 3111`）——实测 14 个 `h1.action-title`、0 个空单元格、全部文本节点对比度 ≥ 4.5:1（含 SVG 文字）、每页不溢出、PDF 1.4 MB / 14 页 / Letter、无 tofu 字形。为满足对比度，珊瑚色只作徽章填充与关键数字下划线，语义色文字改用加深色阶。
