@@ -13,7 +13,7 @@ import type { ReportModel } from '../model/schema';
 export type PageId = `page_${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15}`;
 
 export const PAGES: Array<{ id: PageId; n: number; zh: string; en: string; fragment: string[] }> = [
-  { id: 'page_1', n: 1, zh: '封面', en: 'Cover', fragment: ['meta', 'input', 'score.total', 'score.verdict', 'confidence.total'] },
+  { id: 'page_1', n: 1, zh: '报告概览', en: 'At a Glance', fragment: ['meta', 'input', 'score.total', 'score.verdict', 'confidence.total'] },
   { id: 'page_2', n: 2, zh: '执行摘要', en: 'Executive Summary', fragment: ['score', 'demand', 'finance.breakeven_monthly', 'finance.safety_monthly', 'risks', 'competitors.l1', 'competitors.l2_count', 'trade_area.primary_ring'] },
   { id: 'page_3', n: 3, zh: '商圈地图', en: 'Trade Area Map', fragment: ['trade_area.primary_ring', 'trade_area.rings', 'competitors.l1', 'competitors.l2_count', 'competitors.l4', 'access.transit'] },
   { id: 'page_4', n: 4, zh: '商圈需求', en: 'Demand Coverage', fragment: ['trade_area', 'demand.cuisine_share'] },

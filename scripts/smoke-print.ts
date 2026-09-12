@@ -1,7 +1,7 @@
 /**
  * Phase 5.5 smoke: render the /print page for the Millbrae fixture with a local
  * Chromium, save qa/out/print-millbrae.pdf + per-page screenshots, and assert:
- *   - exactly 15 h1.action-title
+ *   - exactly 15 h1.action-title (plus an unnumbered cover page → 16 PDF pages)
  *   - no text node with contrast < 4.5:1 against its effective background
  *   - no empty <td>
  *   - PDF between 50 KB and 5 MB
@@ -23,7 +23,8 @@ const BASE = argOf('--base', process.env.SMOKE_BASE_URL ?? 'http://localhost:311
 const FIXTURE = argOf('--fixture', 'millbrae');
 const OUT = path.join(process.cwd(), 'qa', 'out');
 /** 14 analysis pages + 总结与建议 (page 15). */
-const EXPECTED_PAGES = 15;
+const EXPECTED_PAGES = 15; // numbered analysis pages (h1.action-title)
+const EXPECTED_PDF_PAGES = EXPECTED_PAGES + 1; // + unnumbered cover page
 /** Customer-facing text must not leak engine ids (研发提示词 wording rule). */
 const JARGON_RE = /\b(walk10|drive5|drive10|drive15|coverage_ratio|cluster_score|Huff|HHI|P25|P75|CapEx)\b|\bL[1-4]\b|β|置信度/;
 
@@ -226,7 +227,7 @@ async function main() {
     // 4b) page-box overflow (content clipped by the fixed 243 mm page)
     await page.emulateMediaType('print');
     const overflow = (await page.evaluate(PAGE_OVERFLOW_JS)) as Array<{ page: number; overflow: number }>;
-    assert('no_page_overflow', overflow.length === 0, overflow.length ? overflow.map((o) => `p${o.page} +${o.overflow}px`).join(', ') : `all ${EXPECTED_PAGES} pages fit the 243 mm box`);
+    assert('no_page_overflow', overflow.length === 0, overflow.length ? overflow.map((o) => `p${o.page} +${o.overflow}px`).join(', ') : `cover + all ${EXPECTED_PAGES} pages fit the 243 mm box`);
     console.log(`[smoke-print] body fill (content ÷ available): ${await page.evaluate(PAGE_FILL_JS)}`);
 
     // 5) screenshots per page
@@ -246,7 +247,7 @@ async function main() {
     const kb = pdf.length / 1024;
     assert('pdf_size', pdf.length > 50 * 1024 && pdf.length < 5 * 1024 * 1024, `${kb.toFixed(1)} KB → ${pdfPath}`);
     const pdfPages = (Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length;
-    assert('pdf_pages', pdfPages === EXPECTED_PAGES, `${pdfPages} PDF pages (expected ${EXPECTED_PAGES})`);
+    assert('pdf_pages', pdfPages === EXPECTED_PDF_PAGES, `${pdfPages} PDF pages (expected ${EXPECTED_PDF_PAGES} = cover + ${EXPECTED_PAGES})`);
 
     if (consoleErrors.length) console.log(`[smoke-print] console errors (${consoleErrors.length}):\n  ${consoleErrors.slice(0, 5).join('\n  ')}`);
   } finally {

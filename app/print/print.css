@@ -626,7 +626,100 @@ strong {
   border-style: dashed;
 }
 
-/* ---------- cover ---------- */
+/* ---------- cover page (unnumbered title page) ---------- */
+.page-cover {
+  padding-bottom: 0;
+}
+.cover-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.cover-page-brand {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 8pt;
+  border-bottom: 2px solid var(--navy);
+}
+.cover-page-title {
+  margin-top: 24pt;
+}
+.cover-page-kicker {
+  display: inline-block;
+  font-size: 9pt;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--navy);
+  background: var(--coral);
+  padding: 2pt 8pt;
+  border-radius: 2pt;
+  margin-bottom: 10pt;
+}
+.cover-page-h {
+  font-size: 34pt;
+  line-height: 1.2;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.01em;
+  font-family: 'Noto Sans SC', 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Zen Hei', sans-serif;
+}
+.cover-page-sub {
+  font-family: var(--font-latin);
+  font-size: 13pt;
+  color: var(--muted);
+  margin: 4pt 0 0;
+}
+.cover-page-site {
+  margin-top: 18pt;
+  padding: 10pt 12pt;
+  border-left: 4px solid var(--coral);
+  background: var(--panel);
+}
+.cover-page-address {
+  font-family: var(--font-latin);
+  font-size: 15pt;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.cover-page-cuisine {
+  font-size: 11pt;
+  margin-top: 4pt;
+}
+.cover-page-map {
+  margin-top: 14pt;
+  border: 1px solid var(--rule);
+  background: var(--panel);
+  overflow: hidden;
+}
+.cover-page-map .map-figure img,
+.cover-page-map svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.cover-page-meta {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10pt;
+  padding-top: 10pt;
+  border-top: 1px solid var(--rule);
+}
+.cover-page-meta-v {
+  font-size: 9.5pt;
+  font-weight: 600;
+  margin-top: 2pt;
+  word-break: break-all;
+}
+.cover-page-foot {
+  font-size: 8pt;
+  color: var(--muted);
+  line-height: 1.4;
+  margin: 8pt 0 0;
+}
+
+/* ---------- page 1 · at a glance ---------- */
 .cover {
   display: flex;
   flex-direction: column;
