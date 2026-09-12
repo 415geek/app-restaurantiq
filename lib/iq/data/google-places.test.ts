@@ -16,7 +16,7 @@ const COST = getDefaults().data_budget.google_places_cost_usd_per_call;
 interface Req {
   url: string;
   headers: Record<string, string>;
-  body: { includedTypes: string[]; maxResultCount: number; locationRestriction: { circle: { center: { latitude: number; longitude: number }; radius: number } } };
+  body: { includedTypes?: string[]; textQuery?: string; maxResultCount: number; locationRestriction: { circle: { center: { latitude: number; longitude: number }; radius: number } } };
 }
 
 function ctxWith(opts: { key?: string | null; respond?: (req: Req, n: number) => Response }): FetchContext & { reqs: Req[] } {
@@ -26,7 +26,7 @@ function ctxWith(opts: { key?: string | null; respond?: (req: Req, n: number) =>
     const req: Req = { url: String(input), headers, body: JSON.parse(String(init?.body)) };
     reqs.push(req);
     if (opts.respond) return opts.respond(req, reqs.length);
-    const types = req.body.includedTypes.join(',');
+    const types = (req.body.includedTypes ?? []).join(',');
     if (types === 'chinese_restaurant') return new Response(chinese, { status: 200 });
     if (types === 'restaurant') return new Response(restaurant, { status: 200 });
     return new Response('{}', { status: 200 });
@@ -49,12 +49,12 @@ test('D6 call plan: ≤ 6 calls, cuisine-specific type appended, cap respected',
   assert.equal(hunan.length, 6);
   assert.deepEqual(hunan[0], { includedTypes: ['chinese_restaurant'], radiusM: 1609, label: 'chinese_restaurant @1mi' });
   assert.equal(hunan[1].radiusM, 4828);
-  assert.deepEqual(hunan[5].includedTypes, ['hunan_restaurant']);
-  assert.equal(hunan[5].radiusM, 4828);
-  assert.deepEqual(buildCallPlan('hot_pot')[5].includedTypes, ['hot_pot_restaurant']);
-  // other_chinese maps to chinese_restaurant which is already in the plan → 5 calls.
-  assert.equal(buildCallPlan('other_chinese').length, 5);
-  assert.equal(buildCallPlan('dongbei').length, 5);
+  assert.equal(hunan[5].textQuery, 'Hunan restaurant');
+  assert.equal(hunan[5].radiusM, 8047);
+  assert.deepEqual(hunan[4].includedTypes, ['tea_house', 'dessert_shop']);
+  // Every cuisine uses the same six Table-A-valid calls (no per-cuisine Google types exist).
+  assert.equal(buildCallPlan('other_chinese').length, 6);
+  assert.equal(buildCallPlan('dongbei').length, 6);
   assert.equal(buildCallPlan('hunan', 3).length, 3);
   assert.equal(buildCallPlan('hunan', 99).length, 6);
 });
@@ -66,8 +66,8 @@ test('D6 ok: 6 calls, Pro field mask, cost accounting, dedupe, price mapping, 30
   assert.equal(ctx.reqs.length, 6);
   assert.equal(r.data!.calls_made, 6);
   assert.equal(r.data!.api_status, 'ok');
-  for (const q of ctx.reqs) {
-    assert.equal(q.url, 'https://places.googleapis.com/v1/places:searchNearby');
+  assert.equal(ctx.reqs.filter((q) => q.url.endsWith(':searchText')).length, 1, 'one Text Search for the cuisine');
+  for (const q of ctx.reqs.filter((q) => q.url.endsWith(':searchNearby'))) {
     assert.equal(q.headers['X-Goog-Api-Key'], 'AIza-test');
     assert.ok(!/reviews|atmosphere|editorial/i.test(q.headers['X-Goog-FieldMask']));
     assert.ok(q.headers['X-Goog-FieldMask'].includes('places.userRatingCount'));
@@ -75,8 +75,8 @@ test('D6 ok: 6 calls, Pro field mask, cost accounting, dedupe, price mapping, 30
     assert.equal(q.body.locationRestriction.circle.center.latitude, millbrae.lat);
   }
   assert.deepEqual(
-    ctx.reqs.map((q) => `${q.body.includedTypes.join('+')}@${q.body.locationRestriction.circle.radius}`),
-    ['chinese_restaurant@1609', 'chinese_restaurant@4828', 'restaurant@1609', 'asian_grocery_store+supermarket@1609', 'bubble_tea_shop+dessert_shop@1609', 'hunan_restaurant@4828'],
+    ctx.reqs.filter((q) => q.body.includedTypes).map((q) => `${(q.body.includedTypes ?? []).join('+')}@${q.body.locationRestriction.circle.radius}`),
+    ['chinese_restaurant@1609', 'chinese_restaurant@4828', 'restaurant@1609', 'asian_grocery_store+supermarket@1609', 'tea_house+dessert_shop@1609'],
   );
   // Cost: 6 × per-call price, attributed to D6.
   assert.equal(r.cost_usd, Math.round(6 * COST * 10_000) / 10_000);

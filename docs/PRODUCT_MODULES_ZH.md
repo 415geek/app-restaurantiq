@@ -371,3 +371,8 @@
 - 新增迁移 `0010_iq_settings.sql` 与 `lib/server/runtime-config.ts`：允许名单内的 key（`GOOGLE_MAPS_API_KEY`、`MAPBOX_TOKEN`、`CRON_SECRET`、`TAVILY_API_KEY`、`BRAVE_SEARCH_API_KEY`、`CENSUS_API_KEY`、`IQ_PRINT_TOKEN`、`IQ360_AUTO`、`IQ_ENGINE`、`IQ_STRUCTURED_OUTPUT`、`RESEND_API_KEY`、`IQ_EMAIL_FROM`、`YELP_API_KEY`、`DATABASE_URL`）可存于 `public.iq_settings`（RLS deny-all，仅 service role），每个 serverless 实例启动时读取并**覆盖** `process.env`，5 分钟刷新——运营方无需登录 Vercel 也能更换失效的 key。
 - 所有入口（免费分析、付费报告与 worker、360° 生成、ops、PDF、`/print`、Stripe webhook、健康探针）在处理前调用 `ensureRuntimeConfig()`；表不存在或 Supabase 未配置时静默沿用部署环境变量。
 - 注意：Vercel Cron 发送的 `Authorization: Bearer` 取自 Vercel 自身的 `CRON_SECRET` 环境变量，表里的值只用于校验；要让定时任务通过鉴权，仍需在 Vercel 设同一个值。
+
+## 360° 首次生产运行修正（2026-09-12）
+- Google Places (New) 的 `bubble_tea_shop` / `hunan_restaurant` 等类型不在 Table A（返回 INVALID_ARGUMENT）：调用计划改为 `tea_house` + `dessert_shop`，直接竞品（L1）改用 **Text Search (New)**「<菜系> restaurant」偏置 5 英里（Nearby 每次最多 20 条会漏掉 L1）；Bootstrap 模式接受 Google `partial`。
+- block group 级 C16001 中文使用者缺失时，中文家庭占比与 p_cn 回退到 B02018 华裔祖源 ÷ 人口（此前四圈层均为「未获取」）。
+- 叙事守卫支持 `[src:a.b[3].c]` 引用；正文上限放宽到 200 / 560 字并要求点号路径；`precheck_reasons` 去重。新增 `.github/workflows/report360-trigger.yml`（手动 / 推送 `.github/report360-queue.txt` 触发生成）。

@@ -412,7 +412,7 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
   const degradations: string[] = [];
   const overtureLoaded = Boolean(bundle.overture?.data?.loaded);
   const foodPool = merged.filter((m) => m.is_food).length;
-  if (!overtureLoaded && bundle.google?.status === 'ok' && foodPool >= 15) {
+  if (!overtureLoaded && (bundle.google?.status === 'ok' || bundle.google?.status === 'partial') && foodPool >= 15) {
     degradations.push(`overture_not_loaded_google_only:${foodPool}`);
   }
   for (const id of ['D1', 'D2', 'D5'] as const) {

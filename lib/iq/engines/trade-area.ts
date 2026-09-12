@@ -100,7 +100,14 @@ export function computeBlockGroupDemand(bg: BlockGroupInput, p: TradeAreaParams)
   const hh = n(bg.households);
   if (hh <= 0 || bg.median_income == null) return { restaurant: 0, chinese: 0, cuisine: 0, p_cn: null };
   const restaurant = hh * p.fafhForIncome(bg.median_income) * d.region_multiplier;
-  const p_cn = bg.chinese_speakers != null && n(bg.pop5plus) > 0 ? Math.min(1, n(bg.chinese_speakers) / n(bg.pop5plus)) : null;
+  // C16001 (Chinese speakers) when the block group has it; otherwise B02018 Chinese ancestry ÷ pop
+  // (downscaled from the tract) — never a county-wide average when a local signal exists.
+  const p_cn =
+    bg.chinese_speakers != null && n(bg.pop5plus) > 0
+      ? Math.min(1, n(bg.chinese_speakers) / n(bg.pop5plus))
+      : bg.chinese_pop_est != null && n(bg.pop) > 0
+        ? Math.min(1, n(bg.chinese_pop_est) / n(bg.pop))
+        : null;
   const pcn = p_cn ?? (p.county.chinese_hh_share ?? 0);
   const chinese = restaurant * (pcn * d.s_cn + (1 - pcn) * d.s_other);
   return { restaurant, chinese, cuisine: chinese * p.cuisine_share, p_cn };
@@ -193,7 +200,7 @@ export function computeTradeArea(input: {
       pop: contributing ? Math.round(pop) : null,
       hh: contributing ? Math.round(hh) : null,
       median_income: incomeHhBase > 0 ? Math.round(incomeHh / incomeHhBase) : null,
-      chinese_hh_share: pop5 > 0 ? Math.round((cn / pop5) * 1000) / 1000 : null,
+      chinese_hh_share: pop5 > 0 ? Math.round((cn / pop5) * 1000) / 1000 : pop > 0 && cnPop > 0 ? Math.round((cnPop / pop) * 1000) / 1000 : null,
       chinese_pop: contributing ? Math.round(cnPop) : null,
       age_25_44_share: pop > 0 ? Math.round((age / pop) * 1000) / 1000 : null,
       family_share: hh > 0 ? Math.round((fam / hh) * 1000) / 1000 : null,
