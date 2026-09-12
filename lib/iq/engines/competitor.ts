@@ -31,6 +31,8 @@ export interface CandidatePoi {
   operating_status: string; // open | closed_temporarily | closed_permanently | unknown | OPERATIONAL | CLOSED_PERMANENTLY
   brand?: string | null;
   hours_per_week?: number | null;
+  /** Overture rows that were already linked to a Google place (iq_poi.google_place_id). */
+  google_place_id?: string | null;
   /** Pre-classified (Phase 3.3 stored on iq_poi.sub_cuisine). */
   sub_cuisine?: string | null;
   sub_cuisine_confidence?: number | null;
@@ -150,14 +152,30 @@ export function classifyCandidate(c: CandidatePoi): { sub_cuisine: string | null
 /** 3.2 merge Overture + Google records that are the same business. */
 export function dedupeCandidates(site: LatLng, candidates: CandidatePoi[]): MergedPoi[] {
   const merged: MergedPoi[] = [];
+  const isCjk = (s: string) => /[一-鿿]/.test(s) && !/[A-Za-z]{3,}/.test(s);
   for (const c of candidates) {
     const norm = normalizeName(c.name);
     const cls = classifyCandidate(c);
     const existing = merged.find((m) => {
-      if (haversineM(m, c) > 100) return false;
+      // 1) explicit link: Overture row already carries this Google place id (or vice versa)
+      if (c.source === 'google' && m.ids.overture && m.google_place_id === c.id) return true;
+      if (c.source === 'overture' && c.google_place_id && m.ids.google === c.google_place_id) return true;
+      const dist = haversineM(m, c);
+      if (dist > 100) return false;
       const mn = normalizeName(m.name);
       const nameMatch = mn === norm || (mn.length > 3 && norm.length > 3 && (mn.includes(norm) || norm.includes(mn)));
-      return nameMatch && m.is_food === cls.is_food;
+      if (nameMatch && m.is_food === cls.is_food) return true;
+      // 2) same spot, one record named in Chinese and the other in English (Overture 湘园 vs Google
+      //    "Xiang Yuan Hunan Cuisine"): same business, different script. Only for food POIs, ≤ 60 m,
+      //    and only when the Chinese-named side has no Latin name of its own to compare.
+      const cjkA = isCjk(m.name);
+      const cjkB = isCjk(c.name);
+      if (dist <= 60 && m.is_food && cls.is_food && cjkA !== cjkB) {
+        const zhSide = cjkA ? m : c;
+        const zhAlt = zhSide.name_zh ?? null;
+        return zhAlt == null || normalizeName(zhAlt) === (cjkA ? norm : mn);
+      }
+      return false;
     });
     if (existing) {
       if (c.source === 'google') existing.ids.google = c.id;
@@ -176,6 +194,14 @@ export function dedupeCandidates(site: LatLng, candidates: CandidatePoi[]): Merg
         existing.classified_by = cls.method ?? 'rule';
         existing.is_chinese = true;
       }
+      // Keep both scripts: Latin name as `name`, Chinese as `name_zh` (renderers show 中文 first).
+      if (isCjk(existing.name) && !isCjk(c.name)) {
+        existing.name_zh = existing.name_zh ?? existing.name;
+        existing.name = c.name;
+      } else if (!isCjk(existing.name) && isCjk(c.name) && !existing.name_zh) {
+        existing.name_zh = c.name;
+      }
+      if (c.google_place_id && !existing.google_place_id) existing.google_place_id = c.google_place_id;
       continue;
     }
     merged.push({

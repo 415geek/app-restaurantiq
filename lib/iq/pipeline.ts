@@ -127,6 +127,7 @@ function candidatesFromBundle(bundle: DataBundle): CandidatePoi[] {
       primary_category: p.primary_category,
       operating_status: p.operating_status || 'unknown',
       brand: p.brand,
+      google_place_id: p.google_place_id,
       sub_cuisine: p.sub_cuisine,
       sub_cuisine_confidence: p.sub_cuisine_confidence,
       sub_cuisine_method: p.sub_cuisine ? 'rule' : null,

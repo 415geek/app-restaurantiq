@@ -84,3 +84,22 @@ test('cluster score U-shape and LLM leftovers', () => {
   applyLlmClassifications(m2, [{ id: 'y', sub_cuisine: 'hunan', confidence: 0.4 }]);
   assert.equal(m2[0].sub_cuisine, 'other_chinese');
 });
+
+test('dedupe: Overture 湘园 + Google "Xiang Yuan Hunan Cuisine" at the same spot merge; google_place_id link merges regardless of distance/name', () => {
+  const zh = poi('ov2', '湘园', 0, 300, { rating: null, rating_count: null });
+  const en = poi('g2', 'Xiang Yuan Hunan Cuisine', 0, 330, { source: 'google', rating: 4.5, rating_count: 275, operating_status: 'OPERATIONAL' });
+  const m = dedupeCandidates(site, [zh, en]);
+  assert.equal(m.length, 1);
+  assert.equal(m[0].name, 'Xiang Yuan Hunan Cuisine');
+  assert.equal(m[0].name_zh, '湘园');
+  assert.equal(m[0].rating_count, 275);
+  const linked = poi('ov3', '老北京', 90, 900, { google_place_id: 'ChIJ-link' });
+  const g = poi('ChIJ-link', 'Old Beijing Restaurant', 120, 1400, { source: 'google', rating: 4.1, rating_count: 90 });
+  const m2 = dedupeCandidates(site, [linked, g]);
+  assert.equal(m2.length, 1);
+  assert.deepEqual(m2[0].ids, { overture: 'ov3', google: 'ChIJ-link' });
+  // two different Chinese-named restaurants 300 m apart stay separate
+  const a = poi('a', '川味观', 0, 200);
+  const b = poi('b', 'Sichuan House', 0, 500, { source: 'google' });
+  assert.equal(dedupeCandidates(site, [a, b]).length, 2);
+});
