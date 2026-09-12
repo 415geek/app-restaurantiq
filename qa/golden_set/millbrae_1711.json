@@ -1,5 +1,5 @@
 {
-  "$comment": "Regression baseline for the 360° upgrade (研发提示词 §1.5 / Phase 0). Reconstructed from the production report 5c361b95 (Millbrae · El Camino Real · 湘菜). The exact stored `input` row lives in Supabase iq_location_reports; replace `input` with `scripts/replay-golden.ts --pull 5c361b95` output when that project is reachable. Everything under `observed_defects` is what the OLD pipeline produced and what the new QA gates must intercept.",
+  "$comment": "Regression baseline for the 360° upgrade (研发提示词 §1.5 / Phase 0). `input` rent/sqft are the REAL user inputs pulled from production row 5c361b95 (market_data_json.user_inputs: $17,000 / 2,500 sqft); seats/ticket/delivery are the assumptions the old report stated. Production market_data_json for this row has NO geocode / places / ACS at all — the legacy Google-only gather failed silently, which is the mechanical root of R1 and R2.",
   "case_id": "millbrae_1711",
   "source_report_id": "5c361b95",
   "input": {
@@ -9,8 +9,8 @@
     "cuisine_label_zh": "湘菜",
     "business_type_raw": "湘菜 Hunan restaurant",
     "language": "zh",
-    "rent_usd": 12000,
-    "sqft": 2200,
+    "rent_usd": 17000,
+    "sqft": 2500,
     "seats": 60,
     "capex_usd": null,
     "ticket_in": 24,
@@ -30,51 +30,99 @@
     {
       "id": "R1",
       "title": "0 competitors written up as 零竞争空白 · 机会",
-      "observed": { "competitors_returned": 0, "wording": ["零竞争", "空白", "机会"] },
+      "observed": {
+        "competitors_returned": 0,
+        "wording": [
+          "零竞争",
+          "空白",
+          "机会"
+        ]
+      },
       "truth": "Millbrae + Burlingame have dozens of Chinese restaurants within drive10; the fetch pipeline failed.",
       "gate": "Phase 3.9 competitor guard + Phase 6 gate 2/6"
     },
     {
       "id": "R2",
       "title": "ACS for ZIP 94030 reported 无法解析",
-      "observed": { "acs_status": "unresolved", "geography_used": "zip" },
+      "observed": {
+        "acs_status": "unresolved",
+        "geography_used": "zip"
+      },
       "truth": "ACS is never published by ZIP; tract/block-group data for 06081 exists.",
       "gate": "Phase 1 D2 (tract/BG lookup from D1) + Phase 6 gate 2"
     },
     {
       "id": "R3",
       "title": "PDF dark background hides titles, KPI values and first table column",
-      "observed": { "pages": [3, 4, 5, 7, 8, 10, 14, 18], "theme": "dark", "generator": "browser print" },
+      "observed": {
+        "pages": [
+          3,
+          4,
+          5,
+          7,
+          8,
+          10,
+          14,
+          18
+        ],
+        "theme": "dark",
+        "generator": "browser print"
+      },
       "gate": "Phase 5 /print light theme + Phase 6 gate 7 contrast ≥ 4.5:1"
     },
     {
       "id": "R4",
       "title": "Scenario table internally inconsistent",
-      "observed": { "seats": 60, "turns_per_day": 2.3, "implied_covers_day": 138, "table_orders_day": 246 },
+      "observed": {
+        "seats": 60,
+        "turns_per_day": 2.3,
+        "implied_covers_day": 138,
+        "table_orders_day": 246
+      },
       "gate": "Phase 4.5 single finance function + reconciliation assert |rev − rev(orders)| < $1"
     },
     {
       "id": "R5",
       "title": "Two scoring systems disagree",
-      "observed": { "page_2_dimensions": 7, "page_2_total": 63.4, "page_18_dimensions": 5, "page_18_total": 62 },
+      "observed": {
+        "page_2_dimensions": 7,
+        "page_2_total": 63.4,
+        "page_18_dimensions": 5,
+        "page_18_total": 62
+      },
       "gate": "Phase 4.1 single score() + Phase 6 gate 4"
     },
     {
       "id": "R6",
       "title": "KPIs with no input support",
-      "observed": { "foot_traffic_index": 66, "payback_months": "20–30", "capex_provided": false, "traffic_snapshot": false },
+      "observed": {
+        "foot_traffic_index": 66,
+        "payback_months": "20–30",
+        "capex_provided": false,
+        "traffic_snapshot": false
+      },
       "gate": "Phase 4.4 hide KPI when input missing (payback_months null, traffic tier null)"
     },
     {
       "id": "R7",
       "title": "No map anywhere in the report",
-      "observed": { "maps": 0 },
+      "observed": {
+        "maps": 0
+      },
       "gate": "Phase 5.4 map page (isochrones + Overture POI)"
     },
     {
       "id": "R8",
       "title": "Same facts repeated across 5 sections; 127% rent premium from a single listing",
-      "observed": { "repeated_facts": ["租金溢价 127%", "One Meadow Glen", "BART"], "sections": 5, "rent_comps": 1 },
+      "observed": {
+        "repeated_facts": [
+          "租金溢价 127%",
+          "One Meadow Glen",
+          "BART"
+        ],
+        "sections": 5,
+        "rent_comps": 1
+      },
       "gate": "Phase 5.2 one-fact-one-section + Phase 1 D8 premium only when comps ≥ 3"
     }
   ]

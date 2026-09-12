@@ -11,7 +11,7 @@
       "search": 0.06,
       "D4": 0
     },
-    "elapsed_ms": 261,
+    "elapsed_ms": 311,
     "language": "zh",
     "precheck_reasons": [],
     "degradations": []
@@ -25,8 +25,8 @@
     "cuisine_label_zh": "湘菜",
     "cuisine_label_en": "Hunan",
     "range_class": "destination",
-    "rent_usd": 12000,
-    "sqft": 2200,
+    "rent_usd": 17000,
+    "sqft": 2500,
     "seats": 60,
     "capex_usd": null,
     "ticket_in": 24,
@@ -1478,7 +1478,7 @@
     "captured_covers_day": 43,
     "lunch_usd": 24682,
     "dinner_usd": 6043,
-    "coverage_ratio": 0.236,
+    "coverage_ratio": 0.221,
     "by_ring": [
       {
         "ring": "walk10",
@@ -1566,20 +1566,20 @@
   "finance": {
     "method": "seats×turns 单一口径；保本 = 固定成本 ÷ 边际贡献率；安全线 = 保本 × 1.28",
     "fixed_cost": {
-      "rent": 12000,
+      "rent": 17000,
       "labor": 53893,
       "utilities": 2340,
       "insurance": 936,
       "pos": 624,
       "marketing": 1950,
       "misc": 1950,
-      "total": 73693
+      "total": 78693
     },
     "rent_source": "user_input",
     "contribution_margin": 0.565,
     "variable_rate": 0.435,
-    "breakeven_monthly": 130430,
-    "safety_monthly": 166950,
+    "breakeven_monthly": 139280,
+    "safety_monthly": 178278,
     "scenarios": [
       {
         "id": "pessimistic",
@@ -1593,7 +1593,7 @@
         "delivery_orders_day": 22.5,
         "orders_day": 112.5,
         "monthly_revenue": 75330,
-        "vs_breakeven": 0.578
+        "vs_breakeven": 0.541
       },
       {
         "id": "base",
@@ -1607,7 +1607,7 @@
         "delivery_orders_day": 40,
         "orders_day": 160,
         "monthly_revenue": 120000,
-        "vs_breakeven": 0.92
+        "vs_breakeven": 0.862
       },
       {
         "id": "optimistic",
@@ -1621,7 +1621,7 @@
         "delivery_orders_day": 64.3,
         "orders_day": 214.3,
         "monthly_revenue": 170100,
-        "vs_breakeven": 1.304
+        "vs_breakeven": 1.221
       }
     ],
     "sensitivity": [
@@ -1629,7 +1629,7 @@
         "id": "rent_plus_10",
         "label_zh": "租金 +10%",
         "label_en": "Rent +10%",
-        "monthly_revenue_delta": -2124,
+        "monthly_revenue_delta": -3008,
         "breaks_breakeven": true
       },
       {
@@ -1654,7 +1654,7 @@
         "breaks_breakeven": false
       }
     ],
-    "occupancy_cost_ratio": 0.391,
+    "occupancy_cost_ratio": 0.553,
     "payback_months": null,
     "inputs_missing": [
       "capex(缺 → 回收期隐藏)"
@@ -1672,7 +1672,7 @@
         "weight": 25,
         "weighted": 5,
         "drivers": [
-          "coverage_ratio=0.24"
+          "coverage_ratio=0.22"
         ]
       },
       {
@@ -1721,7 +1721,7 @@
         "weight": 15,
         "weighted": 2.25,
         "drivers": [
-          "占用成本比 = 租金 ÷ 捕获营收：39.1%",
+          "占用成本比 = 租金 ÷ 捕获营收：55.3%",
           "捕获营收 < 保本线 −10"
         ]
       },
@@ -1748,44 +1748,30 @@
       },
       {
         "dimension": "demand_coverage",
-        "text_zh": "模型捕获需求距保本线尚差 $99,705/月，需靠午市套餐 / 外卖 / 宴席补足",
-        "text_en": "Captured demand is $99,705/mo short of break-even; close it with lunch sets / delivery / banquets",
-        "value": 99705
+        "text_zh": "模型捕获需求距保本线尚差 $108,555/月，需靠午市套餐 / 外卖 / 宴席补足",
+        "text_en": "Captured demand is $108,555/mo short of break-even; close it with lunch sets / delivery / banquets",
+        "value": 108555
       }
     ],
     "alternatives": [
       {
-        "cuisine": "skewers",
-        "label_zh": "烧烤 / 串",
-        "label_en": "Skewers / Chinese BBQ",
-        "total": 51.1,
-        "verdict": "NO_GO"
-      },
-      {
         "cuisine": "shanghai",
         "label_zh": "上海 / 江浙",
         "label_en": "Shanghai / Jiangnan",
-        "total": 48.1,
-        "verdict": "NO_GO"
-      },
-      {
-        "cuisine": "hk_cafe",
-        "label_zh": "港式茶餐厅",
-        "label_en": "Hong Kong-style cafe",
-        "total": 46.1,
-        "verdict": "NO_GO"
-      },
-      {
-        "cuisine": "boba",
-        "label_zh": "奶茶 / 甜品",
-        "label_en": "Boba / Dessert",
-        "total": 46.1,
+        "total": 44.3,
         "verdict": "NO_GO"
       },
       {
         "cuisine": "taiwanese",
         "label_zh": "台湾菜",
         "label_en": "Taiwanese",
+        "total": 44.3,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "skewers",
+        "label_zh": "烧烤 / 串",
+        "label_en": "Skewers / Chinese BBQ",
         "total": 44.3,
         "verdict": "NO_GO"
       },
@@ -1846,6 +1832,20 @@
         "verdict": "NO_GO"
       },
       {
+        "cuisine": "hk_cafe",
+        "label_zh": "港式茶餐厅",
+        "label_en": "Hong Kong-style cafe",
+        "total": 42.3,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "boba",
+        "label_zh": "奶茶 / 甜品",
+        "label_en": "Boba / Dessert",
+        "total": 42.3,
+        "verdict": "NO_GO"
+      },
+      {
         "cuisine": "noodles",
         "label_zh": "麻辣烫 / 面食 / 米线",
         "label_en": "Noodles / Malatang",
@@ -1853,16 +1853,16 @@
         "verdict": "NO_GO"
       }
     ],
-    "user_cuisine_rank": 10,
+    "user_cuisine_rank": 8,
     "cannibalization": []
   },
   "risks": [
     {
       "id": 1,
-      "risk_zh": "租金占捕获营收 39.1%，高于 10% 警戒线",
-      "risk_en": "Rent is 39.1% of captured revenue, above the 10% line",
+      "risk_zh": "租金占捕获营收 55.3%，高于 10% 警戒线",
+      "risk_en": "Rent is 55.3% of captured revenue, above the 10% line",
       "prob": "high",
-      "impact_usd": 8928,
+      "impact_usd": 13928,
       "trigger": "签约租金高于本报告条件页给出的上限",
       "hedge": "争取免租期 / 阶梯租金 / 百分比租金条款"
     },
@@ -1877,10 +1877,10 @@
     },
     {
       "id": 3,
-      "risk_zh": "捕获需求仅覆盖保本线 24%",
-      "risk_en": "Captured demand covers only 24% of break-even",
+      "risk_zh": "捕获需求仅覆盖保本线 22%",
+      "risk_en": "Captured demand covers only 22% of break-even",
       "prob": "high",
-      "impact_usd": 99705,
+      "impact_usd": 108555,
       "trigger": "开业 6 个月月营收 < 保本线",
       "hedge": "压缩座位 / 面积以降低固定成本；先做外卖验证需求"
     },
@@ -1925,7 +1925,7 @@
       "rent_comps": {
         "weight": 15,
         "quality": 1,
-        "note": "样本 6 条（挂牌 1 · 搜索 5），中位 $4.38/SF/mo，标的 $5.45/SF/mo，溢价 +24.4%"
+        "note": "样本 6 条（挂牌 1 · 搜索 5），中位 $4.38/SF/mo，标的 $6.8/SF/mo，溢价 +55.3%"
       },
       "daytime_pop": {
         "weight": 10,
@@ -2026,7 +2026,7 @@
       "name": "Rent comps",
       "status": "ok",
       "fetched_at": "2026-09-12T00:00:00.000Z",
-      "coverage_note": "样本 6 条（挂牌 1 · 搜索 5），中位 $4.38/SF/mo，标的 $5.45/SF/mo，溢价 +24.4%",
+      "coverage_note": "样本 6 条（挂牌 1 · 搜索 5），中位 $4.38/SF/mo，标的 $6.8/SF/mo，溢价 +55.3%",
       "license": "Web search snippets + user-supplied listings (fair use; quoted asking rates)",
       "cost_usd": 0.03,
       "source": "Rent comps · 网络搜索 + 1 个用户挂牌页"
@@ -2065,7 +2065,7 @@
       "id": "D12",
       "name": "User inputs",
       "status": "ok",
-      "fetched_at": "2026-09-12T07:44:59.628Z",
+      "fetched_at": "2026-09-12T09:41:11.844Z",
       "coverage_note": "已提供：月租、面积、座位数、堂食客单价、外卖客单价、外卖占比；缺失：CapEx、车位数；菜系：文本 \"湘菜 Hunan restaurant\" → hunan（匹配 \"Hunan\"）；挂牌链接 1 条；缺 CapEx → 回收期隐藏",
       "license": "User-provided",
       "cost_usd": 0,
