@@ -10,9 +10,13 @@ import { migrationsAvailable, runPendingMigrations, type MigrateResult } from '.
 import { loadLodes, parseCountyList, type LoadLodesResult } from './lodes-loader';
 import { refreshHubs, type RefreshHubsResult } from './refresh-hubs';
 import { snapshotReviews, type SnapshotReviewsResult } from './snapshot-reviews';
+import { runSourceGapAgent, type SourceGapAgentResult } from './source-gap-agent';
 
-export const OPS_TASKS = ['migrate', 'hubs', 'snapshots', 'lodes'] as const;
+export const OPS_TASKS = ['migrate', 'hubs', 'snapshots', 'lodes', 'source_gaps'] as const;
 export type OpsTask = (typeof OPS_TASKS)[number];
+
+/** `source_gaps` joins an `all` run only when at least this much budget is left after lodes. */
+export const SOURCE_GAPS_MIN_BUDGET_MS = 60_000;
 
 /** Default SF Bay counties: San Mateo, San Francisco, Santa Clara, Alameda, Contra Costa. */
 export const DEFAULT_LODES_COUNTIES = ['06081', '06075', '06085', '06001', '06013'];
@@ -27,6 +31,10 @@ export interface OpsParams {
   maxDetails: number;
   /** Force lodes to ignore the recorded progress (reload counties). */
   force: boolean;
+  /** source_gaps: max reports regenerated per run (agent default when absent). */
+  maxReports?: number;
+  /** source_gaps: max web searches per run (agent default when absent). */
+  maxSearches?: number;
 }
 
 export function parseOpsParams(sp: URLSearchParams): OpsParams {
@@ -42,6 +50,13 @@ export function parseOpsParams(sp: URLSearchParams): OpsParams {
   const counties = sp.get('counties') ? parseCountyList(sp.get('counties') as string) : DEFAULT_LODES_COUNTIES;
   const truthy = (v: string | null) => v === '1' || v === 'true' || v === 'yes';
   const maxDetails = Number(sp.get('maxDetails') ?? '0');
+  const optionalCount = (name: string): number | undefined => {
+    const raw = sp.get(name);
+    if (raw == null || raw.trim() === '') return undefined;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 0) throw new OpsConfigError(`${name} must be a non-negative integer, got "${raw}"`);
+    return n;
+  };
   return {
     task: task as OpsTask | 'all',
     metro,
@@ -51,6 +66,8 @@ export function parseOpsParams(sp: URLSearchParams): OpsParams {
     dryRun: truthy(sp.get('dryRun')) || truthy(sp.get('dry_run')),
     maxDetails: Number.isFinite(maxDetails) && maxDetails > 0 ? Math.floor(maxDetails) : 0,
     force: truthy(sp.get('force')),
+    maxReports: optionalCount('maxReports'),
+    maxSearches: optionalCount('maxSearches'),
   };
 }
 
@@ -77,6 +94,8 @@ export interface OpsRunners {
   hubs: (p: OpsParams, budgetMs: number) => Promise<RefreshHubsResult>;
   snapshots: (p: OpsParams, budgetMs: number) => Promise<SnapshotReviewsResult>;
   lodes: (p: OpsParams, budgetMs: number, oneCounty: boolean) => Promise<LoadLodesResult>;
+  /** Optional so older runner sets still type-check; `all` skips the task silently when absent. */
+  source_gaps?: (p: OpsParams, budgetMs: number) => Promise<SourceGapAgentResult>;
 }
 
 export function defaultRunners(log: OpsLog): OpsRunners {
@@ -99,6 +118,8 @@ export function defaultRunners(log: OpsLog): OpsRunners {
         skipDone: p.force ? false : undefined,
         countiesPerRun: oneCounty ? 1 : undefined,
       }),
+    source_gaps: (p, budgetMs) =>
+      runSourceGapAgent({ metro: p.metro, dryRun: p.dryRun, budgetMs, maxReports: p.maxReports, maxSearches: p.maxSearches, log }),
   };
 }
 
@@ -132,7 +153,8 @@ export async function runOps(params: OpsParams, opts: RunOpsOptions): Promise<Op
   const runners = opts.runners ?? defaultRunners(opts.log ?? log);
   const budget = createBudget(opts.budgetMs, now);
   const all = params.task === 'all';
-  const order: OpsTask[] = all ? ['migrate', 'hubs', 'snapshots', 'lodes'] : [params.task as OpsTask];
+  // `source_gaps` rides along in `all` only when a runner is configured (defaultRunners always has one).
+  const order: OpsTask[] = all ? ['migrate', 'hubs', 'snapshots', 'lodes', ...(runners.source_gaps ? (['source_gaps'] as const) : [])] : [params.task as OpsTask];
   const outcomes: OpsTaskOutcome[] = [];
 
   log(`start task=${params.task} metro=${params.metro} state=${params.state} year=${params.year} counties=${params.counties.join(',')} dryRun=${params.dryRun} budget=${Math.round(opts.budgetMs / 1000)}s`);
@@ -144,8 +166,13 @@ export async function runOps(params: OpsParams, opts: RunOpsOptions): Promise<Op
       outcomes.push({ task, ok: false, ms: 0, cost_usd: 0, error: 'skipped: invocation budget exhausted' });
       continue;
     }
+    if (task === 'source_gaps' && all && remaining < SOURCE_GAPS_MIN_BUDGET_MS) {
+      // Not a failure: the weekly cron runs it on its own with a full budget.
+      outcomes.push({ task, ok: true, ms: 0, cost_usd: 0, result: { ok: true, skipped: `less than ${SOURCE_GAPS_MIN_BUDGET_MS / 1000} s remaining after lodes` } });
+      continue;
+    }
     // Each task gets a slice of the remaining budget when running `all`; the whole thing otherwise.
-    const slice = !all ? remaining : task === 'lodes' ? remaining : Math.min(ALL_TASK_BUDGET[task as 'hubs' | 'snapshots'] ?? remaining, remaining);
+    const slice = !all ? remaining : task === 'lodes' || task === 'source_gaps' ? remaining : Math.min(ALL_TASK_BUDGET[task as 'hubs' | 'snapshots'] ?? remaining, remaining);
     try {
       let result: unknown;
       switch (task) {
@@ -160,6 +187,10 @@ export async function runOps(params: OpsParams, opts: RunOpsOptions): Promise<Op
           break;
         case 'lodes':
           result = await runners.lodes(params, slice, all);
+          break;
+        case 'source_gaps':
+          if (!runners.source_gaps) throw new Error('source_gaps runner not configured');
+          result = await runners.source_gaps(params, slice);
           break;
       }
       const ok = taskOk(result);

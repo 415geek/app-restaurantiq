@@ -10,7 +10,7 @@ import { fetchAcs, type AcsData } from './acs';
 import { fetchCex, type CexTable } from './cex';
 import { fetchDevPipeline, type DevPipelineData } from './dev-pipeline';
 import { fetchGeocode, type GeocodeData } from './geocode';
-import { fetchGooglePlaces, type GooglePlacesData } from './google-places';
+import { buildCallPlan, fetchGooglePlaces, type GooglePlacesData, type GooglePlacesInput, type PlaceCall } from './google-places';
 import { fetchIsochrones, type IsochroneData } from './isochrone';
 import { fetchLodes, type LodesData } from './lodes';
 import { fetchOverturePois, type OverturePoiData } from './overture';
@@ -78,6 +78,28 @@ export function cityFromAddress(address: string, fallback: string | null): strin
 
 const RADIUS_DRIVE15_M = 5 * 1_609.344;
 
+/** User-named competitors add at most this many Text Search calls on top of the default D6 plan. */
+export const KNOWN_COMPETITOR_MAX_CALLS = 3;
+const KNOWN_COMPETITOR_RADIUS_M = 8047; // 5 mi, same bias circle as the cuisine Text Search
+
+/**
+ * D6 request for a site: the default plan, plus one Text Search per user-named
+ * competitor (≤ 3) with the cap raised accordingly. Without known competitors
+ * the request is exactly the historical one (no explicit plan, yaml cap).
+ */
+export function buildGooglePlacesRequest(site: Pick<SiteInput, 'cuisine' | 'known_competitors'>, lat: number, lng: number): GooglePlacesInput {
+  const defaultsCap = getDefaults().data_budget.google_places_max_calls;
+  const known = site.known_competitors.slice(0, KNOWN_COMPETITOR_MAX_CALLS);
+  if (!known.length) return { lat, lng, cuisineId: site.cuisine, maxCalls: defaultsCap };
+  const extra: PlaceCall[] = known.map((name) => ({
+    includedTypes: ['restaurant'],
+    radiusM: KNOWN_COMPETITOR_RADIUS_M,
+    label: `text:user:${name}`,
+    textQuery: name,
+  }));
+  return { lat, lng, cuisineId: site.cuisine, maxCalls: defaultsCap + extra.length, plan: [...buildCallPlan(site.cuisine, defaultsCap), ...extra] };
+}
+
 async function settle<T>(p: Promise<DataResult<T>>, id: DataSourceId, name: string, ctx: FetchContext): Promise<DataResult<T>> {
   try {
     return await p;
@@ -141,7 +163,7 @@ export async function fetchAllData(
     settle(F.acs({ geography: g.geography, lat: g.lat, lng: g.lng, radiusM: RADIUS_DRIVE15_M * 1.2 }, ctx), 'D2', 'ACS', ctx),
     settle(F.isochrones({ lat: g.lat, lng: g.lng }, ctx), 'D4', 'Isochrones', ctx),
     settle(F.overture({ lat: g.lat, lng: g.lng, radiusM: Math.max(3 * 1_609.344, RADIUS_DRIVE15_M), metro }, ctx), 'D5', 'Overture', ctx),
-    settle(F.google({ lat: g.lat, lng: g.lng, cuisineId: site.cuisine, maxCalls: getDefaults().data_budget.google_places_max_calls }, ctx), 'D6', 'Google Places', ctx),
+    settle(F.google(buildGooglePlacesRequest(site, g.lat, g.lng), ctx), 'D6', 'Google Places', ctx),
     settle(
       F.rent({ address: site.address, city, state: state ?? '', lat: g.lat, lng: g.lng, userRentUsd: site.rent_usd, userSqft: site.sqft, listingUrls: site.listing_urls }, ctx),
       'D8',

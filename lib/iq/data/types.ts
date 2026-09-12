@@ -87,6 +87,8 @@ export interface SiteInput {
   existing_stores: Array<{ address: string; lat?: number; lng?: number }>;
   /** Optional listing URLs the user supplied for rent comps (D8). */
   listing_urls: string[];
+  /** Direct competitors the user named (≤ 10). Drive extra D6 Text Searches and L1 pre-classification. */
+  known_competitors: string[];
 }
 
 export interface CostEntry {

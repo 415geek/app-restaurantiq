@@ -59,9 +59,13 @@ export interface GooglePlacesInput {
   lat: number;
   lng: number;
   cuisineId: string;
-  /** Hard cap for this request; never exceeds defaults.data_budget.google_places_max_calls. */
+  /**
+   * Hard cap for this request. With the default plan it never exceeds
+   * defaults.data_budget.google_places_max_calls; an explicit `plan` carries its
+   * own budget (index.ts appends ≤ 3 user-named competitor Text Searches).
+   */
   maxCalls?: number;
-  /** Override the default plan (used by scripts/snapshot-reviews.ts). */
+  /** Override the default plan (used by scripts/snapshot-reviews.ts and user-named competitors). */
   plan?: PlaceCall[];
 }
 
@@ -218,7 +222,9 @@ export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchCont
     return failed(SOURCE_ID, ctx, { source: 'Google Places API (New) Nearby Search', license: LICENSE, note: NO_KEY_NOTE, error: 'no api key' });
   }
 
-  const maxCalls = Math.min(input.maxCalls ?? Infinity, getDefaults().data_budget.google_places_max_calls);
+  const defaultCap = getDefaults().data_budget.google_places_max_calls;
+  // An explicit plan is trusted to size its own budget (caller passes maxCalls); the default plan is always yaml-capped.
+  const maxCalls = input.plan ? (input.maxCalls ?? defaultCap) : Math.min(input.maxCalls ?? Infinity, defaultCap);
   const plan = (input.plan ?? buildCallPlan(input.cuisineId, input.maxCalls)).slice(0, Math.max(0, maxCalls));
   const byId = new Map<string, GooglePlace>();
   const outcomes: PlaceCallOutcome[] = [];

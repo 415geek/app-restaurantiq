@@ -377,3 +377,14 @@
 - block group 级 C16001 中文使用者缺失时，中文家庭占比与 p_cn 回退到 B02018 华裔祖源 ÷ 人口（此前四圈层均为「未获取」）。
 - 叙事守卫支持 `[src:a.b[3].c]` 引用；正文上限放宽到 200 / 560 字并要求点号路径；`precheck_reasons` 去重。新增 `.github/workflows/report360-trigger.yml`（手动 / 推送 `.github/report360-queue.txt` 触发生成）。
 - 第二次生产运行修正：2023 ACS 的 B02018 / B02015 表布局已变（`_002E` = 华裔除台湾、`_008E` = 台湾；此前用的 `_007E` 是冲绳人），已改正；叙事模型输出上限降为 420 / 950 token 并在提示词中把 120 字设为硬上限；页面 JSON 片段新增 `_derived`（L1 数、L1+L2 合计、替代菜系数等派生计数），避免 NumberGuard 误拦合理的合计数。新增 `.github/workflows/census-probe.yml` 用于在有网的 runner 上核对 Census 变量。
+
+## 360° 报告 · 客户反馈七项（2026-09-12）
+- **去掉成本栏**：第 14 页数据来源表不再有「状态 / 获取 / 成本」列，页脚不再显示「报告成本 $x · 耗时」；面板与正文任何地方都不出现单份报告成本。
+- **竞对去重与准确性**：`engines/competitor.ts` `dedupeCandidates` 三重合并——同一 `google_place_id`（任意距离）、同名 ≤ 100 m、中文名⇄英文名同点位 ≤ 60 m（保留英文为 `name`、中文为 `name_zh`）；第 7 页 `uniqueCompetitors` 再按中英名归一做展示级去重，每家店只出一张卡（中文名为主、英文小字同行）。
+- **大白话专业用词**：`narrative/templates.ts` 全部模板与 `render/pages.tsx` 全部页面重写；`plainZh()` 在渲染时兜底替换旧叙事里的术语（walk10 / drive10 / L1 / L2 / Huff / P25 / HHI / β / coverage_ratio → 步行 10 分钟范围 / 开车 10 分钟范围 / 同菜系竞品 / 其他中餐 / 需求分流模型 / 低位·中位·高位 / 集中度 / 距离衰减参数 / 需求覆盖率），每个必要术语只在首次出现时用括号解释一次；`SYSTEM_ZH` 提示词加入「写给餐饮老板看」的受众规则，`paramNotes('zh')` 把每个 id 的白话说法告诉模型。
+- **真实地图**：新增 `render/static-map.ts`（Google Maps Static API 路线图、淡色样式、四个可达范围多段线、与第 7 页顺序一致的编号竞品标记、轨道站点；`resolveStaticMaps` 服务端抓图转 data URL，失败或无 key 时回退 SVG）；`render/map.tsx` 新增 `MapFigure`（`<img>` 真实底图 + 白话图例），`app/print/[reportId]/page.tsx` 把 `staticMaps` 传给 `ReportDocument`（第 1 页缩略图、第 3 页主图）。
+- **付费补充信息表单**：新增 `components/iq/PaidIntakeForm.tsx`（全部选填、一分钟填完；`embedded` 模式嵌在免费结果页解锁按钮上方，`standalone` 模式在 360° 面板「补充信息并重新生成」）与 `POST /api/funnel/report-inputs`（`lib/funnel/iq-report-inputs.ts` zod 校验、合并写入 `market_data_json.user_inputs`：租金、面积、座位、堂食/外卖客单价、外卖占比、开办投入、车位、已有门店、你知道的竞品 ≤ 10、房源链接、营业时段、备注）。`SiteInput.known_competitors` 驱动 ≤ 3 次额外 Google Text Search（`buildGooglePlacesRequest`）并在去重后预分类为同菜系竞品；提交后强制重新生成并轮询到新模型落地。
+- **数据源补全 agent**：新增 `lib/iq/ops/source-gap-agent.ts` 与 ops 任务 `source_gaps`（`vercel.json` 每周一 12:00 UTC）：扫描近 60 天付费报告中 partial / failed 的数据源 → 若缺口由未加载的表（LODES / iq_poi / 快照）造成且现已加载，则重跑报告并只在 `ok` 数据源增多且不降级为预检时落库（30 天冷却）→ 对无内部修复的缺口（可达范围、客流、租金、公交客流、开发管线、华人社区信号）每次 ≤ 3 次联网搜索，把政府 / 开放数据 / 许可明确的候选写入新表 `iq_source_candidates`（状态 `new`，绝不自动采用）。迁移 `0011_iq_source_candidates.sql`（含 `iq_source_gap_runs` 运行记录，RLS deny-all）。
+- **第 14 页改为数据溯源**：标题「每个数字都可追溯到公开数据来源」，列：数据源 / 内容 / 更新日期 / 来源机构 / 许可；降级与缺口以「数据说明」脚注用白话列出（不再出现「12 个数据源中 9 个完整」和红色「未获取」徽章）；数据完整度仍在参数框以「85/100」小字展示。
+- **第 15 页 总结与建议**：新增 `page_15`（结论徽章 + 一段话结论、决定成败的三个数字：需求覆盖率 / 租金占比 / 综合分、签约前必须做的事（逐字来自 `score.conditions`）、更适合的替代菜系 Top 3、下一步三条）；叙事层把 `page_2` 与 `page_15` 同作 summary 级并最后生成；QA gates、`smoke-print.ts`（新增 no_jargon / no_cost_line / no_source_count_title / page_15_is_summary 断言）与页脚均按 15 页。
+- 其他：`charts.tsx` 份额条为 0 时标签改画在条外（对比度）；ops 路由注释补充 `source_gaps`；360° 面板文案更新为 15 页。

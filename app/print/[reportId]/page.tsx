@@ -14,6 +14,7 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { ReportDocument } from '@/lib/iq/render/pages';
 import { fixtureAllowed, loadPrintModel } from '@/lib/iq/render/load';
+import { resolveStaticMaps } from '@/lib/iq/render/static-map';
 import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 
 export const dynamic = 'force-dynamic';
@@ -48,5 +49,10 @@ export default async function PrintReportPage({ params, searchParams }: { params
     if (!expected || provided !== expected) notFound();
   }
 
-  return <ReportDocument model={loaded.model} />;
+  // Google Static Maps basemaps (page-3 hero + cover thumbnail), fetched here
+  // with the server-side key (populated by ensureRuntimeConfig above) and
+  // inlined as data URLs. Either may be null → MapFigure shows the SVG fallback.
+  const staticMaps = await resolveStaticMaps(loaded.model);
+
+  return <ReportDocument model={loaded.model} staticMaps={staticMaps} />;
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { coercePositiveNumber, coerceRatio, normalizeUserInputs } from './user-inputs';
+import { coerceKnownCompetitors, coercePositiveNumber, coerceRatio, KNOWN_COMPETITORS_MAX, normalizeUserInputs } from './user-inputs';
 
 test('D12 coercion helpers', () => {
   assert.equal(coercePositiveNumber('$12,000'), 12000);
@@ -87,4 +87,22 @@ test('D12 normalizeUserInputs: empty payload → all null, English, note lists e
   assert.match(result.coverage_note, /已提供：外卖占比/);
   assert.match(result.coverage_note, /缺 CapEx → 回收期隐藏/);
   assert.match(result.coverage_note, /缺租金或面积/);
+  assert.deepEqual(input.known_competitors, []);
+  assert.doesNotMatch(result.coverage_note, /用户指定竞品/);
+});
+
+test('D12 known_competitors: string or array, split on comma/newline/Chinese separators, trimmed, deduped, ≤ 10', () => {
+  assert.deepEqual(coerceKnownCompetitors('Hunan Home Kitchen, 湘水缘\n Golden Dragon ；hunan home kitchen'), ['Hunan Home Kitchen', '湘水缘', 'Golden Dragon']);
+  assert.deepEqual(coerceKnownCompetitors(['A', ' ', 42, null, 'a', 'B']), ['A', 'B']);
+  assert.deepEqual(coerceKnownCompetitors(undefined), []);
+  assert.deepEqual(coerceKnownCompetitors({ not: 'a list' }), []);
+  const many = Array.from({ length: 15 }, (_, i) => `Shop ${i}`);
+  assert.equal(coerceKnownCompetitors(many).length, KNOWN_COMPETITORS_MAX);
+  // Over-long names are cut, never dropped.
+  const long = 'X'.repeat(200);
+  assert.equal(coerceKnownCompetitors([long])[0].length, 80);
+
+  const { input, result } = normalizeUserInputs({ report_id: 'r', address: 'a', known_competitors: 'Hunan Home, 湘水缘' });
+  assert.deepEqual(input.known_competitors, ['Hunan Home', '湘水缘']);
+  assert.match(result.coverage_note, /用户指定竞品 2 家/);
 });

@@ -85,7 +85,23 @@ export async function generateReport360(
 export async function generateReport360ForRow(reportId: string, opts: Report360Options & { persist?: boolean; narrative?: boolean } = {}): Promise<Generate360Result | null> {
   const row = await iqGetReport(reportId);
   if (!row) return null;
-  const md = (row.market_data_json ?? {}) as { user_inputs?: { monthly_rent_usd?: number; sqft?: number; seats?: number; capex_usd?: number } };
+  // `market_data_json.user_inputs` is written by /api/funnel/analyze (rent, sqft) and
+  // /api/funnel/report-inputs (everything else); every key is optional and D12 re-normalizes.
+  const md = (row.market_data_json ?? {}) as {
+    user_inputs?: {
+      monthly_rent_usd?: unknown;
+      sqft?: unknown;
+      seats?: unknown;
+      ticket_in?: unknown;
+      ticket_delivery?: unknown;
+      delivery_ratio?: unknown;
+      capex_usd?: unknown;
+      parking_spaces?: unknown;
+      existing_stores?: unknown;
+      listing_urls?: unknown;
+      known_competitors?: unknown;
+    };
+  };
   const u = md.user_inputs ?? {};
   return generateReport360(
     {
@@ -93,7 +109,19 @@ export async function generateReport360ForRow(reportId: string, opts: Report360O
       address: row.location,
       cuisineText: row.business_type,
       language: row.language === 'zh' ? 'zh' : 'en',
-      user: { rent_usd: u.monthly_rent_usd ?? null, sqft: u.sqft ?? null, seats: u.seats ?? null, capex_usd: u.capex_usd ?? null },
+      user: {
+        rent_usd: u.monthly_rent_usd ?? null,
+        sqft: u.sqft ?? null,
+        seats: u.seats ?? null,
+        capex_usd: u.capex_usd ?? null,
+        ticket_in: u.ticket_in ?? null,
+        ticket_delivery: u.ticket_delivery ?? null,
+        delivery_ratio: u.delivery_ratio ?? null,
+        parking_spaces: u.parking_spaces ?? null,
+        existing_stores: u.existing_stores ?? [],
+        listing_urls: u.listing_urls ?? [],
+        known_competitors: u.known_competitors ?? [],
+      },
     },
     opts,
   );

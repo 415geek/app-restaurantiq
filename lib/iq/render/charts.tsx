@@ -118,7 +118,9 @@ export function SegmentBars({ rows }: { rows: Array<{ label: string; share: numb
             {text(left - 8, y + 15, r.label, { anchor: 'end', size: 9.5 })}
             <rect x={left} y={y + 3} width={span} height={18} fill={PALETTE.panel} />
             <rect x={left} y={y + 3} width={w} height={18} fill={PALETTE.navy} />
-            {text(left + 4, y + 15.5, fmtPct(r.share), { size: 8.5, fill: '#FFFFFF', weight: 600 })}
+            {w >= 34
+              ? text(left + 4, y + 15.5, fmtPct(r.share), { size: 8.5, fill: '#FFFFFF', weight: 600 })
+              : text(left + w + 4, y + 15.5, fmtPct(r.share), { size: 8.5, fill: PALETTE.navy, weight: 600 })}
             <circle cx={left + span + 18} cy={y + 12} r={4} fill={idxColor} />
             {text(left + span + 28, y + 15.5, r.index == null ? NA : String(Math.round(r.index)), { size: 10, weight: 600 })}
           </g>

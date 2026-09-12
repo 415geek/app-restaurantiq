@@ -1,7 +1,7 @@
 /**
  * Narrative layer (研发提示词 Phase 5.4 + 附录 E + Phase 6 门槛 5/6).
  *
- * For each of the 14 pages the LLM is handed ONLY the page's JSON fragment
+ * For each of the 15 pages the LLM is handed ONLY the page's JSON fragment
  * (`pageFragment`) and must return `{title, body, refs}` where every number is
  * followed by a `[src:path]` citation. Output is checked by NumberGuard plus
  * length / ref-path rules; a failure is fed back for ONE regeneration, and a
@@ -58,7 +58,9 @@ export const NARRATIVE_MAX_TOKENS: Record<NarrativeTier, number> = { page: 420, 
 
 const DEFAULT_TIMEOUT_MS = 45_000;
 const DEFAULT_CONCURRENCY = 4;
-const SUMMARY_PAGE: PageId = 'page_2';
+/** Summary-tier pages (Claude quality path, wider body cap): the executive summary and the closing 总结与建议. */
+export const SUMMARY_PAGES: readonly PageId[] = ['page_2', 'page_15'];
+const isSummaryPage = (id: PageId) => SUMMARY_PAGES.includes(id);
 
 /**
  * Length limits. The executive summary must carry three reasons, three risks
@@ -77,11 +79,18 @@ export const NARRATIVE_LIMITS = {
 const SYSTEM_ZH =
   '你是 RestaurantIQ 的分析师，为中餐馆老板写选址报告。你只能使用下面 JSON 里的数字与事实，不得引入任何 JSON 之外的数字、地名、品牌或判断。' +
   '每个数字后面必须紧跟 [src:字段路径]（路径用点号，如 trade_area.rings.2.pop，不要用方括号下标）。输出 JSON：{"title": "≤28字、必须包含判断（如 覆盖/不足/偏高/可做）", "body": "≤120 个汉字（硬性上限，超出整段作废），两句到三句，写完数一遍字数", "refs": [字段路径数组]}。' +
-  '禁用词：零竞争、空白（除非 competitors.void.is_void 为 true）、保守估计、大约、显著（修饰官方统计时）。语气：直接、给判断、不夸张、不安慰。中文为主，专有名词可用英文。';
+  '禁用词：零竞争、空白（除非 competitors.void.is_void 为 true）、保守估计、大约、显著（修饰官方统计时）。语气：直接、给判断、不夸张、不安慰。' +
+  '读者：写给餐饮老板看——大白话、具体数字、一个术语最多解释一次（用括号）、不用英文缩写、不出现字段名或圈层代号；判断要直接。';
 
 const SYSTEM_ZH_SUMMARY =
   '本页是执行摘要：body 除两到三句结论外，还必须列出三条支持理由与三条风险（每条 ≤ 30 字、每条带 [src:字段路径] 引用），' +
   '并以「签约前条件：」开头逐字复制 score.conditions[].text_zh（用「；」分隔，不得改写任何数字或措辞；无条件时写「无」）。body 总长 ≤ 400 字。';
+
+const SYSTEM_ZH_FINAL =
+  '本页是报告最后一页、面向老板的总结：body 第一句直接给判断（可做 / 有条件可做 / 不建议）；' +
+  '然后给三个决定性数字：需求覆盖率（demand.coverage_ratio）、占用成本比（finance.occupancy_cost_ratio）、综合评分（score.total），各带 [src:字段路径] 引用；' +
+  '再以「签约前必须做的事：」开头逐字复制 score.conditions[].text_zh（用「；」分隔，不得改写任何数字或措辞；无条件时写「无」）；' +
+  '最后列出更适合的替代菜系前三名（取 score.alternatives 中排在用户菜系之外的前三，带分数）与下一步三条（不要引入 JSON 之外的数字）。body 总长 ≤ 400 字。';
 
 const SYSTEM_EN =
   'You are a RestaurantIQ analyst writing a site-selection report for a Chinese-restaurant owner. Use ONLY the numbers and facts in the JSON below; ' +
@@ -93,6 +102,12 @@ const SYSTEM_EN =
 const SYSTEM_EN_SUMMARY =
   'This page is the executive summary: besides the two-to-three-sentence conclusion, the body must list three supporting reasons and three risks (each ≤ 30 words, each with a [src:field.path] citation), ' +
   'and must start a line with "Pre-lease conditions:" followed by score.conditions[].text_en copied verbatim (separated by "; "; never rewrite a number or wording; write "none" when empty). Body ≤ 300 words.';
+
+const SYSTEM_EN_FINAL =
+  'This page is the closing summary for the owner: the first sentence states the verdict (viable / conditional / not recommended); ' +
+  'then the three deciding numbers — demand coverage (demand.coverage_ratio), occupancy cost ratio (finance.occupancy_cost_ratio) and total score (score.total), each with a [src:field.path] citation; ' +
+  'then a line starting with "Must do before signing:" followed by score.conditions[].text_en copied verbatim (separated by "; "; never rewrite a number or wording; write "none" when empty); ' +
+  'finally the top three alternative cuisines (from score.alternatives, excluding the input cuisine, with scores) and three next steps (no numbers outside the JSON). Body ≤ 300 words.';
 
 const bandsText = (lang: NarrativeLanguage): string => {
   const d = getDefaults();
@@ -112,7 +127,10 @@ export function paramNotes(lang: NarrativeLanguage): string {
       'coverage_ratio = 模型捕获月需求 ÷ 保本线，≥ 1 表示覆盖保本，< 1 表示不足。' +
       bandsText('zh') +
       `verdict：总分 ≥ ${v.go} 为 GO（可做），≥ ${v.conditional} 为 CONDITIONAL_GO（有条件可做），否则 NO_GO（不建议）。` +
-      'null = 未获取，只能写「未获取」，不得估算。'
+      'null = 未获取，只能写「未获取」，不得估算。' +
+      '写作时不要照抄字段名、圈层代号或英文缩写：walk10 写「步行 10 分钟范围」，drive5 / drive10 / drive15 写「开车 5 / 10 / 15 分钟范围」，' +
+      'L1 写「同菜系竞品」，L2 写「其他中餐」，L3 写「其他亚洲餐」，L4 写「华人客流聚集点」，coverage_ratio 写「需求覆盖率」，occupancy_cost_ratio 写「占用成本比」，' +
+      'cluster_score 写「集聚分」，huff 写「需求分流模型」，benchmark_revenue_band 的 p25 / median / p75 写「低位 / 中位 / 高位」，hhi 写「集中度」，confidence 写「数据完整度」，capex 写「开办投入（装修与设备）」；GO / CONDITIONAL_GO / NO_GO 写「可做 / 有条件可做 / 不建议」。'
     );
   }
   return (
@@ -127,8 +145,9 @@ export function paramNotes(lang: NarrativeLanguage): string {
 
 export function buildNarrativePrompts(pageId: PageId, fragment: Record<string, unknown>, lang: NarrativeLanguage): { system: string; user: string; tier: NarrativeTier } {
   const spec = PAGES.find((p) => p.id === pageId)!;
-  const tier: NarrativeTier = pageId === SUMMARY_PAGE ? 'summary' : 'page';
-  const system = lang === 'zh' ? (tier === 'summary' ? `${SYSTEM_ZH} ${SYSTEM_ZH_SUMMARY}` : SYSTEM_ZH) : tier === 'summary' ? `${SYSTEM_EN} ${SYSTEM_EN_SUMMARY}` : SYSTEM_EN;
+  const tier: NarrativeTier = isSummaryPage(pageId) ? 'summary' : 'page';
+  const suffix = tier !== 'summary' ? '' : pageId === 'page_15' ? (lang === 'zh' ? SYSTEM_ZH_FINAL : SYSTEM_EN_FINAL) : lang === 'zh' ? SYSTEM_ZH_SUMMARY : SYSTEM_EN_SUMMARY;
+  const system = `${lang === 'zh' ? SYSTEM_ZH : SYSTEM_EN}${suffix ? ` ${suffix}` : ''}`;
   const user =
     lang === 'zh'
       ? `页面 = ${pageId}（${spec.zh}/${spec.en}）；页面 JSON 片段 = ${JSON.stringify(fragment)}；参数说明 = ${paramNotes('zh')}`
@@ -368,10 +387,11 @@ export async function generateNarratives(model: ReportModel, opts: GenerateNarra
   };
 
   const pageIds = PAGES.map((p) => p.id);
-  const others = pageIds.filter((id) => id !== SUMMARY_PAGE);
+  const others = pageIds.filter((id) => !isSummaryPage(id));
   try {
     await runPool(others, opts.concurrency ?? DEFAULT_CONCURRENCY, generatePage);
-    await generatePage(SUMMARY_PAGE);
+    // summary pages last, one at a time (Claude quality path): page_2 then page_15
+    for (const id of SUMMARY_PAGES) await generatePage(id);
   } catch (e) {
     // generatePage never throws, but the report must be narrated regardless.
     console.warn('[iq360/narrative] unexpected failure', e);
