@@ -891,6 +891,19 @@ strong {
   gap: 7pt;
   margin-bottom: 8pt;
 }
+/* page 6: nine-row group table + cluster curve just exceed the box with wrapped 说明 cells */
+.page-6 .data-table th,
+.page-6 .data-table td {
+  padding: 2.5pt 5pt;
+}
+.cards-grid .void-panel {
+  grid-column: 1 / -1;
+  font-size: 10pt;
+  line-height: 1.5;
+}
+.cards-grid .void-panel p {
+  margin: 0;
+}
 .comp-card {
   border: 1px solid var(--rule);
   background: var(--panel);

@@ -174,6 +174,10 @@ export const reportModelSchema = z.object({
       conditions: z.object({ chinese_pop_ok: z.boolean(), density_ok: z.boolean(), l2_ok: z.boolean() }),
     }),
     metro_sub_cuisine_total: nullableNum,
+    /** Candidate pool radius (§3.1, max(3 mi, drive15)); L1/L2 are only searched inside it. */
+    pool_radius_mi: z.number().optional(),
+    /** Nearest same-cuisine restaurant found *outside* the pool — "no L1" is a finding, not a gap. */
+    l1_nearest_outside_pool: z.object({ name: z.string(), distance_mi: z.number() }).nullable().optional(),
   }),
   demand: z.object({
     captured_monthly_usd: nullableNum,

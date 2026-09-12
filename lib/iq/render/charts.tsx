@@ -200,7 +200,7 @@ export function ClusterCurve({ walk10Count, clusterScore }: { walk10Count: numbe
       {[0, 5, 10, 15, 20].map((n) => text(x(n), bottom + 24, n === 20 ? '20+' : String(n), { anchor: 'middle', size: 8, fill: PALETTE.muted, key: `t${n}` }))}
       <line x1={sx} x2={sx} y1={top} y2={bottom} stroke={PALETTE.coral} strokeDasharray="3 2" />
       <circle cx={sx} cy={sy} r={5} fill={PALETTE.coral} stroke="#FFFFFF" strokeWidth={1.5} />
-      {text(Math.min(sx + 8, right - 90), Math.max(sy - 6, top + 8), `本址 walk10 ${walk10Count} 家 · ${clusterScore} 分`, { size: 9, weight: 600 })}
+      {text(Math.min(sx + 8, right - 90), Math.max(sy - 6, top + 8), `本址步行 10 分钟内 ${walk10Count} 家 · ${clusterScore} 分`, { size: 9, weight: 600 })}
     </svg>
   );
 }

@@ -1,4 +1,4 @@
 # One paid report id per line; append " force" to regenerate. Pushing a change
 # to this file runs .github/workflows/report360-trigger.yml.
-# run: 2026-09-12T11:08:18Z (pool radius + percent guard fix)
+# run: 2026-09-12T11:23:55Z (empty-L1 as finding, percent ratios)
 5c361b95-0ccf-4550-bd3e-5a33ca3a6fe9 force

@@ -685,7 +685,24 @@ function Page7({ model }: PageProps) {
   return (
     <PageShell model={m} pageId="page_7" chips={<SourceChips model={m} ids={['D5', 'D6', 'D7']} model_labels={['分流比例']} />}>
       <div className="cards-grid">
-        {cards.length === 0 ? <div className="panel">同菜系竞品：{NA}</div> : null}
+        {cards.length === 0 ? (
+          m.competitors.guard_passed ? (
+            <div className="panel void-panel">
+              <div className="panel-title">同菜系竞品 · Same-cuisine competitors</div>
+              <p>
+                周边 <strong>{m.competitors.pool_radius_mi ?? 5} 英里</strong>内没有一家{m.input.cuisine_label_zh}餐厅
+                {m.competitors.l1_nearest_outside_pool ? (
+                  <>
+                    ，最近的一家「{m.competitors.l1_nearest_outside_pool.name}」在 <strong>{fmtMiles(m.competitors.l1_nearest_outside_pool.distance_mi)}</strong> 外
+                  </>
+                ) : null}
+                。这是一个空档：没有同行分走客流，但也没有同行替你把这个菜系的市场培育起来，需求要靠自己做。
+              </p>
+            </div>
+          ) : (
+            <div className="panel">同菜系竞品：{NA}（竞品数据源未获取）</div>
+          )
+        ) : null}
         {cards.map((c, i) => (
           <div className="comp-card" key={c.id}>
             <div className="comp-head">
