@@ -239,7 +239,60 @@ function uniqueCompetitors(list: Competitor[]): Competitor[] {
 const rangeClassZh = (rc: ReportModel['input']['range_class']) => (rc === 'destination' ? '目的地型（顾客愿意专程开车来）' : rc === 'regular' ? '常规型' : '日常型（就近吃）');
 
 /* ------------------------------------------------------------------ */
-/* 1 · Cover                                                             */
+/* 0 · Cover page (unnumbered title page before the 15 analysis pages)   */
+/* ------------------------------------------------------------------ */
+function CoverPage({ model, staticMaps }: PageProps) {
+  const m = model;
+  const address = m.input.matched_address ?? m.input.address;
+  const region = m.geo.county_name ?? null;
+  return (
+    <section className="page page-cover" data-page="0" aria-label="封面 · Cover">
+      <div className="cover-page">
+        <div className="cover-page-brand">
+          <span className="brand-name">RestaurantIQ</span>
+          <span className="brand-sub">餐饮选址智能分析 · Restaurant Site Intelligence</span>
+        </div>
+        <div className="cover-page-title">
+          <div className="cover-page-kicker">{m.meta.tier === 'paid' ? '付费专业版 · Professional Edition' : '预检版 · Precheck Edition'}</div>
+          <h2 className="cover-page-h">商圈选址分析报告</h2>
+          <p className="cover-page-sub">360° Site Selection Report</p>
+        </div>
+        <div className="cover-page-site">
+          <div className="cover-page-address">{address}</div>
+          <div className="cover-page-cuisine">
+            拟开业态：{m.input.cuisine_label_zh}（{m.input.cuisine_label_en}）
+            {region ? <span className="muted"> · {region}</span> : null}
+          </div>
+        </div>
+        <div className="cover-page-map">
+          <MapFigure model={m} staticMap={staticMaps?.thumb ?? null} variant="thumb" />
+        </div>
+        <div className="cover-page-meta">
+          <div>
+            <div className="cover-label">报告编号 · Report ID</div>
+            <div className="cover-page-meta-v">{m.meta.report_id}</div>
+          </div>
+          <div>
+            <div className="cover-label">生成日期 · Generated</div>
+            <div className="cover-page-meta-v">{fmtDate(m.meta.generated_at)}</div>
+          </div>
+          <div>
+            <div className="cover-label">数据截止 · Data as of</div>
+            <div className="cover-page-meta-v">{m.meta.data_as_of}</div>
+          </div>
+          <div>
+            <div className="cover-label">编制 · Prepared by</div>
+            <div className="cover-page-meta-v">RestaurantIQ 360° 分析引擎</div>
+          </div>
+        </div>
+        <p className="cover-page-foot">本报告基于美国人口普查、公开地图与平台数据及您提供的信息，按统一模型计算；每个数字都可追溯到来源（见第 14 页）。报告仅供选址决策参考，不构成投资、法律或租赁建议。</p>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* 1 · At a glance                                                       */
 /* ------------------------------------------------------------------ */
 function Page1({ model, staticMaps }: PageProps) {
   const m = model;
@@ -1394,10 +1447,11 @@ export const PAGE_COMPONENTS: Record<PageId, ComponentType<PageProps>> = {
   page_15: Page15,
 };
 
-/** All fifteen pages in PAGES order. `staticMaps` (optional) is the raster basemap pair for pages 1 and 3. */
+/** An unnumbered cover page, then all fifteen pages in PAGES order. `staticMaps` (optional) is the raster basemap pair for the cover, page 1 and page 3. */
 export function ReportDocument({ model, staticMaps }: PageProps) {
   return (
     <main className="report" data-report-id={model.meta.report_id} lang="zh-CN">
+      <CoverPage model={model} staticMaps={staticMaps} />
       {PAGES.map((p) => {
         const C = PAGE_COMPONENTS[p.id];
         return <C key={p.id} model={model} staticMaps={staticMaps} />;
