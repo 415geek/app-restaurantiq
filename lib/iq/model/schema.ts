@@ -96,6 +96,8 @@ export const reportModelSchema = z.object({
     elapsed_ms: z.number(),
     language: z.enum(['en', 'zh']),
     precheck_reasons: z.array(z.string()),
+    /** Declared fallbacks that keep the report deliverable (e.g. Overture not loaded → Google-only POI base). */
+    degradations: z.array(z.string()),
   }),
   input: z.object({
     address: z.string(),

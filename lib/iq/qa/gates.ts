@@ -38,7 +38,9 @@ export function gateIntegrity(m: ReportModel): GateResult {
   const d: string[] = [];
   if (m.confidence.total < 60) d.push(`置信度 ${m.confidence.total} < 60`);
   if (!m.competitors.guard_passed) d.push(...m.competitors.guard_notes.map((n) => `竞品守卫：${n}`));
+  const googleOnly = m.meta.degradations.some((x) => x.startsWith('overture_not_loaded_google_only'));
   for (const id of ['D1', 'D2', 'D5']) {
+    if (id === 'D5' && googleOnly) continue; // declared bootstrap mode: Google pool ≥ 15 stands in for Overture
     const s = m.sources.find((x) => x.id === id);
     if (!s) d.push(`${id} 缺失`);
     else if (s.status !== 'ok') d.push(`${id} 状态 ${s.status}：${s.coverage_note}`);

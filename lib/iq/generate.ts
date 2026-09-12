@@ -9,6 +9,7 @@ import { createFetchContext } from './data/context';
 import { persistCostLog, REPORT_COST_CAP_USD } from './data/cost-log';
 import { generateNarratives } from './narrative/generate';
 import { runQaGates, type GatesReport } from './qa/gates';
+import { runPendingMigrations } from './ops/migrate';
 import { runReport360, type Report360Options } from './pipeline';
 import type { ReportModel } from './model/schema';
 
@@ -52,13 +53,26 @@ export async function generateReport360(
 
   let persisted = false;
   if (opts.persist !== false) {
+    const { narrative, ...rest } = model;
+    const persist = () =>
+      iqSetReportModel({ reportId: input.reportId, reportModelJson: rest as unknown as Record<string, unknown>, narrativeJson: narrative, tier: model.meta.tier, costUsd: model.meta.cost_usd });
     try {
-      const { narrative, ...rest } = model;
-      await iqSetReportModel({ reportId: input.reportId, reportModelJson: rest as unknown as Record<string, unknown>, narrativeJson: narrative, tier: model.meta.tier, costUsd: model.meta.cost_usd });
+      await persist();
       persisted = true;
     } catch (e) {
-      if (isMissingColumnError(e)) ctx.log('[iq360] migration 0009 not applied — report model not persisted');
-      else ctx.log('[iq360] persist failed', e);
+      if (isMissingColumnError(e)) {
+        // Migration 0009 not applied: apply it now over DATABASE_URL and retry once.
+        const mig = await runPendingMigrations();
+        if (mig.ok) {
+          try {
+            await persist();
+            persisted = true;
+            ctx.log(`[iq360] applied migrations ${mig.applied.join(', ')} and persisted`);
+          } catch (e2) {
+            ctx.log('[iq360] persist failed after migration', e2);
+          }
+        } else ctx.log(`[iq360] migration 0009 missing and auto-migrate unavailable: ${mig.reason}`);
+      } else ctx.log('[iq360] persist failed', e);
     }
     await persistCostLog(input.reportId, ctx.cost);
   }

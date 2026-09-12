@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { after } from 'next/server';
-import { iqGetReport } from '@/lib/funnel/iq-repository';
+import { iqGetReport, iqHasReportModelColumn } from '@/lib/funnel/iq-repository';
 import { verifyWorkerSecret } from '@/lib/funnel/iq-report-job';
 import { generateReport360ForRow } from '@/lib/iq/generate';
 
@@ -19,9 +19,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const row = await iqGetReport(id);
   if (!row) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   if (!row.paid) return NextResponse.json({ error: 'unpaid' }, { status: 403 });
-  const model = row.report_model_json as { meta?: { tier?: string; cost_usd?: number; generated_at?: string }; score?: { total?: number; verdict?: string } } | null | undefined;
+  const model = row.report_model_json as { meta?: { tier?: string; cost_usd?: number; generated_at?: string; precheck_reasons?: string[] }; score?: { total?: number; verdict?: string } } | null | undefined;
+  const migration_needed = model ? false : !(await iqHasReportModelColumn());
   return NextResponse.json({
     ready: Boolean(model),
+    migration_needed,
+    precheck_reasons: model?.meta?.precheck_reasons ?? [],
     tier: row.report_tier ?? model?.meta?.tier ?? null,
     generated_at: model?.meta?.generated_at ?? null,
     cost_usd: row.report_cost_usd ?? model?.meta?.cost_usd ?? null,

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { Report360Panel } from '@/components/iq/Report360Panel';
 
 type Props = {
   reportId: string;
@@ -247,6 +248,8 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
           </div>
         </div>
       </div>
+
+      {isPaid ? <Report360Panel reportId={reportId} lang={lang} /> : null}
 
       {isPaid ? (
         <div className="rounded-2xl border border-amber-900/40 bg-amber-950/20 p-6">

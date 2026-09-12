@@ -19,6 +19,7 @@
  * reports `legacy: true` so callers fall back to the synchronous path.
  */
 
+import { kickReport360 } from '@/lib/iq/kick';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { getPublicBaseUrl } from '@/lib/funnel/base-url';
 import { createIqDeadline } from '@/lib/funnel/iq-deadline';
@@ -398,6 +399,8 @@ async function stageFinalize(ctx: StageCtx): Promise<void> {
   // Drop the (large) draft from the checkpoint once the report is stored.
   delete state.draft;
   pushLog(state, `finalized (${clean.generation_tier})`);
+  // 360° engine runs in its own invocation once the legacy report is safe on disk.
+  await kickReport360(row.id);
 }
 
 async function notifyIfRequested(row: IqReportRow, language: 'en' | 'zh'): Promise<void> {

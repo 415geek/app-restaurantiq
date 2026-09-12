@@ -19,8 +19,8 @@ import { createOfflineContext } from './fixtures/router';
 
 const golden = JSON.parse(readFileSync(join(process.cwd(), 'qa/golden_set/millbrae_1711.json'), 'utf8')) as { input: Record<string, unknown> & { address: string } };
 
-export async function runMillbrae(over: { cuisine_text?: string; competitorsDown?: boolean; skipAlternatives?: boolean } = {}) {
-  const { ctx, deps } = createOfflineContext({ competitorsDown: over.competitorsDown });
+export async function runMillbrae(over: { cuisine_text?: string; competitorsDown?: boolean; overtureDown?: boolean; skipAlternatives?: boolean } = {}) {
+  const { ctx, deps } = createOfflineContext({ competitorsDown: over.competitorsDown, overtureDown: over.overtureDown });
   return runReport360(
     {
       report_id: 'golden-millbrae',
@@ -113,4 +113,12 @@ test('Phase 4: single score(), reconciliation, hidden payback, alternatives', as
   // R6: no KPI without an input behind it
   assert.equal(model.finance.payback_months, null);
   assert.ok(model.finance.inputs_missing.some((x) => x.startsWith('capex')));
+});
+
+test('Bootstrap mode: Overture not loaded but Google pool ≥ 15 → declared degradation, still deliverable', async () => {
+  const { model } = await runMillbrae({ overtureDown: true, skipAlternatives: true });
+  assert.ok(model.meta.degradations.some((d) => d.startsWith('overture_not_loaded_google_only')), JSON.stringify(model.meta));
+  assert.ok(!model.meta.precheck_reasons.some((r) => r.startsWith('D5')), model.meta.precheck_reasons.join('; '));
+  assert.equal(model.sources.find((s) => s.id === 'D5')?.status, 'failed', 'sources[] stays honest');
+  assert.ok(model.competitors.l1.length + model.competitors.l2_count >= 5);
 });

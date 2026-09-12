@@ -1177,6 +1177,7 @@ function Page14({ model }: { model: ReportModel }) {
       <p className="disclaimer">
         免责声明：本报告基于公开统计、平台数据与用户输入，按固定模型计算；所有「未获取」字段未作估计。评分与判定仅供选址决策参考，不构成投资、法律或租赁建议；签约前请以实地核查、租约文本与专业顾问意见为准。
         {m.meta.precheck_reasons.length ? ` 预检说明：${m.meta.precheck_reasons.join('；')}。` : ''}
+        {m.meta.degradations.length ? ` 已声明的降级：${m.meta.degradations.map((d) => (d.startsWith('overture_not_loaded_google_only') ? `Overture POI 底图未加载，本报告以 Google Places 返回的 ${d.split(':')[1] ?? '—'} 家餐饮 POI 作为竞品池（bootstrap 模式）` : d)).join('；')}。` : ''}
       </p>
     </PageShell>
   );

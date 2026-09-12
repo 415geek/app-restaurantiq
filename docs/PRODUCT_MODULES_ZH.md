@@ -353,3 +353,8 @@
 - 页面：封面 / 执行摘要（结论徽章 + 三支撑 + 三风险 + 保本 vs 捕获双柱 + 签约前条件）/ 商圈地图（SVG：四圈层等时圈 + L1/L2 竞品 + L4 锚点 + 拟选址，仅 Overture 与自算图层，不含 Google 底图）/ Esri 式四圈层表 / 客群画像 / 竞争格局（L1–L4、价格阶梯、集聚曲线位置、关店率）/ 直接竞品卡片 + 标杆营收带 / 品类缺口与替代菜系 / Huff 需求捕获（圈层堆叠、午晚拆分、覆盖比仪表）/ 财务模型（成本表、三情景、敏感性瀑布，无 CapEx 不显示回收期）/ 六维评分 / 风险矩阵 / 签约核查与 90 天计划 / 方法与数据来源（`sources[]` 表 + 公式）。缺失值一律「未获取」。
 - `lib/iq/render/pdf.ts`：服务端 Chromium 打开 `/print`，等待 `window.__REPORT_READY__`，`page.pdf({ format: 'Letter', printBackground: true, preferCSSPageSize: true })`；`GET /api/iq/report/[id]/pdf` 在存在 `report_model_json` 时自动走该路径（否则沿用旧模板），彻底替代浏览器打印深色页面（R3）。`/print` 在生产环境要求已付费或 `IQ_PRINT_TOKEN`。
 - 视觉回归（门槛 7）：`npx tsx scripts/smoke-print.ts`（需 `next dev -p 3111`）——实测 14 个 `h1.action-title`、0 个空单元格、全部文本节点对比度 ≥ 4.5:1（含 SVG 文字）、每页不溢出、PDF 1.4 MB / 14 页 / Letter、无 tofu 字形。为满足对比度，珊瑚色只作徽章填充与关键数字下划线，语义色文字改用加深色阶。
+
+## 360° 升级 · 自动接入前端与自动化运维（2026-09-12）
+- **自动生成**：旧版付费报告落库（后台 finalize 或同步路径）后立即 `POST /api/iq/report360/:id`，360° 引擎在独立调用中生成并落库；报告页新增「360° 专业版报告」面板（`components/iq/Report360Panel.tsx`）：自动触发、每 6 秒轮询状态、就绪后显示综合分 / 结论并提供「下载 360° PDF」「在线预览 /print」「重新生成」；`IQ360_AUTO=false` 可关闭自动触发。
+- **自动迁移**：写入 `report_model_json` 时若发现迁移 0009 未执行，`lib/iq/ops/migrate.ts` 通过 `DATABASE_URL` 幂等执行全部迁移文件后重试；无 `DATABASE_URL` 时面板提示「数据库尚未升级」。
+- **Bootstrap 模式**：Overture 尚未落库但 Google Places 返回 ≥ 15 家餐饮 POI 时，以 Google 为 POI 底图继续交付，并在 `meta.degradations` 与第 14 页明确声明（`sources[]` 中 D5 仍如实标 failed）；Overture 加载后自动恢复正常模式。

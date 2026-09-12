@@ -53,6 +53,8 @@ const json = (body: unknown, status = 200) =>
 export interface RouterOptions {
   /** Simulate the R1 failure mode: Google returns an auth error and Overture is not loaded. */
   competitorsDown?: boolean;
+  /** Overture table empty but Google fine → bootstrap (Google-only) mode. */
+  overtureDown?: boolean;
   noMapbox?: boolean;
   env?: Record<string, string>;
 }
@@ -123,7 +125,7 @@ export function createOfflineContext(opts: RouterOptions = {}) {
   const overtureRows = fixture('overture_pois_millbrae.json') as OverturePoiRow[];
   const inBbox = (b: BBox, r: OverturePoiRow) => r.lat >= b.minLat && r.lat <= b.maxLat && r.lng >= b.minLng && r.lng <= b.maxLng;
   const deps = {
-    poiQuery: async (bbox: BBox, metro: string) => (opts.competitorsDown ? [] : overtureRows.filter((x) => x.metro === metro && inBbox(bbox, x))),
+    poiQuery: async (bbox: BBox, metro: string) => (opts.competitorsDown || opts.overtureDown ? [] : overtureRows.filter((x) => x.metro === metro && inBbox(bbox, x))),
     metroSummaryQuery: undefined as undefined,
     wacQuery: async (_tracts: string[], year: number) => (year === 2022 ? (fixture('lodes_wac_sample.json') as { rows: LodesWacRow[] }).rows : []),
     snapshotQuery: async (metro: string) => (fixture('poi_snapshots_sample.json') as Array<SnapshotRow & { metro: string }>).filter((s) => s.metro === metro),

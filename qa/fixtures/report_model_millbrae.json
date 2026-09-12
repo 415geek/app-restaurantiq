@@ -13,7 +13,8 @@
     },
     "elapsed_ms": 261,
     "language": "zh",
-    "precheck_reasons": []
+    "precheck_reasons": [],
+    "degradations": []
   },
   "input": {
     "address": "1711 El Camino Real, Millbrae, CA 94030",

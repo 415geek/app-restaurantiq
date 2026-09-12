@@ -400,3 +400,20 @@ export async function iqMarkReportNotified(reportId: string): Promise<void> {
     .eq('id', reportId);
   if (error) throw error;
 }
+
+let reportModelColumnProbe: { at: number; present: boolean } | null = null;
+
+/** True when migration 0009 (report_model_json) is applied; cached 60 s per process. */
+export async function iqHasReportModelColumn(): Promise<boolean> {
+  if (reportModelColumnProbe && Date.now() - reportModelColumnProbe.at < 60_000) return reportModelColumnProbe.present;
+  let present = false;
+  try {
+    const sb = supabaseAdmin();
+    const { error } = await sb.from(TABLE).select('report_model_json').limit(1);
+    present = !error || !isMissingColumnError(error);
+  } catch {
+    present = false;
+  }
+  reportModelColumnProbe = { at: Date.now(), present };
+  return present;
+}

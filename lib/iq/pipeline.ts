@@ -406,8 +406,18 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
   const precheck_reasons: string[] = [];
   if (!competitors.guard_passed) precheck_reasons.push(...competitors.guard_notes);
   if (confidence.total < 60) precheck_reasons.push(`置信度 ${confidence.total} < 60`);
+  // Bootstrap mode (Overture not loaded yet): Google Places (New) alone is an
+  // acceptable POI base when it returned a real pool (≥ 15 food POIs). Declared
+  // in meta.degradations and on page 14 — never silent.
+  const degradations: string[] = [];
+  const overtureLoaded = Boolean(bundle.overture?.data?.loaded);
+  const foodPool = merged.filter((m) => m.is_food).length;
+  if (!overtureLoaded && bundle.google?.status === 'ok' && foodPool >= 15) {
+    degradations.push(`overture_not_loaded_google_only:${foodPool}`);
+  }
   for (const id of ['D1', 'D2', 'D5'] as const) {
     const s = statusMap[id];
+    if (id === 'D5' && degradations.some((d) => d.startsWith('overture_not_loaded_google_only'))) continue;
     if (!s || s.status !== 'ok') precheck_reasons.push(`${id} 状态 ${s?.status ?? '缺失'}：${s?.coverage_note ?? ''}`);
   }
 
@@ -423,6 +433,7 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
       elapsed_ms: Date.now() - t0,
       language: site.language,
       precheck_reasons,
+      degradations,
     },
     input: {
       address: site.address,
