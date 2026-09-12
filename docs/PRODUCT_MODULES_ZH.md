@@ -310,3 +310,9 @@
 - 参数表 `lib/iq/params/{defaults,cuisine_taxonomy,hubs}.yaml`（附录 A/B/C，zod 校验），`lib/iq/geo.ts` 几何工具（等时圈 × block group 面积加权采样），`lib/iq/model/schema.ts`（`report_model.json` 唯一事实源 schema，附录 D）。
 - 迁移 `0009_iq_360_data_layer.sql`：`iq_poi`、`iq_poi_snapshot`、`iq_lodes_wac`、`iq_cost_log` 与报告行 `report_model_json / narrative_json / report_tier / report_cost_usd`。
 - 验收：`qa/e2e-data.test.ts` 离线重放 Millbrae 用例——D2 返回 tract 级华裔与收入、D5 1 英里内 ≥ 30 家餐饮 POI 且中餐 ≥ 10、D6 ≤ 6 次、`sources[]` 12 项全部有状态、数据成本 ≤ $0.10；降级路径（无 Mapbox / 竞品源失效）逐一断言。`npm run test:iq` 99 项通过。本沙箱无法访问外网，线上首跑请以 `sources[]` 表为准核对各源状态。
+
+## 360° 升级 · Phase 2 商圈引擎（2026-09-12）
+- `lib/iq/engines/trade-area.ts`：固定四圈层 walk10 / drive5 / drive10 / drive15，block group 指标按「等时圈 × block group 面积份额」裁切汇总（人口、户数、户数加权收入中位、中文家庭占比、华裔人口、25–44 岁、有孩家庭、户均人数、租房比例、日间岗位、餐饮 / 中餐 / 菜系需求）；主商圈按菜系 `range_class` 选定（everyday → drive5，regular → drive10，destination → drive15）。
+- 需求估算 §2.3：`餐饮支出 = 户数 × CEX(收入分位) × 区域系数`；`中餐支出 = 餐饮支出 × [p_cn × 0.55 + (1 − p_cn) × 0.08]`；`cuisine_share` 不拍脑袋——`lib/iq/engines/cuisine-share.ts` 按贸易区中餐供给的评论数 log 权重自校准（Laplace 平滑，3%–50% 截断）。
+- `lib/iq/engines/demand-huff.ts`：Huff 引力捕获 `P_ij = A_j^α d_ij^−β / Σ A_k^α d_ik^−β`，`A = log(1 + 评论数) × (评分 / 4.2)`，β 按菜系 2.0 / 1.5 / 1.1，L2 权重 0.5；午市单独按 walk10 岗位 × 外食率 × 中餐份额 × 午市客单 × 21 天与 walk10 竞品分摊；输出捕获月需求、午晚拆分、按来源圈层堆叠、各竞品分流比例与 P 值分布。
+- 验收（`qa/e2e-report.test.ts`）：Millbrae 四圈层表齐全；`coverage_ratio = 捕获 ÷ 保本` 各中间量可打印；菜系改为「中式快餐」时主商圈自动变为 drive5、β = 2.0、捕获需求随之变化。
