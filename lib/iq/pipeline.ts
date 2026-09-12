@@ -539,6 +539,8 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
       benchmark_revenue_band: competitors.benchmark_revenue_band,
       void: competitors.void,
       metro_sub_cuisine_total: competitors.metro_sub_cuisine_total,
+      pool_radius_mi: competitors.pool_radius_mi,
+      l1_nearest_outside_pool: competitors.l1_nearest_outside_pool ?? null,
     },
     demand: {
       captured_monthly_usd: huff.captured_monthly_usd,

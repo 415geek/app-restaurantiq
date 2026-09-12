@@ -82,6 +82,8 @@ test('Phase 3: layers populated for Millbrae; guard trips when the POI pipeline 
   assert.equal(model.competitors.void.is_void, false);
   // §3.1 candidate pool = max(3 mi, drive15): a biased Text Search must not import same-cuisine hits from across the metro
   for (const c of [...model.competitors.l1, ...model.competitors.l4]) assert.ok(c.distance_mi <= 5.01, `${c.name} at ${c.distance_mi} mi is outside the 5 mi pool`);
+  assert.equal(model.competitors.pool_radius_mi, 5);
+  assert.ok('l1_nearest_outside_pool' in model.competitors, 'nearest same-cuisine beyond the pool is recorded (null when none)');
 
   const down = await runMillbrae({ competitorsDown: true, skipAlternatives: true });
   assert.equal(down.model.competitors.guard_passed, false);
