@@ -1,0 +1,51 @@
+# 附录 A · 默认参数表（全部可校准）。加载: lib/iq/params/index.ts
+huff:
+  alpha: 1.0
+  beta: { everyday: 2.0, regular: 1.5, destination: 1.1 }
+  adjacent_weight: 0.5          # L2 竞品在分母中的权重
+  default_speed_mph: 25         # 无等时圈时的车速
+demand:
+  s_cn: 0.55                    # 华人家庭餐饮支出中的中餐份额
+  s_other: 0.08                 # 非华裔家庭中餐份额
+  lunch_out_rate: 0.35          # 工作日外食率
+  region_multiplier: 1.15       # SF MSA 相对全国 CEX 的餐饮支出系数
+  workdays_per_month: 21
+review_to_covers:
+  k: 80                         # 每条 Google 新评论 ≈ 80 次覆盖（区间 40–150，用 POS 客户数据校准）
+cluster_score:                  # walk10 内 L1+L2 数量 → 分
+  bands: [[0, 0, 30], [1, 3, 60], [4, 8, 85], [9, 15, 60], [16, 999, 35]]
+  coverage_adjust: 10           # 按 coverage_ratio 调节 ±
+void_analysis:
+  min_chinese_pop_drive10: 3000
+  density_ratio_threshold: 0.5
+  min_l2_count: 4
+competitor_guard:
+  min_metro_pois_for_zero_check: 10   # metro 内该子菜系 ≥ 10 家而 drive10 内 L1+L2 == 0 → 抓取异常
+  min_food_pois_drive10: 15           # drive10 内餐饮 POI < 15 且人口 > 20,000 → 覆盖异常
+  min_pop_for_poi_check: 20000
+finance:
+  safety_multiplier: 1.28
+  occupancy_cost_bands: [[0, 0.08, 90], [0.08, 0.10, 70], [0.10, 0.12, 50], [0.12, 1, 25]]
+  days_open_per_month: 30
+  cc_fees_pct: 0.025
+  delivery_blended_pct: 0.07
+score:
+  weights: { demand_coverage: 25, audience_fit: 15, competitive_position: 20, access_traffic: 15, financial_viability: 15, occasion_delivery: 10 }
+  coverage_bands: [[0, 0.6, 20], [0.6, 0.8, 45], [0.8, 1.0, 65], [1.0, 1.3, 85], [1.3, 99, 95]]
+  audience_thresholds: { destination: 0.15, regular: 0.10, everyday: 0.05 }   # 主商圈中文家庭占比阈值
+  quality_gap: { low_rating: 4.0, high_rating: 4.4, bonus: 10 }
+  closure_penalty: { threshold: 0.20, penalty: 15 }
+confidence_weights: { acs: 20, competitors: 25, traffic_proxy: 15, rent_comps: 15, daytime_pop: 10, transit: 5, dev_pipeline: 5, user_inputs: 5 }
+verdict: { go: 75, conditional: 60 }
+rent_comps:
+  min_comps_for_premium: 3
+data_budget:
+  google_places_max_calls: 6
+  google_places_cost_usd_per_call: 0.032
+  report_cost_cap_usd: 0.50
+  data_cost_cap_usd: 0.10
+rings:
+  walk10: { mode: walking, minutes: 10, fallback_radius_mi: 0.5 }
+  drive5: { mode: driving, minutes: 5, fallback_radius_mi: 1.0 }
+  drive10: { mode: driving, minutes: 10, fallback_radius_mi: 3.0 }
+  drive15: { mode: driving, minutes: 15, fallback_radius_mi: 5.0 }

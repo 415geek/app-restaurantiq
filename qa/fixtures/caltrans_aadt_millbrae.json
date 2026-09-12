@@ -1,0 +1,33 @@
+{
+  "$comment": "Stubbed Caltrans Traffic_AADT ArcGIS query response for a 2-mile radius around 1711 El Camino Real, Millbrae (37.6003, -122.3868). Seven segments so the top-5-by-AADT cut is exercised; AADT values approximate 2022 census counts.",
+  "features": [
+    {
+      "attributes": { "ROUTE": "101", "ROUTE_NAME": "US-101", "COUNTY": "SM", "AADT": 231000, "PEAK_HR": 17400, "POSTMILE": 17.2, "DATA_YEAR": 2022 },
+      "geometry": { "x": -122.3835, "y": 37.6045 }
+    },
+    {
+      "attributes": { "ROUTE": "101", "ROUTE_NAME": "US-101", "COUNTY": "SM", "AADT": 218000, "PEAK_HR": 16900, "POSTMILE": 15.9, "DATA_YEAR": 2022 },
+      "geometry": { "x": -122.3760, "y": 37.5900 }
+    },
+    {
+      "attributes": { "ROUTE": "280", "ROUTE_NAME": "I-280", "COUNTY": "SM", "AADT": 126000, "PEAK_HR": 9800, "POSTMILE": 19.4, "DATA_YEAR": 2022 },
+      "geometry": { "x": -122.4110, "y": 37.6100 }
+    },
+    {
+      "attributes": { "ROUTE": "82", "ROUTE_NAME": "El Camino Real (SR-82)", "COUNTY": "SM", "AADT": 34500, "PEAK_HR": 2900, "POSTMILE": 21.1, "DATA_YEAR": 2022 },
+      "geometry": { "x": -122.3878, "y": 37.6010 }
+    },
+    {
+      "attributes": { "ROUTE": "82", "ROUTE_NAME": "El Camino Real (SR-82)", "COUNTY": "SM", "AADT": 31200, "PEAK_HR": 2700, "POSTMILE": 20.3, "DATA_YEAR": 2022 },
+      "geometry": { "x": -122.3820, "y": 37.5920 }
+    },
+    {
+      "attributes": { "ROUTE": "380", "ROUTE_NAME": "I-380", "COUNTY": "SM", "AADT": 98000, "PEAK_HR": 7600, "POSTMILE": 1.2, "DATA_YEAR": 2022 },
+      "geometry": { "x": -122.4050, "y": 37.6290 }
+    },
+    {
+      "attributes": { "ROUTE": "35", "ROUTE_NAME": "Skyline Blvd (SR-35)", "COUNTY": "SM", "AADT": 12400, "PEAK_HR": 1100, "POSTMILE": 24.0, "DATA_YEAR": 2021 },
+      "geometry": { "x": -122.4420, "y": 37.6210 }
+    }
+  ]
+}

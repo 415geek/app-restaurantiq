@@ -1,0 +1,22 @@
+# 附录 C · 湾区华人餐饮枢纽对标清单。中心坐标为商业带中心；drive10 圈层与各子菜系密度中位数由
+# scripts/refresh-hubs.ts 月度预计算写入 iq_market_cache(source=iq360_hub_density)。
+metro: sf-bay
+hubs:
+  - { id: millbrae, name: Millbrae, lat: 37.5985, lng: -122.3872 }
+  - { id: burlingame_broadway, name: Burlingame (Broadway), lat: 37.5896, lng: -122.3607 }
+  - { id: daly_city, name: Daly City (Serramonte / Westlake), lat: 37.6706, lng: -122.4703 }
+  - { id: sf_richmond, name: SF Richmond (Clement St), lat: 37.7828, lng: -122.4700 }
+  - { id: sf_sunset, name: SF Sunset (Irving / Noriega), lat: 37.7600, lng: -122.4900 }
+  - { id: sf_chinatown, name: SF Chinatown, lat: 37.7941, lng: -122.4078 }
+  - { id: cupertino, name: Cupertino, lat: 37.3230, lng: -122.0322 }
+  - { id: milpitas, name: Milpitas (Milpitas Square), lat: 37.4180, lng: -121.8990 }
+  - { id: fremont, name: Fremont (Warm Springs / Mission), lat: 37.4880, lng: -121.9290 }
+  - { id: san_mateo, name: San Mateo (Downtown), lat: 37.5640, lng: -122.3240 }
+  - { id: foster_city, name: Foster City, lat: 37.5585, lng: -122.2711 }
+  - { id: mountain_view, name: Mountain View (Castro), lat: 37.3940, lng: -122.0790 }
+  - { id: sunnyvale, name: Sunnyvale, lat: 37.3688, lng: -122.0363 }
+  - { id: dublin_pleasanton, name: Dublin / Pleasanton, lat: 37.7020, lng: -121.9160 }
+  - { id: oakland_chinatown, name: Oakland Chinatown, lat: 37.7990, lng: -122.2700 }
+  - { id: newark, name: Newark, lat: 37.5297, lng: -122.0402 }
+# metro bbox used by scripts/load-overture.py and the competitor guard's metro count
+metro_bbox: { min_lat: 37.20, min_lng: -122.60, max_lat: 38.05, max_lng: -121.70 }

@@ -297,3 +297,72 @@
   - 支付完成即后台起任务，用户到达报告页时常已生成完毕。
 - **邮件送达报告**：生成页可留邮箱（`POST /api/funnel/full-report/notify`），finalize 阶段通过 Resend 发送报告链接（`RESEND_API_KEY`、`IQ_EMAIL_FROM`）；用户可直接离开页面。
 - **该地址过往/现有商家评论分析（新数据点）**：`lib/funnel/external-data/site-history.ts` 用 Google Find Place + Nearby（≤45m）与 Yelp（≤60m）识别在**该地址本身**营业/曾营业的商家，拉取 Place Details / Yelp 评论，LLM 提炼正负面主题、关店信号与对新经营者的启示，写入 `market_data.site_history`；注入付费提示词锚点、竞对白名单、多 Agent 场址/竞争分析师；报告 `site_history` 字段扩展（prior_business_name/status、review_themes、lessons），报告页新增「该地址过往/现有商家与评论」板块。
+- **修复移动端「PDF 无法下载」**：此前报告页先用 `fetch` 把 PDF 读成 Blob，再用脚本点击一个 `<a download>`——iOS Safari / 微信内置浏览器 / 多数 Android WebView 会直接忽略这种程序化下载（无任何反应或打开空白页）。现改为：先向 `/api/iq/report/[id]/pdf` 发送探测请求（`x-iq-pdf-probe: 1`，服务端只做已付费 / 报告就绪校验并返回 204，不启动 Chromium），通过后由浏览器自身导航到 PDF 地址完成下载——桌面浏览器原地保存文件，iOS 打开系统 PDF 预览并可分享 / 存入「文件」。未付费 / 未生成 / 服务端失败仍会在页面内给出可读的错误提示。
+
+## 付费报告 360° 升级（研发提示词 v1.0）· Phase 0 基线（2026-09-12）
+- 新增 `qa/golden_set/millbrae_1711.json`：把 Millbrae 报告（编号 5c361b95）暴露的 R1–R8 缺陷固化为回归基线（输入 + 观测到的缺陷 + 对应拦截门槛）。
+- 新增 `npm run replay:golden -- millbrae_1711`（`scripts/replay-golden.ts`）：用当前付费链路重放该用例（不落库），输出到 `qa/out/`，并逐项扫描 R1–R8 是否仍然出现；缺少 API key 时以退出码 2 明确报错。
+- 新增 `npm run test:iq`（Node 内置 test runner + tsx）与 `npm run qa:gates` 占位，供后续 Phase 使用；依赖新增 `tsx`（dev）与 `yaml`（参数表）。
+
+## 360° 升级 · Phase 1 数据层（2026-09-12）
+- 新增 `lib/iq/data/`：D1–D12 十二个数据模块，统一接口 `fetch(site, ctx) → DataResult{status: ok|partial|failed, data, source, fetched_at, license, cost_usd, coverage_note}`；任何失败都如实写入 `sources[]`，**绝不用估算值填充**。
+  - D1 Census Geocoder（备用 Google Geocoding + Census coordinates / FCC）→ 经纬度 + block / block group / tract / county / ZCTA；D2 ACS 5-year **按 block group + tract 查询**（B01003 / B11001 / B19013 / B19001 / B01001 / B25010 / B11003 / B08301 / B25064 / B25077 / B25003 / C16001 中文使用者 + B02018 华裔）并从 TIGERweb 取 block group 几何——从根源消除「ZIP 无 ACS」（R2）；D3 LODES v8 WAC（`iq_lodes_wac`，`scripts/load-lodes.ts`）；D4 Mapbox 等时圈（步行 10 / 车程 5·10·15），无 token 时退化为直线半径并标 `[直线半径]`；D5 Overture Places 落库 `iq_poi`（`scripts/load_overture.py`，DuckDB 直读 S3）；D6 Google Places API (New) Nearby，Pro 字段掩码、**每报告 ≤ 6 次**、30 天缓存、免费额度内计 $0（`GOOGLE_PLACES_BILLED=1` 后按 $0.032/次记账）；D7 评论增速快照（`iq_poi_snapshot`，`scripts/snapshot-reviews.ts`）→ 相对客流等级；D8 租金对标（用户输入 + 挂牌页解析 + 一次联网检索），**对标 < 3 个不输出溢价 %**；D9 BART / Caltrain 站点表 + Caltrans AADT；D10 BLS CEX 2023 五分位外出就餐支出；D11 开发管线（一次检索，须带 URL）；D12 用户输入归一化（缺 CapEx → 回收期隐藏）。
+- 参数表 `lib/iq/params/{defaults,cuisine_taxonomy,hubs}.yaml`（附录 A/B/C，zod 校验），`lib/iq/geo.ts` 几何工具（等时圈 × block group 面积加权采样），`lib/iq/model/schema.ts`（`report_model.json` 唯一事实源 schema，附录 D）。
+- 迁移 `0009_iq_360_data_layer.sql`：`iq_poi`、`iq_poi_snapshot`、`iq_lodes_wac`、`iq_cost_log` 与报告行 `report_model_json / narrative_json / report_tier / report_cost_usd`。
+- 验收：`qa/e2e-data.test.ts` 离线重放 Millbrae 用例——D2 返回 tract 级华裔与收入、D5 1 英里内 ≥ 30 家餐饮 POI 且中餐 ≥ 10、D6 ≤ 6 次、`sources[]` 12 项全部有状态、数据成本 ≤ $0.10；降级路径（无 Mapbox / 竞品源失效）逐一断言。`npm run test:iq` 99 项通过。本沙箱无法访问外网，线上首跑请以 `sources[]` 表为准核对各源状态。
+
+## 360° 升级 · Phase 2 商圈引擎（2026-09-12）
+- `lib/iq/engines/trade-area.ts`：固定四圈层 walk10 / drive5 / drive10 / drive15，block group 指标按「等时圈 × block group 面积份额」裁切汇总（人口、户数、户数加权收入中位、中文家庭占比、华裔人口、25–44 岁、有孩家庭、户均人数、租房比例、日间岗位、餐饮 / 中餐 / 菜系需求）；主商圈按菜系 `range_class` 选定（everyday → drive5，regular → drive10，destination → drive15）。
+- 需求估算 §2.3：`餐饮支出 = 户数 × CEX(收入分位) × 区域系数`；`中餐支出 = 餐饮支出 × [p_cn × 0.55 + (1 − p_cn) × 0.08]`；`cuisine_share` 不拍脑袋——`lib/iq/engines/cuisine-share.ts` 按贸易区中餐供给的评论数 log 权重自校准（Laplace 平滑，3%–50% 截断）。
+- `lib/iq/engines/demand-huff.ts`：Huff 引力捕获 `P_ij = A_j^α d_ij^−β / Σ A_k^α d_ik^−β`，`A = log(1 + 评论数) × (评分 / 4.2)`，β 按菜系 2.0 / 1.5 / 1.1，L2 权重 0.5；午市单独按 walk10 岗位 × 外食率 × 中餐份额 × 午市客单 × 21 天与 walk10 竞品分摊；输出捕获月需求、午晚拆分、按来源圈层堆叠、各竞品分流比例与 P 值分布。
+- 验收（`qa/e2e-report.test.ts`）：Millbrae 四圈层表齐全；`coverage_ratio = 捕获 ÷ 保本` 各中间量可打印；菜系改为「中式快餐」时主商圈自动变为 drive5、β = 2.0、捕获需求随之变化。
+
+## 360° 升级 · Phase 3 竞对引擎（2026-09-12）
+- `lib/iq/engines/competitor.ts`：候选池 = Overture ∪ Google；去重（名字归一化 + ≤100 m + 同类型，保留两边 id，Google 的评分 / 状态优先）；三级子菜系分类器（类别映射 → 中英文店名关键词 → LLM 批量兜底 `lib/iq/narrative/llm.ts`，confidence < 0.6 归「其他中餐」）；四层竞争关系 L1 同子菜系 / L2 其他中餐 / L3 walk10 同价位场景替代 / L4 亚超・奶茶・点心・中文学校・华人银行锚点。
+- 指标：每万居民 / 每万华裔的 L1 密度、L1 评论数 HHI、价格阶梯、品质缺口（均分 < 4.0 机会 / > 4.4 高门槛）、关店率、标杆营收带（月新增评论 × k=80 × 客单，历史不足时标 `relative_tier_only`）；集聚 U 型分（0 家 30 / 1–3 60 / 4–8 85 / 9–15 60 / >15 35，按 coverage_ratio ±10）。
+- 空白分析：必须**同时**满足 drive10 华裔 ≥ 3,000、密度 < 枢纽中位数 50%、L2 ≥ 4，否则只能写「该品类供给较少」；枢纽中位数由 `scripts/refresh-hubs.ts` 月度预计算写入缓存。
+- **竞品守卫（拦截 R1）**：metro 内该子菜系 ≥ 10 家而 drive10 内 L1+L2 = 0 → 「竞品抓取异常」；drive10 餐饮 POI < 15 且人口 > 20,000 → 「POI 覆盖异常」；D5/D6 同时失效 → 守卫不通过；触发即标记预检版、禁止付费交付。
+- 验收：Millbrae L1（湘菜）≥ 1、L2 ≥ 15、L4 含亚超；人为清空 POI 表重放时守卫触发且不出现「空白」措辞。
+
+## 360° 升级 · Phase 4 评分 · 财务自洽 · 置信度（2026-09-12）
+- **唯一评分函数** `lib/iq/engines/cuisine-fit.ts`（拦截 R5）：六维 需求覆盖 25 / 客群匹配 15 / 竞争态势 20 / 可达与流量 15 / 财务可行 15 / 场景与外卖 10，权重和 = 100，`total = Σ 权重 × 分 ÷ 100`；≥ 75 GO / 60–74 CONDITIONAL GO / < 60 NO GO；缺输入的维度记中性 50 并写明「未知」，绝不编数；条件由得分最低两维自动生成，数字反算自模型（如「租金需谈至 ≤ $X 使占用成本比 ≤ 10%」）。
+- 替代菜系 §4.2：同一地址对附录 B 全部 14 个子菜系重跑（只换竞品集合、β、价位、需求份额），输出排名与用户菜系名次；蚕食分析 §4.3：已有门店用同一 Huff 模型算分流比例。
+- **财务自洽** `lib/iq/engines/finance.ts`（拦截 R4）：`堂食覆盖 = seats × turns`、`外卖单 = 堂食 × r/(1−r)`、`月营收 = (堂食 × 客单 + 外卖 × 外卖客单) × 营业日`；去掉入座率；三情景只改 turns / 外卖占比 / 客单，表中单量由函数反算并断言 |Δ| < $1；敏感性（租金 +10%、翻台 −0.5、客单 −12.5%、外卖 +15pt）同一函数；**无 CapEx 则 `payback_months = null`**（拦截 R6）。
+- **置信度** `lib/iq/engines/confidence.ts`：`Σ w_s × q_s`（ACS 20 / 竞品 25 / 客流代理 15 / 租金对标 15 / 日间人口 10 / 交通 5 / 开发管线 5 / 用户输入 5，q ∈ {0, 0.5, 1}），< 60 预检版。
+- `lib/iq/pipeline.ts` `runReport360`：数据层 → 引擎 → `report_model.json`（zod 校验，附录 D）；`npm run replay:golden -- millbrae_1711 --engine v360` 可重放。风险登记 `engines/risk.ts` 与客群画像 `engines/audience.ts` 只用模型数字填模板。
+- 验收（`qa/e2e-report.test.ts`）：所有分数 = `score()` 输出、权重和 100、三情景单量 ↔ 营收互相反算一致、无 CapEx 时回收期为 null、替代菜系表 14 行；`npm run test:iq` 102 项通过。
+
+## 360° 升级 · Phase 5a 叙事层（2026-09-12）
+- `lib/iq/narrative/templates.ts`：14 页信息架构（§5.2）与确定性模板句（只用模型数字 + `[src:字段路径]`）；`pageFragment` 给每页切出只读 JSON 片段。
+- `lib/iq/narrative/generate.ts`：附录 E 提示词逐页生成（页面用快速模型，执行摘要用 Claude），输出 `{title ≤ 28 字且含判断, body ≤ 120 字, refs}`；`lib/iq/narrative/number-guard.ts` 校验叙事中每个数字（含 $ / % / 万 / 单 / 家）都能在该页 JSON 片段中找到（±1 舍入）、引用路径存在、禁用词（零竞争 / 空白 仅在 `void.is_void` 时允许；保守估计 / 大约 一律禁止）；失败重生成一次，再失败用模板句替代并标注 `guard`。执行摘要的「签约前条件」必须逐字复制 `score.conditions`。
+- `lib/iq/generate.ts` `generateReport360`：管线 → 叙事 → QA 门槛 → 落库 `report_model_json / narrative_json / report_tier / report_cost_usd` → `iq_cost_log`；新增 `POST/GET /api/iq/report360/[id]`（202 后台生成；`?sync=1` + worker secret 同步返回）。
+
+## 360° 升级 · Phase 6 质量门槛与回归测试（2026-09-12）
+- `lib/iq/qa/gates.ts`（`npm run qa:gates [model.json]`）：① schema 校验（附录 D）② 数据完整性（置信度 ≥ 60、竞品守卫通过、D1/D2/D5 = ok）③ 合理性（中文家庭占比 ≤ 100% 且与县值同数量级、租金 $1–$15/sf/月、高人口区零竞品异常）④ 数值自洽（三情景反算、保本 = 固定成本 ÷ 边际贡献、权重和 = 100、总分 = Σ、无 CapEx 不得有回收期、coverage_ratio 一致）⑤ NumberGuard ⑥ 禁用措辞；任一失败 → 预检版。
+- `lib/iq/qa/gates.test.ts`：Millbrae 原始缺陷 R1、R2、R4、R5、R6、R8 各有一个失败用例被拦截（R3 由 Phase 5b 视觉回归、R7 由地图页覆盖）。
+- Golden set 回测：`qa/golden_set/backtest_bay_area.json`（6 家经营 ≥ 4 年门店 + 6 家已关门店，标签需用 D6 `business_status` 复核）与 `scripts/backtest-golden.ts`（评分 AUC ≥ 0.75 才允许上线；本沙箱无网络，需在有网环境执行）。
+
+## 360° 升级 · Phase 7 成本控制与运营（2026-09-12）
+- 单份报告变动成本预算 ≤ $0.50：数据 ≤ $0.10（Overture 月度落库、ACS / LODES 12 月缓存、Google ≤ 6 次 + 30 天缓存且免费额度内计 $0、等时圈按 100 m 网格缓存）、LLM ≤ $0.25（子菜系分类批处理 $0.002/家并按月复用；叙事每页 ≤ 600 token 约 $0.004，仅执行摘要用 Claude 约 $0.03）、检索 ≤ $0.06（租金 + 开发管线各 1 次）、渲染 ≈ $0.02。`CostLedger` 逐项记账，`persistCostLog` 写入 `iq_cost_log`，合计 > $0.50 记录报警日志。
+- 运营脚本：`scripts/load_overture.py`（月）、`scripts/snapshot-reviews.ts`（月）、`scripts/refresh-hubs.ts`（月）、`scripts/load-lodes.ts`（年）、`scripts/refresh-cex.ts`（年）、`scripts/backtest-golden.ts`（每次参数变更）。
+- 降级策略均落在 `sources[]`：Google 配额耗尽 → 只用 Overture、评分类指标「未获取」、置信度自动下调；Mapbox 耗尽 → 直线半径；LLM 失败 → 模板句；任何降级都出现在第 14 页来源表。
+- 「连续 20 份报告平均成本 ≤ $0.50、P95 ≤ 90 秒」需在有网环境用 `replay:golden --engine v360` 循环验证；离线重放的数据成本为 $0.06。
+
+## 360° 升级 · Phase 5b 报告信息架构与渲染（2026-09-12）
+- 新增 `/print/[reportId]`（`app/print/`）：服务端读取 `report_model_json` + `narrative_json` 渲染 **浅色打印版 14 页**（US Letter、18 mm 页边距、页脚 = 报告编号 · 数据截至 · 页码），强制浅色 token（`prefers-color-scheme` 无效），Noto Sans SC + Inter，Lucide 线性图标，无 emoji；每页固定结构：action title（含判断）→ 英文小标题 → 一个核心图表 / 表格 → ≤ 120 字解读 → 数据来源 chip（官方统计 / 平台数据 / 用户输入 / 模型估算 / 联网检索，状态取自 `sources[]`）。非生产环境 `?fixture=millbrae` 可用离线模型预览。
+- 页面：封面 / 执行摘要（结论徽章 + 三支撑 + 三风险 + 保本 vs 捕获双柱 + 签约前条件）/ 商圈地图（SVG：四圈层等时圈 + L1/L2 竞品 + L4 锚点 + 拟选址，仅 Overture 与自算图层，不含 Google 底图）/ Esri 式四圈层表 / 客群画像 / 竞争格局（L1–L4、价格阶梯、集聚曲线位置、关店率）/ 直接竞品卡片 + 标杆营收带 / 品类缺口与替代菜系 / Huff 需求捕获（圈层堆叠、午晚拆分、覆盖比仪表）/ 财务模型（成本表、三情景、敏感性瀑布，无 CapEx 不显示回收期）/ 六维评分 / 风险矩阵 / 签约核查与 90 天计划 / 方法与数据来源（`sources[]` 表 + 公式）。缺失值一律「未获取」。
+- `lib/iq/render/pdf.ts`：服务端 Chromium 打开 `/print`，等待 `window.__REPORT_READY__`，`page.pdf({ format: 'Letter', printBackground: true, preferCSSPageSize: true })`；`GET /api/iq/report/[id]/pdf` 在存在 `report_model_json` 时自动走该路径（否则沿用旧模板），彻底替代浏览器打印深色页面（R3）。`/print` 在生产环境要求已付费或 `IQ_PRINT_TOKEN`。
+- 视觉回归（门槛 7）：`npx tsx scripts/smoke-print.ts`（需 `next dev -p 3111`）——实测 14 个 `h1.action-title`、0 个空单元格、全部文本节点对比度 ≥ 4.5:1（含 SVG 文字）、每页不溢出、PDF 1.4 MB / 14 页 / Letter、无 tofu 字形。为满足对比度，珊瑚色只作徽章填充与关键数字下划线，语义色文字改用加深色阶。
+
+## 360° 升级 · 自动接入前端与自动化运维（2026-09-12）
+- **自动生成**：旧版付费报告落库（后台 finalize 或同步路径）后立即 `POST /api/iq/report360/:id`，360° 引擎在独立调用中生成并落库；报告页新增「360° 专业版报告」面板（`components/iq/Report360Panel.tsx`）：自动触发、每 6 秒轮询状态、就绪后显示综合分 / 结论并提供「下载 360° PDF」「在线预览 /print」「重新生成」；`IQ360_AUTO=false` 可关闭自动触发。
+- **自动迁移**：写入 `report_model_json` 时若发现迁移 0009 未执行，`lib/iq/ops/migrate.ts` 通过 `DATABASE_URL` 幂等执行全部迁移文件后重试；无 `DATABASE_URL` 时面板提示「数据库尚未升级」。
+- **Bootstrap 模式**：Overture 尚未落库但 Google Places 返回 ≥ 15 家餐饮 POI 时，以 Google 为 POI 底图继续交付，并在 `meta.degradations` 与第 14 页明确声明（`sources[]` 中 D5 仍如实标 failed）；Overture 加载后自动恢复正常模式。
+
+## 360° 升级 · 运维 / Ops：数据任务上 Vercel Cron（2026-09-12）
+- 新增 `GET|POST /api/iq/ops?task=migrate|lodes|hubs|snapshots|all&metro=sf-bay&state=ca&year=2022&counties=06081,…&dryRun=1&maxDetails=0&force=1`（`runtime nodejs`、`maxDuration 300`）。鉴权二选一：`Authorization: Bearer ${CRON_SECRET}`（项目设置了 `CRON_SECRET` 环境变量时 Vercel Cron 自动携带）或 `x-iq-worker-secret`（`IQ_WORKER_SECRET`，或由 `SUPABASE_SERVICE_ROLE_KEY` 派生的 worker 密钥，同 full-report worker）。任务在 300 s 预算内同步执行并返回 JSON：`{ ok, tasks: [{ task, ok, ms, cost_usd, result | error }], cost_usd, total_ms }`；`all` 按 migrate → hubs → snapshots → lodes（单县）顺序执行，任一任务失败只记录到 `tasks[].error`、不抛出（HTTP 仍为 200，`ok:false`）。日志打印每任务成本汇总。
+- 三个脚本的核心逻辑迁入可导入函数（`lib/iq/ops/`），脚本退化为同参数的 CLI 壳：`loadLodes({ state, year, counties, budgetMs, maxRows? })`（流式 fetch + gunzip + 逐行解析，按县 FIPS 前缀过滤，每 1000 行 upsert `iq_lodes_wac`；预算将尽时干净停止，返回 `counties_done / counties_remaining / truncated`；已完成的县记入 `iq_market_cache(iq360_ops_progress / lodes:<state>:<year>)`，下次同一 query string 的 cron 自动跳过；`budgetMs < 120 s` 时默认每次只加载一个县）、`refreshHubs({ metro, dryRun })` → `{ hubs_done, cuisines_written, cost_usd, warnings }`、`snapshotReviews({ metro, maxDetails?, budgetMs })` → `{ places, rows_upserted, cost_usd, calls }`。迁移复用 `runPendingMigrations`（`lib/iq/ops/migrate.ts`）。
+- `vercel.json` crons：`hubs` 每月 1 日 09:00 UTC、`snapshots` 每月 1 日 10:00 UTC、`lodes`（ca / 2022 / 湾区五县）每周日 11:00 UTC；函数项 `app/api/iq/ops/route.ts: maxDuration 300`。**Vercel Hobby 仅允许每日一次的 cron（且触发时间不精确），上述月/周计划需要 Pro**；Hobby 上可改为每日触发（幂等，无额外成本：hubs/lodes 走缓存与进度记录）或手动 `curl -H "x-iq-worker-secret: …" https://app.restaurantiq.ai/api/iq/ops?task=all`。
+- 环境变量：`CRON_SECRET`（可选；不设则 Bearer 通道关闭，只接受 worker 密钥）、`DATABASE_URL`（`task=migrate` 需要，Supabase → Settings → Database → URI）、`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`（写库）、`GOOGLE_MAPS_API_KEY`（snapshots）。
+- 未上 Vercel 的部分：Overture 月度落库 `scripts/load_overture.py`（DuckDB 扫描 S3 parquet，数十分钟、内存大）仍在本机 / 服务器执行；`scripts/refresh-cex.ts` 与 `scripts/backtest-golden.ts` 也保持手动。LODES 全州文件（CA ≈ 30 MB gz、数十万行）一次流式扫描通常在 1–3 分钟内完成湾区五县；若某次超预算，返回的 `counties_remaining` 会在下一周 cron 中继续。
+- 测试（`npm run test:iq`，无网络 / 无 DB）：`lib/iq/ops/lodes-loader.test.ts`（注入 gzip 流与 upsert：解析、县过滤、分批、预算停止与 `counties_remaining`、单县模式、进度跳过、maxRows、dry run）、`auth.test.ts`（Bearer / worker 密钥 / 拒绝）、`run.test.ts`（参数解析、`all` 顺序与预算切分、错误收集、预算耗尽跳过）。

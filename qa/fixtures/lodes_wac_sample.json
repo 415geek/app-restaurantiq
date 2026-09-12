@@ -1,0 +1,11 @@
+{
+  "$comment": "Rows in iq_lodes_wac shape (LEHD LODES v8 WAC, S000/JT00, 2022) for two Millbrae tracts (06081601700, 06081601800). Values are synthetic but plausible; used by lib/iq/data/lodes.test.ts via deps.wacQuery.",
+  "year": 2022,
+  "rows": [
+    { "block_geoid": "060816017001001", "year": 2022, "state": "ca", "c000": 412, "ca01": 90, "ca02": 231, "ca03": 91, "ce01": 120, "ce02": 140, "ce03": 152, "cns07": 88, "cns12": 30, "cns15": 12, "cns18": 96, "cr04": 175 },
+    { "block_geoid": "060816017001002", "year": 2022, "state": "ca", "c000": 138, "ca01": 30, "ca02": 80, "ca03": 28, "ce01": 50, "ce02": 45, "ce03": 43, "cns07": 40, "cns12": 5, "cns15": 0, "cns18": 22, "cr04": 60 },
+    { "block_geoid": "060816017002003", "year": 2022, "state": "ca", "c000": 27, "ca01": 6, "ca02": 15, "ca03": 6, "ce01": 9, "ce02": 9, "ce03": 9, "cns07": 3, "cns12": 4, "cns15": 0, "cns18": 2, "cr04": 10 },
+    { "block_geoid": "060816018001001", "year": 2022, "state": "ca", "c000": 980, "ca01": 210, "ca02": 560, "ca03": 210, "ce01": 260, "ce02": 330, "ce03": 390, "cns07": 120, "cns12": 210, "cns15": 40, "cns18": 150, "cr04": 410 },
+    { "block_geoid": "060816018002005", "year": 2022, "state": "ca", "c000": 61, "ca01": 12, "ca02": 35, "ca03": 14, "ce01": 20, "ce02": 21, "ce03": 20, "cns07": 10, "cns12": 8, "cns15": 0, "cns18": 6, "cr04": null }
+  ]
+}

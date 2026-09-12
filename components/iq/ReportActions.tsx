@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { Report360Panel } from '@/components/iq/Report360Panel';
 
 type Props = {
   reportId: string;
@@ -106,13 +107,31 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
     setLinked(isLinkedToUser);
   }, [isLinkedToUser]);
 
+  const pdfUrl = `/api/iq/report/${encodeURIComponent(reportId)}/pdf?lang=${lang}`;
+
+  /**
+   * Mobile-safe download.
+   *
+   * The previous implementation fetched the PDF into a Blob and clicked a
+   * synthetic <a download> — iOS Safari / WeChat / many Android WebViews
+   * ignore programmatic blob downloads (nothing happens, or a blank tab), which
+   * is exactly the "PDF 无法下载" report from phone users. We now:
+   *   1. Pre-flight the route with a HEAD-style probe (GET + Range) so we can
+   *      show a readable error when the report is not paid / not ready / failed.
+   *   2. Then hand the real download to the browser through a same-tab
+   *      navigation to the PDF URL (server sends Content-Disposition:
+   *      attachment) — desktop browsers save the file without leaving the
+   *      page, iOS opens its native PDF viewer with the Share/Save sheet.
+   */
   const handleDownloadServerPdf = async () => {
     setPdfError(null);
     setIsDownloading(true);
     try {
-      const url = `/api/iq/report/${encodeURIComponent(reportId)}/pdf?lang=${lang}`;
-      const res = await fetch(url, { method: 'GET', credentials: 'same-origin' });
-      const ct = res.headers.get('content-type') || '';
+      const res = await fetch(pdfUrl, {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: { 'x-iq-pdf-probe': '1' },
+      });
       if (res.status === 403) {
         setPdfError(lang === 'zh' ? '需完成购买后才能下载正式 PDF。' : 'Purchase is required to download the PDF.');
         return;
@@ -125,27 +144,8 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
         setPdfError(await parsePdfErrorResponse(res, lang, t.pdfError));
         return;
       }
-      if (!ct.includes('application/pdf')) {
-        setPdfError(await parsePdfErrorResponse(res, lang, t.pdfError));
-        return;
-      }
-      const blob = await res.blob();
-      if (blob.size < 512) {
-        setPdfError(t.pdfError);
-        return;
-      }
-      const dispo = res.headers.get('content-disposition') || '';
-      const match = /filename="([^"]+)"/.exec(dispo);
-      const filename = match?.[1] ?? `RestaurantIQ-Report-${reportId.slice(0, 8)}.pdf`;
-      const href = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = href;
-      a.download = filename;
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(href);
+      // Probe OK (204 = report ready). Let the browser perform the download.
+      window.location.assign(pdfUrl);
     } catch (e) {
       console.error('PDF download error:', e);
       setPdfError(t.pdfError);
@@ -248,6 +248,8 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
           </div>
         </div>
       </div>
+
+      {isPaid ? <Report360Panel reportId={reportId} lang={lang} /> : null}
 
       {isPaid ? (
         <div className="rounded-2xl border border-amber-900/40 bg-amber-950/20 p-6">

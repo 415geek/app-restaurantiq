@@ -8,6 +8,7 @@ import {
   GENERATION_MIN_BUDGET_MS,
 } from '@/lib/funnel/iq-deadline';
 import { startReportGeneration } from '@/lib/funnel/iq-report-job';
+import { kickReport360 } from '@/lib/iq/kick';
 
 export const runtime = 'nodejs';
 /** Legacy synchronous path (language preview / un-migrated DB) can run minutes. */
@@ -160,6 +161,7 @@ export async function POST(req: Request) {
     fullJson.generation_tier = qualityMode ? 'professional' : 'standard';
     if (!isPreview) {
       await iqSetFullReport(reportId, fullJson);
+      await kickReport360(reportId);
     }
     return NextResponse.json(fullJson);
   } catch (e) {

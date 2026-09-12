@@ -1,0 +1,125 @@
+# 附录 B · 子菜系分类体系。id 用于 report_model.input.cuisine 与 poi.sub_cuisine。
+cuisines:
+  - id: cantonese
+    label_zh: 粤菜 / 烧腊
+    label_en: Cantonese / BBQ
+    range_class: regular
+    price_tier: "$$"
+    ticket_in: 22
+    keywords: [粤, 烧腊, 海鲜酒家, 烧味, Cantonese, BBQ, Seafood, Roast]
+    mappings: [cantonese_restaurant]
+  - id: hk_cafe
+    label_zh: 港式茶餐厅
+    label_en: Hong Kong-style cafe
+    range_class: everyday
+    price_tier: "$"
+    ticket_in: 16
+    keywords: [茶餐厅, 冰室, Cafe HK, Hong Kong Cafe, Cha Chaan Teng]
+    mappings: [hong_kong_style_cafe]
+  - id: dim_sum
+    label_zh: 点心
+    label_en: Dim Sum
+    range_class: regular
+    price_tier: "$$"
+    ticket_in: 20
+    keywords: [点心, 早茶, Dim Sum, Dimsum]
+    mappings: [dim_sum_restaurant]
+  - id: sichuan
+    label_zh: 川菜
+    label_en: Sichuan
+    range_class: regular
+    price_tier: "$$"
+    ticket_in: 22
+    keywords: [川, 蜀, 麻辣, Sichuan, Szechuan, Szechwan, Chengdu, Chongqing]
+    mappings: [szechuan_restaurant, sichuan_restaurant]
+  - id: hunan
+    label_zh: 湘菜
+    label_en: Hunan
+    range_class: destination
+    price_tier: "$$"
+    ticket_in: 24
+    keywords: [湘, 湖南, Hunan, Xiang]
+    mappings: [hunan_restaurant]
+  - id: dongbei
+    label_zh: 东北菜
+    label_en: Northeastern Chinese
+    range_class: destination
+    price_tier: "$$"
+    ticket_in: 22
+    keywords: [东北, 饺子, 锅包肉, Dongbei, Northeastern, Dumpling]
+    mappings: []
+  - id: shanghai
+    label_zh: 上海 / 江浙
+    label_en: Shanghai / Jiangnan
+    range_class: destination
+    price_tier: "$$"
+    ticket_in: 24
+    keywords: [上海, 本帮, 小笼, 江浙, 苏, 杭, Shanghai, Shanghainese, Jiangnan, Xiao Long Bao, Soup Dumpling]
+    mappings: [shanghainese_restaurant]
+  - id: taiwanese
+    label_zh: 台湾菜
+    label_en: Taiwanese
+    range_class: regular
+    price_tier: "$$"
+    ticket_in: 18
+    keywords: [台, 卤肉饭, 台湾, Taiwanese, Taiwan]
+    mappings: [taiwanese_restaurant]
+  - id: hot_pot
+    label_zh: 火锅
+    label_en: Hot Pot
+    range_class: destination
+    price_tier: "$$$"
+    ticket_in: 35
+    keywords: [火锅, 涮, Hot Pot, Hotpot, Shabu]
+    mappings: [hot_pot_restaurant]
+  - id: skewers
+    label_zh: 烧烤 / 串
+    label_en: Skewers / Chinese BBQ
+    range_class: destination
+    price_tier: "$$"
+    ticket_in: 28
+    keywords: [烧烤, 串, 撸串, Skewers, Chuan, BBQ Skewer]
+    mappings: []
+  - id: noodles
+    label_zh: 麻辣烫 / 面食 / 米线
+    label_en: Noodles / Malatang
+    range_class: everyday
+    price_tier: "$"
+    ticket_in: 15
+    keywords: [麻辣烫, 面, 米线, 面馆, 拉面, 刀削面, Noodle, Malatang, Mala Tang, Ramen House, Rice Noodle]
+    mappings: [noodle_house, chinese_noodle_restaurant]
+  - id: chinese_fast
+    label_zh: 中式快餐 / 美式中餐
+    label_en: Chinese fast food / American Chinese
+    range_class: everyday
+    price_tier: "$"
+    ticket_in: 13
+    keywords: [快餐, Express, Takeout, Take-out, Panda, Wok, Chop Suey]
+    mappings: [chinese_takeout, chinese_fast_food]
+  - id: boba
+    label_zh: 奶茶 / 甜品
+    label_en: Boba / Dessert
+    range_class: everyday
+    price_tier: "$"
+    ticket_in: 8
+    keywords: [奶茶, 茶, 甜品, 糖水, Boba, Bubble Tea, Tea House, Dessert]
+    mappings: [bubble_tea_shop, boba_shop]
+  - id: other_chinese
+    label_zh: 其他中餐
+    label_en: Other Chinese
+    range_class: regular
+    price_tier: "$$"
+    ticket_in: 20
+    keywords: []
+    mappings: [chinese_restaurant]
+
+# L3 场景替代候选类型（同价位、walk10）
+l3_types: [japanese_restaurant, korean_restaurant, vietnamese_restaurant, thai_restaurant, fast_food_restaurant, sandwich_shop, pizza_restaurant, ramen_restaurant, sushi_restaurant]
+
+# L4 流量共生锚点
+l4_anchors:
+  grocery_types: [asian_grocery_store, supermarket, grocery_store]
+  grocery_names: ["99 Ranch", "Ranch Market", "大华", "Marina", "Lion", "永和", "H Mart", "Nijiya", "Mitsuwa", "Pacific Supermarket", "Manila Oriental"]
+  other_types: [bubble_tea_shop, dim_sum_restaurant, chinese_school, language_school]
+  bank_types: [bank]
+  bank_names: ["East West", "Cathay", "Bank of the Orient", "HSBC", "Preferred Bank"]

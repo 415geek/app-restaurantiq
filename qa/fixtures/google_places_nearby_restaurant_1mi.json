@@ -1,0 +1,348 @@
+{
+  "places": [
+    {
+      "id": "ChIJfx_001_HunanHom",
+      "displayName": {
+        "text": "Hunan Home Kitchen",
+        "languageCode": "en"
+      },
+      "location": {
+        "latitude": 37.595656,
+        "longitude": -122.387753
+      },
+      "primaryType": "chinese_restaurant",
+      "types": [
+        "chinese_restaurant",
+        "restaurant",
+        "food",
+        "point_of_interest",
+        "establishment",
+        "meal_takeaway"
+      ],
+      "rating": 4.3,
+      "userRatingCount": 812,
+      "businessStatus": "OPERATIONAL",
+      "priceLevel": "PRICE_LEVEL_MODERATE",
+      "regularOpeningHours": {
+        "weekdayDescriptions": [
+          "Monday: 11:00 AM – 9:30 PM",
+          "Tuesday: 11:00 AM – 9:30 PM",
+          "Wednesday: 11:00 AM – 9:30 PM",
+          "Thursday: 11:00 AM – 9:30 PM",
+          "Friday: 11:00 AM – 10:00 PM",
+          "Saturday: 10:30 AM – 10:00 PM",
+          "Sunday: 10:30 AM – 9:30 PM"
+        ]
+      }
+    },
+    {
+      "id": "ChIJfx_002_LittleSi",
+      "displayName": {
+        "text": "Little Sichuan Millbrae",
+        "languageCode": "en"
+      },
+      "location": {
+        "latitude": 37.601808,
+        "longitude": -122.385145
+      },
+      "primaryType": "chinese_restaurant",
+      "types": [
+        "chinese_restaurant",
+        "restaurant",
+        "food",
+        "point_of_interest",
+        "establishment",
+        "meal_takeaway"
+      ],
+      "rating": 4.4,
+      "userRatingCount": 1540,
+      "businessStatus": "OPERATIONAL",
+      "priceLevel": "PRICE_LEVEL_MODERATE",
+      "regularOpeningHours": {
+        "weekdayDescriptions": [
+          "Monday: 11:00 AM – 9:30 PM",
+          "Tuesday: 11:00 AM – 9:30 PM",
+          "Wednesday: 11:00 AM – 9:30 PM",
+          "Thursday: 11:00 AM – 9:30 PM",
+          "Friday: 11:00 AM – 10:00 PM",
+          "Saturday: 10:30 AM – 10:00 PM",
+          "Sunday: 10:30 AM – 9:30 PM"
+        ]
+      }
+    },
+    {
+      "id": "ChIJfx_003_GoldenCa",
+      "displayName": {
+        "text": "Golden Cantonese Seafood",
+        "languageCode": "en"
+      },
+      "location": {
+        "latitude": 37.595756,
+        "longitude": -122.382143
+      },
+      "primaryType": "chinese_restaurant",
+      "types": [
+        "chinese_restaurant",
+        "restaurant",
+        "food",
+        "point_of_interest",
+        "establishment",
+        "meal_takeaway"
+      ],
+      "rating": 4.1,
+      "userRatingCount": 2210,
+      "businessStatus": "OPERATIONAL",
+      "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+      "regularOpeningHours": {
+        "weekdayDescriptions": [
+          "Monday: 11:00 AM – 9:30 PM",
+          "Tuesday: 11:00 AM – 9:30 PM",
+          "Wednesday: 11:00 AM – 9:30 PM",
+          "Thursday: 11:00 AM – 9:30 PM",
+          "Friday: 11:00 AM – 10:00 PM",
+          "Saturday: 10:30 AM – 10:00 PM",
+          "Sunday: 10:30 AM – 9:30 PM"
+        ]
+      }
+    },
+    {
+      "id": "ChIJfx_004_HongKong",
+      "displayName": {
+        "text": "Hong Kong Flower Lounge Dim Sum",
+        "languageCode": "en"
+      },
+      "location": {
+        "latitude": 37.597742,
+        "longitude": -122.384408
+      },
+      "primaryType": "chinese_restaurant",
+      "types": [
+        "chinese_restaurant",
+        "restaurant",
+        "food",
+        "point_of_interest",
+        "establishment",
+        "meal_takeaway"
+      ],
+      "rating": 4.2,
+      "userRatingCount": 3105,
+      "businessStatus": "OPERATIONAL",
+      "priceLevel": "PRICE_LEVEL_MODERATE",
+      "regularOpeningHours": {
+        "weekdayDescriptions": [
+          "Monday: 11:00 AM – 9:30 PM",
+          "Tuesday: 11:00 AM – 9:30 PM",
+          "Wednesday: 11:00 AM – 9:30 PM",
+          "Thursday: 11:00 AM – 9:30 PM",
+          "Friday: 11:00 AM – 10:00 PM",
+          "Saturday: 10:30 AM – 10:00 PM",
+          "Sunday: 10:30 AM – 9:30 PM"
+        ]
+      }
+    },
+    {
+      "id": "ChIJfx_100_SushiYos",
+      "displayName": {
+        "text": "Sushi Yoshi",
+        "languageCode": "en"
+      },
+      "location": {
+        "latitude": 37.601116,
+        "longitude": -122.388031
+      },
+      "primaryType": "japanese_restaurant",
+      "types": [
+        "japanese_restaurant",
+        "restaurant",
+        "food",
+        "point_of_interest",
+        "establishment"
+      ],
+      "rating": 4.4,
+      "userRatingCount": 990,
+      "businessStatus": "OPERATIONAL",
+      "priceLevel": "PRICE_LEVEL_MODERATE",
+      "regularOpeningHours": {
+        "weekdayDescriptions": [
+          "Monday: 11:00 AM – 9:30 PM",
+          "Tuesday: 11:00 AM – 9:30 PM",
+          "Wednesday: 11:00 AM – 9:30 PM",
+          "Thursday: 11:00 AM – 9:30 PM",
+          "Friday: 11:00 AM – 10:00 PM",
+          "Saturday: 10:30 AM – 10:00 PM",
+          "Sunday: 10:30 AM – 9:30 PM"
+        ]
+      }
+    },
+    {
+      "id": "ChIJfx_101_PhoMillb",
+      "displayName": {
+        "text": "Pho Millbrae",
+        "languageCode": "en"
+      },
+      "location": {
+        "latitude": 37.600337,
+        "longitude": -122.391751
+      },
+      "primaryType": "vietnamese_restaurant",
+      "types": [
+        "vietnamese_restaurant",
+        "restaurant",
+        "food",
+        "point_of_interest",
+        "establishment"
+      ],
+      "rating": 4.2,
+      "userRatingCount": 1210,
+      "businessStatus": "OPERATIONAL",
+      "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+      "regularOpeningHours": {
+        "weekdayDescriptions": [
+          "Monday: 11:00 AM – 9:30 PM",
+          "Tuesday: 11:00 AM – 9:30 PM",
+          "Wednesday: 11:00 AM – 9:30 PM",
+          "Thursday: 11:00 AM – 9:30 PM",
+          "Friday: 11:00 AM – 10:00 PM",
+          "Saturday: 10:30 AM – 10:00 PM",
+          "Sunday: 10:30 AM – 9:30 PM"
+        ]
+      }
+    },
+    {
+      "id": "ChIJfx_102_Taqueria",
+      "displayName": {
+        "text": "Taqueria El Grullense",
+        "languageCode": "en"
+      },
+      "location": {
+        "latitude": 37.60173,
+        "longitude": -122.38038
+      },
+      "primaryType": "mexican_restaurant",
+      "types": [
+        "mexican_restaurant",
+        "restaurant",
+        "food",
+        "point_of_interest",
+        "establishment"
+      ],
+      "rating": 4.5,
+      "userRatingCount": 1800,
+      "businessStatus": "OPERATIONAL",
+      "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+      "regularOpeningHours": {
+        "weekdayDescriptions": [
+          "Monday: 11:00 AM – 9:30 PM",
+          "Tuesday: 11:00 AM – 9:30 PM",
+          "Wednesday: 11:00 AM – 9:30 PM",
+          "Thursday: 11:00 AM – 9:30 PM",
+          "Friday: 11:00 AM – 10:00 PM",
+          "Saturday: 10:30 AM – 10:00 PM",
+          "Sunday: 10:30 AM – 9:30 PM"
+        ]
+      }
+    },
+    {
+      "id": "ChIJfx_103_Peninsul",
+      "displayName": {
+        "text": "Peninsula Pizza Co",
+        "languageCode": "en"
+      },
+      "location": {
+        "latitude": 37.59173,
+        "longitude": -122.38351
+      },
+      "primaryType": "pizza_restaurant",
+      "types": [
+        "pizza_restaurant",
+        "restaurant",
+        "food",
+        "point_of_interest",
+        "establishment"
+      ],
+      "rating": 4,
+      "userRatingCount": 560,
+      "businessStatus": "OPERATIONAL",
+      "priceLevel": "PRICE_LEVEL_MODERATE",
+      "regularOpeningHours": {
+        "weekdayDescriptions": [
+          "Monday: 11:00 AM – 9:30 PM",
+          "Tuesday: 11:00 AM – 9:30 PM",
+          "Wednesday: 11:00 AM – 9:30 PM",
+          "Thursday: 11:00 AM – 9:30 PM",
+          "Friday: 11:00 AM – 10:00 PM",
+          "Saturday: 10:30 AM – 10:00 PM",
+          "Sunday: 10:30 AM – 9:30 PM"
+        ]
+      }
+    },
+    {
+      "id": "ChIJfx_104_SeoulGar",
+      "displayName": {
+        "text": "Seoul Garden BBQ",
+        "languageCode": "en"
+      },
+      "location": {
+        "latitude": 37.591208,
+        "longitude": -122.394035
+      },
+      "primaryType": "korean_restaurant",
+      "types": [
+        "korean_restaurant",
+        "restaurant",
+        "food",
+        "point_of_interest",
+        "establishment"
+      ],
+      "rating": 4.1,
+      "userRatingCount": 740,
+      "businessStatus": "OPERATIONAL",
+      "priceLevel": "PRICE_LEVEL_MODERATE",
+      "regularOpeningHours": {
+        "weekdayDescriptions": [
+          "Monday: 11:00 AM – 9:30 PM",
+          "Tuesday: 11:00 AM – 9:30 PM",
+          "Wednesday: 11:00 AM – 9:30 PM",
+          "Thursday: 11:00 AM – 9:30 PM",
+          "Friday: 11:00 AM – 10:00 PM",
+          "Saturday: 10:30 AM – 10:00 PM",
+          "Sunday: 10:30 AM – 9:30 PM"
+        ]
+      }
+    },
+    {
+      "id": "ChIJfx_105_InNOutBu",
+      "displayName": {
+        "text": "In-N-Out Burger",
+        "languageCode": "en"
+      },
+      "location": {
+        "latitude": 37.605582,
+        "longitude": -122.374753
+      },
+      "primaryType": "hamburger_restaurant",
+      "types": [
+        "hamburger_restaurant",
+        "restaurant",
+        "food",
+        "point_of_interest",
+        "establishment"
+      ],
+      "rating": 4.6,
+      "userRatingCount": 5400,
+      "businessStatus": "OPERATIONAL",
+      "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+      "regularOpeningHours": {
+        "weekdayDescriptions": [
+          "Monday: 11:00 AM – 9:30 PM",
+          "Tuesday: 11:00 AM – 9:30 PM",
+          "Wednesday: 11:00 AM – 9:30 PM",
+          "Thursday: 11:00 AM – 9:30 PM",
+          "Friday: 11:00 AM – 10:00 PM",
+          "Saturday: 10:30 AM – 10:00 PM",
+          "Sunday: 10:30 AM – 9:30 PM"
+        ]
+      }
+    }
+  ]
+}

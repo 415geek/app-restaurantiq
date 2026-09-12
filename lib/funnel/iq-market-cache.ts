@@ -24,7 +24,23 @@ export type MarketCacheSource =
   | 'deepseek_summary'
   | 'deepseek_competitor_insights'
   | 'claude_demographics'
-  | 'site_history';
+  | 'site_history'
+  // 360° data layer (lib/iq/data/*) — namespaced so TTLs/keys never collide with legacy sources
+  | 'iq360_geocode'
+  | 'iq360_acs_bg'
+  | 'iq360_acs_tract'
+  | 'iq360_bg_geometry'
+  | 'iq360_lodes'
+  | 'iq360_isochrone'
+  | 'iq360_overture'
+  | 'iq360_google_places'
+  | 'iq360_traffic_proxy'
+  | 'iq360_rent_comps'
+  | 'iq360_transit'
+  | 'iq360_aadt'
+  | 'iq360_dev_pipeline'
+  | 'iq360_hub_density'
+  | 'iq360_cuisine_share';
 
 export interface MarketCacheKeyInput {
   source: MarketCacheSource;

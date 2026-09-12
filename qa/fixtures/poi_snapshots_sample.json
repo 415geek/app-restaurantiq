@@ -1,0 +1,858 @@
+[
+  {
+    "place_id": "ChIJfx_001_HunanHom",
+    "snapshot_month": "2026-02-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 760,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_001_HunanHom",
+    "snapshot_month": "2026-03-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 769,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_001_HunanHom",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 778,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_001_HunanHom",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 787,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_001_HunanHom",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 796,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_001_HunanHom",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 805,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_001_HunanHom",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 814,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_002_LittleSi",
+    "snapshot_month": "2026-02-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1400,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_002_LittleSi",
+    "snapshot_month": "2026-03-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1424,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_002_LittleSi",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1448,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_002_LittleSi",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1472,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_002_LittleSi",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1496,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_002_LittleSi",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1520,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_002_LittleSi",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1544,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_003_GoldenCa",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 2190,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_003_GoldenCa",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 2194,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_003_GoldenCa",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 2198,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_003_GoldenCa",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 2202,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_003_GoldenCa",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 2206,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_004_HongKong",
+    "snapshot_month": "2026-02-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 3000,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_004_HongKong",
+    "snapshot_month": "2026-03-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 3018,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_004_HongKong",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 3036,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_004_HongKong",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 3054,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_004_HongKong",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 3072,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_004_HongKong",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 3090,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_004_HongKong",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 3108,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_005_ChefChuS",
+    "snapshot_month": "2026-03-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 630,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_005_ChefChuS",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 632,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_005_ChefChuS",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 634,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_005_ChefChuS",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 636,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_005_ChefChuS",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 638,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_005_ChefChuS",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 640,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_006_XiangYua",
+    "snapshot_month": "2026-02-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 200,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_006_XiangYua",
+    "snapshot_month": "2026-03-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 213,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_006_XiangYua",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 226,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_006_XiangYua",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 239,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_006_XiangYua",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 252,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_006_XiangYua",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 265,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_006_XiangYua",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 278,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_008_Shanghai",
+    "snapshot_month": "2026-02-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1900,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_008_Shanghai",
+    "snapshot_month": "2026-03-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1915,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_008_Shanghai",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1930,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_008_Shanghai",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1945,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_008_Shanghai",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1960,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_008_Shanghai",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1975,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_008_Shanghai",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1990,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_009_BoilingP",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1050,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_009_BoilingP",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1059,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_009_BoilingP",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1068,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_009_BoilingP",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1077,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_009_BoilingP",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1086,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_010_CantonRo",
+    "snapshot_month": "2026-02-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 540,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_010_CantonRo",
+    "snapshot_month": "2026-03-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 545,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_010_CantonRo",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 550,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_010_CantonRo",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 555,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_010_CantonRo",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 560,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_010_CantonRo",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 565,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_010_CantonRo",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 570,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_012_ZhangMam",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 700,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_012_ZhangMam",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 706,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_012_ZhangMam",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 712,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_012_ZhangMam",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 718,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_011_PandaExp",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 300,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_013_LuckyGar",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 300,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJfx_014_MamaJiSi",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 300,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_001",
+    "snapshot_month": "2026-02-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 500,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_001",
+    "snapshot_month": "2026-03-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 501,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_001",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 502,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_001",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 503,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_001",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 504,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_001",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 505,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_001",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 506,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_002",
+    "snapshot_month": "2026-02-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 600,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_002",
+    "snapshot_month": "2026-03-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 603,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_002",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 606,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_002",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 609,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_002",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 612,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_002",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 615,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_002",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 618,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_003",
+    "snapshot_month": "2026-02-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 700,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_003",
+    "snapshot_month": "2026-03-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 707,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_003",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 714,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_003",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 721,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_003",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 728,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_003",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 735,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_003",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 742,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_004",
+    "snapshot_month": "2026-02-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 800,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_004",
+    "snapshot_month": "2026-03-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 811,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_004",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 822,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_004",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 833,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_004",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 844,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_004",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 855,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_004",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 866,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_005",
+    "snapshot_month": "2026-02-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 900,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_005",
+    "snapshot_month": "2026-03-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 920,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_005",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 940,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_005",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 960,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_005",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 980,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_005",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1000,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_005",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1020,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_006",
+    "snapshot_month": "2026-02-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1000,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_006",
+    "snapshot_month": "2026-03-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1035,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_006",
+    "snapshot_month": "2026-04-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1070,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_006",
+    "snapshot_month": "2026-05-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1105,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_006",
+    "snapshot_month": "2026-06-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1140,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_006",
+    "snapshot_month": "2026-07-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1175,
+    "business_status": "OPERATIONAL"
+  },
+  {
+    "place_id": "ChIJpeer_006",
+    "snapshot_month": "2026-08-01",
+    "metro": "sf-bay",
+    "rating": 4.2,
+    "user_rating_count": 1210,
+    "business_status": "OPERATIONAL"
+  }
+]
