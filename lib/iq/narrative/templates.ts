@@ -177,5 +177,20 @@ export function pageFragment(m: ReportModel, page: PageId): Record<string, unkno
       out[path] = path === 'trade_area' ? { ...(cur as object), rings } : rings;
     } else out[path] = cur;
   }
+  // Derived counts the prose naturally cites (totals, list lengths). NumberGuard only
+  // accepts numbers present in the fragment, so expose them explicitly.
+  out._derived = {
+    l1_count: m.competitors.l1.length,
+    l1_l2_total: m.competitors.l1.length + m.competitors.l2_count,
+    l4_count: m.competitors.l4.length,
+    alternatives_count: m.score.alternatives.length,
+    conditions_count: m.score.conditions.length,
+    risks_count: m.risks.length,
+    sources_total: m.sources.length,
+    sources_ok: m.sources.filter((s) => s.status === 'ok').length,
+    rings_count: m.trade_area.rings.length,
+    inputs_missing_count: m.finance.inputs_missing.length,
+    lunch_share_pct: m.demand.lunch_usd != null && m.demand.dinner_usd != null && m.demand.lunch_usd + m.demand.dinner_usd > 0 ? Math.round((m.demand.lunch_usd / (m.demand.lunch_usd + m.demand.dinner_usd)) * 100) : null,
+  };
   return out;
 }

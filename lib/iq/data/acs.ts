@@ -123,15 +123,15 @@ export interface TractVarSet {
 export const ACS_TRACT_VARS_B02018: TractVarSet = {
   table: 'B02018',
   total: 'B02018_001E',
-  chinese_ex_taiwanese: 'B02018_007E',
-  taiwanese: 'B02018_020E',
+  chinese_ex_taiwanese: 'B02018_002E',
+  taiwanese: 'B02018_008E',
 };
 /** Asian alone (fallback when the API rejects B02018 for the vintage). */
 export const ACS_TRACT_VARS_B02015: TractVarSet = {
   table: 'B02015',
   total: 'B02015_001E',
-  chinese_ex_taiwanese: 'B02015_007E',
-  taiwanese: 'B02015_020E',
+  chinese_ex_taiwanese: 'B02015_002E',
+  taiwanese: 'B02015_008E',
 };
 
 export interface AcsInput {
