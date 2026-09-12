@@ -341,3 +341,9 @@
 - `lib/iq/qa/gates.ts`（`npm run qa:gates [model.json]`）：① schema 校验（附录 D）② 数据完整性（置信度 ≥ 60、竞品守卫通过、D1/D2/D5 = ok）③ 合理性（中文家庭占比 ≤ 100% 且与县值同数量级、租金 $1–$15/sf/月、高人口区零竞品异常）④ 数值自洽（三情景反算、保本 = 固定成本 ÷ 边际贡献、权重和 = 100、总分 = Σ、无 CapEx 不得有回收期、coverage_ratio 一致）⑤ NumberGuard ⑥ 禁用措辞；任一失败 → 预检版。
 - `lib/iq/qa/gates.test.ts`：Millbrae 原始缺陷 R1、R2、R4、R5、R6、R8 各有一个失败用例被拦截（R3 由 Phase 5b 视觉回归、R7 由地图页覆盖）。
 - Golden set 回测：`qa/golden_set/backtest_bay_area.json`（6 家经营 ≥ 4 年门店 + 6 家已关门店，标签需用 D6 `business_status` 复核）与 `scripts/backtest-golden.ts`（评分 AUC ≥ 0.75 才允许上线；本沙箱无网络，需在有网环境执行）。
+
+## 360° 升级 · Phase 7 成本控制与运营（2026-09-12）
+- 单份报告变动成本预算 ≤ $0.50：数据 ≤ $0.10（Overture 月度落库、ACS / LODES 12 月缓存、Google ≤ 6 次 + 30 天缓存且免费额度内计 $0、等时圈按 100 m 网格缓存）、LLM ≤ $0.25（子菜系分类批处理 $0.002/家并按月复用；叙事每页 ≤ 600 token 约 $0.004，仅执行摘要用 Claude 约 $0.03）、检索 ≤ $0.06（租金 + 开发管线各 1 次）、渲染 ≈ $0.02。`CostLedger` 逐项记账，`persistCostLog` 写入 `iq_cost_log`，合计 > $0.50 记录报警日志。
+- 运营脚本：`scripts/load_overture.py`（月）、`scripts/snapshot-reviews.ts`（月）、`scripts/refresh-hubs.ts`（月）、`scripts/load-lodes.ts`（年）、`scripts/refresh-cex.ts`（年）、`scripts/backtest-golden.ts`（每次参数变更）。
+- 降级策略均落在 `sources[]`：Google 配额耗尽 → 只用 Overture、评分类指标「未获取」、置信度自动下调；Mapbox 耗尽 → 直线半径；LLM 失败 → 模板句；任何降级都出现在第 14 页来源表。
+- 「连续 20 份报告平均成本 ≤ $0.50、P95 ≤ 90 秒」需在有网环境用 `replay:golden --engine v360` 循环验证；离线重放的数据成本为 $0.06。

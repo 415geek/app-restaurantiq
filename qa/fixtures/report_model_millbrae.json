@@ -1,0 +1,2075 @@
+{
+  "meta": {
+    "report_id": "golden-millbrae",
+    "generated_at": "2026-09-12T00:00:00.000Z",
+    "data_as_of": "ACS 2023 5-year · Overture 2026-08-20.0 · Google 2026-09-12",
+    "tier": "paid",
+    "engine_version": "360.1.0",
+    "cost_usd": 0.06,
+    "cost_breakdown": {
+      "D6": 0,
+      "search": 0.06,
+      "D4": 0
+    },
+    "elapsed_ms": 261,
+    "language": "zh",
+    "precheck_reasons": []
+  },
+  "input": {
+    "address": "1711 El Camino Real, Millbrae, CA 94030",
+    "matched_address": "1711 EL CAMINO REAL, MILLBRAE, CA, 94030",
+    "lat": 37.59952,
+    "lng": -122.38946,
+    "cuisine": "hunan",
+    "cuisine_label_zh": "湘菜",
+    "cuisine_label_en": "Hunan",
+    "range_class": "destination",
+    "rent_usd": 12000,
+    "sqft": 2200,
+    "seats": 60,
+    "capex_usd": null,
+    "ticket_in": 24,
+    "ticket_delivery": 28,
+    "delivery_ratio": 0.25,
+    "parking_spaces": null,
+    "existing_stores": []
+  },
+  "geo": {
+    "block": "060816023001005",
+    "block_group": "060816023001",
+    "tract": "06081602300",
+    "zcta": "94030",
+    "county": "06081",
+    "county_name": "San Mateo County",
+    "state": "06",
+    "metro": "sf-bay"
+  },
+  "trade_area": {
+    "primary_ring": "drive15",
+    "rings": [
+      {
+        "id": "walk10",
+        "method": "mapbox",
+        "minutes": 10,
+        "radius_mi": null,
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                -122.3872,
+                37.606646
+              ],
+              [
+                -122.384749,
+                37.605747
+              ],
+              [
+                -122.383261,
+                37.603906
+              ],
+              [
+                -122.381567,
+                37.602963
+              ],
+              [
+                -122.379365,
+                37.602083
+              ],
+              [
+                -122.378564,
+                37.600333
+              ],
+              [
+                -122.379122,
+                37.5985
+              ],
+              [
+                -122.378997,
+                37.596758
+              ],
+              [
+                -122.379605,
+                37.595025
+              ],
+              [
+                -122.381181,
+                37.59373
+              ],
+              [
+                -122.382094,
+                37.591492
+              ],
+              [
+                -122.385019,
+                37.592052
+              ],
+              [
+                -122.3872,
+                37.592301
+              ],
+              [
+                -122.389643,
+                37.591274
+              ],
+              [
+                -122.392366,
+                37.59141
+              ],
+              [
+                -122.393012,
+                37.593895
+              ],
+              [
+                -122.394812,
+                37.595017
+              ],
+              [
+                -122.397064,
+                37.596405
+              ],
+              [
+                -122.396426,
+                37.5985
+              ],
+              [
+                -122.397238,
+                37.60063
+              ],
+              [
+                -122.394434,
+                37.601809
+              ],
+              [
+                -122.394014,
+                37.603898
+              ],
+              [
+                -122.391784,
+                37.60479
+              ],
+              [
+                -122.389325,
+                37.604782
+              ],
+              [
+                -122.3872,
+                37.606646
+              ]
+            ]
+          ]
+        },
+        "area_sq_mi": 0.75,
+        "pop": 4447,
+        "hh": 1574,
+        "median_income": 132580,
+        "chinese_hh_share": 0.422,
+        "chinese_pop": 1449,
+        "age_25_44_share": 0.296,
+        "family_share": 0.295,
+        "avg_hh_size": 2.83,
+        "renter_share": 0.393,
+        "jobs": 2273,
+        "jobs_method": "acs_b08301_estimate",
+        "restaurant_spend_usd": 9596733,
+        "chinese_spend_usd": 2678230,
+        "cuisine_demand_usd": 366917,
+        "block_groups": 3
+      },
+      {
+        "id": "drive5",
+        "method": "mapbox",
+        "minutes": 5,
+        "radius_mi": null,
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                -122.3872,
+                37.620258
+              ],
+              [
+                -122.380509,
+                37.61828
+              ],
+              [
+                -122.376551,
+                37.61311
+              ],
+              [
+                -122.369336,
+                37.61265
+              ],
+              [
+                -122.36988,
+                37.606421
+              ],
+              [
+                -122.368174,
+                37.602537
+              ],
+              [
+                -122.363996,
+                37.598498
+              ],
+              [
+                -122.364021,
+                37.593576
+              ],
+              [
+                -122.3651,
+                37.588387
+              ],
+              [
+                -122.369707,
+                37.584636
+              ],
+              [
+                -122.375953,
+                37.583062
+              ],
+              [
+                -122.380537,
+                37.578791
+              ],
+              [
+                -122.3872,
+                37.57707
+              ],
+              [
+                -122.39234,
+                37.583297
+              ],
+              [
+                -122.398413,
+                37.583108
+              ],
+              [
+                -122.403898,
+                37.585267
+              ],
+              [
+                -122.411412,
+                37.587421
+              ],
+              [
+                -122.409806,
+                37.593698
+              ],
+              [
+                -122.412249,
+                37.598497
+              ],
+              [
+                -122.410007,
+                37.603339
+              ],
+              [
+                -122.408989,
+                37.608464
+              ],
+              [
+                -122.40638,
+                37.613692
+              ],
+              [
+                -122.397726,
+                37.612941
+              ],
+              [
+                -122.394092,
+                37.618875
+              ],
+              [
+                -122.3872,
+                37.620258
+              ]
+            ]
+          ]
+        },
+        "area_sq_mi": 5.4,
+        "pop": 5410,
+        "hh": 1920,
+        "median_income": 130063,
+        "chinese_hh_share": 0.403,
+        "chinese_pop": 1680,
+        "age_25_44_share": 0.295,
+        "family_share": 0.294,
+        "avg_hh_size": 2.82,
+        "renter_share": 0.401,
+        "jobs": 2760,
+        "jobs_method": "acs_b08301_estimate",
+        "restaurant_spend_usd": 11566498,
+        "chinese_spend_usd": 3125211,
+        "cuisine_demand_usd": 428154,
+        "block_groups": 3
+      },
+      {
+        "id": "drive10",
+        "method": "mapbox",
+        "minutes": 10,
+        "radius_mi": null,
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                -122.3872,
+                37.6435
+              ],
+              [
+                -122.372636,
+                37.641539
+              ],
+              [
+                -122.359735,
+                37.636168
+              ],
+              [
+                -122.344154,
+                37.632582
+              ],
+              [
+                -122.346489,
+                37.617111
+              ],
+              [
+                -122.333696,
+                37.609845
+              ],
+              [
+                -122.342774,
+                37.598492
+              ],
+              [
+                -122.341312,
+                37.588748
+              ],
+              [
+                -122.348958,
+                37.580996
+              ],
+              [
+                -122.35404,
+                37.572213
+              ],
+              [
+                -122.362127,
+                37.564074
+              ],
+              [
+                -122.376019,
+                37.565423
+              ],
+              [
+                -122.3872,
+                37.563779
+              ],
+              [
+                -122.402212,
+                37.554082
+              ],
+              [
+                -122.416168,
+                37.558723
+              ],
+              [
+                -122.421139,
+                37.571595
+              ],
+              [
+                -122.435234,
+                37.576511
+              ],
+              [
+                -122.437163,
+                37.587881
+              ],
+              [
+                -122.445024,
+                37.598486
+              ],
+              [
+                -122.434139,
+                37.608454
+              ],
+              [
+                -122.426295,
+                37.616373
+              ],
+              [
+                -122.420657,
+                37.624994
+              ],
+              [
+                -122.414983,
+                37.636605
+              ],
+              [
+                -122.401349,
+                37.640314
+              ],
+              [
+                -122.3872,
+                37.6435
+              ]
+            ]
+          ]
+        },
+        "area_sq_mi": 24.57,
+        "pop": 5410,
+        "hh": 1920,
+        "median_income": 130063,
+        "chinese_hh_share": 0.403,
+        "chinese_pop": 1680,
+        "age_25_44_share": 0.295,
+        "family_share": 0.294,
+        "avg_hh_size": 2.82,
+        "renter_share": 0.401,
+        "jobs": 2760,
+        "jobs_method": "acs_b08301_estimate",
+        "restaurant_spend_usd": 11566498,
+        "chinese_spend_usd": 3125211,
+        "cuisine_demand_usd": 428154,
+        "block_groups": 3
+      },
+      {
+        "id": "drive15",
+        "method": "mapbox",
+        "minutes": 15,
+        "radius_mi": null,
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                -122.3872,
+                37.671738
+              ],
+              [
+                -122.362408,
+                37.671732
+              ],
+              [
+                -122.340307,
+                37.662786
+              ],
+              [
+                -122.3322,
+                37.642039
+              ],
+              [
+                -122.317351,
+                37.630417
+              ],
+              [
+                -122.313527,
+                37.614114
+              ],
+              [
+                -122.298519,
+                37.598467
+              ],
+              [
+                -122.302107,
+                37.5804
+              ],
+              [
+                -122.305547,
+                37.561102
+              ],
+              [
+                -122.330064,
+                37.55319
+              ],
+              [
+                -122.346897,
+                37.543144
+              ],
+              [
+                -122.364249,
+                37.530571
+              ],
+              [
+                -122.3872,
+                37.54229
+              ],
+              [
+                -122.410699,
+                37.528949
+              ],
+              [
+                -122.421932,
+                37.550802
+              ],
+              [
+                -122.446308,
+                37.551624
+              ],
+              [
+                -122.448121,
+                37.570606
+              ],
+              [
+                -122.452341,
+                37.58465
+              ],
+              [
+                -122.479072,
+                37.598464
+              ],
+              [
+                -122.478303,
+                37.617801
+              ],
+              [
+                -122.452633,
+                37.628402
+              ],
+              [
+                -122.438256,
+                37.638919
+              ],
+              [
+                -122.430587,
+                37.657985
+              ],
+              [
+                -122.411703,
+                37.67088
+              ],
+              [
+                -122.3872,
+                37.671738
+              ]
+            ]
+          ]
+        },
+        "area_sq_mi": 65.09,
+        "pop": 5410,
+        "hh": 1920,
+        "median_income": 130063,
+        "chinese_hh_share": 0.403,
+        "chinese_pop": 1680,
+        "age_25_44_share": 0.295,
+        "family_share": 0.294,
+        "avg_hh_size": 2.82,
+        "renter_share": 0.401,
+        "jobs": 2760,
+        "jobs_method": "acs_b08301_estimate",
+        "restaurant_spend_usd": 11566498,
+        "chinese_spend_usd": 3125211,
+        "cuisine_demand_usd": 428154,
+        "block_groups": 3
+      }
+    ],
+    "county_benchmark": {
+      "chinese_hh_share": 0.09418282548476455,
+      "median_income": 149907
+    },
+    "isochrone_method": "mapbox"
+  },
+  "audience": {
+    "segments": [
+      {
+        "id": "chinese_family",
+        "share": 0.299,
+        "index": 428,
+        "basis": "中文家庭占比 × 有孩家庭占比（主商圈）"
+      },
+      {
+        "id": "commuter_professional",
+        "share": 0.377,
+        "index": 42,
+        "basis": "walk10 岗位数 ÷ 主商圈人口"
+      },
+      {
+        "id": "young_chinese",
+        "share": 0.199,
+        "index": 105,
+        "basis": "中文家庭占比 × 25–44 岁占比（全国基准 28%）"
+      },
+      {
+        "id": "non_chinese_explorer",
+        "share": 0.125,
+        "index": 87,
+        "basis": "非华裔人口 × 收入指数"
+      }
+    ],
+    "lunch_dinner_split": [
+      0.8,
+      0.2
+    ]
+  },
+  "competitors": {
+    "guard_passed": true,
+    "guard_notes": [],
+    "candidates_total": 60,
+    "l1": [
+      {
+        "id": "ChIJfx_001_HunanHom",
+        "name": "Hunan Home Kitchen",
+        "name_zh": null,
+        "lat": 37.595656,
+        "lng": -122.387753,
+        "distance_mi": 0.28,
+        "drive_min": null,
+        "rating": 4.3,
+        "rating_count": 812,
+        "price_level": 2,
+        "sub_cuisine": "hunan",
+        "layer": "L1",
+        "is_chain": false,
+        "traffic_tier": 3,
+        "monthly_review_growth": 9,
+        "huff_share": 0.153,
+        "operating_status": "OPERATIONAL",
+        "source": "google",
+        "hours_per_week": 76,
+        "offers_delivery": null
+      },
+      {
+        "id": "ChIJfx_006_XiangYua",
+        "name": "Xiang Yuan Hunan Cuisine",
+        "name_zh": null,
+        "lat": 37.600084,
+        "lng": -122.399755,
+        "distance_mi": 0.56,
+        "drive_min": null,
+        "rating": 4.5,
+        "rating_count": 275,
+        "price_level": 2,
+        "sub_cuisine": "hunan",
+        "layer": "L1",
+        "is_chain": false,
+        "traffic_tier": 4,
+        "monthly_review_growth": 13,
+        "huff_share": 0.086,
+        "operating_status": "OPERATIONAL",
+        "source": "google",
+        "hours_per_week": 76,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300001a3816050",
+        "name": "Hunan Home Kitchen",
+        "name_zh": "湘味小厨",
+        "lat": 37.609844,
+        "lng": -122.393369,
+        "distance_mi": 0.74,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "hunan",
+        "layer": "L1",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300006a3485c1d",
+        "name": "Xiang Yuan Hunan Cuisine",
+        "name_zh": "湘园",
+        "lat": 37.587603,
+        "lng": -122.392443,
+        "distance_mi": 0.84,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "hunan",
+        "layer": "L1",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      }
+    ],
+    "l2": [
+      {
+        "id": "08f28300002a2c62f93",
+        "name": "Little Sichuan Millbrae",
+        "name_zh": "小四川",
+        "lat": 37.59938,
+        "lng": -122.387771,
+        "distance_mi": 0.09,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "sichuan",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300012a1dd3d2",
+        "name": "Mama Ji Sichuan Bistro",
+        "name_zh": "姬妈川菜",
+        "lat": 37.600081,
+        "lng": -122.387567,
+        "distance_mi": 0.11,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "sichuan",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300038a2d71d05",
+        "name": "Burlingame Dim Sum Palace",
+        "name_zh": "点心皇宫",
+        "lat": 37.600962,
+        "lng": -122.388334,
+        "distance_mi": 0.12,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "dim_sum",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300005a4609f87",
+        "name": "Chef Chu Szechuan",
+        "name_zh": null,
+        "lat": 37.598122,
+        "lng": -122.391283,
+        "distance_mi": 0.14,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "sichuan",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "ChIJfx_010_CantonRo",
+        "name": "Canton Roast Duck House",
+        "name_zh": null,
+        "lat": 37.598894,
+        "lng": -122.392055,
+        "distance_mi": 0.15,
+        "drive_min": null,
+        "rating": 4.3,
+        "rating_count": 566,
+        "price_level": 1,
+        "sub_cuisine": "cantonese",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": 2,
+        "monthly_review_growth": 5,
+        "huff_share": 0.076,
+        "operating_status": "OPERATIONAL",
+        "source": "google",
+        "hours_per_week": 76,
+        "offers_delivery": null
+      },
+      {
+        "id": "ChIJfx_002_LittleSi",
+        "name": "Little Sichuan Millbrae",
+        "name_zh": null,
+        "lat": 37.601808,
+        "lng": -122.385145,
+        "distance_mi": 0.28,
+        "drive_min": null,
+        "rating": 4.4,
+        "rating_count": 1540,
+        "price_level": 2,
+        "sub_cuisine": "sichuan",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": 5,
+        "monthly_review_growth": 24,
+        "huff_share": 0.09,
+        "operating_status": "OPERATIONAL",
+        "source": "google",
+        "hours_per_week": 76,
+        "offers_delivery": null
+      },
+      {
+        "id": "ChIJfx_004_HongKong",
+        "name": "Hong Kong Flower Lounge Dim Sum",
+        "name_zh": null,
+        "lat": 37.597742,
+        "lng": -122.384408,
+        "distance_mi": 0.3,
+        "drive_min": null,
+        "rating": 4.2,
+        "rating_count": 3105,
+        "price_level": 2,
+        "sub_cuisine": "dim_sum",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": 5,
+        "monthly_review_growth": 18,
+        "huff_share": 0.083,
+        "operating_status": "OPERATIONAL",
+        "source": "google",
+        "hours_per_week": 76,
+        "offers_delivery": null
+      },
+      {
+        "id": "ChIJfx_012_ZhangMam",
+        "name": "Zhang Mama Noodle House",
+        "name_zh": null,
+        "lat": 37.603985,
+        "lng": -122.387323,
+        "distance_mi": 0.33,
+        "drive_min": null,
+        "rating": 4.4,
+        "rating_count": 730,
+        "price_level": 1,
+        "sub_cuisine": "noodles",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": 2,
+        "monthly_review_growth": 6,
+        "huff_share": 0.083,
+        "operating_status": "OPERATIONAL",
+        "source": "google",
+        "hours_per_week": 76,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300008a2495c21",
+        "name": "Boiling Point Hot Pot",
+        "name_zh": "沸点",
+        "lat": 37.593988,
+        "lng": -122.390484,
+        "distance_mi": 0.39,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "hot_pot",
+        "layer": "L2",
+        "is_chain": true,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300020a19471bd",
+        "name": "Seoul Garden BBQ",
+        "name_zh": null,
+        "lat": 37.593931,
+        "lng": -122.391765,
+        "distance_mi": 0.41,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "cantonese",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300007a3ef4a98",
+        "name": "Shanghai Dumpling King",
+        "name_zh": "上海饺子王",
+        "lat": 37.592582,
+        "lng": -122.388822,
+        "distance_mi": 0.48,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "shanghai",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "ChIJfx_003_GoldenCa",
+        "name": "Golden Cantonese Seafood",
+        "name_zh": null,
+        "lat": 37.595756,
+        "lng": -122.382143,
+        "distance_mi": 0.48,
+        "drive_min": null,
+        "rating": 4.1,
+        "rating_count": 2210,
+        "price_level": 3,
+        "sub_cuisine": "cantonese",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": 2,
+        "monthly_review_growth": 4,
+        "huff_share": 0.068,
+        "operating_status": "OPERATIONAL",
+        "source": "google",
+        "hours_per_week": 76,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300009a8ed654",
+        "name": "Canton Roast Duck House",
+        "name_zh": "广东烧鸭",
+        "lat": 37.59255,
+        "lng": -122.39369,
+        "distance_mi": 0.53,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "cantonese",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "ChIJfx_005_ChefChuS",
+        "name": "Chef Chu Szechuan",
+        "name_zh": null,
+        "lat": 37.591194,
+        "lng": -122.39104,
+        "distance_mi": 0.58,
+        "drive_min": null,
+        "rating": 3.9,
+        "rating_count": 640,
+        "price_level": 1,
+        "sub_cuisine": "sichuan",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": 1,
+        "monthly_review_growth": 2,
+        "huff_share": 0.036,
+        "operating_status": "OPERATIONAL",
+        "source": "google",
+        "hours_per_week": 76,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300011a188f52e",
+        "name": "Panda Express",
+        "name_zh": null,
+        "lat": 37.593332,
+        "lng": -122.380948,
+        "distance_mi": 0.63,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "chinese_fast",
+        "layer": "L2",
+        "is_chain": true,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "ChIJfx_104_SeoulGar",
+        "name": "Seoul Garden BBQ",
+        "name_zh": null,
+        "lat": 37.591208,
+        "lng": -122.394035,
+        "distance_mi": 0.63,
+        "drive_min": null,
+        "rating": 4.1,
+        "rating_count": 740,
+        "price_level": 2,
+        "sub_cuisine": "cantonese",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": 3,
+        "monthly_review_growth": null,
+        "huff_share": 0.036,
+        "operating_status": "OPERATIONAL",
+        "source": "google",
+        "hours_per_week": 76,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300010a62c1f9",
+        "name": "Zhang Mama Noodle House",
+        "name_zh": "张妈妈面馆",
+        "lat": 37.600095,
+        "lng": -122.377827,
+        "distance_mi": 0.64,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "noodles",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "ChIJfx_008_Shanghai",
+        "name": "Shanghai Dumpling King",
+        "name_zh": null,
+        "lat": 37.593895,
+        "lng": -122.378118,
+        "distance_mi": 0.73,
+        "drive_min": null,
+        "rating": 4.2,
+        "rating_count": 1990,
+        "price_level": 1,
+        "sub_cuisine": "dongbei",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": 4,
+        "monthly_review_growth": 15,
+        "huff_share": 0.043,
+        "operating_status": "OPERATIONAL",
+        "source": "google",
+        "hours_per_week": 76,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300003a1f3c027",
+        "name": "Golden Cantonese Seafood",
+        "name_zh": "金粤海鲜酒家",
+        "lat": 37.60787,
+        "lng": -122.398259,
+        "distance_mi": 0.75,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "cantonese",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300004a320b7b9",
+        "name": "Hong Kong Flower Lounge",
+        "name_zh": "香港花园",
+        "lat": 37.603021,
+        "lng": -122.403071,
+        "distance_mi": 0.78,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "dim_sum",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "ChIJfx_011_PandaExp",
+        "name": "Panda Express",
+        "name_zh": null,
+        "lat": 37.605077,
+        "lng": -122.402066,
+        "distance_mi": 0.79,
+        "drive_min": null,
+        "rating": 3.6,
+        "rating_count": 420,
+        "price_level": 1,
+        "sub_cuisine": "chinese_fast",
+        "layer": "L2",
+        "is_chain": true,
+        "traffic_tier": 2,
+        "monthly_review_growth": null,
+        "huff_share": 0.028,
+        "operating_status": "OPERATIONAL",
+        "source": "google",
+        "hours_per_week": 76,
+        "offers_delivery": null
+      },
+      {
+        "id": "ChIJfx_014_MamaJiSi",
+        "name": "Mama Ji Sichuan Bistro",
+        "name_zh": null,
+        "lat": 37.590507,
+        "lng": -122.399477,
+        "distance_mi": 0.83,
+        "drive_min": null,
+        "rating": 4.6,
+        "rating_count": 98,
+        "price_level": 2,
+        "sub_cuisine": "sichuan",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": 1,
+        "monthly_review_growth": null,
+        "huff_share": 0.022,
+        "operating_status": "OPERATIONAL",
+        "source": "google",
+        "hours_per_week": 76,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300015a2853dee",
+        "name": "Tea Hut Boba",
+        "name_zh": "茶屋",
+        "lat": 37.587928,
+        "lng": -122.395116,
+        "distance_mi": 0.86,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "boba",
+        "layer": "L2",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "ChIJfx_009_BoilingP",
+        "name": "Boiling Point Hot Pot",
+        "name_zh": null,
+        "lat": 37.58742,
+        "lng": -122.382492,
+        "distance_mi": 0.92,
+        "drive_min": null,
+        "rating": 4,
+        "rating_count": 1102,
+        "price_level": 2,
+        "sub_cuisine": "hot_pot",
+        "layer": "L2",
+        "is_chain": true,
+        "traffic_tier": 3,
+        "monthly_review_growth": 9,
+        "huff_share": 0.027,
+        "operating_status": "OPERATIONAL",
+        "source": "google",
+        "hours_per_week": 76,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300037a2d3039b",
+        "name": "Boba Guys",
+        "name_zh": null,
+        "lat": 37.585319,
+        "lng": -122.386218,
+        "distance_mi": 1,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "boba",
+        "layer": "L2",
+        "is_chain": true,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": 0,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      }
+    ],
+    "l2_count": 25,
+    "l3_count": 5,
+    "l4": [
+      {
+        "id": "08f28300028a4f69aee",
+        "name": "Cathay Bank",
+        "name_zh": "国泰银行",
+        "lat": 37.598216,
+        "lng": -122.388232,
+        "distance_mi": 0.11,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "non_chinese",
+        "layer": "L4",
+        "is_chain": true,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": null,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300038a2d71d05",
+        "name": "Burlingame Dim Sum Palace",
+        "name_zh": "点心皇宫",
+        "lat": 37.600962,
+        "lng": -122.388334,
+        "distance_mi": 0.12,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "dim_sum",
+        "layer": "L4",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": null,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300029a37e22e1",
+        "name": "Millbrae Chinese School",
+        "name_zh": "米尔布雷中文学校",
+        "lat": 37.601632,
+        "lng": -122.387596,
+        "distance_mi": 0.18,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "non_chinese",
+        "layer": "L4",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": null,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300014a5e3deb8",
+        "name": "99 Ranch Market",
+        "name_zh": "大华超级市场",
+        "lat": 37.598307,
+        "lng": -122.383297,
+        "distance_mi": 0.35,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "non_chinese",
+        "layer": "L4",
+        "is_chain": true,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": null,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300027a3a0144e",
+        "name": "East West Bank",
+        "name_zh": "华美银行",
+        "lat": 37.593967,
+        "lng": -122.397447,
+        "distance_mi": 0.58,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "non_chinese",
+        "layer": "L4",
+        "is_chain": true,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": null,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300004a320b7b9",
+        "name": "Hong Kong Flower Lounge",
+        "name_zh": "香港花园",
+        "lat": 37.603021,
+        "lng": -122.403071,
+        "distance_mi": 0.78,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "dim_sum",
+        "layer": "L4",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": null,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300015a2853dee",
+        "name": "Tea Hut Boba",
+        "name_zh": "茶屋",
+        "lat": 37.587928,
+        "lng": -122.395116,
+        "distance_mi": 0.86,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "boba",
+        "layer": "L4",
+        "is_chain": false,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": null,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      },
+      {
+        "id": "08f28300037a2d3039b",
+        "name": "Boba Guys",
+        "name_zh": null,
+        "lat": 37.585319,
+        "lng": -122.386218,
+        "distance_mi": 1,
+        "drive_min": null,
+        "rating": null,
+        "rating_count": null,
+        "price_level": null,
+        "sub_cuisine": "boba",
+        "layer": "L4",
+        "is_chain": true,
+        "traffic_tier": null,
+        "monthly_review_growth": null,
+        "huff_share": null,
+        "operating_status": "open",
+        "source": "overture",
+        "hours_per_week": null,
+        "offers_delivery": null
+      }
+    ],
+    "walk10_l1_l2_count": 13,
+    "density_per_10k_residents": 53.6,
+    "density_per_10k_chinese": 23.81,
+    "hhi": 0.622,
+    "avg_rating_l1": 4.4,
+    "weighted_rating_l1": 4.35,
+    "price_ladder": [
+      {
+        "level": 1,
+        "count": 5
+      },
+      {
+        "level": 2,
+        "count": 7
+      },
+      {
+        "level": 3,
+        "count": 1
+      },
+      {
+        "level": 4,
+        "count": 0
+      }
+    ],
+    "closure_rate": 0.121,
+    "cluster_score": 50,
+    "benchmark_revenue_band": {
+      "p25": null,
+      "median": null,
+      "p75": null,
+      "method": "relative_tier_only"
+    },
+    "void": {
+      "is_void": false,
+      "reason": "未满足品类缺口三条件（只可写「该品类供给较少」）：华裔人口不足、密度对标缺失、L2 25 家",
+      "density_vs_hub_median": null,
+      "conditions": {
+        "chinese_pop_ok": false,
+        "density_ok": false,
+        "l2_ok": true
+      }
+    },
+    "metro_sub_cuisine_total": 2
+  },
+  "demand": {
+    "captured_monthly_usd": 30725,
+    "captured_covers_day": 43,
+    "lunch_usd": 24682,
+    "dinner_usd": 6043,
+    "coverage_ratio": 0.236,
+    "by_ring": [
+      {
+        "ring": "walk10",
+        "monthly_usd": 4294,
+        "share": 0.711
+      },
+      {
+        "ring": "drive5",
+        "monthly_usd": 1749,
+        "share": 0.289
+      }
+    ],
+    "cuisine_share": 0.137,
+    "cuisine_share_method": "供给份额 ≈ 需求份额：按评论数 log 权重（D5+D6），Laplace 平滑，[3%,50%] 截断",
+    "huff": {
+      "alpha": 1,
+      "beta": 1.1,
+      "site_attractiveness": 6.441,
+      "competitor_set": 29
+    }
+  },
+  "access": {
+    "transit": [
+      {
+        "system": "BART",
+        "name": "Millbrae",
+        "distance_m": 250,
+        "avg_weekday_exits": 2600
+      },
+      {
+        "system": "Caltrain",
+        "name": "Millbrae",
+        "distance_m": 252,
+        "avg_weekday_exits": null
+      },
+      {
+        "system": "BART",
+        "name": "San Francisco Int'l Airport (SFO)",
+        "distance_m": 1851,
+        "avg_weekday_exits": 6000
+      }
+    ],
+    "aadt": [
+      {
+        "route": "101",
+        "aadt": 231000,
+        "year": 2022,
+        "distance_m": 763
+      },
+      {
+        "route": "101",
+        "aadt": 218000,
+        "year": 2022,
+        "distance_m": 1590
+      },
+      {
+        "route": "280",
+        "aadt": 126000,
+        "year": 2022,
+        "distance_m": 2227
+      },
+      {
+        "route": "380",
+        "aadt": 98000,
+        "year": 2022,
+        "distance_m": 3552
+      },
+      {
+        "route": "82",
+        "aadt": 34500,
+        "year": 2022,
+        "distance_m": 220
+      }
+    ],
+    "parking": {
+      "spaces": null,
+      "source": "none"
+    },
+    "commute_mix": {
+      "transit": 0.214,
+      "walk": 0.042,
+      "drove_alone": 0.598
+    }
+  },
+  "finance": {
+    "method": "seats×turns 单一口径；保本 = 固定成本 ÷ 边际贡献率；安全线 = 保本 × 1.28",
+    "fixed_cost": {
+      "rent": 12000,
+      "labor": 53893,
+      "utilities": 2340,
+      "insurance": 936,
+      "pos": 624,
+      "marketing": 1950,
+      "misc": 1950,
+      "total": 73693
+    },
+    "rent_source": "user_input",
+    "contribution_margin": 0.565,
+    "variable_rate": 0.435,
+    "breakeven_monthly": 130430,
+    "safety_monthly": 166950,
+    "scenarios": [
+      {
+        "id": "pessimistic",
+        "turns_per_day": 1.5,
+        "delivery_ratio": 0.2,
+        "ticket_in": 21.6,
+        "ticket_delivery": 25.2,
+        "seats": 60,
+        "days_open": 30,
+        "dine_in_covers_day": 90,
+        "delivery_orders_day": 22.5,
+        "orders_day": 112.5,
+        "monthly_revenue": 75330,
+        "vs_breakeven": 0.578
+      },
+      {
+        "id": "base",
+        "turns_per_day": 2,
+        "delivery_ratio": 0.25,
+        "ticket_in": 24,
+        "ticket_delivery": 28,
+        "seats": 60,
+        "days_open": 30,
+        "dine_in_covers_day": 120,
+        "delivery_orders_day": 40,
+        "orders_day": 160,
+        "monthly_revenue": 120000,
+        "vs_breakeven": 0.92
+      },
+      {
+        "id": "optimistic",
+        "turns_per_day": 2.5,
+        "delivery_ratio": 0.3,
+        "ticket_in": 25.2,
+        "ticket_delivery": 29.4,
+        "seats": 60,
+        "days_open": 30,
+        "dine_in_covers_day": 150,
+        "delivery_orders_day": 64.3,
+        "orders_day": 214.3,
+        "monthly_revenue": 170100,
+        "vs_breakeven": 1.304
+      }
+    ],
+    "sensitivity": [
+      {
+        "id": "rent_plus_10",
+        "label_zh": "租金 +10%",
+        "label_en": "Rent +10%",
+        "monthly_revenue_delta": -2124,
+        "breaks_breakeven": true
+      },
+      {
+        "id": "turns_minus_05",
+        "label_zh": "翻台 −0.5",
+        "label_en": "Turns −0.5",
+        "monthly_revenue_delta": -30000,
+        "breaks_breakeven": true
+      },
+      {
+        "id": "ticket_minus_125",
+        "label_zh": "客单价 −12.5%",
+        "label_en": "Ticket −12.5%",
+        "monthly_revenue_delta": -15000,
+        "breaks_breakeven": true
+      },
+      {
+        "id": "delivery_plus_15pt",
+        "label_zh": "外卖占比 +15pt",
+        "label_en": "Delivery +15 pt",
+        "monthly_revenue_delta": 33600,
+        "breaks_breakeven": false
+      }
+    ],
+    "occupancy_cost_ratio": 0.391,
+    "payback_months": null,
+    "inputs_missing": [
+      "capex(缺 → 回收期隐藏)"
+    ]
+  },
+  "score": {
+    "total": 43.3,
+    "verdict": "NO_GO",
+    "dimensions": [
+      {
+        "id": "demand_coverage",
+        "label_zh": "需求覆盖",
+        "label_en": "Demand Coverage",
+        "score": 20,
+        "weight": 25,
+        "weighted": 5,
+        "drivers": [
+          "coverage_ratio=0.24"
+        ]
+      },
+      {
+        "id": "audience_fit",
+        "label_zh": "客群匹配",
+        "label_en": "Audience Fit",
+        "score": 92.5,
+        "weight": 15,
+        "weighted": 13.88,
+        "drivers": [
+          "中文家庭占比 40.3% vs 阈值 15%（destination）",
+          "收入中位 $130,063 vs 价位 $$ 理想 ≥ $90,000",
+          "有孩家庭占比 29%"
+        ]
+      },
+      {
+        "id": "competitive_position",
+        "label_zh": "竞争态势",
+        "label_en": "Competitive Position",
+        "score": 50,
+        "weight": 20,
+        "weighted": 10,
+        "drivers": [
+          "集聚分 50（walk10 内 L1+L2 13 家）"
+        ]
+      },
+      {
+        "id": "access_traffic",
+        "label_zh": "可达与流量",
+        "label_en": "Access & Traffic",
+        "score": 67.9,
+        "weight": 15,
+        "weighted": 10.19,
+        "drivers": [
+          "walk10 岗位 2273",
+          "轨道站步行可达 是",
+          "AADT 231000",
+          "停车 —（none）"
+        ]
+      },
+      {
+        "id": "financial_viability",
+        "label_zh": "财务可行",
+        "label_en": "Financial Viability",
+        "score": 15,
+        "weight": 15,
+        "weighted": 2.25,
+        "drivers": [
+          "占用成本比 = 租金 ÷ 捕获营收：39.1%",
+          "捕获营收 < 保本线 −10"
+        ]
+      },
+      {
+        "id": "occasion_delivery",
+        "label_zh": "场景与外卖",
+        "label_en": "Occasion & Delivery",
+        "score": 20,
+        "weight": 10,
+        "weighted": 2,
+        "drivers": [
+          "午市占比 80%",
+          "drive5 户密度 356 户/平方英里",
+          "L1 提供外卖比例 未获取（中性）"
+        ]
+      }
+    ],
+    "conditions": [
+      {
+        "dimension": "financial_viability",
+        "text_zh": "租金需谈至 ≤ $3,073/月，使占用成本比 ≤ 10%",
+        "text_en": "Negotiate rent to ≤ $3,073/mo so occupancy cost ≤ 10%",
+        "value": 3073
+      },
+      {
+        "dimension": "demand_coverage",
+        "text_zh": "模型捕获需求距保本线尚差 $99,705/月，需靠午市套餐 / 外卖 / 宴席补足",
+        "text_en": "Captured demand is $99,705/mo short of break-even; close it with lunch sets / delivery / banquets",
+        "value": 99705
+      }
+    ],
+    "alternatives": [
+      {
+        "cuisine": "skewers",
+        "label_zh": "烧烤 / 串",
+        "label_en": "Skewers / Chinese BBQ",
+        "total": 51.1,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "shanghai",
+        "label_zh": "上海 / 江浙",
+        "label_en": "Shanghai / Jiangnan",
+        "total": 48.1,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "hk_cafe",
+        "label_zh": "港式茶餐厅",
+        "label_en": "Hong Kong-style cafe",
+        "total": 46.1,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "boba",
+        "label_zh": "奶茶 / 甜品",
+        "label_en": "Boba / Dessert",
+        "total": 46.1,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "taiwanese",
+        "label_zh": "台湾菜",
+        "label_en": "Taiwanese",
+        "total": 44.3,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "other_chinese",
+        "label_zh": "其他中餐",
+        "label_en": "Other Chinese",
+        "total": 44.3,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "cantonese",
+        "label_zh": "粤菜 / 烧腊",
+        "label_en": "Cantonese / BBQ",
+        "total": 43.8,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "dim_sum",
+        "label_zh": "点心",
+        "label_en": "Dim Sum",
+        "total": 43.3,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "sichuan",
+        "label_zh": "川菜",
+        "label_en": "Sichuan",
+        "total": 43.3,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "hunan",
+        "label_zh": "湘菜",
+        "label_en": "Hunan",
+        "total": 43.3,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "dongbei",
+        "label_zh": "东北菜",
+        "label_en": "Northeastern Chinese",
+        "total": 43.3,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "chinese_fast",
+        "label_zh": "中式快餐 / 美式中餐",
+        "label_en": "Chinese fast food / American Chinese",
+        "total": 43.3,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "hot_pot",
+        "label_zh": "火锅",
+        "label_en": "Hot Pot",
+        "total": 42.5,
+        "verdict": "NO_GO"
+      },
+      {
+        "cuisine": "noodles",
+        "label_zh": "麻辣烫 / 面食 / 米线",
+        "label_en": "Noodles / Malatang",
+        "total": 41.3,
+        "verdict": "NO_GO"
+      }
+    ],
+    "user_cuisine_rank": 10,
+    "cannibalization": []
+  },
+  "risks": [
+    {
+      "id": 1,
+      "risk_zh": "租金占捕获营收 39.1%，高于 10% 警戒线",
+      "risk_en": "Rent is 39.1% of captured revenue, above the 10% line",
+      "prob": "high",
+      "impact_usd": 8928,
+      "trigger": "签约租金高于本报告条件页给出的上限",
+      "hedge": "争取免租期 / 阶梯租金 / 百分比租金条款"
+    },
+    {
+      "id": 2,
+      "risk_zh": "客单价下滑 12.5% 即击穿保本线（基准客单 $24）",
+      "risk_en": "A 12.5% ticket drop breaks even (base ticket $24)",
+      "prob": "medium",
+      "impact_usd": 15000,
+      "trigger": "开业 3 个月后实际客单价 < 基准 × 0.9",
+      "hedge": "设计套餐锚定客单价；控制折扣渠道占比"
+    },
+    {
+      "id": 3,
+      "risk_zh": "捕获需求仅覆盖保本线 24%",
+      "risk_en": "Captured demand covers only 24% of break-even",
+      "prob": "high",
+      "impact_usd": 99705,
+      "trigger": "开业 6 个月月营收 < 保本线",
+      "hedge": "压缩座位 / 面积以降低固定成本；先做外卖验证需求"
+    },
+    {
+      "id": 4,
+      "risk_zh": "周边有 6 个在建 / 已批项目：施工期客流受影响，交付后需求上行（未计入当前需求）",
+      "risk_en": "6 nearby projects under construction / approved: construction-period disruption, upside on delivery (excluded from current demand)",
+      "prob": "medium",
+      "impact_usd": null,
+      "trigger": "施工围挡影响门面 / 停车",
+      "hedge": "租约加入施工期租金减免条款"
+    },
+    {
+      "id": 5,
+      "risk_zh": "未提供 CapEx：回收期无法评估",
+      "risk_en": "CapEx not provided: payback cannot be assessed",
+      "prob": "medium",
+      "impact_usd": null,
+      "trigger": "—",
+      "hedge": "取得装修 / 设备报价后重跑报告"
+    }
+  ],
+  "confidence": {
+    "total": 85,
+    "level": "high",
+    "components": {
+      "acs": {
+        "weight": 20,
+        "quality": 1,
+        "note": "ACS 2023 5 年；地理来自 D1 tract/BG（tract 06081602300），不按 ZIP 查询；county 06081 block group 5 行；tract 级华裔祖源 B02018 4 行 → 按 BG 人口份额下推；BG 几何 3/5（bbox 内 3 个，半径 9656 m）"
+      },
+      "competitors": {
+        "weight": 25,
+        "quality": 1,
+        "note": "D5 ok / D6 ok"
+      },
+      "traffic_proxy": {
+        "weight": 15,
+        "quality": 0.5,
+        "note": "10/20 个地点有 ≥2 个月快照 → 月均新增评论数在 metro 16 家有历史的门店中的百分位（五分位等级）。 无历史快照 → 相对等级（评论数百分位）：10/20 个地点按当前评论数在iq_poi_snapshot 2026-08-01 月（n=19）中的百分位定级。 等级为相对值，不代表绝对客流。"
+      },
+      "rent_comps": {
+        "weight": 15,
+        "quality": 1,
+        "note": "样本 6 条（挂牌 1 · 搜索 5），中位 $4.38/SF/mo，标的 $5.45/SF/mo，溢价 +24.4%"
+      },
+      "daytime_pop": {
+        "weight": 10,
+        "quality": 0.5,
+        "note": "iq_lodes_wac 无 2022/2021 年数据 → LODES 未加载 → 用 ACS B08301 反推 (置信度 0.5)。涉及 2 个 tract；by_block 为空，日间人口由 Phase 2 按 ACS 通勤者估算并标注。"
+      },
+      "transit": {
+        "weight": 5,
+        "quality": 0.5,
+        "note": "步行 800 m 内 2 站（BART Millbrae 250 m、Caltrain Millbrae 252 m）；最近站 BART Millbrae 250 m；部分站点无客流（Caltrain 未提供站点出站量）；BART 客流为 FY2024 近似值（±15%）；Caltrans AADT 2 mi 内 5 段（仅州道/高速，不含市政道路）：US-101 231,000/日 763 m、US-101 218,000/日 1590 m、I-280 126,000/日 2227 m、I-380 98,000/日 3552 m、El Camino Real (SR-82) 34,500/日 220 m"
+      },
+      "dev_pipeline": {
+        "weight": 5,
+        "quality": 1,
+        "note": "6 个项目线索（5 个含交付时间，6 个含规模）· 搜索结果 8 条；在建/已批项目仅作供给侧风险提示，不计入当前需求，交付时间/规模来自摘要正则，需人工核对"
+      },
+      "user_inputs": {
+        "weight": 5,
+        "quality": 1,
+        "note": "用户提供 3/3（租金/面积/座位）"
+      }
+    }
+  },
+  "sources": [
+    {
+      "id": "D1",
+      "name": "Geocode · Census geography",
+      "status": "ok",
+      "fetched_at": "2026-09-12T00:00:00.000Z",
+      "coverage_note": "Census Geocoder 命中：1711 EL CAMINO REAL, MILLBRAE, CA, 94030；block 060816023001005 → BG 060816023001 / tract 06081602300 / county 06081；ZCTA 94030（仅作上下文，不按 ZIP 查询）",
+      "license": "Public domain (U.S. Census Bureau)",
+      "cost_usd": 0,
+      "source": "U.S. Census Bureau Geocoder (Public_AR_Current / Current_Current, layers=all)"
+    },
+    {
+      "id": "D2",
+      "name": "Census ACS 5-year (block group + tract)",
+      "status": "ok",
+      "fetched_at": "2026-09-12T00:00:00.000Z",
+      "coverage_note": "ACS 2023 5 年；地理来自 D1 tract/BG（tract 06081602300），不按 ZIP 查询；county 06081 block group 5 行；tract 级华裔祖源 B02018 4 行 → 按 BG 人口份额下推；BG 几何 3/5（bbox 内 3 个，半径 9656 m）",
+      "license": "Public domain (U.S. Census Bureau ACS / TIGERweb)",
+      "cost_usd": 0,
+      "source": "U.S. Census Bureau ACS 5-year 2023 (block group + tract, api.census.gov) + TIGERweb Tracts_Blocks"
+    },
+    {
+      "id": "D3",
+      "name": "LEHD LODES v8 workplace population",
+      "status": "partial",
+      "fetched_at": "2026-09-12T00:00:00.000Z",
+      "coverage_note": "iq_lodes_wac 无 2022/2021 年数据 → LODES 未加载 → 用 ACS B08301 反推 (置信度 0.5)。涉及 2 个 tract；by_block 为空，日间人口由 Phase 2 按 ACS 通勤者估算并标注。",
+      "license": "Public domain (U.S. Census Bureau · LEHD)",
+      "cost_usd": 0,
+      "source": "LEHD LODES v8 WAC (iq_lodes_wac · 2022/2021)",
+      "degraded_from": "lodes_wac"
+    },
+    {
+      "id": "D4",
+      "name": "Isochrones (walk 10 / drive 5 · 10 · 15)",
+      "status": "ok",
+      "fetched_at": "2026-09-12T00:00:00.000Z",
+      "coverage_note": "等时圈来自 Mapbox 路网（步行 10 分钟；驾车 5/10/15 分钟）。",
+      "license": "Mapbox Terms of Service (isochrone geometry; free tier)",
+      "cost_usd": 0,
+      "source": "Mapbox Isochrone API v1 (walking 10 · driving 5/10/15)"
+    },
+    {
+      "id": "D5",
+      "name": "Overture Maps Places (POI base map)",
+      "status": "ok",
+      "fetched_at": "2026-09-12T00:00:00.000Z",
+      "coverage_note": "半径 8047 m 内 40 个 POI（bbox 命中 40），其中已分类子菜系 17 个。 metro=sf-bay 共 40 个 POI，已分类 17 个。",
+      "license": "Overture Maps Places · CDLA-Permissive-2.0 (sources ODbL/CC-BY where noted in sources_json)",
+      "cost_usd": 0,
+      "source": "Supabase iq_poi (Overture Maps release 2026-08-20.0)"
+    },
+    {
+      "id": "D6",
+      "name": "Google Places (freshness & quality)",
+      "status": "ok",
+      "fetched_at": "2026-09-12T00:00:00.000Z",
+      "coverage_note": "6 步计划：成功 6（网络 6，缓存 0），去重后 20 个地点，其中永久关闭 2 个。",
+      "license": "Google Maps Platform ToS (Places API (New) Nearby Search Pro SKU; no reviews/atmosphere fields)",
+      "cost_usd": 0,
+      "source": "Google Places API (New) Nearby Search · Pro field mask"
+    },
+    {
+      "id": "D7",
+      "name": "Traffic proxy (review-count snapshots)",
+      "status": "partial",
+      "fetched_at": "2026-09-12T00:00:00.000Z",
+      "coverage_note": "10/20 个地点有 ≥2 个月快照 → 月均新增评论数在 metro 16 家有历史的门店中的百分位（五分位等级）。 无历史快照 → 相对等级（评论数百分位）：10/20 个地点按当前评论数在iq_poi_snapshot 2026-08-01 月（n=19）中的百分位定级。 等级为相对值，不代表绝对客流。",
+      "license": "Derived from Google Places rating counts (internal monthly snapshots); relative tiers only",
+      "cost_usd": 0,
+      "source": "Supabase iq_poi_snapshot（107 行，2025-08-01 起）"
+    },
+    {
+      "id": "D8",
+      "name": "Rent comps",
+      "status": "ok",
+      "fetched_at": "2026-09-12T00:00:00.000Z",
+      "coverage_note": "样本 6 条（挂牌 1 · 搜索 5），中位 $4.38/SF/mo，标的 $5.45/SF/mo，溢价 +24.4%",
+      "license": "Web search snippets + user-supplied listings (fair use; quoted asking rates)",
+      "cost_usd": 0.03,
+      "source": "Rent comps · 网络搜索 + 1 个用户挂牌页"
+    },
+    {
+      "id": "D9",
+      "name": "Transit & traffic counts",
+      "status": "partial",
+      "fetched_at": "2026-09-12T00:00:00.000Z",
+      "coverage_note": "步行 800 m 内 2 站（BART Millbrae 250 m、Caltrain Millbrae 252 m）；最近站 BART Millbrae 250 m；部分站点无客流（Caltrain 未提供站点出站量）；BART 客流为 FY2024 近似值（±15%）；Caltrans AADT 2 mi 内 5 段（仅州道/高速，不含市政道路）：US-101 231,000/日 763 m、US-101 218,000/日 1590 m、I-280 126,000/日 2227 m、I-380 98,000/日 3552 m、El Camino Real (SR-82) 34,500/日 220 m",
+      "license": "BART / Caltrain open data (station list) · Caltrans Traffic Census (public)",
+      "cost_usd": 0,
+      "source": "BART/Caltrain station table (lib/iq/params/bart_stations.json) + Caltrans Traffic_AADT (ArcGIS)"
+    },
+    {
+      "id": "D10",
+      "name": "BLS Consumer Expenditure Survey",
+      "status": "ok",
+      "fetched_at": "2026-09-12T00:00:00.000Z",
+      "coverage_note": "CEX 2023 五分位均值（静态表，scripts/refresh-cex.ts 刷新）；收入轴为税后均值，引擎输入 B19013 为税前中位数，未做税负换算；最高分位以上按最高分位占比外推，封顶 1.2× 最高分位",
+      "license": "Public domain (U.S. Bureau of Labor Statistics)",
+      "cost_usd": 0,
+      "source": "U.S. BLS Consumer Expenditure Survey 2023, Table 1101 (quintiles of income before taxes)"
+    },
+    {
+      "id": "D11",
+      "name": "Development pipeline",
+      "status": "ok",
+      "fetched_at": "2026-09-12T00:00:00.000Z",
+      "coverage_note": "6 个项目线索（5 个含交付时间，6 个含规模）· 搜索结果 8 条；在建/已批项目仅作供给侧风险提示，不计入当前需求，交付时间/规模来自摘要正则，需人工核对",
+      "license": "Web search snippets (fair use; links to original planning / news pages)",
+      "cost_usd": 0.03,
+      "source": "Web search (tavily) · 2026"
+    },
+    {
+      "id": "D12",
+      "name": "User inputs",
+      "status": "ok",
+      "fetched_at": "2026-09-12T07:44:59.628Z",
+      "coverage_note": "已提供：月租、面积、座位数、堂食客单价、外卖客单价、外卖占比；缺失：CapEx、车位数；菜系：文本 \"湘菜 Hunan restaurant\" → hunan（匹配 \"Hunan\"）；挂牌链接 1 条；缺 CapEx → 回收期隐藏",
+      "license": "User-provided",
+      "cost_usd": 0,
+      "source": "User form input"
+    }
+  ],
+  "narrative": {}
+}
