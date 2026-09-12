@@ -17,6 +17,14 @@
     },
     "app/api/iq/report360/[id]/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/iq/ops/route.ts": {
+      "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    { "path": "/api/iq/ops?task=hubs&metro=sf-bay", "schedule": "0 9 1 * *" },
+    { "path": "/api/iq/ops?task=snapshots&metro=sf-bay", "schedule": "0 10 1 * *" },
+    { "path": "/api/iq/ops?task=lodes&state=ca&year=2022&counties=06081,06075,06085,06001,06013", "schedule": "0 11 * * 0" }
+  ]
 }
