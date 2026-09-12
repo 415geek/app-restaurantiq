@@ -131,7 +131,30 @@ export type IqReportRow = {
   user_id: string | null;
   language: string;
   created_at?: string;
+  // Background generation (migration 0008). Absent until the migration runs.
+  generation_status?: string | null;
+  generation_stage?: string | null;
+  generation_state_json?: Record<string, unknown> | null;
+  generation_error?: string | null;
+  generation_started_at?: string | null;
+  generation_updated_at?: string | null;
+  notify_email?: string | null;
+  notified_at?: string | null;
 };
+
+/**
+ * True when a Supabase/PostgREST error means migration 0008 has not been
+ * applied yet — callers fall back to the legacy synchronous path.
+ */
+export function isMissingColumnError(e: unknown): boolean {
+  const msg = (e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e ?? '')) ?? '';
+  const code = (e as { code?: string } | null)?.code ?? '';
+  return (
+    code === '42703' ||
+    code === 'PGRST204' ||
+    /column .* does not exist|could not find the .* column|schema cache/i.test(msg)
+  );
+}
 
 export async function iqInsertReport(input: {
   location: string;
@@ -272,4 +295,80 @@ export async function iqGetUserPaidReports(userId: string): Promise<IqReportRow[
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as IqReportRow[];
+}
+
+// ---------------------------------------------------------------------------
+// Background generation state (migration 0008)
+// ---------------------------------------------------------------------------
+
+export type IqGenerationClaim = {
+  reportId: string;
+  stage: string;
+  stateJson: Record<string, unknown>;
+  /** A 'running' row untouched since before this instant is considered dead and reclaimable. */
+  staleBeforeIso: string;
+};
+
+/**
+ * Atomically mark a report as generating. Returns false when another worker
+ * holds a fresh claim. Throws the raw error when the columns are missing so
+ * the caller can detect the un-migrated database.
+ */
+export async function iqClaimReportGeneration(input: IqGenerationClaim): Promise<boolean> {
+  const sb = supabaseAdmin();
+  const now = new Date().toISOString();
+  const { data, error } = await sb
+    .from(TABLE)
+    .update({
+      generation_status: 'running',
+      generation_stage: input.stage,
+      generation_state_json: input.stateJson,
+      generation_error: null,
+      generation_started_at: now,
+      generation_updated_at: now,
+    })
+    .eq('id', input.reportId)
+    .or(
+      `generation_status.neq.running,generation_updated_at.is.null,generation_updated_at.lt.${input.staleBeforeIso}`,
+    )
+    .select('id');
+  if (error) throw error;
+  return Array.isArray(data) && data.length > 0;
+}
+
+export async function iqUpdateReportGeneration(
+  reportId: string,
+  patch: {
+    status?: 'running' | 'done' | 'failed' | 'idle';
+    stage?: string | null;
+    stateJson?: Record<string, unknown> | null;
+    error?: string | null;
+  },
+): Promise<void> {
+  const sb = supabaseAdmin();
+  const row: Record<string, unknown> = { generation_updated_at: new Date().toISOString() };
+  if (patch.status !== undefined) row.generation_status = patch.status;
+  if (patch.stage !== undefined) row.generation_stage = patch.stage;
+  if (patch.stateJson !== undefined) row.generation_state_json = patch.stateJson;
+  if (patch.error !== undefined) row.generation_error = patch.error;
+  const { error } = await sb.from(TABLE).update(row).eq('id', reportId);
+  if (error) throw error;
+}
+
+export async function iqSetReportNotifyEmail(reportId: string, email: string): Promise<void> {
+  const sb = supabaseAdmin();
+  const { error } = await sb
+    .from(TABLE)
+    .update({ notify_email: email, notified_at: null })
+    .eq('id', reportId);
+  if (error) throw error;
+}
+
+export async function iqMarkReportNotified(reportId: string): Promise<void> {
+  const sb = supabaseAdmin();
+  const { error } = await sb
+    .from(TABLE)
+    .update({ notified_at: new Date().toISOString() })
+    .eq('id', reportId);
+  if (error) throw error;
 }

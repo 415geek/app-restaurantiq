@@ -2,6 +2,8 @@
 
 import { CompetitorMap } from '@/components/iq/CompetitorMap';
 import { RiskAuditScorecard } from '@/components/iq/RiskAuditScorecard';
+import { SiteHistorySection } from '@/components/iq/SiteHistorySection';
+import type { SiteHistoryPack } from '@/lib/funnel/external-data/site-history';
 import { buildCompetitorMapPins } from '@/lib/funnel/iq-competitor-map';
 import type { CompetitorInsights } from '@/lib/funnel/iq-deepseek-competitor-insights';
 import type { DeterministicFinanceModel } from '@/lib/funnel/iq-finance-model';
@@ -369,6 +371,16 @@ export function RiskAuditReportSections({
           </div>
         </SectionShell>
       )}
+
+      {marketData?.site_history && typeof marketData.site_history === 'object' ? (
+        <SectionShell title={lang === 'zh' ? '该地址过往 / 现有商家与评论' : 'Businesses at this address & their reviews'} icon="🏚️">
+          <SiteHistorySection
+            pack={marketData.site_history as SiteHistoryPack}
+            llm={(full.site_history as Record<string, unknown> | undefined) ?? null}
+            lang={lang}
+          />
+        </SectionShell>
+      ) : null}
 
       {costs.length > 0 && (
         <SectionShell title={t.costModel} icon="💵">

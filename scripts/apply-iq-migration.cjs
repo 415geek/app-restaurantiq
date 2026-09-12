@@ -58,6 +58,7 @@ async function main() {
     '0003_add_user_id.sql',
     '0004_add_language.sql',
     '20260327_add_share_features.sql',
+    '0008_iq_report_generation.sql',
   ];
 
   const client = new Client({

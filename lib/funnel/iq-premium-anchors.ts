@@ -4,6 +4,7 @@
  * and identical revenue bands).
  */
 
+import { buildSiteHistoryBlock, type SiteHistoryPack } from '@/lib/funnel/external-data/site-history';
 import {
   summarizeWebResearchForAnchors,
   summarizeDeepResearchForAnchors,
@@ -575,8 +576,14 @@ export function buildPremiumMarketDataSection(
     competitorInsightsBlock = buildCompetitorInsightsBlock(ci, lang);
   }
 
+  // Businesses at the exact address + reviews — grounds `site_history`.
+  const siteHistoryBlock = buildSiteHistoryBlock(
+    marketData?.site_history as SiteHistoryPack | undefined,
+    lang,
+  );
+
   if (!marketData || typeof marketData !== 'object') {
-    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${competitorInsightsBlock}`;
+    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${competitorInsightsBlock}${siteHistoryBlock}`;
   }
 
   const mdForJson = { ...marketData };
@@ -590,6 +597,17 @@ export function buildPremiumMarketDataSection(
         has_structured_report: Boolean(drObj.report),
         sources_count: Array.isArray(drObj.sources) ? drObj.sources.length : 0,
       };
+    }
+    if (mdForJson.site_history) {
+      // The anchor block above already carries the reviews; keep the JSON slim.
+      const sh = mdForJson.site_history as SiteHistoryPack;
+      mdForJson.site_history = {
+        businesses: Array.isArray(sh.businesses)
+          ? sh.businesses.map((b) => ({ name: b.name, source: b.source, status: b.status, rating: b.rating, review_count: b.review_count }))
+          : [],
+        closed_count: sh.closed_count,
+        total_reviews_sampled: sh.total_reviews_sampled,
+      } as unknown as SiteHistoryPack;
     }
     if (mdForJson.competitor_insights) {
       const ciObj = mdForJson.competitor_insights as CompetitorInsights;
@@ -618,5 +636,5 @@ export function buildPremiumMarketDataSection(
     lang === 'zh'
       ? `${evidencePreamble}\n\n【市场数据 JSON${fullContext ? '（全文）' : ''}】\n${jsonPayload}`
       : `${evidencePreamble}\n\nMARKET DATA JSON${fullContext ? ' (full)' : ''}:\n${jsonPayload}`;
-  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${competitorInsightsBlock}${jsonBlock}`;
+  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${competitorInsightsBlock}${siteHistoryBlock}${jsonBlock}`;
 }

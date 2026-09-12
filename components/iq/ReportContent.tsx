@@ -273,7 +273,25 @@ export function ReportContent({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ reportId: report.id, force: true, quality: true }),
         });
-        if (!cancelled && res.ok) {
+        if (cancelled) return;
+        if (res.status === 202) {
+          // Background job: poll until the professional tier is stored, then swap it in.
+          const startedAt = Date.now();
+          while (!cancelled && Date.now() - startedAt < 20 * 60_000) {
+            await new Promise((r) => setTimeout(r, 6_000));
+            const s = await fetch(`/api/funnel/full-report/status?reportId=${report.id}`, {
+              cache: 'no-store',
+            })
+              .then((r) => r.json())
+              .catch(() => null);
+            if (!s || cancelled) continue;
+            if (s.status === 'done' && s.generationTier === 'professional') {
+              window.location.reload();
+              return;
+            }
+            if (s.status === 'failed' || s.legacy) break;
+          }
+        } else if (res.ok) {
           window.location.reload();
           return;
         }

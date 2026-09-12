@@ -67,6 +67,12 @@ export async function runAnthropicJson(opts: {
   disableThinking?: boolean;
   /** Hard per-call budget from the pipeline deadline. */
   timeoutMs?: number;
+  /**
+   * Strict JSON Schema for structured outputs (`output_config.format`). The
+   * API then guarantees parseable JSON — no repair path, no lost report. If
+   * the API rejects the schema (400), the call is retried once without it.
+   */
+  jsonSchema?: Record<string, unknown>;
   /** Optional sink for call diagnostics (health probe / debugging). */
   diag?: AnthropicDiagnostic;
 }): Promise<{ raw: Record<string, unknown>; model: string } | null> {
@@ -85,17 +91,43 @@ export async function runAnthropicJson(opts: {
 
   const startedAt = Date.now();
   try {
-    const stream = client.messages.stream({
-      model: opts.model,
-      max_tokens: opts.maxTokens ?? 16_000,
-      system:
-        opts.system +
-        '\n\nOutput ONLY a single valid JSON object. No prose, no markdown fences, no comments before or after the JSON. Do not include internal or system XML tags in your response.',
-      messages: [{ role: 'user', content: opts.user }],
-      ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
-      ...(opts.disableThinking ? { thinking: { type: 'disabled' as const } } : {}),
-    });
-    const response = await stream.finalMessage();
+    const buildParams = (withSchema: boolean) => {
+      const outputConfig: Record<string, unknown> = {};
+      if (opts.effort) outputConfig.effort = opts.effort;
+      if (withSchema && opts.jsonSchema) {
+        outputConfig.format = { type: 'json_schema', schema: opts.jsonSchema };
+      }
+      return {
+        model: opts.model,
+        max_tokens: opts.maxTokens ?? 16_000,
+        system:
+          opts.system +
+          '\n\nOutput ONLY a single valid JSON object. No prose, no markdown fences, no comments before or after the JSON. Do not include internal or system XML tags in your response.',
+        messages: [{ role: 'user' as const, content: opts.user }],
+        ...(Object.keys(outputConfig).length > 0 ? { output_config: outputConfig } : {}),
+        ...(opts.disableThinking ? { thinking: { type: 'disabled' as const } } : {}),
+      };
+    };
+
+    let response: Anthropic.Message;
+    try {
+      // The typed param shape lags the API for output_config.format; pass through.
+      response = await client.messages
+        .stream(buildParams(true) as unknown as Anthropic.MessageStreamParams)
+        .finalMessage();
+    } catch (schemaErr) {
+      const m = schemaErr instanceof Error ? schemaErr.message : String(schemaErr);
+      const schemaRejected =
+        Boolean(opts.jsonSchema) &&
+        schemaErr instanceof Anthropic.BadRequestError &&
+        /schema|format|output_config/i.test(m);
+      if (!schemaRejected) throw schemaErr;
+      console.warn('[anthropic] structured-output schema rejected, retrying without it:', m.slice(0, 200));
+      if (d) d.error = `schema rejected: ${m.slice(0, 200)}`;
+      response = await client.messages
+        .stream(buildParams(false) as unknown as Anthropic.MessageStreamParams)
+        .finalMessage();
+    }
     if (d) {
       d.durationMs = Date.now() - startedAt;
       d.stopReason = response.stop_reason ?? null;

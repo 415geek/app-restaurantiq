@@ -130,6 +130,8 @@ type BarProps = {
   lang: 'en' | 'zh';
   title?: string;
   subtitle?: string;
+  /** Server-reported checklist row; overrides the percent-derived guess. */
+  activeIndex?: number;
 };
 
 export function IqAnalysisProgressBar({
@@ -139,9 +141,13 @@ export function IqAnalysisProgressBar({
   lang,
   title,
   subtitle,
+  activeIndex,
 }: BarProps) {
   const pct = Math.round(Math.min(100, Math.max(0, percent)));
-  const activeIdx = stageActiveIndex(pct, stages.length);
+  const activeIdx =
+    typeof activeIndex === 'number' && pct < 100
+      ? Math.min(stages.length - 1, Math.max(0, activeIndex))
+      : stageActiveIndex(pct, stages.length);
 
   const elapsedLabel = useMemo(() => {
     if (elapsedSec == null) return null;

@@ -329,7 +329,7 @@ export async function runAgentDValidator(input: {
     }
   }
 
-  let experiments = [...(input.planned.plan.experiments ?? [])].slice(0, 3).map((experiment, index) => ({
+  const experiments = [...(input.planned.plan.experiments ?? [])].slice(0, 3).map((experiment, index) => ({
     ...experiment,
     name: sanitizeText(experiment.name) || `Experiment ${index + 1}`,
     name_zh: fallbackZh(experiment.name || `Experiment ${index + 1}`, experiment.name_zh),
@@ -342,7 +342,7 @@ export async function runAgentDValidator(input: {
     warnings.push('Experiment count is below the recommended range (2-3).');
   }
 
-  let dataRequests = [...(input.planned.plan.data_requests ?? [])].slice(0, 6).map((request) => ({
+  const dataRequests = [...(input.planned.plan.data_requests ?? [])].slice(0, 6).map((request) => ({
     ...request,
     question: sanitizeText(request.question),
     question_zh: fallbackZh(request.question, request.question_zh),

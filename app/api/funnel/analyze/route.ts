@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { iqInsertReport } from '@/lib/funnel/iq-repository';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { buildFreeTierMarketBrief } from '@/lib/funnel/iq-premium-anchors';
+import { computeSiteMetrics, formatMetricsDigest } from '@/lib/funnel/agents/metrics';
 import { runPartialAnalysis } from '@/lib/funnel/iq-llm';
 import { analyzeWithN8n, getAnalyzeWebhookUrl } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
@@ -95,7 +96,11 @@ export async function POST(req: Request) {
     }
 
     const hasN8nWebhook = Boolean(getAnalyzeWebhookUrl());
-    const hasOpenAiKey = Boolean(process.env.OPENAI_API_KEY?.trim());
+    const hasOpenAiKey = Boolean(
+      process.env.OPENAI_API_KEY?.trim() ||
+        process.env.ANTHROPIC_API_KEY?.trim() ||
+        process.env.MIMO_API_KEY?.trim(),
+    );
     if (!hasN8nWebhook && !hasOpenAiKey) {
       const isDevLike = process.env.NODE_ENV !== 'production';
       const allowMock = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true';
@@ -142,7 +147,16 @@ export async function POST(req: Request) {
     } catch (prefetchErr) {
       console.warn('[funnel/analyze] market prefetch failed, continuing:', prefetchErr);
     }
-    const freeBrief = buildFreeTierMarketBrief(prefetchedMarket, language);
+    // Deterministic metrics (fair-share revenue, saturation, demand pool, rent
+    // economics) are appended so the free verdict is grounded in computed numbers.
+    const siteMetrics = computeSiteMetrics({
+      marketData: prefetchedMarket,
+      businessType: businessType || 'restaurant',
+    });
+    const metricsDigest = formatMetricsDigest(siteMetrics, language);
+    const freeBrief = [buildFreeTierMarketBrief(prefetchedMarket, language), metricsDigest]
+      .filter(Boolean)
+      .join('\n\n');
 
     let parsed: Awaited<ReturnType<typeof analyzeWithN8n>>;
     try {
@@ -156,6 +170,7 @@ export async function POST(req: Request) {
             ? {
                 market_data: {
                   ...prefetchedMarket,
+                  computed_metrics: siteMetrics,
                   ...(userInputs ? { user_inputs: userInputs } : {}),
                 },
               }
