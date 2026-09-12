@@ -289,3 +289,13 @@
   - Handles Claude `refusal` stop reason, markdown-fence stripping, and one automatic JSON repair retry.
   - Fixes: the n8n failure fallback no longer loops back into the failing webhook; `gatherIqMarketDataFromGoogle` now populates `geocode.city/state` (unlocks Caltrans traffic and city-scoped commercial listings).
 - **New diagnostic endpoint `/api/health/analyze`**: live connectivity probes for Anthropic / OpenAI / N8N (latency, reachability, actionable hints) to quickly triage "Failed to analyze location" incidents.
+
+## Added in this update (2026-09-12)
+- **Paid report now generates in the background, in stages (fixes the "89% then timeout" loop)**
+  - Root cause: the whole pipeline ran inside one 300s HTTP request; a 188s Claude decode produced invalid JSON → retry hit the wall → 504; nothing after enrichment was persisted so Retry started over.
+  - New `lib/funnel/iq-report-job.ts`: `enrich → draft → verify → finalize`, each stage in its own invocation (`POST /api/funnel/full-report/worker`, chained via `after()`) with a 250s budget; progress and the draft checkpoint live in `generation_state_json` (migration `0008`); Retry resumes from the failed stage; stalled jobs are re-kicked by the status endpoint.
+  - `POST /api/funnel/full-report` returns 202 and enqueues; the page polls `GET /api/funnel/full-report/status` (real stage-based progress instead of a timer curve). Language previews and un-migrated databases fall back to the synchronous path automatically.
+  - Claude runs with structured outputs (`output_config.format`, schema derived from the zod report schema in `lib/funnel/iq-report-output-schema.ts`), eliminating "output was not valid JSON"; `IQ_STRUCTURED_OUTPUT=false` disables.
+  - Purchase fulfillment kicks the job immediately, so the report is often ready when the user lands on the page.
+- **Email-me-when-ready**: the generation page accepts an email (`POST /api/funnel/full-report/notify`); finalize sends the report link via Resend (`RESEND_API_KEY`, `IQ_EMAIL_FROM`) so the user can leave.
+- **Businesses at the exact address + their reviews (new data point)**: `lib/funnel/external-data/site-history.ts` identifies businesses operating/formerly operating at the address itself (Google Find Place + Nearby ≤45 m, Yelp ≤60 m), pulls Place Details / Yelp reviews, and extracts positive/negative themes, closure signals and lessons for the new operator into `market_data.site_history`; injected into paid prompt anchors, the competitor whitelist, and the multi-agent site/competition analysts; report `site_history` schema extended (prior_business_name/status, review_themes, lessons) and a new "Businesses at this address & their reviews" section renders on the report page.

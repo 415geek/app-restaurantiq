@@ -39,18 +39,6 @@ const radarFixed = z.object(
 /** The zod report schema with record-typed fields pinned to enumerable keys. */
 export const iqFullReportStructuredSchema = iqFullReportSchema.extend({
   risk_audit: riskAuditFullSchema.extend({ radar: radarFixed.optional() }).optional(),
-  // Site-history review analysis (populated from the address-level review pack).
-  site_history: z
-    .object({
-      prior_failures_detected: z.union([z.boolean(), z.string()]).optional(),
-      note: z.string().optional(),
-      prior_business_name: z.string().optional(),
-      prior_business_status: z.string().optional(),
-      review_themes_positive: z.array(z.string()).optional(),
-      review_themes_negative: z.array(z.string()).optional(),
-      lessons_for_new_operator: z.array(z.string()).optional(),
-    })
-    .optional(),
 });
 
 const DROP_KEYS = new Set([

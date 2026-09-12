@@ -23,7 +23,8 @@ export type MarketCacheSource =
   | 'census_acs'
   | 'deepseek_summary'
   | 'deepseek_competitor_insights'
-  | 'claude_demographics';
+  | 'claude_demographics'
+  | 'site_history';
 
 export interface MarketCacheKeyInput {
   source: MarketCacheSource;

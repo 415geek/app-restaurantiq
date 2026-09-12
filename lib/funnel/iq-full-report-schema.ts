@@ -103,6 +103,12 @@ export const iqFullReportSchema = z
       .object({
         prior_failures_detected: z.union([z.boolean(), z.string()]).optional(),
         note: optionalString,
+        // Grounded in market_data.site_history (businesses at the exact address + reviews).
+        prior_business_name: optionalString,
+        prior_business_status: optionalString,
+        review_themes_positive: z.array(z.string()).optional(),
+        review_themes_negative: z.array(z.string()).optional(),
+        lessons_for_new_operator: z.array(z.string()).optional(),
       })
       .optional(),
     cannibalization: z

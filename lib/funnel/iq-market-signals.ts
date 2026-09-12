@@ -266,6 +266,22 @@ export function extractCompetitorWhitelist(
   counts.brightdata = 0;
   for (const e of byKey.values()) if (e.sources.includes('brightdata')) counts.brightdata += 1;
 
+  // Pass 5: businesses at the exact address (site history). They are not
+  // competitors, but the report may legitimately name them in site_history /
+  // comparables — without this the whitelist filter would silently drop them.
+  const siteHistory = asRecord(root.site_history) ?? (ext ? asRecord(ext.site_history) : null);
+  for (const row of siteHistory ? asArray(siteHistory.businesses) : []) {
+    const r = asRecord(row);
+    if (!r) continue;
+    addEntry(byKey, r.source === 'yelp' ? 'yelp' : 'google', {
+      name: r.name,
+      address: r.address,
+      rating: r.rating,
+      reviewCount: r.review_count,
+      priceLevel: r.price_level,
+    });
+  }
+
   const keys = new Set(byKey.keys());
   const displayNames = Array.from(byKey.values()).map((e) => e.display);
   return { keys, byKey, displayNames, total: byKey.size, countsBySource: counts };

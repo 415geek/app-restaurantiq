@@ -287,3 +287,13 @@
   - 处理 Claude `refusal` 停止原因、Markdown 围栏剥离、JSON 解析失败自动修复重试一次。
   - 修复：n8n 失败降级不再回环调用失败的 webhook；`gatherIqMarketDataFromGoogle` 现在填充 `geocode.city/state`（解锁 Caltrans 车流与商业挂牌城市检索）。
 - **新增诊断接口 `/api/health/analyze`**：实测 Anthropic / OpenAI / N8N 三通道连通性（延迟、可达性、可操作提示），用于快速定位 "Failed to analyze location" 类故障。
+
+## 本次新增（2026-09-12）
+- **付费报告改为后台分阶段生成（修复「89% 超时」）**
+  - 根因：整条流水线塞在一个 300 秒的 HTTP 请求里；一次 Claude 解码 188 秒后输出非法 JSON → 重试撞墙 → 504；LLM 阶段零落库，重试从头再来。
+  - 新增 `lib/funnel/iq-report-job.ts`：`enrich → draft → verify → finalize` 每阶段独立调用（`POST /api/funnel/full-report/worker`，`after()` 链式触发），各自 250 秒预算，进度与草稿落库 `generation_state_json`（迁移 `0008`）；重试从失败阶段续跑；卡死的任务由状态接口自动重新拉起。
+  - `POST /api/funnel/full-report` 改为返回 202 入队；前端轮询 `GET /api/funnel/full-report/status`（按阶段的真实进度，不再是纯计时曲线）。语言预览与未迁移数据库自动走原同步路径。
+  - Claude 调用启用结构化输出（`output_config.format`，schema 由 zod 报告 schema 生成，`lib/funnel/iq-report-output-schema.ts`），从根源杜绝「输出不是合法 JSON」；`IQ_STRUCTURED_OUTPUT=false` 可关闭。
+  - 支付完成即后台起任务，用户到达报告页时常已生成完毕。
+- **邮件送达报告**：生成页可留邮箱（`POST /api/funnel/full-report/notify`），finalize 阶段通过 Resend 发送报告链接（`RESEND_API_KEY`、`IQ_EMAIL_FROM`）；用户可直接离开页面。
+- **该地址过往/现有商家评论分析（新数据点）**：`lib/funnel/external-data/site-history.ts` 用 Google Find Place + Nearby（≤45m）与 Yelp（≤60m）识别在**该地址本身**营业/曾营业的商家，拉取 Place Details / Yelp 评论，LLM 提炼正负面主题、关店信号与对新经营者的启示，写入 `market_data.site_history`；注入付费提示词锚点、竞对白名单、多 Agent 场址/竞争分析师；报告 `site_history` 字段扩展（prior_business_name/status、review_themes、lessons），报告页新增「该地址过往/现有商家与评论」板块。

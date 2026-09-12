@@ -9,6 +9,7 @@
  */
 
 import { enrichMarketDataWithAcs } from '@/lib/funnel/iq-acs-enrichment';
+import { enrichMarketDataWithSiteHistory } from '@/lib/funnel/external-data/site-history';
 import { enrichMarketDataWithDemographicNarrative } from '@/lib/funnel/iq-demographic-narrative';
 import { enrichMarketDataWithCompetitorInsights } from '@/lib/funnel/iq-deepseek-competitor-insights';
 import { computeFinanceModel } from '@/lib/funnel/iq-finance-model';
@@ -124,6 +125,21 @@ export async function resolveMarketDataForIqReport(input: {
   }
 
   base = await enrichMarketDataWithAcs(base);
+
+  // Businesses at the exact address + their reviews (Google/Yelp). Cheap (a
+  // handful of cached calls) and highly predictive, so it runs for every paid
+  // report, lean or not.
+  if (isPremium) {
+    try {
+      base = await enrichMarketDataWithSiteHistory(base, {
+        address: location,
+        cuisine: businessType || 'restaurant',
+        lang,
+      });
+    } catch (err) {
+      console.warn('[resolve-market-data] site history enrichment failed', err);
+    }
+  }
 
   if (isPremium && !leanResolve) {
     try {
