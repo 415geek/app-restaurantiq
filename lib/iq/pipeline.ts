@@ -114,7 +114,18 @@ function blockGroupsFromBundle(bundle: DataBundle): { groups: BlockGroupInput[];
   };
 }
 
+/** Candidate pool radius (研发提示词 §3.1): max(3 mi, drive15). Text Search is only *biased* to 5 mi, so Google can return same-cuisine hits from across the metro. */
+export const CANDIDATE_POOL_RADIUS_M = 5 * 1_609.344;
+
 function candidatesFromBundle(bundle: DataBundle): CandidatePoi[] {
+  const all = rawCandidatesFromBundle(bundle);
+  const g = bundle.geocode.data;
+  if (!g) return all;
+  const site = { lat: g.lat, lng: g.lng };
+  return all.filter((c) => haversineM(site, { lat: c.lat, lng: c.lng }) <= CANDIDATE_POOL_RADIUS_M);
+}
+
+function rawCandidatesFromBundle(bundle: DataBundle): CandidatePoi[] {
   const out: CandidatePoi[] = [];
   for (const p of bundle.overture?.data?.pois ?? []) {
     out.push({

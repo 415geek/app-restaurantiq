@@ -25,3 +25,10 @@ test('extractor ignores citation paths, ring ids and years', () => {
   const nums = extractNarrativeNumbers('drive10 内 [src:trade_area.rings.2.pop] 2024 年 4.1 万户');
   assert.deepEqual(nums.map((n) => n.value), [41_000]);
 });
+
+test('a coverage ratio above 1 written as a percentage matches (1.72 → 172%)', () => {
+  const r = numberGuard('需求覆盖率 172% [src:demand.coverage_ratio]', { demand: { coverage_ratio: 1.72 } });
+  assert.deepEqual(r.unmatched, []);
+  const bad = numberGuard('需求覆盖率 190% [src:demand.coverage_ratio]', { demand: { coverage_ratio: 1.72 } });
+  assert.deepEqual(bad.unmatched, ['190%']);
+});
