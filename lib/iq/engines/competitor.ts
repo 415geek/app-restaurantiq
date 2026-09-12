@@ -96,6 +96,9 @@ export interface CompetitorEngineResult {
     conditions: { chinese_pop_ok: boolean; density_ok: boolean; l2_ok: boolean };
   };
   metro_sub_cuisine_total: number | null;
+  /** Set by the pipeline: candidate pool radius and the nearest same-cuisine restaurant beyond it. */
+  pool_radius_mi?: number;
+  l1_nearest_outside_pool?: { name: string; distance_mi: number } | null;
   unclassified: Array<{ id: string; name: string; categories: string[] }>;
   chain_names: string[];
 }

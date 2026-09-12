@@ -18,6 +18,7 @@ import { computeAudience } from './engines/audience';
 import {
   applyLlmClassifications,
   clusterScoreFor,
+  classifyCandidate,
   computeCompetitors,
   dedupeCandidates,
   normalizeName,
@@ -123,6 +124,21 @@ function candidatesFromBundle(bundle: DataBundle): CandidatePoi[] {
   if (!g) return all;
   const site = { lat: g.lat, lng: g.lng };
   return all.filter((c) => haversineM(site, { lat: c.lat, lng: c.lng }) <= CANDIDATE_POOL_RADIUS_M);
+}
+
+/** The closest same-cuisine restaurant beyond the pool, so page 7 can say "none within 5 mi; nearest is X at N mi" instead of 未获取. */
+function nearestSameCuisineOutsidePool(bundle: DataBundle, site: { lat: number; lng: number }, cuisine: string): { name: string; distance_mi: number } | null {
+  let best: { name: string; distance_mi: number } | null = null;
+  for (const c of rawCandidatesFromBundle(bundle)) {
+    const d = haversineM(site, { lat: c.lat, lng: c.lng });
+    if (d <= CANDIDATE_POOL_RADIUS_M) continue;
+    if (/closed/i.test(c.operating_status)) continue;
+    const k = classifyCandidate(c);
+    if (!k.is_food || k.sub_cuisine !== cuisine) continue;
+    const distance_mi = Math.round((d / 1_609.344) * 10) / 10;
+    if (!best || distance_mi < best.distance_mi) best = { name: c.name, distance_mi };
+  }
+  return best;
 }
 
 function rawCandidatesFromBundle(bundle: DataBundle): CandidatePoi[] {
@@ -296,6 +312,8 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
     metro_sub_cuisine_total: bundle.overture?.data?.loaded ? (metroTotals[site.cuisine] ?? 0) : null,
     hub_median_density_per_10k_chinese: hubMedian,
   });
+  competitors.pool_radius_mi = Math.round((CANDIDATE_POOL_RADIUS_M / 1_609.344) * 10) / 10;
+  competitors.l1_nearest_outside_pool = nearestSameCuisineOutsidePool(bundle, siteLL, site.cuisine);
   // Google-side failure with an empty pool is a pipeline failure, not "no competition" (R1).
   if (bundle.google?.status === 'failed' && (bundle.overture?.status === 'failed' || !bundle.overture?.data?.loaded)) {
     competitors.guard_notes.push(`竞品源不可用：D5 ${bundle.overture?.coverage_note ?? '—'}；D6 ${bundle.google?.coverage_note ?? '—'}`);

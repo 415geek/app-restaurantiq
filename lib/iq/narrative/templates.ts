@@ -19,7 +19,7 @@ export const PAGES: Array<{ id: PageId; n: number; zh: string; en: string; fragm
   { id: 'page_4', n: 4, zh: '商圈需求', en: 'Demand Coverage', fragment: ['trade_area', 'demand.cuisine_share'] },
   { id: 'page_5', n: 5, zh: '客群画像', en: 'Audience', fragment: ['audience', 'trade_area.rings', 'demand.lunch_usd', 'demand.dinner_usd'] },
   { id: 'page_6', n: 6, zh: '竞争格局', en: 'Competitive Landscape', fragment: ['competitors'] },
-  { id: 'page_7', n: 7, zh: '直接竞品对标', en: 'Direct Competitors', fragment: ['competitors.l1', 'competitors.benchmark_revenue_band', 'finance.breakeven_monthly'] },
+  { id: 'page_7', n: 7, zh: '直接竞品对标', en: 'Direct Competitors', fragment: ['competitors.l1', 'competitors.benchmark_revenue_band', 'finance.breakeven_monthly', 'competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'competitors.guard_passed'] },
   { id: 'page_8', n: 8, zh: '品类缺口与替代菜系', en: 'Category Gap & Alternatives', fragment: ['competitors.void', 'competitors.density_per_10k_chinese', 'score.alternatives', 'score.user_cuisine_rank'] },
   { id: 'page_9', n: 9, zh: '需求捕获模型', en: 'Demand Capture', fragment: ['demand', 'finance.breakeven_monthly'] },
   { id: 'page_10', n: 10, zh: '财务模型', en: 'Financial Model', fragment: ['finance', 'input.rent_usd', 'input.seats'] },
@@ -160,6 +160,18 @@ export function templateNarrative(m: ReportModel, page: PageId): { title: string
     case 'page_7': {
       const b = m.competitors.benchmark_revenue_band;
       const be = m.finance.breakeven_monthly;
+      if (m.competitors.l1.length === 0 && m.competitors.guard_passed) {
+        const r = m.competitors.pool_radius_mi ?? 5;
+        const near = m.competitors.l1_nearest_outside_pool;
+        return {
+          title: `${r} 英里内没有同菜系门店，本址是${m.input.cuisine_label_zh}的空档`,
+          body:
+            `周边 ${r} 英里内没有一家同菜系餐厅 [src:competitors.pool_radius_mi]` +
+            (near ? `，最近的一家「${near.name}」在 ${near.distance_mi} 英里外 [src:competitors.l1_nearest_outside_pool.distance_mi]` : '') +
+            `。没有同行分客流，也没有同行替你教育市场；保本线 ${fmtUsd(be)} [src:finance.breakeven_monthly]。`,
+          refs: ['competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'finance.breakeven_monthly'],
+        };
+      }
       const title = b.median != null && be != null ? `同类门店中位月营收 ${fmtUsd(b.median)}，${b.median < be ? '低于' : '高于'}本址保本线` : '同类门店营收缺历史数据，只能给相对客流等级';
       return {
         title,
