@@ -331,3 +331,8 @@
 - **置信度** `lib/iq/engines/confidence.ts`：`Σ w_s × q_s`（ACS 20 / 竞品 25 / 客流代理 15 / 租金对标 15 / 日间人口 10 / 交通 5 / 开发管线 5 / 用户输入 5，q ∈ {0, 0.5, 1}），< 60 预检版。
 - `lib/iq/pipeline.ts` `runReport360`：数据层 → 引擎 → `report_model.json`（zod 校验，附录 D）；`npm run replay:golden -- millbrae_1711 --engine v360` 可重放。风险登记 `engines/risk.ts` 与客群画像 `engines/audience.ts` 只用模型数字填模板。
 - 验收（`qa/e2e-report.test.ts`）：所有分数 = `score()` 输出、权重和 100、三情景单量 ↔ 营收互相反算一致、无 CapEx 时回收期为 null、替代菜系表 14 行；`npm run test:iq` 102 项通过。
+
+## 360° 升级 · Phase 5a 叙事层（2026-09-12）
+- `lib/iq/narrative/templates.ts`：14 页信息架构（§5.2）与确定性模板句（只用模型数字 + `[src:字段路径]`）；`pageFragment` 给每页切出只读 JSON 片段。
+- `lib/iq/narrative/generate.ts`：附录 E 提示词逐页生成（页面用快速模型，执行摘要用 Claude），输出 `{title ≤ 28 字且含判断, body ≤ 120 字, refs}`；`lib/iq/narrative/number-guard.ts` 校验叙事中每个数字（含 $ / % / 万 / 单 / 家）都能在该页 JSON 片段中找到（±1 舍入）、引用路径存在、禁用词（零竞争 / 空白 仅在 `void.is_void` 时允许；保守估计 / 大约 一律禁止）；失败重生成一次，再失败用模板句替代并标注 `guard`。执行摘要的「签约前条件」必须逐字复制 `score.conditions`。
+- `lib/iq/generate.ts` `generateReport360`：管线 → 叙事 → QA 门槛 → 落库 `report_model_json / narrative_json / report_tier / report_cost_usd` → `iq_cost_log`；新增 `POST/GET /api/iq/report360/[id]`（202 后台生成；`?sync=1` + worker secret 同步返回）。

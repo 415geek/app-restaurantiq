@@ -140,6 +140,12 @@ export type IqReportRow = {
   generation_updated_at?: string | null;
   notify_email?: string | null;
   notified_at?: string | null;
+  // 360° report (migration 0009). Absent until the migration runs.
+  report_model_json?: Record<string, unknown> | null;
+  narrative_json?: Record<string, unknown> | null;
+  report_tier?: string | null;
+  report_cost_usd?: number | null;
+  pdf_storage_path?: string | null;
 };
 
 /**
@@ -250,6 +256,28 @@ export async function iqSetFullReport(reportId: string, fullReportJson: Record<s
     .from(TABLE)
     .update({ full_report_json: fullReportJson, updated_at: new Date().toISOString() })
     .eq('id', reportId);
+  if (error) throw error;
+}
+
+/** Persist the 360° report model + page narratives (migration 0009 columns). */
+export async function iqSetReportModel(input: {
+  reportId: string;
+  reportModelJson: Record<string, unknown>;
+  narrativeJson: Record<string, unknown>;
+  tier: 'paid' | 'precheck';
+  costUsd: number;
+}): Promise<void> {
+  const sb = supabaseAdmin();
+  const { error } = await sb
+    .from(TABLE)
+    .update({
+      report_model_json: input.reportModelJson,
+      narrative_json: input.narrativeJson,
+      report_tier: input.tier,
+      report_cost_usd: input.costUsd,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.reportId);
   if (error) throw error;
 }
 
