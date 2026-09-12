@@ -298,3 +298,8 @@
 - **邮件送达报告**：生成页可留邮箱（`POST /api/funnel/full-report/notify`），finalize 阶段通过 Resend 发送报告链接（`RESEND_API_KEY`、`IQ_EMAIL_FROM`）；用户可直接离开页面。
 - **该地址过往/现有商家评论分析（新数据点）**：`lib/funnel/external-data/site-history.ts` 用 Google Find Place + Nearby（≤45m）与 Yelp（≤60m）识别在**该地址本身**营业/曾营业的商家，拉取 Place Details / Yelp 评论，LLM 提炼正负面主题、关店信号与对新经营者的启示，写入 `market_data.site_history`；注入付费提示词锚点、竞对白名单、多 Agent 场址/竞争分析师；报告 `site_history` 字段扩展（prior_business_name/status、review_themes、lessons），报告页新增「该地址过往/现有商家与评论」板块。
 - **修复移动端「PDF 无法下载」**：此前报告页先用 `fetch` 把 PDF 读成 Blob，再用脚本点击一个 `<a download>`——iOS Safari / 微信内置浏览器 / 多数 Android WebView 会直接忽略这种程序化下载（无任何反应或打开空白页）。现改为：先向 `/api/iq/report/[id]/pdf` 发送探测请求（`x-iq-pdf-probe: 1`，服务端只做已付费 / 报告就绪校验并返回 204，不启动 Chromium），通过后由浏览器自身导航到 PDF 地址完成下载——桌面浏览器原地保存文件，iOS 打开系统 PDF 预览并可分享 / 存入「文件」。未付费 / 未生成 / 服务端失败仍会在页面内给出可读的错误提示。
+
+## 付费报告 360° 升级（研发提示词 v1.0）· Phase 0 基线（2026-09-12）
+- 新增 `qa/golden_set/millbrae_1711.json`：把 Millbrae 报告（编号 5c361b95）暴露的 R1–R8 缺陷固化为回归基线（输入 + 观测到的缺陷 + 对应拦截门槛）。
+- 新增 `npm run replay:golden -- millbrae_1711`（`scripts/replay-golden.ts`）：用当前付费链路重放该用例（不落库），输出到 `qa/out/`，并逐项扫描 R1–R8 是否仍然出现；缺少 API key 时以退出码 2 明确报错。
+- 新增 `npm run test:iq`（Node 内置 test runner + tsx）与 `npm run qa:gates` 占位，供后续 Phase 使用；依赖新增 `tsx`（dev）与 `yaml`（参数表）。
