@@ -69,6 +69,8 @@ export interface PlaceCall {
   includedTypes: string[];
   radiusM: number;
   label: string;
+  /** When set, the call uses Text Search (New) with this query (locationBias circle) instead of Nearby. */
+  textQuery?: string;
 }
 
 export interface PlaceCallOutcome extends PlaceCall {
@@ -81,6 +83,8 @@ const SOURCE_ID = 'D6' as const;
 const CACHE_SOURCE = 'iq360_google_places';
 const CACHE_TTL_S = 30 * 24 * 3600;
 const NEARBY_URL = 'https://places.googleapis.com/v1/places:searchNearby';
+const TEXT_URL = 'https://places.googleapis.com/v1/places:searchText';
+const FIVE_MILES_M = 8047;
 const FIELD_MASK =
   'places.id,places.displayName,places.location,places.primaryType,places.types,places.rating,places.userRatingCount,places.priceLevel,places.businessStatus,places.regularOpeningHours';
 const LICENSE = 'Google Maps Platform ToS (Places API (New) Nearby Search Pro SKU; no reviews/atmosphere fields)';
@@ -108,11 +112,12 @@ export function buildCallPlan(cuisineId: string, maxCalls?: number): PlaceCall[]
     { includedTypes: ['asian_grocery_store', 'supermarket'], radiusM: ONE_MILE_M, label: 'grocery @1mi' },
     // Places (New) Table A has no bubble_tea_shop; tea_house + dessert_shop cover boba/dessert anchors.
     { includedTypes: ['tea_house', 'dessert_shop'], radiusM: ONE_MILE_M, label: 'tea/dessert @1mi' },
-    // Table A has no per-Chinese-cuisine types (hunan_restaurant etc. → INVALID_ARGUMENT); the wider
-    // asian_restaurant pool at 3 mi feeds the classifier instead. `cuisineId` stays for future types.
-    { includedTypes: ['asian_restaurant'], radiusM: THREE_MILES_M, label: 'asian_restaurant @3mi' },
   ];
-  void cuisineById(cuisineId);
+  // Table A has no per-Chinese-cuisine types (hunan_restaurant etc. → INVALID_ARGUMENT). Nearby is
+  // capped at 20 results per call, so the direct-competitor (L1) set comes from one Text Search
+  // (New) for the cuisine name biased to a 5-mile circle — same Pro SKU, same field mask.
+  const cuisine = cuisineById(cuisineId);
+  plan.push({ includedTypes: ['restaurant'], radiusM: FIVE_MILES_M, label: `text:${cuisine.id} @5mi`, textQuery: `${cuisine.label_en} restaurant` });
   return plan.slice(0, cap);
 }
 
@@ -156,7 +161,7 @@ export function toGooglePlace(raw: RawPlace, site: { lat: number; lng: number })
 }
 
 function callCacheKey(site: { lat: number; lng: number }, call: PlaceCall): string {
-  return `${roundCoord(site.lat)},${roundCoord(site.lng)}:${[...call.includedTypes].sort().join('+')}:${call.radiusM}`;
+  return `${roundCoord(site.lat)},${roundCoord(site.lng)}:${call.textQuery ? `text=${call.textQuery}` : [...call.includedTypes].sort().join('+')}:${call.radiusM}`;
 }
 
 type CallResult =
@@ -169,14 +174,13 @@ async function nearby(ctx: FetchContext, key: string, site: { lat: number; lng: 
   if (cached && Array.isArray(cached.places)) return { ok: true, places: cached.places, cache: 'hit' };
 
   const cost = perCallCost(ctx);
-  const body = {
-    includedTypes: call.includedTypes,
-    maxResultCount: 20,
-    locationRestriction: { circle: { center: { latitude: site.lat, longitude: site.lng }, radius: call.radiusM } },
-  };
+  const circle = { center: { latitude: site.lat, longitude: site.lng }, radius: call.radiusM };
+  const body = call.textQuery
+    ? { textQuery: call.textQuery, includedType: 'restaurant', maxResultCount: 20, locationBias: { circle } }
+    : { includedTypes: call.includedTypes, maxResultCount: 20, locationRestriction: { circle } };
   let res: Response;
   try {
-    res = await fetchWithTimeout(ctx, NEARBY_URL, {
+    res = await fetchWithTimeout(ctx, call.textQuery ? TEXT_URL : NEARBY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': FIELD_MASK },
       body: JSON.stringify(body),
@@ -187,7 +191,7 @@ async function nearby(ctx: FetchContext, key: string, site: { lat: number; lng: 
     return { ok: false, status: 0, message: msg, fatal: false };
   }
   // Charged whenever a request reached Google — the conservative direction for the cost cap.
-  ctx.cost.add(SOURCE_ID, cost, `Nearby ${call.label} → HTTP ${res.status}`);
+  ctx.cost.add(SOURCE_ID, cost, `${call.textQuery ? 'TextSearch' : 'Nearby'} ${call.label} → HTTP ${res.status}`);
 
   let json: NearbyResponse = {};
   try {

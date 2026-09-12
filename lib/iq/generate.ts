@@ -44,7 +44,9 @@ export async function generateReport360(
   const gates = runQaGates(model);
   if (!gates.passed) {
     model.meta.tier = 'precheck';
-    model.meta.precheck_reasons = [...new Set([...model.meta.precheck_reasons, ...gates.failures])];
+    const known = new Set(model.meta.precheck_reasons);
+    const fresh = gates.failures.filter((f) => !known.has(f.replace(/^\[\w+\] /, '')));
+    model.meta.precheck_reasons = [...new Set([...model.meta.precheck_reasons, ...fresh])];
   }
   model.meta.cost_usd = ctx.cost.total();
   model.meta.cost_breakdown = ctx.cost.bySource();

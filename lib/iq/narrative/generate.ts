@@ -65,8 +65,8 @@ const SUMMARY_PAGE: PageId = 'page_2';
  * cap is wider than the per-page 120 (+overflow to 160) rule of 附录 E.
  */
 export const NARRATIVE_LIMITS = {
-  zh: { title: 28, body: { page: 160, summary: 480 } },
-  en: { title: 12, body: { page: 160, summary: 320 } }, // words
+  zh: { title: 28, body: { page: 200, summary: 560 } },
+  en: { title: 12, body: { page: 160, summary: 360 } }, // words
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -75,7 +75,7 @@ export const NARRATIVE_LIMITS = {
 
 const SYSTEM_ZH =
   '你是 RestaurantIQ 的分析师，为中餐馆老板写选址报告。你只能使用下面 JSON 里的数字与事实，不得引入任何 JSON 之外的数字、地名、品牌或判断。' +
-  '每个数字后面必须紧跟 [src:字段路径]。输出 JSON：{"title": "≤28字、必须包含判断（如 覆盖/不足/偏高/可做）", "body": "≤120字，两句到三句", "refs": [字段路径数组]}。' +
+  '每个数字后面必须紧跟 [src:字段路径]（路径用点号，如 trade_area.rings.2.pop，不要用方括号下标）。输出 JSON：{"title": "≤28字、必须包含判断（如 覆盖/不足/偏高/可做）", "body": "≤120字，两句到三句，严格控制长度", "refs": [字段路径数组]}。' +
   '禁用词：零竞争、空白（除非 competitors.void.is_void 为 true）、保守估计、大约、显著（修饰官方统计时）。语气：直接、给判断、不夸张、不安慰。中文为主，专有名词可用英文。';
 
 const SYSTEM_ZH_SUMMARY =
@@ -179,7 +179,8 @@ export function refExists(ref: string, fragment: Record<string, unknown>): boole
 }
 
 function citationsIn(text: string): string[] {
-  return [...text.matchAll(/\[src:([^\]]+)\]/g)].map((m) => normalizeRef(m[1]));
+  // Allow one level of index brackets inside the path: [src:audience.segments[3].share]
+  return [...text.matchAll(/\[src:((?:[^\[\]]|\[[^\[\]]*\])+)\]/g)].map((m) => normalizeRef(m[1]));
 }
 
 export function checkNarrative(
