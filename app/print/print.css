@@ -432,15 +432,33 @@ strong {
 .sources-table td {
   padding: 2pt 3pt;
 }
-.sources-table th:nth-child(1) { width: 5%; }
-.sources-table th:nth-child(2) { width: 18%; }
-.sources-table th:nth-child(3) { width: 8%; }
-.sources-table th:nth-child(4) { width: 11%; }
-.sources-table th:nth-child(5) { width: 35%; }
-.sources-table th:nth-child(6) { width: 16%; }
-.sources-table th:nth-child(7) { width: 7%; }
+/* data lineage: 数据源 / 内容 / 更新日期 / 来源机构 / 许可 */
+.lineage-table th:nth-child(1) { width: 14%; }
+.lineage-table th:nth-child(2) { width: 34%; }
+.lineage-table th:nth-child(3) { width: 11%; }
+.lineage-table th:nth-child(4) { width: 24%; }
+.lineage-table th:nth-child(5) { width: 17%; }
 .sources-table thead th {
   font-size: 7.5pt;
+}
+.lineage-table td {
+  padding: 1.5pt 3pt;
+}
+.data-notes {
+  font-size: 7pt;
+  line-height: 1.35;
+  color: var(--muted);
+  margin: 0 0 5pt;
+  padding: 3pt 7pt;
+  border-left: 2px solid var(--rule);
+}
+.data-notes-title {
+  font-weight: 700;
+  color: var(--navy);
+  margin-right: 5pt;
+}
+.data-table td.nowrap {
+  white-space: nowrap;
 }
 .sources-table td.num {
   white-space: normal;
@@ -817,6 +835,14 @@ strong {
   display: block;
   font-size: 7.5pt;
 }
+/* one name per competitor: Chinese first, English smaller on the same line */
+.comp-name-en {
+  font-family: var(--font-latin);
+  font-size: 7.5pt;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 3pt;
+}
 .tag {
   flex: 0 0 auto;
   font-size: 7pt;
@@ -864,4 +890,49 @@ strong {
 .waterfall-wrap {
   max-width: 140mm;
   margin: 0 auto;
+}
+
+/* ---------- page 15 · 总结与建议 ---------- */
+.final-conclusion {
+  font-size: 10pt;
+  line-height: 1.5;
+  margin: 2pt 0 7pt;
+  padding: 7pt 9pt;
+  background: var(--panel);
+  border-left: 3px solid var(--coral);
+}
+.alt-table {
+  margin-top: 0;
+}
+.next-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8pt;
+  font-size: 9pt;
+  line-height: 1.4;
+}
+.next-steps li {
+  display: flex;
+  gap: 6pt;
+  align-items: flex-start;
+  padding: 6pt 8pt;
+  border: 1px solid var(--rule);
+}
+.next-steps .step-no {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #ffffff;
+  font-family: var(--font-latin);
+  font-size: 9pt;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1pt;
 }

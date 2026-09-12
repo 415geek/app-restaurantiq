@@ -20,6 +20,7 @@ import {
   clusterScoreFor,
   computeCompetitors,
   dedupeCandidates,
+  normalizeName,
   type CandidatePoi,
   type CompetitorEngineResult,
   type LlmClassifier,
@@ -127,6 +128,7 @@ function candidatesFromBundle(bundle: DataBundle): CandidatePoi[] {
       primary_category: p.primary_category,
       operating_status: p.operating_status || 'unknown',
       brand: p.brand,
+      google_place_id: p.google_place_id,
       sub_cuisine: p.sub_cuisine,
       sub_cuisine_confidence: p.sub_cuisine_confidence,
       sub_cuisine_method: p.sub_cuisine ? 'rule' : null,
@@ -207,6 +209,27 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
   // Competitors first (cuisine_share needs the supply mix).
   const candidates = candidatesFromBundle(bundle);
   const merged = dedupeCandidates(siteLL, candidates);
+  // User-named direct competitors (D12 known_competitors): a Chinese-food candidate whose
+  // name matches one of them and is still unclassified is read as the site's own sub-cuisine
+  // — the user told us it is a direct competitor — so it lands in L1 instead of other_chinese.
+  // "Unclassified" = no sub-cuisine yet, or the generic `other_chinese` bucket the category rule
+  // assigns to any `chinese_restaurant` type (§3.3 "Chinese-but-unknown"). A specific rule/keyword
+  // hit (e.g. "Hunan" in the name) or an LLM decision is never overridden.
+  // Same normalized-substring rule as dedupeCandidates.
+  if (site.known_competitors.length) {
+    // CJK names are short ("湘水缘"), so the anti-false-positive length floor is script-aware.
+    const longEnough = (s: string) => s.length >= (/[㐀-鿿]/.test(s) ? 2 : 4);
+    const known = site.known_competitors.map(normalizeName).filter(longEnough);
+    const matches = (n: string) => longEnough(n) && known.some((k) => n === k || n.includes(k) || k.includes(n));
+    const unclassified = (m: (typeof merged)[number]) => !m.sub_cuisine || (m.sub_cuisine === 'other_chinese' && m.classified_by !== 'llm');
+    for (const m of merged) {
+      if (!m.is_food || !m.is_chinese || !unclassified(m)) continue;
+      if (matches(normalizeName(m.name)) || (m.name_zh && matches(normalizeName(m.name_zh)))) {
+        m.sub_cuisine = site.cuisine;
+        m.classified_by = 'keyword';
+      }
+    }
+  }
   const leftovers = merged.filter((m) => m.is_food && m.is_chinese && !m.sub_cuisine).map((m) => ({ id: m.id, name: m.name, categories: m.categories }));
   if (leftovers.length) {
     const classify: LlmClassifier | null =

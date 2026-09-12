@@ -25,6 +25,7 @@
   "crons": [
     { "path": "/api/iq/ops?task=hubs&metro=sf-bay", "schedule": "0 9 1 * *" },
     { "path": "/api/iq/ops?task=snapshots&metro=sf-bay", "schedule": "0 10 1 * *" },
-    { "path": "/api/iq/ops?task=lodes&state=ca&year=2022&counties=06081,06075,06085,06001,06013", "schedule": "0 11 * * 0" }
+    { "path": "/api/iq/ops?task=lodes&state=ca&year=2022&counties=06081,06075,06085,06001,06013", "schedule": "0 11 * * 0" },
+    { "path": "/api/iq/ops?task=source_gaps&metro=sf-bay", "schedule": "0 12 * * 1" }
   ]
 }

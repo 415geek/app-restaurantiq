@@ -8,6 +8,13 @@ import { getIqPaywallLockedItems } from '@/lib/funnel/iq-paywall-sections';
 import { RiskAuditScorecard } from '@/components/iq/RiskAuditScorecard';
 import { LeadCaptureModal, type LeadCaptureSubmit } from '@/components/iq/LeadCaptureModal';
 import {
+  emptyPaidIntakeValues,
+  hasPaidIntakeValues,
+  PaidIntakeForm,
+  submitPaidIntake,
+  type PaidIntakeValues,
+} from '@/components/iq/PaidIntakeForm';
+import {
   FREE_ANALYZE_PHASES,
   getFreeAnalyzeStages,
   IqAnalysisProgressBar,
@@ -114,6 +121,8 @@ const resultCopy: Record<
     fallbackLoadFailed: string;
     loadingPage: string;
     riskAudit: string;
+    addDetails: string;
+    addDetailsHide: string;
   }
 > = {
   en: {
@@ -139,6 +148,8 @@ const resultCopy: Record<
     reportNotSaved: 'Report was not saved — please rerun the analysis, then unlock.',
     fallbackLoadFailed: 'Failed to load result.',
     loadingPage: 'Loading…',
+    addDetails: 'Add details (optional, 1 min)',
+    addDetailsHide: 'Hide details',
   },
   zh: {
     missingLocation: '缺少地址信息',
@@ -163,6 +174,8 @@ const resultCopy: Record<
     reportNotSaved: '报告尚未保存成功，请重新运行分析后再解锁。',
     fallbackLoadFailed: '结果加载失败。',
     loadingPage: '加载中…',
+    addDetails: '补充信息（可选，1 分钟）',
+    addDetailsHide: '收起补充信息',
   },
 };
 
@@ -232,6 +245,9 @@ function ResultContent() {
   const [accessCode, setAccessCode] = useState('');
   const [accessCodeLoading, setAccessCodeLoading] = useState(false);
   const [accessCodeError, setAccessCodeError] = useState<string | null>(null);
+  // Optional supplemental inputs for the paid 360° report (saved best-effort before checkout).
+  const [intake, setIntake] = useState<PaidIntakeValues>(() => emptyPaidIntakeValues());
+  const [intakeOpen, setIntakeOpen] = useState(false);
   // Lead capture gate — required before the free report is revealed.
   // Returning visitors who already left their email skip the modal.
   const [unlocked, setUnlocked] = useState(false);
@@ -332,6 +348,15 @@ function ResultContent() {
     }
     setCheckoutLoading(true);
     setCheckoutError(null);
+    // Best-effort: persist supplemental inputs first so the 360° job can use them.
+    // A failure here must never block checkout.
+    if (hasPaidIntakeValues(intake)) {
+      try {
+        await submitPaidIntake(data.reportId, intake);
+      } catch {
+        /* ignore — proceed to checkout */
+      }
+    }
     try {
       const res = await fetch('/api/funnel/create-checkout-session', {
         method: 'POST',
@@ -548,6 +573,36 @@ function ResultContent() {
               </li>
             ))}
           </ul>
+
+          {/* Optional supplemental inputs — collapsed by default, saved on unlock. */}
+          <div className="mt-5 rounded-2xl border border-white/10 bg-black/20">
+            <button
+              type="button"
+              onClick={() => setIntakeOpen((o) => !o)}
+              aria-expanded={intakeOpen}
+              aria-controls="paid-intake-form"
+              className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-white/80 transition hover:text-white"
+            >
+              <span>
+                ✍️ {intakeOpen ? t.addDetailsHide : t.addDetails}
+                {!intakeOpen && hasPaidIntakeValues(intake) ? <span className="ml-2 text-xs text-emerald-300/80">✓</span> : null}
+              </span>
+              <span className="text-white/40">{intakeOpen ? '▴' : '▾'}</span>
+            </button>
+            {intakeOpen ? (
+              <div id="paid-intake-form" className="border-t border-white/10 px-4 pb-4 pt-3">
+                <PaidIntakeForm
+                  lang={locale}
+                  reportId={data.reportId}
+                  mode="embedded"
+                  value={intake}
+                  onChange={setIntake}
+                  disabled={checkoutLoading}
+                />
+              </div>
+            ) : null}
+          </div>
+
           <button
             type="button"
             onClick={() => void handleCheckout()}

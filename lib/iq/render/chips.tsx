@@ -5,6 +5,7 @@
 import type { ReactNode } from 'react';
 import { Calculator, Database, Globe, Landmark, PenLine } from 'lucide-react';
 import type { ReportModel, SourceRow } from '../model/schema';
+import { sourceShortZh } from './format';
 
 export type SourceKind = 'official' | 'platform' | 'user' | 'model' | 'web';
 
@@ -66,10 +67,9 @@ export function SourceChip({ kind, label, status }: { kind: SourceKind; label?: 
   );
 }
 
-/** Short display label for a source row (drop the parenthetical detail). */
+/** Short display label for a source row: plain Chinese name (page 14 carries the full lineage), never the raw D-id. */
 function shortSourceName(row: SourceRow): string {
-  const name = row.name.split(' (')[0].split(' · ')[0].trim();
-  return `${row.id} ${name}`;
+  return sourceShortZh(row);
 }
 
 /** Chips for the given data-source ids (looked up in model.sources so status is real), plus optional model-estimate chips. */

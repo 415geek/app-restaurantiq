@@ -22,6 +22,8 @@ export type RawSiteInput = {
   language?: string | null;
   listing_urls?: unknown;
   existing_stores?: unknown;
+  /** Competitor names the user typed: string[] or one "a, b\nc" string. */
+  known_competitors?: unknown;
   /** Form fields may arrive as strings ("$12,000", "25%"). */
   rent_usd?: unknown;
   sqft?: unknown;
@@ -89,6 +91,30 @@ function coerceExistingStores(v: unknown): SiteInput['existing_stores'] {
   return out;
 }
 
+export const KNOWN_COMPETITORS_MAX = 10;
+const KNOWN_COMPETITOR_NAME_MAX_CHARS = 80;
+
+/**
+ * "Hunan Home, 湘水缘\nGolden Dragon" | string[] → ≤ 10 trimmed, de-duplicated
+ * (case-insensitive) names. Empty / non-string items are dropped.
+ */
+export function coerceKnownCompetitors(v: unknown): string[] {
+  const list = Array.isArray(v) ? v : typeof v === 'string' ? v.split(/[\n\r,，;；]+/) : [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of list) {
+    if (typeof item !== 'string') continue;
+    const s = item.trim().slice(0, KNOWN_COMPETITOR_NAME_MAX_CHARS).trim();
+    if (!s) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+    if (out.length >= KNOWN_COMPETITORS_MAX) break;
+  }
+  return out;
+}
+
 function resolveCuisine(raw: RawSiteInput): { id: string; how: string } {
   const text = (raw.cuisine_text ?? '').trim();
   const id = (raw.cuisine ?? '').trim();
@@ -133,6 +159,7 @@ export function normalizeUserInputs(raw: RawSiteInput): { input: SiteInput; resu
     parking_spaces: coercePositiveNumber(raw.parking_spaces),
     existing_stores: coerceExistingStores(raw.existing_stores),
     listing_urls: coerceListingUrls(raw.listing_urls),
+    known_competitors: coerceKnownCompetitors(raw.known_competitors),
   };
 
   const provided = FIELD_LABELS.filter(([k]) => input[k] != null).map(([, label]) => label);
@@ -144,6 +171,7 @@ export function normalizeUserInputs(raw: RawSiteInput): { input: SiteInput; resu
   ];
   if (input.listing_urls.length) parts.push(`挂牌链接 ${input.listing_urls.length} 条`);
   if (input.existing_stores.length) parts.push(`现有门店 ${input.existing_stores.length} 家`);
+  if (input.known_competitors.length) parts.push(`用户指定竞品 ${input.known_competitors.length} 家`);
   if (input.capex_usd == null) parts.push('缺 CapEx → 回收期隐藏');
   if (input.rent_usd == null || input.sqft == null) parts.push('缺租金或面积 → 标的 $/SF 与租金溢价不计算');
 

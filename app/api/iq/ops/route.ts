@@ -11,8 +11,9 @@ export const dynamic = 'force-dynamic';
  * Ops endpoint for the 360° data jobs — the cron-on-Vercel replacement for
  * running scripts/*.ts by hand.
  *
- *   GET|POST /api/iq/ops?task=migrate|lodes|hubs|snapshots|all
+ *   GET|POST /api/iq/ops?task=migrate|lodes|hubs|snapshots|source_gaps|all
  *            &metro=sf-bay&state=ca&year=2022&counties=06081,06075&dryRun=1&maxDetails=0&force=1
+ *            &maxReports=3&maxSearches=3   (source_gaps: fill + discover data-source gaps weekly)
  *
  * Auth: `Authorization: Bearer ${CRON_SECRET}` (Vercel Cron adds it when the
  * CRON_SECRET env var exists) or `x-iq-worker-secret` (IQ_WORKER_SECRET / the

@@ -1,7 +1,7 @@
 /**
  * Phase 5.5 smoke: render the /print page for the Millbrae fixture with a local
  * Chromium, save qa/out/print-millbrae.pdf + per-page screenshots, and assert:
- *   - exactly 14 h1.action-title
+ *   - exactly 15 h1.action-title
  *   - no text node with contrast < 4.5:1 against its effective background
  *   - no empty <td>
  *   - PDF between 50 KB and 5 MB
@@ -22,6 +22,10 @@ const argOf = (k: string, d: string) => {
 const BASE = argOf('--base', process.env.SMOKE_BASE_URL ?? 'http://localhost:3111');
 const FIXTURE = argOf('--fixture', 'millbrae');
 const OUT = path.join(process.cwd(), 'qa', 'out');
+/** 14 analysis pages + 总结与建议 (page 15). */
+const EXPECTED_PAGES = 15;
+/** Customer-facing text must not leak engine ids (研发提示词 wording rule). */
+const JARGON_RE = /\b(walk10|drive5|drive10|drive15|coverage_ratio|cluster_score|Huff|HHI|P25|P75|CapEx)\b|\bL[1-4]\b|β|置信度/;
 
 function findChrome(): string {
   const env = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH;
@@ -189,7 +193,7 @@ async function main() {
 
     // 1) page count
     const titles = await page.$$eval('h1.action-title', (els) => els.map((e) => (e.textContent ?? '').trim()));
-    assert('action_titles', titles.length === 14, `${titles.length} h1.action-title`);
+    assert('action_titles', titles.length === EXPECTED_PAGES, `${titles.length} h1.action-title (expected ${EXPECTED_PAGES})`);
     const longTitles = titles.filter((t) => t.length > 28);
     console.log(`[smoke-print] titles > 28 chars: ${longTitles.length}${longTitles.length ? ' → ' + longTitles.map((t) => `"${t}" (${t.length})`).join('; ') : ''}`);
     const emptyTitles = titles.filter((t) => !t);
@@ -203,6 +207,17 @@ async function main() {
     const emoji = (await page.evaluate(EMOJI_JS)) as string;
     assert('no_emoji', emoji === 'none', emoji);
 
+    // 3b) jargon scan on the customer-facing text (footer report ids excluded by the regex)
+    // textContent (not innerText) so hidden/clamped text is scanned too; scripts (RSC payload serialises the raw model),
+    // map legend / SVG (map module, scanned by its owner) and footers (report ids by design) are excluded
+    const bodyText = (await page.evaluate(`(() => { const b = document.body.cloneNode(true); b.querySelectorAll('script, style, noscript, template, .map-legend, svg, .page-foot').forEach((e) => e.remove()); return b.textContent || ''; })()`)) as string;
+    const jargonHits = [...new Set((bodyText.match(new RegExp(JARGON_RE.source, 'g')) ?? []))];
+    assert('no_jargon', jargonHits.length === 0, jargonHits.length ? `leaked: ${jargonHits.join(', ')}` : 'no engine ids in page text');
+    assert('no_cost_line', !/报告成本|成本 \$0\.\d{3}/.test(bodyText), '成本 column / per-report cost line absent');
+    assert('no_source_count_title', !/个数据源中 \d+ 个完整/.test(bodyText), '"N 个数据源中 M 个完整" absent');
+    const titleP15 = titles[14] ?? '';
+    assert('page_15_is_summary', /总结与建议/.test(bodyText) && titleP15.length > 0, `page 15 title: "${titleP15}"`);
+
     // 4) contrast (text nodes incl. SVG <text>; effective background resolved through transparent ancestors)
     const violations = (await page.evaluate(CONTRAST_JS)) as ContrastViolation[];
     assert('contrast_4_5', violations.length === 0, `${violations.length} text nodes < 4.5:1`);
@@ -211,7 +226,7 @@ async function main() {
     // 4b) page-box overflow (content clipped by the fixed 243 mm page)
     await page.emulateMediaType('print');
     const overflow = (await page.evaluate(PAGE_OVERFLOW_JS)) as Array<{ page: number; overflow: number }>;
-    assert('no_page_overflow', overflow.length === 0, overflow.length ? overflow.map((o) => `p${o.page} +${o.overflow}px`).join(', ') : 'all 14 pages fit the 243 mm box');
+    assert('no_page_overflow', overflow.length === 0, overflow.length ? overflow.map((o) => `p${o.page} +${o.overflow}px`).join(', ') : `all ${EXPECTED_PAGES} pages fit the 243 mm box`);
     console.log(`[smoke-print] body fill (content ÷ available): ${await page.evaluate(PAGE_FILL_JS)}`);
 
     // 5) screenshots per page
@@ -231,7 +246,7 @@ async function main() {
     const kb = pdf.length / 1024;
     assert('pdf_size', pdf.length > 50 * 1024 && pdf.length < 5 * 1024 * 1024, `${kb.toFixed(1)} KB → ${pdfPath}`);
     const pdfPages = (Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length;
-    assert('pdf_pages', pdfPages === 14, `${pdfPages} PDF pages`);
+    assert('pdf_pages', pdfPages === EXPECTED_PAGES, `${pdfPages} PDF pages (expected ${EXPECTED_PAGES})`);
 
     if (consoleErrors.length) console.log(`[smoke-print] console errors (${consoleErrors.length}):\n  ${consoleErrors.slice(0, 5).join('\n  ')}`);
   } finally {

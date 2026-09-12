@@ -1,0 +1,380 @@
+'use client';
+
+import { useState } from 'react';
+
+/**
+ * PaidIntakeForm — the optional "补充信息" step between the free report and the
+ * paid 360° report. Every field is optional; values are kept as raw strings
+ * and coerced server-side (POST /api/funnel/report-inputs).
+ *
+ * Two modes:
+ *   - embedded   (result page): parent owns `value` / `onChange` and saves on 「立即购买」.
+ *   - standalone (Report360Panel): the form saves itself and calls `onSaved`.
+ */
+
+export type PaidIntakeValues = {
+  seats: string;
+  ticket_in: string;
+  ticket_delivery: string;
+  delivery_ratio: string;
+  capex_usd: string;
+  parking_spaces: string;
+  existing_stores: string;
+  known_competitors: string;
+  listing_urls: string;
+  dayparts: string[];
+  notes: string;
+};
+
+export const DAYPARTS = ['breakfast', 'lunch', 'dinner', 'late_night'] as const;
+
+export function emptyPaidIntakeValues(): PaidIntakeValues {
+  return {
+    seats: '',
+    ticket_in: '',
+    ticket_delivery: '',
+    delivery_ratio: '',
+    capex_usd: '',
+    parking_spaces: '',
+    existing_stores: '',
+    known_competitors: '',
+    listing_urls: '',
+    dayparts: [],
+    notes: '',
+  };
+}
+
+/** True when the user typed anything at all (so the parent can skip an empty POST). */
+export function hasPaidIntakeValues(v: PaidIntakeValues): boolean {
+  return Object.values(v).some((x) => (Array.isArray(x) ? x.length > 0 : x.trim().length > 0));
+}
+
+/** Non-empty fields only, as the API expects them (strings; the server splits lists). */
+export function paidIntakePayload(v: PaidIntakeValues): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, x] of Object.entries(v)) {
+    if (Array.isArray(x)) {
+      if (x.length) out[k] = x;
+    } else if (x.trim()) out[k] = x.trim();
+  }
+  return out;
+}
+
+export async function submitPaidIntake(
+  reportId: string,
+  values: PaidIntakeValues,
+): Promise<{ ok: boolean; inputs?: Record<string, unknown>; error?: string }> {
+  const res = await fetch('/api/funnel/report-inputs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reportId, inputs: paidIntakePayload(values) }),
+  });
+  let json: { ok?: boolean; inputs?: Record<string, unknown>; error?: string } = {};
+  try {
+    json = (await res.json()) as typeof json;
+  } catch {
+    /* empty body */
+  }
+  if (!res.ok || !json.ok) return { ok: false, error: json.error || `HTTP ${res.status}` };
+  return { ok: true, inputs: json.inputs };
+}
+
+type Lang = 'en' | 'zh';
+
+const COPY: Record<
+  Lang,
+  {
+    reassurance: string;
+    seats: string;
+    ticketIn: string;
+    ticketDelivery: string;
+    deliveryRatio: string;
+    capex: string;
+    parking: string;
+    existingStores: string;
+    existingStoresHint: string;
+    knownCompetitors: string;
+    knownCompetitorsHint: string;
+    listingUrls: string;
+    listingUrlsHint: string;
+    dayparts: string;
+    daypart: Record<(typeof DAYPARTS)[number], string>;
+    notes: string;
+    notesHint: string;
+    save: string;
+    saving: string;
+    saved: string;
+    failed: string;
+    cancel: string;
+    sectionFinance: string;
+    sectionCompetition: string;
+  }
+> = {
+  zh: {
+    reassurance: '不填也能生成；填得越全，竞对与财务越准。',
+    seats: '座位数',
+    ticketIn: '计划堂食客单价 ($)',
+    ticketDelivery: '计划外卖客单价 ($)',
+    deliveryRatio: '外卖占比 (%)',
+    capex: '装修 + 设备预算 CapEx ($)',
+    parking: '停车位数',
+    existingStores: '已有门店地址',
+    existingStoresHint: '每行一个地址，用于分流（自蚕食）测算',
+    knownCompetitors: '你知道的直接竞品',
+    knownCompetitorsHint: '店名，逗号或换行分隔，最多 10 家',
+    listingUrls: '房源挂牌链接',
+    listingUrlsHint: 'LoopNet / Crexi 等链接，每行一个',
+    dayparts: '计划营业时段',
+    daypart: { breakfast: '早', lunch: '午', dinner: '晚', late_night: '夜宵' },
+    notes: '备注',
+    notesHint: '任何想让分析师知道的情况',
+    save: '保存并重新生成',
+    saving: '保存中…',
+    saved: '已保存，正在重新生成…',
+    failed: '保存失败，请稍后重试。',
+    cancel: '取消',
+    sectionFinance: '财务',
+    sectionCompetition: '竞争与选址',
+  },
+  en: {
+    reassurance: 'All optional — the report works without these; the more you add, the sharper the competitor and finance sections.',
+    seats: 'Seats',
+    ticketIn: 'Planned dine-in ticket ($)',
+    ticketDelivery: 'Planned delivery ticket ($)',
+    deliveryRatio: 'Delivery share (%)',
+    capex: 'Build-out + equipment budget ($)',
+    parking: 'Parking spaces',
+    existingStores: 'Existing store addresses',
+    existingStoresHint: 'One per line — used for the cannibalization check',
+    knownCompetitors: 'Direct competitors you know of',
+    knownCompetitorsHint: 'Names, comma or newline separated, up to 10',
+    listingUrls: 'Listing links',
+    listingUrlsHint: 'LoopNet / Crexi etc., one per line',
+    dayparts: 'Planned service hours',
+    daypart: { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', late_night: 'Late night' },
+    notes: 'Notes',
+    notesHint: 'Anything the analyst should know',
+    save: 'Save & regenerate',
+    saving: 'Saving…',
+    saved: 'Saved — regenerating…',
+    failed: 'Could not save. Please try again.',
+    cancel: 'Cancel',
+    sectionFinance: 'Finance',
+    sectionCompetition: 'Competition & site',
+  },
+};
+
+const inputCls =
+  'w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none transition focus:border-emerald-400/60 focus:bg-white/10 disabled:opacity-60';
+const labelCls = 'mb-1 block text-xs font-medium text-white/60';
+const hintCls = 'mt-1 text-[11px] text-white/35';
+
+type Props = {
+  lang?: Lang;
+  reportId: string;
+  /** embedded: controlled by the parent (no submit button). standalone: self-saving with a submit button. */
+  mode?: 'embedded' | 'standalone';
+  value?: PaidIntakeValues;
+  onChange?: (next: PaidIntakeValues) => void;
+  onSaved?: (inputs: Record<string, unknown>) => void | Promise<void>;
+  onCancel?: () => void;
+  disabled?: boolean;
+  className?: string;
+};
+
+export function PaidIntakeForm({ lang = 'en', reportId, mode = 'embedded', value, onChange, onSaved, onCancel, disabled, className }: Props) {
+  const t = COPY[lang];
+  const [inner, setInner] = useState<PaidIntakeValues>(() => value ?? emptyPaidIntakeValues());
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const v = value ?? inner;
+
+  const set = (patch: Partial<PaidIntakeValues>) => {
+    const next = { ...v, ...patch };
+    if (onChange) onChange(next);
+    else setInner(next);
+    if (error) setError(null);
+  };
+  const setField = (k: keyof Omit<PaidIntakeValues, 'dayparts'>) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    set({ [k]: e.target.value } as Partial<PaidIntakeValues>);
+  const toggleDaypart = (id: string) =>
+    set({ dayparts: v.dayparts.includes(id) ? v.dayparts.filter((d) => d !== id) : [...v.dayparts, id] });
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!reportId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await submitPaidIntake(reportId, v);
+      if (!r.ok) {
+        setError(t.failed);
+        return;
+      }
+      setSavedOk(true);
+      await onSaved?.(r.inputs ?? {});
+    } catch {
+      setError(t.failed);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const busy = Boolean(disabled) || saving;
+  const num = (k: keyof Omit<PaidIntakeValues, 'dayparts'>, label: string, placeholder: string) => (
+    <div>
+      <label className={labelCls} htmlFor={`intake-${k}`}>
+        {label}
+      </label>
+      <input
+        id={`intake-${k}`}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        value={v[k]}
+        onChange={setField(k)}
+        placeholder={placeholder}
+        maxLength={20}
+        disabled={busy}
+        className={inputCls}
+      />
+    </div>
+  );
+
+  const body = (
+    <div className={`space-y-4 ${className ?? ''}`}>
+      <p className="text-xs text-emerald-300/80">{t.reassurance}</p>
+
+      <div>
+        <div className="mb-2 text-[11px] uppercase tracking-wide text-white/40">{t.sectionFinance}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {num('seats', t.seats, '60')}
+          {num('capex_usd', t.capex, '$250,000')}
+          {num('ticket_in', t.ticketIn, '$24')}
+          {num('ticket_delivery', t.ticketDelivery, '$28')}
+          {num('delivery_ratio', t.deliveryRatio, '25')}
+          {num('parking_spaces', t.parking, '12')}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-2 text-[11px] uppercase tracking-wide text-white/40">{t.sectionCompetition}</div>
+        <div className="space-y-3">
+          <div>
+            <label className={labelCls} htmlFor="intake-known_competitors">
+              {t.knownCompetitors}
+            </label>
+            <textarea
+              id="intake-known_competitors"
+              rows={2}
+              value={v.known_competitors}
+              onChange={setField('known_competitors')}
+              maxLength={1000}
+              disabled={busy}
+              className={inputCls}
+            />
+            <p className={hintCls}>{t.knownCompetitorsHint}</p>
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="intake-existing_stores">
+              {t.existingStores}
+            </label>
+            <textarea
+              id="intake-existing_stores"
+              rows={2}
+              value={v.existing_stores}
+              onChange={setField('existing_stores')}
+              maxLength={1200}
+              disabled={busy}
+              className={inputCls}
+            />
+            <p className={hintCls}>{t.existingStoresHint}</p>
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="intake-listing_urls">
+              {t.listingUrls}
+            </label>
+            <textarea
+              id="intake-listing_urls"
+              rows={2}
+              value={v.listing_urls}
+              onChange={setField('listing_urls')}
+              maxLength={2600}
+              disabled={busy}
+              className={inputCls}
+              spellCheck={false}
+            />
+            <p className={hintCls}>{t.listingUrlsHint}</p>
+          </div>
+          <div>
+            <div className={labelCls}>{t.dayparts}</div>
+            <div className="flex flex-wrap gap-2" role="group" aria-label={t.dayparts}>
+              {DAYPARTS.map((id) => {
+                const on = v.dayparts.includes(id);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={on}
+                    disabled={busy}
+                    onClick={() => toggleDaypart(id)}
+                    className={`rounded-full border px-3 py-1.5 text-xs transition disabled:opacity-60 ${
+                      on ? 'border-emerald-400/60 bg-emerald-400/20 text-emerald-200' : 'border-white/10 bg-white/5 text-white/60 hover:bg-white/10'
+                    }`}
+                  >
+                    {t.daypart[id]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="intake-notes">
+              {t.notes}
+            </label>
+            <textarea
+              id="intake-notes"
+              rows={2}
+              value={v.notes}
+              onChange={setField('notes')}
+              maxLength={1000}
+              placeholder={t.notesHint}
+              disabled={busy}
+              className={inputCls}
+            />
+          </div>
+        </div>
+      </div>
+
+      {error ? (
+        <p className="text-sm text-rose-300" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+
+  if (mode === 'embedded') return body;
+
+  return (
+    <form onSubmit={(e) => void handleSubmit(e)}>
+      {body}
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          type="submit"
+          disabled={busy || !reportId}
+          className="rounded-xl bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:opacity-60"
+        >
+          {saving ? t.saving : t.save}
+        </button>
+        {onCancel ? (
+          <button type="button" onClick={onCancel} disabled={saving} className="text-sm text-white/50 hover:text-white/80 disabled:opacity-60">
+            {t.cancel}
+          </button>
+        ) : null}
+        {savedOk && !saving && !error ? <span className="text-xs text-emerald-300/80">{t.saved}</span> : null}
+      </div>
+    </form>
+  );
+}

@@ -26,6 +26,22 @@ test('healthy model passes schema / reconciliation / number guard / wording', ()
   assert.equal(byId.wording.passed, true, byId.wording.details.join('; '));
 });
 
+test('page count: the gates cover all 15 pages, including 总结与建议 (page_15)', () => {
+  assert.equal(PAGES.length, 15);
+  assert.equal(PAGES[14].id, 'page_15');
+  assert.equal(PAGES[13].id, 'page_14');
+  const m = loadModel();
+  assert.equal(Object.keys(m.narrative).length, 15);
+  assert.equal(runQaGates(m).passed, true);
+  delete m.narrative.page_15;
+  const r = runQaGates(m);
+  assert.ok(r.failures.some((f) => f.includes('page_15 无叙事')), r.failures.join('\n'));
+  // a page-15 summary that invents a number is caught like any other page
+  const m2 = loadModel();
+  m2.narrative.page_15 = { title: '不建议', body: '需求覆盖率 88% [src:demand.coverage_ratio]', refs: ['demand.coverage_ratio'] };
+  assert.ok(runQaGates(m2).failures.some((f) => f.includes('page_15') && f.includes('88%')));
+});
+
 test('R1: zero competitors from a broken pipeline → integrity gate fails, precheck', () => {
   const m = loadModel();
   m.competitors.guard_passed = false;
