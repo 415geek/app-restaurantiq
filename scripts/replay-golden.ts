@@ -181,8 +181,38 @@ async function main() {
     return;
   }
 
-  // `--engine v360` is wired in Phase 2 (lib/iq/pipeline.ts).
-  console.error(`[replay-golden] unknown engine "${engine}" (use current)`);
+  if (engine === 'v360') {
+    const { runReport360 } = await import('@/lib/iq/pipeline');
+    const { model, intermediates } = await runReport360({
+      report_id: `golden-${golden.case_id}`,
+      address: input.address,
+      cuisine_text: input.business_type_raw ?? input.cuisine,
+      language: input.language,
+      rent_usd: input.rent_usd,
+      sqft: input.sqft,
+      seats: input.seats,
+      capex_usd: input.capex_usd,
+      ticket_in: input.ticket_in,
+      ticket_delivery: input.ticket_delivery,
+      delivery_ratio: input.delivery_ratio,
+    });
+    const outPath = resolve(outDir, `${caseId}.v360.json`);
+    writeFileSync(outPath, JSON.stringify(model, null, 2));
+    console.log(`\n[replay-golden] engine=v360 case=${caseId} elapsed=${Math.round((Date.now() - t0) / 1000)}s → ${outPath}`);
+    console.log(`tier=${model.meta.tier} confidence=${model.confidence.total} verdict=${model.score.verdict} total=${model.score.total} cost=$${model.meta.cost_usd.toFixed(3)}`);
+    console.log('coverage intermediates:', {
+      cuisine_demand_drive15: model.trade_area.rings[3]?.cuisine_demand_usd,
+      competitor_set: model.demand.huff.competitor_set,
+      p: intermediates.huff.p_distribution,
+      captured: model.demand.captured_monthly_usd,
+      breakeven: model.finance.breakeven_monthly,
+      coverage_ratio: model.demand.coverage_ratio,
+    });
+    console.table(model.sources.map((s) => ({ id: s.id, status: s.status, cost: s.cost_usd, note: s.coverage_note.slice(0, 80) })));
+    return;
+  }
+
+  console.error(`[replay-golden] unknown engine "${engine}" (use current | v360)`);
   process.exit(2);
 }
 
