@@ -8,6 +8,7 @@ import { iqGetReport, iqMarkPaidAndReport, iqUpdateMarketDataJson } from '@/lib/
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { generateIqFullReportWithN8nFallback } from '@/lib/funnel/iq-generate-full-report';
 import { startReportGeneration } from '@/lib/funnel/iq-report-job';
+import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 
 export type FulfillIqPurchaseInput = {
   reportId: string;
@@ -18,6 +19,7 @@ export type FulfillIqPurchaseInput = {
 };
 
 export async function fulfillIqPaidPurchase(input: FulfillIqPurchaseInput): Promise<void> {
+  await ensureRuntimeConfig();
   const existing = await iqGetReport(input.reportId);
   if (!existing) {
     console.warn('[fulfillIqPaidPurchase] report not found:', input.reportId);

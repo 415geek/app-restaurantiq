@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 
 export const runtime = 'nodejs';
 
@@ -165,6 +166,7 @@ async function testAnthropic(): Promise<ServiceResult> {
 }
 
 export async function GET() {
+  await ensureRuntimeConfig();
   const [n8n, openai, anthropic] = await Promise.all([testN8n(), testOpenAi(), testAnthropic()]);
 
   const overallOk =

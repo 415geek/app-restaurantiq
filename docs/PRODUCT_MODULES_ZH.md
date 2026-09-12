@@ -366,3 +366,8 @@
 - 环境变量：`CRON_SECRET`（可选；不设则 Bearer 通道关闭，只接受 worker 密钥）、`DATABASE_URL`（`task=migrate` 需要，Supabase → Settings → Database → URI）、`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`（写库）、`GOOGLE_MAPS_API_KEY`（snapshots）。
 - 未上 Vercel 的部分：Overture 月度落库 `scripts/load_overture.py`（DuckDB 扫描 S3 parquet，数十分钟、内存大）仍在本机 / 服务器执行；`scripts/refresh-cex.ts` 与 `scripts/backtest-golden.ts` 也保持手动。LODES 全州文件（CA ≈ 30 MB gz、数十万行）一次流式扫描通常在 1–3 分钟内完成湾区五县；若某次超预算，返回的 `counties_remaining` 会在下一周 cron 中继续。
 - 测试（`npm run test:iq`，无网络 / 无 DB）：`lib/iq/ops/lodes-loader.test.ts`（注入 gzip 流与 upsert：解析、县过滤、分批、预算停止与 `counties_remaining`、单县模式、进度跳过、maxRows、dry run）、`auth.test.ts`（Bearer / worker 密钥 / 拒绝）、`run.test.ts`（参数解析、`all` 顺序与预算切分、错误收集、预算耗尽跳过）。
+
+## 运行时配置表 `iq_settings`（2026-09-12）
+- 新增迁移 `0010_iq_settings.sql` 与 `lib/server/runtime-config.ts`：允许名单内的 key（`GOOGLE_MAPS_API_KEY`、`MAPBOX_TOKEN`、`CRON_SECRET`、`TAVILY_API_KEY`、`BRAVE_SEARCH_API_KEY`、`CENSUS_API_KEY`、`IQ_PRINT_TOKEN`、`IQ360_AUTO`、`IQ_ENGINE`、`IQ_STRUCTURED_OUTPUT`、`RESEND_API_KEY`、`IQ_EMAIL_FROM`、`YELP_API_KEY`、`DATABASE_URL`）可存于 `public.iq_settings`（RLS deny-all，仅 service role），每个 serverless 实例启动时读取并**覆盖** `process.env`，5 分钟刷新——运营方无需登录 Vercel 也能更换失效的 key。
+- 所有入口（免费分析、付费报告与 worker、360° 生成、ops、PDF、`/print`、Stripe webhook、健康探针）在处理前调用 `ensureRuntimeConfig()`；表不存在或 Supabase 未配置时静默沿用部署环境变量。
+- 注意：Vercel Cron 发送的 `Authorization: Bearer` 取自 Vercel 自身的 `CRON_SECRET` 环境变量，表里的值只用于校验；要让定时任务通过鉴权，仍需在 Vercel 设同一个值。

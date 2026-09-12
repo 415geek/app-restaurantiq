@@ -12,6 +12,7 @@ import type { Browser } from 'puppeteer-core';
 import { isVercelServerless, launchPdfBrowser } from '@/lib/iq/render/chromium';
 import { renderReportPdf } from '@/lib/iq/render/pdf';
 import { getPublicBaseUrl } from '@/lib/funnel/base-url';
+import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -1164,6 +1165,7 @@ function generatePdfHtml(input: {
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  await ensureRuntimeConfig();
   const { id } = await params;
   const url = new URL(req.url);
   const lang: Lang = url.searchParams.get('lang') === 'zh' ? 'zh' : 'en';

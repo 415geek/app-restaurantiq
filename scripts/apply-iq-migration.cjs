@@ -60,6 +60,7 @@ async function main() {
     '20260327_add_share_features.sql',
     '0008_iq_report_generation.sql',
     '0009_iq_360_data_layer.sql',
+    '0010_iq_settings.sql',
   ];
 
   const client = new Client({
