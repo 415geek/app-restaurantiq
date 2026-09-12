@@ -356,6 +356,8 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
   maxTokens?: number;
   /** Optional sink recording why each leg failed (surfaced in error messages). */
   attempts?: IqRouteAttempt[];
+  /** Strict JSON Schema for providers with structured outputs (Anthropic). */
+  jsonSchema?: Record<string, unknown>;
 }): Promise<IqJsonRunResult<T> | null> {
   const withBudget = (route: IqRouteResolution): IqRouteResolution =>
     opts.maxTokens && opts.maxTokens > 0
@@ -432,6 +434,7 @@ export async function runIqProviderJson<T extends Record<string, unknown>>(opts:
           effort: route.effort,
           disableThinking: route.disableThinking,
           timeoutMs: budgetMs,
+          jsonSchema: opts.jsonSchema,
           diag,
         });
         record(

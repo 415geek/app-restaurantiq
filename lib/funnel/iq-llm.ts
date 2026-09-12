@@ -20,6 +20,10 @@ import {
 } from '@/lib/funnel/iq-full-report-schema';
 import { buildPremiumMarketDataSection } from '@/lib/funnel/iq-premium-anchors';
 import {
+  getIqFullReportJsonSchema,
+  structuredOutputEnabled,
+} from '@/lib/funnel/iq-report-output-schema';
+import {
   appendLlmProviderToDisclaimer,
   runIqProviderJson,
   shouldUseFullMarketContextForIqFull,
@@ -245,6 +249,9 @@ async function callProviderForFullReport(
     timeoutMs,
     maxTokens,
     attempts,
+    // Guarantees parseable JSON on Claude — the 188s "unparseable JSON" loss
+    // seen in production cannot recur on the structured-output path.
+    jsonSchema: structuredOutputEnabled() ? getIqFullReportJsonSchema() : undefined,
   });
   const attemptSummary = () =>
     attempts.map((a) => `${a.provider}/${a.model}: ${a.ok ? 'ok' : a.reason ?? 'failed'}`).join(' | ');

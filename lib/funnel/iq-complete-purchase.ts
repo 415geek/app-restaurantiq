@@ -7,6 +7,7 @@
 import { iqGetReport, iqMarkPaidAndReport, iqUpdateMarketDataJson } from '@/lib/funnel/iq-repository';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { generateIqFullReportWithN8nFallback } from '@/lib/funnel/iq-generate-full-report';
+import { startReportGeneration } from '@/lib/funnel/iq-report-job';
 
 export type FulfillIqPurchaseInput = {
   reportId: string;
@@ -33,6 +34,19 @@ export async function fulfillIqPaidPurchase(input: FulfillIqPurchaseInput): Prom
       customerEmail: input.customerEmail,
       fullReportJson: null,
     });
+    // Start the background job right away so the report is often ready by
+    // the time the user reaches the report page. Best-effort: the report page
+    // starts (or resumes) the same job if this kick did not land.
+    try {
+      const started = await startReportGeneration({
+        reportId: input.reportId,
+        mode: 'standard',
+        trigger: 'purchase',
+      });
+      console.log(`[fulfillIqPaidPurchase] background generation: ${started.kind}`);
+    } catch (e) {
+      console.warn('[fulfillIqPaidPurchase] could not start background generation:', e);
+    }
     return;
   }
 
