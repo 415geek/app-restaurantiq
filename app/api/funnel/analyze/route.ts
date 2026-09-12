@@ -6,6 +6,7 @@ import { computeSiteMetrics, formatMetricsDigest } from '@/lib/funnel/agents/met
 import { runPartialAnalysis } from '@/lib/funnel/iq-llm';
 import { analyzeWithN8n, getAnalyzeWebhookUrl } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
+import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 
 export const runtime = 'nodejs';
 type AnalysisLanguage = 'en' | 'zh';
@@ -63,6 +64,7 @@ function reconcileRiskAuditPreviewWithUserInputs(
 }
 
 export async function POST(req: Request) {
+  await ensureRuntimeConfig();
   try {
     const body = (await req.json()) as {
       location?: string;

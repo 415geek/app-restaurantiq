@@ -14,6 +14,7 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { ReportDocument } from '@/lib/iq/render/pages';
 import { fixtureAllowed, loadPrintModel } from '@/lib/iq/render/load';
+import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -26,6 +27,7 @@ function first(v: string | string[] | undefined): string | undefined {
 }
 
 export default async function PrintReportPage({ params, searchParams }: { params: Params; searchParams: Search }) {
+  await ensureRuntimeConfig();
   const { reportId } = await params;
   const sp = await searchParams;
   const fixture = fixtureAllowed() ? first(sp.fixture)?.trim() || null : null;

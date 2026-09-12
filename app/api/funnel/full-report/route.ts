@@ -9,6 +9,7 @@ import {
 } from '@/lib/funnel/iq-deadline';
 import { startReportGeneration } from '@/lib/funnel/iq-report-job';
 import { kickReport360 } from '@/lib/iq/kick';
+import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 
 export const runtime = 'nodejs';
 /** Legacy synchronous path (language preview / un-migrated DB) can run minutes. */
@@ -52,6 +53,7 @@ type Body = {
 };
 
 export async function POST(req: Request) {
+  await ensureRuntimeConfig();
   let targetLang: 'en' | 'zh' = 'en';
   const deadline = createIqDeadline(ROUTE_BUDGET_MS);
   try {

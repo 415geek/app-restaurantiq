@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isOpsAuthorized } from '@/lib/iq/ops/auth';
 import { parseOpsParams, runOps } from '@/lib/iq/ops/run';
+import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -36,9 +37,11 @@ async function handle(req: Request): Promise<Response> {
 }
 
 export async function GET(req: Request) {
+  await ensureRuntimeConfig();
   return handle(req);
 }
 
 export async function POST(req: Request) {
+  await ensureRuntimeConfig();
   return handle(req);
 }

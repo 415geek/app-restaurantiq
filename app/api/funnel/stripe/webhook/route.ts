@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { iqGetReport } from '@/lib/funnel/iq-repository';
 import { fulfillIqPaidPurchase } from '@/lib/funnel/iq-complete-purchase';
+import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 
 export const runtime = 'nodejs';
 
@@ -40,6 +41,7 @@ function verifyStripeSignature(payload: string, signature: string, secret: strin
 }
 
 export async function POST(req: Request) {
+  await ensureRuntimeConfig();
   const signature = req.headers.get('stripe-signature');
   if (!signature) {
     return new NextResponse('Missing stripe-signature header', { status: 400 });

@@ -17,6 +17,7 @@ export const MIGRATION_FILES = [
   '0007_iq_market_cache.sql',
   '0008_iq_report_generation.sql',
   '0009_iq_360_data_layer.sql',
+  '0010_iq_settings.sql',
 ];
 
 export interface MigrateResult {

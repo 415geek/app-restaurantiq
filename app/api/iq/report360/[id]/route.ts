@@ -3,6 +3,7 @@ import { after } from 'next/server';
 import { iqGetReport, iqHasReportModelColumn } from '@/lib/funnel/iq-repository';
 import { verifyWorkerSecret } from '@/lib/funnel/iq-report-job';
 import { generateReport360ForRow } from '@/lib/iq/generate';
+import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -15,6 +16,7 @@ export const maxDuration = 300;
  * Auth: the row must be paid; sync mode additionally requires the worker secret.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  await ensureRuntimeConfig();
   const { id } = await params;
   const row = await iqGetReport(id);
   if (!row) return NextResponse.json({ error: 'not_found' }, { status: 404 });
@@ -34,6 +36,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  await ensureRuntimeConfig();
   const { id } = await params;
   const url = new URL(req.url);
   const sync = url.searchParams.get('sync') === '1';
