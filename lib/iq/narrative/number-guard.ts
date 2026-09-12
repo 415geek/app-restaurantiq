@@ -20,8 +20,8 @@ const BANNED_UNLESS_VOID = ['零竞争', '空白'];
 export function collectNumbers(fragment: unknown, out = new Set<number>()): Set<number> {
   if (typeof fragment === 'number' && Number.isFinite(fragment)) {
     out.add(fragment);
-    // ratios/shares are usually written as percentages
-    if (Math.abs(fragment) <= 1.5) out.add(Math.round(fragment * 1000) / 10);
+    // ratios/shares are usually written as percentages (coverage 1.72 → "172%", share 0.093 → "9.3%")
+    if (Math.abs(fragment) <= 10) out.add(Math.round(fragment * 1000) / 10);
     return out;
   }
   if (typeof fragment === 'string') {
