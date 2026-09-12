@@ -297,3 +297,4 @@
   - 支付完成即后台起任务，用户到达报告页时常已生成完毕。
 - **邮件送达报告**：生成页可留邮箱（`POST /api/funnel/full-report/notify`），finalize 阶段通过 Resend 发送报告链接（`RESEND_API_KEY`、`IQ_EMAIL_FROM`）；用户可直接离开页面。
 - **该地址过往/现有商家评论分析（新数据点）**：`lib/funnel/external-data/site-history.ts` 用 Google Find Place + Nearby（≤45m）与 Yelp（≤60m）识别在**该地址本身**营业/曾营业的商家，拉取 Place Details / Yelp 评论，LLM 提炼正负面主题、关店信号与对新经营者的启示，写入 `market_data.site_history`；注入付费提示词锚点、竞对白名单、多 Agent 场址/竞争分析师；报告 `site_history` 字段扩展（prior_business_name/status、review_themes、lessons），报告页新增「该地址过往/现有商家与评论」板块。
+- **修复移动端「PDF 无法下载」**：此前报告页先用 `fetch` 把 PDF 读成 Blob，再用脚本点击一个 `<a download>`——iOS Safari / 微信内置浏览器 / 多数 Android WebView 会直接忽略这种程序化下载（无任何反应或打开空白页）。现改为：先向 `/api/iq/report/[id]/pdf` 发送探测请求（`x-iq-pdf-probe: 1`，服务端只做已付费 / 报告就绪校验并返回 204，不启动 Chromium），通过后由浏览器自身导航到 PDF 地址完成下载——桌面浏览器原地保存文件，iOS 打开系统 PDF 预览并可分享 / 存入「文件」。未付费 / 未生成 / 服务端失败仍会在页面内给出可读的错误提示。

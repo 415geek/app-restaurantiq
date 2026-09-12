@@ -1233,6 +1233,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: msg, code: 'REPORT_NOT_READY' }, { status: 422 });
     }
 
+    // Readiness probe from the report page (see ReportActions): all gates above
+    // passed, so answer 204 without launching Chromium. The client then
+    // navigates to this URL so the browser itself handles the download —
+    // required for iOS Safari / WeChat, which ignore programmatic blob saves.
+    if (req.headers.get('x-iq-pdf-probe') === '1') {
+      return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
+    }
+
     const [cjkUri, launched] = await Promise.all([fontPromise, launchPdfBrowser()]);
     browser = launched;
     const html = generatePdfHtml({
