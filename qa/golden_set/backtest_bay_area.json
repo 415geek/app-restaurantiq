@@ -1,0 +1,17 @@
+{
+  "$comment": "Phase 6 gate 8 golden set: 6 Bay Area Chinese restaurants operating ≥ 4 years with rating ≥ 4.2 and strong review growth (label 1), 6 permanently closed (label 0). Cuisine = the venue's own cuisine. Addresses are real business addresses to the best of the author's knowledge; scripts/backtest-golden.ts re-checks each label against Google businessStatus / rating before scoring, and drops any row whose label cannot be confirmed. Replace/extend rows as the operator verifies them — the AUC threshold (≥ 0.75) is only meaningful with confirmed labels.",
+  "cases": [
+    { "id": "koi_palace_daly_city", "label": 1, "address": "365 Gellert Blvd, Daly City, CA 94015", "cuisine": "dim_sum", "seats": 300, "note": "Koi Palace · long-running, high volume" },
+    { "id": "hong_kong_lounge_ii", "label": 1, "address": "3300 Geary Blvd, San Francisco, CA 94118", "cuisine": "dim_sum", "seats": 150, "note": "Hong Kong Lounge II · Richmond" },
+    { "id": "spices_3_oakland", "label": 1, "address": "3301 Grand Ave, Oakland, CA 94610", "cuisine": "sichuan", "seats": 60, "note": "Spices! 3" },
+    { "id": "china_village_albany", "label": 1, "address": "1335 Solano Ave, Albany, CA 94706", "cuisine": "sichuan", "seats": 80, "note": "China Village" },
+    { "id": "din_tai_fung_santa_clara", "label": 1, "address": "2855 Stevens Creek Blvd, Santa Clara, CA 95050", "cuisine": "shanghai", "seats": 200, "note": "Din Tai Fung Valley Fair" },
+    { "id": "boiling_point_san_mateo", "label": 1, "address": "1725 S El Camino Real, San Mateo, CA 94402", "cuisine": "hot_pot", "seats": 80, "note": "Boiling Point" },
+    { "id": "closed_millbrae_1711", "label": 0, "address": "1711 El Camino Real, Millbrae, CA 94030", "cuisine": "hunan", "seats": 60, "note": "prior tenant permanently closed (golden baseline site)" },
+    { "id": "closed_case_2", "label": 0, "address": "1150 Broadway, Burlingame, CA 94010", "cuisine": "other_chinese", "seats": 60, "note": "verify CLOSED_PERMANENTLY via D6 before use" },
+    { "id": "closed_case_3", "label": 0, "address": "5825 Geary Blvd, San Francisco, CA 94121", "cuisine": "cantonese", "seats": 60, "note": "verify CLOSED_PERMANENTLY via D6 before use" },
+    { "id": "closed_case_4", "label": 0, "address": "1918 Irving St, San Francisco, CA 94122", "cuisine": "noodles", "seats": 40, "note": "verify CLOSED_PERMANENTLY via D6 before use" },
+    { "id": "closed_case_5", "label": 0, "address": "20956 Homestead Rd, Cupertino, CA 95014", "cuisine": "sichuan", "seats": 60, "note": "verify CLOSED_PERMANENTLY via D6 before use" },
+    { "id": "closed_case_6", "label": 0, "address": "1070 E El Camino Real, Sunnyvale, CA 94087", "cuisine": "taiwanese", "seats": 60, "note": "verify CLOSED_PERMANENTLY via D6 before use" }
+  ]
+}

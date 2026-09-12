@@ -336,3 +336,8 @@
 - `lib/iq/narrative/templates.ts`：14 页信息架构（§5.2）与确定性模板句（只用模型数字 + `[src:字段路径]`）；`pageFragment` 给每页切出只读 JSON 片段。
 - `lib/iq/narrative/generate.ts`：附录 E 提示词逐页生成（页面用快速模型，执行摘要用 Claude），输出 `{title ≤ 28 字且含判断, body ≤ 120 字, refs}`；`lib/iq/narrative/number-guard.ts` 校验叙事中每个数字（含 $ / % / 万 / 单 / 家）都能在该页 JSON 片段中找到（±1 舍入）、引用路径存在、禁用词（零竞争 / 空白 仅在 `void.is_void` 时允许；保守估计 / 大约 一律禁止）；失败重生成一次，再失败用模板句替代并标注 `guard`。执行摘要的「签约前条件」必须逐字复制 `score.conditions`。
 - `lib/iq/generate.ts` `generateReport360`：管线 → 叙事 → QA 门槛 → 落库 `report_model_json / narrative_json / report_tier / report_cost_usd` → `iq_cost_log`；新增 `POST/GET /api/iq/report360/[id]`（202 后台生成；`?sync=1` + worker secret 同步返回）。
+
+## 360° 升级 · Phase 6 质量门槛与回归测试（2026-09-12）
+- `lib/iq/qa/gates.ts`（`npm run qa:gates [model.json]`）：① schema 校验（附录 D）② 数据完整性（置信度 ≥ 60、竞品守卫通过、D1/D2/D5 = ok）③ 合理性（中文家庭占比 ≤ 100% 且与县值同数量级、租金 $1–$15/sf/月、高人口区零竞品异常）④ 数值自洽（三情景反算、保本 = 固定成本 ÷ 边际贡献、权重和 = 100、总分 = Σ、无 CapEx 不得有回收期、coverage_ratio 一致）⑤ NumberGuard ⑥ 禁用措辞；任一失败 → 预检版。
+- `lib/iq/qa/gates.test.ts`：Millbrae 原始缺陷 R1、R2、R4、R5、R6、R8 各有一个失败用例被拦截（R3 由 Phase 5b 视觉回归、R7 由地图页覆盖）。
+- Golden set 回测：`qa/golden_set/backtest_bay_area.json`（6 家经营 ≥ 4 年门店 + 6 家已关门店，标签需用 D6 `business_status` 复核）与 `scripts/backtest-golden.ts`（评分 AUC ≥ 0.75 才允许上线；本沙箱无网络，需在有网环境执行）。
