@@ -1,0 +1,32 @@
+name: Census probe
+
+# Diagnostic: print ACS variable labels and live values for the Millbrae tract /
+# block groups so data-layer assumptions (variable ids, geography availability)
+# can be verified from a networked runner. Runs on changes to .github/census-probe.txt.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/census-probe.txt'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Variable labels
+        run: |
+          set -u
+          for v in B02018_001E B02018_007E B02018_020E B02015_007E C16001_001E C16001_021E B01003_001E; do
+            printf '%s: ' "$v"; curl -s "https://api.census.gov/data/2023/acs/acs5/variables/$v.json" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("label"), "|", d.get("concept"))' || echo "n/a"
+          done
+      - name: Tract 06081605000 (Millbrae) values
+        run: |
+          echo "--- tract B02018 / C16001 / pop"
+          curl -s "https://api.census.gov/data/2023/acs/acs5?get=NAME,B01003_001E,B02018_001E,B02018_007E,B02018_020E,C16001_001E,C16001_021E&for=tract:605000&in=state:06%20county:081"
+          echo; echo "--- block groups of that tract: C16001 + B02018 availability"
+          curl -s "https://api.census.gov/data/2023/acs/acs5?get=NAME,B01003_001E,C16001_001E,C16001_021E&for=block%20group:*&in=state:06%20county:081%20tract:605000"
+          echo; curl -s "https://api.census.gov/data/2023/acs/acs5?get=NAME,B02018_007E&for=block%20group:*&in=state:06%20county:081%20tract:605000" | head -c 400
+          echo; echo "--- county C16001"
+          curl -s "https://api.census.gov/data/2023/acs/acs5?get=NAME,C16001_001E,C16001_021E,B02018_001E,B02018_007E&for=county:081&in=state:06"
