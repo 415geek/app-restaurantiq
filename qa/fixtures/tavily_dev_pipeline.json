@@ -1,0 +1,46 @@
+{
+  "$comment": "Stubbed Tavily /search response for the D11 development-pipeline query (Millbrae, CA). Seven results incl. one without a URL (dropped) so the cap of 6 and the URL filter are both exercised.",
+  "query": "Millbrae CA planning \"under construction\" OR \"approved\" mixed-use OR apartments OR development 2026",
+  "results": [
+    {
+      "title": "Gateway at Millbrae Station: 400 apartments and hotel now under construction",
+      "url": "https://www.sfyimby.com/2025/gateway-at-millbrae-station-update",
+      "content": "The Gateway at Millbrae Station transit-oriented development includes 400 residential units, a 164-room hotel and 44,000 square feet of retail. Phase 2 is expected to deliver in Q3 2026."
+    },
+    {
+      "title": "Millbrae City Council approves 150-unit El Camino Real mixed-use project",
+      "url": "https://www.smdailyjournal.com/news/local/millbrae-approves-el-camino-project",
+      "content": "The council approved a six-story mixed-use building at 1101 El Camino Real with 150 apartments and 8,500 sq ft of ground-floor retail. Construction could begin in 2026 with completion targeted for 2028."
+    },
+    {
+      "title": "Serra Station Apartments - 76 units near Millbrae BART approved",
+      "url": "https://www.ci.millbrae.ca.us/departments/community-development/planning/projects/serra-station",
+      "content": "76 units of housing at 100 El Camino Real. Approved by the Planning Commission; anticipated completion 2027."
+    },
+    {
+      "title": "Millbrae Station Area Specific Plan update",
+      "url": "https://www.ci.millbrae.ca.us/msasp",
+      "content": "Draft plan update for the station area: up to 2,900 new homes and 1.5 million square feet of office over 20 years."
+    },
+    {
+      "title": "Millbrae approves affordable housing development on Rollins Road",
+      "url": "https://www.sfchronicle.com/bayarea/millbrae-rollins-affordable",
+      "content": "The 120-unit affordable project on Rollins Road is approved; the developer expects to break ground in Q2 2026."
+    },
+    {
+      "title": "Untitled press release without a link",
+      "url": "",
+      "content": "Approved development of 300 apartments in 2027."
+    },
+    {
+      "title": "Burlingame mixed-use tower at 1 Adrian Court under construction",
+      "url": "https://www.sfyimby.com/2025/1-adrian-court-burlingame",
+      "content": "265-unit residential tower in neighboring Burlingame, under construction with delivery expected 2026."
+    },
+    {
+      "title": "Millbrae Bay Club expansion approved",
+      "url": "https://www.example-news.com/millbrae-bay-club-approved",
+      "content": "Fitness club expansion of 20,000 sq ft approved; opening 2026."
+    }
+  ]
+}

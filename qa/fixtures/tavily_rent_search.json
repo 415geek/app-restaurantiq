@@ -1,0 +1,41 @@
+{
+  "$comment": "Stubbed Tavily /search response for the D8 rent-comps query (Millbrae, CA · El Camino Real). Five usable comps: three quoted $/SF/MO, two quoted $/SF/YR (must be divided by 12), one result with no price (ignored), one with an implausible 'for sale' figure (ignored).",
+  "query": "\"Millbrae, CA\" retail restaurant space for lease \"El Camino Real\" $/SF",
+  "results": [
+    {
+      "title": "1350 El Camino Real, Millbrae, CA 94030 - Retail Space for Lease | LoopNet",
+      "url": "https://www.loopnet.com/Listing/1350-El-Camino-Real-Millbrae-CA/11111111/",
+      "content": "1,850 SF retail space available on El Camino Real. Rate: $4.75/SF/MO NNN. Former restaurant with grease trap and hood. Excellent visibility near Millbrae BART/Caltrain."
+    },
+    {
+      "title": "Retail for Lease - 200 Broadway, Millbrae | Crexi",
+      "url": "https://www.crexi.com/lease/properties/22222222/millbrae-200-broadway",
+      "content": "Downtown Millbrae storefront, 2,400 SF, asking $54.00/SF/YR modified gross. Restaurant use permitted. Available Q1 2026."
+    },
+    {
+      "title": "1000 El Camino Real Millbrae Restaurant Space - CityFeet",
+      "url": "https://www.cityfeet.com/cont/millbrae-ca/1000-el-camino-real-33333333",
+      "content": "Second-generation restaurant space, 3,100 sq. ft. Lease rate $3.95 per sq ft per month plus NNN of $0.85/SF/mo."
+    },
+    {
+      "title": "Burlingame Ave Retail Space - 1200 Burlingame Ave | Showcase",
+      "url": "https://www.showcase.com/1200-burlingame-ave-burlingame-ca/44444444/",
+      "content": "Premier retail on Burlingame Avenue. 1,600 SF at $66.00/SF/YR NNN. High foot traffic corridor 2 miles from Millbrae."
+    },
+    {
+      "title": "Millbrae CA Retail Space For Lease - Commercial Real Estate | LoopNet",
+      "url": "https://www.loopnet.com/search/retail-space/millbrae-ca/for-lease/",
+      "content": "Browse 14 retail spaces for lease in Millbrae, CA. Rates from $3.50/SF/MO to $5.25/SF/MO. Filter by size, price and property type."
+    },
+    {
+      "title": "Millbrae Planning Department - Zoning Map",
+      "url": "https://www.ci.millbrae.ca.us/departments/community-development/planning",
+      "content": "El Camino Real corridor zoning and development standards. See the Millbrae Station Area Specific Plan for allowed retail uses."
+    },
+    {
+      "title": "El Camino Real Millbrae mixed-use building for sale",
+      "url": "https://www.loopnet.com/Listing/500-El-Camino-Real-Millbrae-CA/55555555/",
+      "content": "Investment opportunity: 6,000 SF mixed-use building for sale at $850/SF. Fully leased retail on the ground floor."
+    }
+  ]
+}

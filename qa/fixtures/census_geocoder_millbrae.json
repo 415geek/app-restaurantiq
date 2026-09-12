@@ -1,0 +1,53 @@
+{
+  "result": {
+    "input": {
+      "address": { "address": "1711 El Camino Real, Millbrae, CA 94030" },
+      "vintage": { "isDefault": true, "id": "4", "vintageName": "Current_Current", "vintageDescription": "Current Vintage - Current Benchmark" },
+      "benchmark": { "isDefault": true, "benchmarkDescription": "Public Address Ranges - Current Benchmark", "id": "4", "benchmarkName": "Public_AR_Current" }
+    },
+    "addressMatches": [
+      {
+        "tigerLine": { "side": "L", "tigerLineId": "124806372" },
+        "geographies": {
+          "States": [
+            { "STATENS": "01779778", "GEOID": "06", "CENTLAT": "+37.1551773", "AREAWATER": 20501510129, "STATE": "06", "BASENAME": "California", "STUSAB": "CA", "OID": "27490100114206", "LSADC": "00", "FUNCSTAT": "A", "INTPTLAT": "+37.1551773", "DIVISION": "9", "NAME": "California", "REGION": "4", "OBJECTID": 2, "CENTLON": "-119.5434183", "AREALAND": 403673294366, "INTPTLON": "-119.5434183", "MTFCC": "G4000" }
+          ],
+          "Counties": [
+            { "GEOID": "06081", "CENTLAT": "+37.4143216", "AREAWATER": 757371253, "STATE": "06", "BASENAME": "San Mateo", "OID": "27590300154116", "LSADC": "06", "FUNCSTAT": "A", "INTPTLAT": "+37.4143216", "NAME": "San Mateo County", "OBJECTID": 2116, "CENTLON": "-122.3712614", "COUNTYCC": "H1", "COUNTYNS": "00277305", "AREALAND": 1161974081, "INTPTLON": "-122.3712614", "MTFCC": "G4020", "COUNTY": "081" }
+          ],
+          "Census Tracts": [
+            { "GEOID": "06081602300", "CENTLAT": "+37.6002031", "AREAWATER": 0, "STATE": "06", "BASENAME": "6023", "OID": "20790352102621", "LSADC": "CT", "FUNCSTAT": "S", "INTPTLAT": "+37.6002031", "NAME": "Census Tract 6023", "OBJECTID": 40512, "TRACT": "602300", "CENTLON": "-122.3900141", "AREALAND": 1210331, "INTPTLON": "-122.3900141", "MTFCC": "G5020", "COUNTY": "081" }
+          ],
+          "Census Block Groups": [
+            { "GEOID": "060816023001", "CENTLAT": "+37.5991402", "AREAWATER": 0, "STATE": "06", "BASENAME": "1", "OID": "20890352102633", "LSADC": "BG", "FUNCSTAT": "S", "INTPTLAT": "+37.5991402", "NAME": "Block Group 1", "OBJECTID": 118422, "TRACT": "602300", "CENTLON": "-122.3921054", "BLKGRP": "1", "AREALAND": 402118, "INTPTLON": "-122.3921054", "MTFCC": "G5030", "COUNTY": "081" }
+          ],
+          "Census Blocks": [
+            { "SUFFIX": "", "GEOID": "060816023001005", "CENTLAT": "+37.5995211", "BLOCK": "1005", "AREAWATER": 0, "STATE": "06", "BASENAME": "1005", "OID": "21090352104612", "LSADC": "BK", "FUNCSTAT": "S", "INTPTLAT": "+37.5995211", "NAME": "Block 1005", "OBJECTID": 7481205, "TRACT": "602300", "CENTLON": "-122.3912002", "BLKGRP": "1", "AREALAND": 31921, "INTPTLON": "-122.3912002", "MTFCC": "G5040", "LWBLKTYP": "L", "UR": "U", "COUNTY": "081" }
+          ],
+          "2020 Census ZIP Code Tabulation Areas": [
+            { "GEOID": "94030", "CENTLAT": "+37.6023614", "AREAWATER": 0, "BASENAME": "94030", "OID": "22190385021003", "LSADC": "Z5", "FUNCSTAT": "S", "INTPTLAT": "+37.6023614", "NAME": "ZCTA5 94030", "OBJECTID": 25711, "CENTLON": "-122.4021301", "ZCTA5": "94030", "AREALAND": 8309105, "INTPTLON": "-122.4021301", "MTFCC": "G6350", "ZCTA5CC": "B5" }
+          ],
+          "Incorporated Places": [
+            { "GEOID": "0647486", "NAME": "Millbrae city", "BASENAME": "Millbrae", "PLACE": "47486", "STATE": "06", "LSADC": "25", "FUNCSTAT": "A" }
+          ]
+        },
+        "coordinates": { "x": -122.38946, "y": 37.59952 },
+        "addressComponents": {
+          "zip": "94030",
+          "streetName": "EL CAMINO REAL",
+          "preType": "",
+          "city": "MILLBRAE",
+          "preDirection": "",
+          "suffixDirection": "",
+          "fromAddress": "1701",
+          "state": "CA",
+          "suffixType": "",
+          "toAddress": "1799",
+          "suffixQualifier": "",
+          "preQualifier": ""
+        },
+        "matchedAddress": "1711 EL CAMINO REAL, MILLBRAE, CA, 94030"
+      }
+    ]
+  }
+}

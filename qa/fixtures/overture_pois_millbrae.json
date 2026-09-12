@@ -1,0 +1,1033 @@
+[
+  {
+    "id": "08f28300001a3816050",
+    "metro": "sf-bay",
+    "name": "Hunan Home Kitchen",
+    "names_json": {
+      "primary": "Hunan Home Kitchen",
+      "common": {
+        "zh": "湘味小厨"
+      }
+    },
+    "lat": 37.609844,
+    "lng": -122.393369,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "chinese_restaurant"
+    ],
+    "primary_category": "chinese_restaurant",
+    "operating_status": "open",
+    "confidence": 0.782,
+    "brand": null,
+    "address": "170 El Camino Real, Millbrae, CA 94030",
+    "sub_cuisine": "hunan",
+    "sub_cuisine_confidence": 0.92,
+    "google_place_id": "ChIJfx_001_HunanHom",
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300002a2c62f93",
+    "metro": "sf-bay",
+    "name": "Little Sichuan Millbrae",
+    "names_json": {
+      "primary": "Little Sichuan Millbrae",
+      "common": {
+        "zh": "小四川"
+      }
+    },
+    "lat": 37.59938,
+    "lng": -122.387771,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "sichuan_restaurant"
+    ],
+    "primary_category": "sichuan_restaurant",
+    "operating_status": "open",
+    "confidence": 0.945,
+    "brand": null,
+    "address": "770 Millbrae Ave, Millbrae, CA 94030",
+    "sub_cuisine": "sichuan",
+    "sub_cuisine_confidence": 0.95,
+    "google_place_id": "ChIJfx_002_LittleSi",
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300003a1f3c027",
+    "metro": "sf-bay",
+    "name": "Golden Cantonese Seafood",
+    "names_json": {
+      "primary": "Golden Cantonese Seafood",
+      "common": {
+        "zh": "金粤海鲜酒家"
+      }
+    },
+    "lat": 37.60787,
+    "lng": -122.398259,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "cantonese_restaurant"
+    ],
+    "primary_category": "cantonese_restaurant",
+    "operating_status": "open",
+    "confidence": 0.717,
+    "brand": null,
+    "address": "115 Magnolia Ave, Millbrae, CA 94030",
+    "sub_cuisine": "cantonese",
+    "sub_cuisine_confidence": 0.9,
+    "google_place_id": "ChIJfx_003_GoldenCa",
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300004a320b7b9",
+    "metro": "sf-bay",
+    "name": "Hong Kong Flower Lounge",
+    "names_json": {
+      "primary": "Hong Kong Flower Lounge",
+      "common": {
+        "zh": "香港花园"
+      }
+    },
+    "lat": 37.603021,
+    "lng": -122.403071,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "dim_sum_restaurant"
+    ],
+    "primary_category": "dim_sum_restaurant",
+    "operating_status": "open",
+    "confidence": 0.97,
+    "brand": null,
+    "address": "696 Broadway, Millbrae, CA 94030",
+    "sub_cuisine": "dim_sum",
+    "sub_cuisine_confidence": 0.88,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300005a4609f87",
+    "metro": "sf-bay",
+    "name": "Chef Chu Szechuan",
+    "names_json": {
+      "primary": "Chef Chu Szechuan",
+      "common": null
+    },
+    "lat": 37.598122,
+    "lng": -122.391283,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "chinese_restaurant"
+    ],
+    "primary_category": "chinese_restaurant",
+    "operating_status": "open",
+    "confidence": 0.862,
+    "brand": null,
+    "address": "521 El Camino Real, Millbrae, CA 94030",
+    "sub_cuisine": "sichuan",
+    "sub_cuisine_confidence": 0.85,
+    "google_place_id": "ChIJfx_005_ChefChuS",
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300006a3485c1d",
+    "metro": "sf-bay",
+    "name": "Xiang Yuan Hunan Cuisine",
+    "names_json": {
+      "primary": "Xiang Yuan Hunan Cuisine",
+      "common": {
+        "zh": "湘园"
+      }
+    },
+    "lat": 37.587603,
+    "lng": -122.392443,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "hunan_restaurant"
+    ],
+    "primary_category": "hunan_restaurant",
+    "operating_status": "open",
+    "confidence": 0.892,
+    "brand": null,
+    "address": "644 Millbrae Ave, Millbrae, CA 94030",
+    "sub_cuisine": "hunan",
+    "sub_cuisine_confidence": 0.93,
+    "google_place_id": "ChIJfx_006_XiangYua",
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300007a3ef4a98",
+    "metro": "sf-bay",
+    "name": "Shanghai Dumpling King",
+    "names_json": {
+      "primary": "Shanghai Dumpling King",
+      "common": {
+        "zh": "上海饺子王"
+      }
+    },
+    "lat": 37.592582,
+    "lng": -122.388822,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "shanghainese_restaurant"
+    ],
+    "primary_category": "shanghainese_restaurant",
+    "operating_status": "open",
+    "confidence": 0.645,
+    "brand": null,
+    "address": "460 Magnolia Ave, Millbrae, CA 94030",
+    "sub_cuisine": "shanghai",
+    "sub_cuisine_confidence": 0.9,
+    "google_place_id": "ChIJfx_008_Shanghai",
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300008a2495c21",
+    "metro": "sf-bay",
+    "name": "Boiling Point Hot Pot",
+    "names_json": {
+      "primary": "Boiling Point Hot Pot",
+      "common": {
+        "zh": "沸点"
+      }
+    },
+    "lat": 37.593988,
+    "lng": -122.390484,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "hot_pot_restaurant"
+    ],
+    "primary_category": "hot_pot_restaurant",
+    "operating_status": "open",
+    "confidence": 0.624,
+    "brand": null,
+    "address": "161 Broadway, Millbrae, CA 94030",
+    "sub_cuisine": "hot_pot",
+    "sub_cuisine_confidence": 0.94,
+    "google_place_id": "ChIJfx_009_BoilingP",
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300009a8ed654",
+    "metro": "sf-bay",
+    "name": "Canton Roast Duck House",
+    "names_json": {
+      "primary": "Canton Roast Duck House",
+      "common": {
+        "zh": "广东烧鸭"
+      }
+    },
+    "lat": 37.59255,
+    "lng": -122.39369,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "cantonese_restaurant"
+    ],
+    "primary_category": "cantonese_restaurant",
+    "operating_status": "open",
+    "confidence": 0.709,
+    "brand": null,
+    "address": "261 El Camino Real, Millbrae, CA 94030",
+    "sub_cuisine": "cantonese",
+    "sub_cuisine_confidence": 0.9,
+    "google_place_id": "ChIJfx_010_CantonRo",
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300010a62c1f9",
+    "metro": "sf-bay",
+    "name": "Zhang Mama Noodle House",
+    "names_json": {
+      "primary": "Zhang Mama Noodle House",
+      "common": {
+        "zh": "张妈妈面馆"
+      }
+    },
+    "lat": 37.600095,
+    "lng": -122.377827,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "noodle_house"
+    ],
+    "primary_category": "noodle_house",
+    "operating_status": "open",
+    "confidence": 0.976,
+    "brand": null,
+    "address": "709 Millbrae Ave, Millbrae, CA 94030",
+    "sub_cuisine": "noodles",
+    "sub_cuisine_confidence": 0.87,
+    "google_place_id": "ChIJfx_012_ZhangMam",
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300011a188f52e",
+    "metro": "sf-bay",
+    "name": "Panda Express",
+    "names_json": {
+      "primary": "Panda Express",
+      "common": null
+    },
+    "lat": 37.593332,
+    "lng": -122.380948,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "chinese_restaurant"
+    ],
+    "primary_category": "chinese_restaurant",
+    "operating_status": "open",
+    "confidence": 0.929,
+    "brand": null,
+    "address": "129 Magnolia Ave, Millbrae, CA 94030",
+    "sub_cuisine": "chinese_fast",
+    "sub_cuisine_confidence": 0.99,
+    "google_place_id": "ChIJfx_011_PandaExp",
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300012a1dd3d2",
+    "metro": "sf-bay",
+    "name": "Mama Ji Sichuan Bistro",
+    "names_json": {
+      "primary": "Mama Ji Sichuan Bistro",
+      "common": {
+        "zh": "姬妈川菜"
+      }
+    },
+    "lat": 37.600081,
+    "lng": -122.387567,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "sichuan_restaurant"
+    ],
+    "primary_category": "sichuan_restaurant",
+    "operating_status": "open",
+    "confidence": 0.962,
+    "brand": null,
+    "address": "548 Broadway, Millbrae, CA 94030",
+    "sub_cuisine": "sichuan",
+    "sub_cuisine_confidence": 0.9,
+    "google_place_id": "ChIJfx_014_MamaJiSi",
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300013a11195ec",
+    "metro": "sf-bay",
+    "name": "Lucky Garden Chinese",
+    "names_json": {
+      "primary": "Lucky Garden Chinese",
+      "common": null
+    },
+    "lat": 37.600145,
+    "lng": -122.389503,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "chinese_restaurant"
+    ],
+    "primary_category": "chinese_restaurant",
+    "operating_status": "closed_permanently",
+    "confidence": 0.885,
+    "brand": null,
+    "address": "788 El Camino Real, Millbrae, CA 94030",
+    "sub_cuisine": "other_chinese",
+    "sub_cuisine_confidence": 0.6,
+    "google_place_id": "ChIJfx_013_LuckyGar",
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300014a5e3deb8",
+    "metro": "sf-bay",
+    "name": "99 Ranch Market",
+    "names_json": {
+      "primary": "99 Ranch Market",
+      "common": {
+        "zh": "大华超级市场"
+      }
+    },
+    "lat": 37.598307,
+    "lng": -122.383297,
+    "taxonomy_path": [
+      "retail",
+      "food",
+      "grocery_store",
+      "asian_grocery_store"
+    ],
+    "primary_category": "asian_grocery_store",
+    "operating_status": "open",
+    "confidence": 0.867,
+    "brand": "99 Ranch Market",
+    "address": "259 Millbrae Ave, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300015a2853dee",
+    "metro": "sf-bay",
+    "name": "Tea Hut Boba",
+    "names_json": {
+      "primary": "Tea Hut Boba",
+      "common": {
+        "zh": "茶屋"
+      }
+    },
+    "lat": 37.587928,
+    "lng": -122.395116,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "cafe",
+      "bubble_tea_shop"
+    ],
+    "primary_category": "bubble_tea_shop",
+    "operating_status": "open",
+    "confidence": 0.972,
+    "brand": null,
+    "address": "490 Magnolia Ave, Millbrae, CA 94030",
+    "sub_cuisine": "boba",
+    "sub_cuisine_confidence": 0.9,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300016a3f61b85",
+    "metro": "sf-bay",
+    "name": "Sushi Yoshi",
+    "names_json": {
+      "primary": "Sushi Yoshi",
+      "common": null
+    },
+    "lat": 37.587851,
+    "lng": -122.384685,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "japanese_restaurant"
+    ],
+    "primary_category": "japanese_restaurant",
+    "operating_status": "open",
+    "confidence": 0.717,
+    "brand": null,
+    "address": "529 Broadway, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300017a384f5b6",
+    "metro": "sf-bay",
+    "name": "Pho Millbrae",
+    "names_json": {
+      "primary": "Pho Millbrae",
+      "common": null
+    },
+    "lat": 37.599156,
+    "lng": -122.38741,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "vietnamese_restaurant"
+    ],
+    "primary_category": "vietnamese_restaurant",
+    "operating_status": "open",
+    "confidence": 0.835,
+    "brand": null,
+    "address": "992 El Camino Real, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300018ac10ca1",
+    "metro": "sf-bay",
+    "name": "Taqueria El Grullense",
+    "names_json": {
+      "primary": "Taqueria El Grullense",
+      "common": null
+    },
+    "lat": 37.588245,
+    "lng": -122.384432,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "mexican_restaurant"
+    ],
+    "primary_category": "mexican_restaurant",
+    "operating_status": "open",
+    "confidence": 0.801,
+    "brand": null,
+    "address": "233 Millbrae Ave, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300019a13d1097",
+    "metro": "sf-bay",
+    "name": "Peninsula Pizza Co",
+    "names_json": {
+      "primary": "Peninsula Pizza Co",
+      "common": null
+    },
+    "lat": 37.600099,
+    "lng": -122.379148,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "pizza_restaurant"
+    ],
+    "primary_category": "pizza_restaurant",
+    "operating_status": "open",
+    "confidence": 0.868,
+    "brand": null,
+    "address": "566 Magnolia Ave, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300020a19471bd",
+    "metro": "sf-bay",
+    "name": "Seoul Garden BBQ",
+    "names_json": {
+      "primary": "Seoul Garden BBQ",
+      "common": null
+    },
+    "lat": 37.593931,
+    "lng": -122.391765,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "korean_restaurant"
+    ],
+    "primary_category": "korean_restaurant",
+    "operating_status": "open",
+    "confidence": 0.616,
+    "brand": null,
+    "address": "358 Broadway, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300021a1c7812d",
+    "metro": "sf-bay",
+    "name": "In-N-Out Burger",
+    "names_json": {
+      "primary": "In-N-Out Burger",
+      "common": null
+    },
+    "lat": 37.590428,
+    "lng": -122.383836,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "fast_food_restaurant"
+    ],
+    "primary_category": "fast_food_restaurant",
+    "operating_status": "open",
+    "confidence": 0.801,
+    "brand": "In-N-Out Burger",
+    "address": "854 El Camino Real, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300022a520cc69",
+    "metro": "sf-bay",
+    "name": "Starbucks",
+    "names_json": {
+      "primary": "Starbucks",
+      "common": null
+    },
+    "lat": 37.59703,
+    "lng": -122.390769,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "cafe",
+      "coffee_shop"
+    ],
+    "primary_category": "coffee_shop",
+    "operating_status": "open",
+    "confidence": 0.972,
+    "brand": "Starbucks",
+    "address": "453 Millbrae Ave, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300023a17e7904",
+    "metro": "sf-bay",
+    "name": "Peet's Coffee",
+    "names_json": {
+      "primary": "Peet's Coffee",
+      "common": null
+    },
+    "lat": 37.592928,
+    "lng": -122.391919,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "cafe",
+      "coffee_shop"
+    ],
+    "primary_category": "coffee_shop",
+    "operating_status": "open",
+    "confidence": 0.957,
+    "brand": "Peet's Coffee",
+    "address": "328 Magnolia Ave, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300024a4c48a95",
+    "metro": "sf-bay",
+    "name": "Millbrae Bakery",
+    "names_json": {
+      "primary": "Millbrae Bakery",
+      "common": {
+        "zh": "米尔布雷饼屋"
+      }
+    },
+    "lat": 37.596817,
+    "lng": -122.388609,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "bakery"
+    ],
+    "primary_category": "bakery",
+    "operating_status": "open",
+    "confidence": 0.631,
+    "brand": null,
+    "address": "394 Broadway, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300025a25e7ff3",
+    "metro": "sf-bay",
+    "name": "Safeway",
+    "names_json": {
+      "primary": "Safeway",
+      "common": null
+    },
+    "lat": 37.600687,
+    "lng": -122.400221,
+    "taxonomy_path": [
+      "retail",
+      "food",
+      "grocery_store",
+      "supermarket"
+    ],
+    "primary_category": "supermarket",
+    "operating_status": "open",
+    "confidence": 0.964,
+    "brand": "Safeway",
+    "address": "208 El Camino Real, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300026a3b335f1",
+    "metro": "sf-bay",
+    "name": "Trader Joe's",
+    "names_json": {
+      "primary": "Trader Joe's",
+      "common": null
+    },
+    "lat": 37.597764,
+    "lng": -122.389174,
+    "taxonomy_path": [
+      "retail",
+      "food",
+      "grocery_store"
+    ],
+    "primary_category": "grocery_store",
+    "operating_status": "open",
+    "confidence": 0.765,
+    "brand": "Trader Joe's",
+    "address": "844 Millbrae Ave, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300027a3a0144e",
+    "metro": "sf-bay",
+    "name": "East West Bank",
+    "names_json": {
+      "primary": "East West Bank",
+      "common": {
+        "zh": "华美银行"
+      }
+    },
+    "lat": 37.593967,
+    "lng": -122.397447,
+    "taxonomy_path": [
+      "financial_service",
+      "bank"
+    ],
+    "primary_category": "bank",
+    "operating_status": "open",
+    "confidence": 0.824,
+    "brand": "East West Bank",
+    "address": "855 Magnolia Ave, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300028a4f69aee",
+    "metro": "sf-bay",
+    "name": "Cathay Bank",
+    "names_json": {
+      "primary": "Cathay Bank",
+      "common": {
+        "zh": "国泰银行"
+      }
+    },
+    "lat": 37.598216,
+    "lng": -122.388232,
+    "taxonomy_path": [
+      "financial_service",
+      "bank"
+    ],
+    "primary_category": "bank",
+    "operating_status": "open",
+    "confidence": 0.859,
+    "brand": "Cathay Bank",
+    "address": "973 Broadway, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300029a37e22e1",
+    "metro": "sf-bay",
+    "name": "Millbrae Chinese School",
+    "names_json": {
+      "primary": "Millbrae Chinese School",
+      "common": {
+        "zh": "米尔布雷中文学校"
+      }
+    },
+    "lat": 37.601632,
+    "lng": -122.387596,
+    "taxonomy_path": [
+      "education",
+      "school",
+      "language_school"
+    ],
+    "primary_category": "language_school",
+    "operating_status": "open",
+    "confidence": 0.951,
+    "brand": null,
+    "address": "848 El Camino Real, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300030a4fd3efa",
+    "metro": "sf-bay",
+    "name": "Taylor Middle School",
+    "names_json": {
+      "primary": "Taylor Middle School",
+      "common": null
+    },
+    "lat": 37.611144,
+    "lng": -122.384264,
+    "taxonomy_path": [
+      "education",
+      "school"
+    ],
+    "primary_category": "school",
+    "operating_status": "open",
+    "confidence": 0.65,
+    "brand": null,
+    "address": "234 Millbrae Ave, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300031a13fb4d0",
+    "metro": "sf-bay",
+    "name": "Sakura Ramen",
+    "names_json": {
+      "primary": "Sakura Ramen",
+      "common": null
+    },
+    "lat": 37.592111,
+    "lng": -122.377493,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "ramen_restaurant"
+    ],
+    "primary_category": "ramen_restaurant",
+    "operating_status": "open",
+    "confidence": 0.707,
+    "brand": null,
+    "address": "134 Magnolia Ave, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300032aa95da1",
+    "metro": "sf-bay",
+    "name": "Thai Basil",
+    "names_json": {
+      "primary": "Thai Basil",
+      "common": null
+    },
+    "lat": 37.588582,
+    "lng": -122.392156,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "thai_restaurant"
+    ],
+    "primary_category": "thai_restaurant",
+    "operating_status": "open",
+    "confidence": 0.864,
+    "brand": null,
+    "address": "730 Broadway, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300033a3bd90f",
+    "metro": "sf-bay",
+    "name": "Subway",
+    "names_json": {
+      "primary": "Subway",
+      "common": null
+    },
+    "lat": 37.599379,
+    "lng": -122.382532,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "sandwich_shop"
+    ],
+    "primary_category": "sandwich_shop",
+    "operating_status": "open",
+    "confidence": 0.802,
+    "brand": "Subway",
+    "address": "200 El Camino Real, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300034a44c31b0",
+    "metro": "sf-bay",
+    "name": "Chipotle",
+    "names_json": {
+      "primary": "Chipotle",
+      "common": null
+    },
+    "lat": 37.590546,
+    "lng": -122.388688,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "mexican_restaurant"
+    ],
+    "primary_category": "mexican_restaurant",
+    "operating_status": "open",
+    "confidence": 0.733,
+    "brand": "Chipotle Mexican Grill",
+    "address": "904 Millbrae Ave, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300035a38de1b",
+    "metro": "sf-bay",
+    "name": "Yogurtland",
+    "names_json": {
+      "primary": "Yogurtland",
+      "common": null
+    },
+    "lat": 37.593708,
+    "lng": -122.387795,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "dessert_shop"
+    ],
+    "primary_category": "dessert_shop",
+    "operating_status": "open",
+    "confidence": 0.763,
+    "brand": "Yogurtland",
+    "address": "630 Magnolia Ave, Millbrae, CA 94030",
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300036a396df08",
+    "metro": "sf-bay",
+    "name": "Old Mandarin Islamic",
+    "names_json": {
+      "primary": "Old Mandarin Islamic",
+      "common": {
+        "zh": "老北京清真"
+      }
+    },
+    "lat": 37.588561,
+    "lng": -122.378994,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "chinese_restaurant"
+    ],
+    "primary_category": "chinese_restaurant",
+    "operating_status": "closed_permanently",
+    "confidence": 0.799,
+    "brand": null,
+    "address": "845 Broadway, Millbrae, CA 94030",
+    "sub_cuisine": "other_chinese",
+    "sub_cuisine_confidence": 0.7,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300037a2d3039b",
+    "metro": "sf-bay",
+    "name": "Boba Guys",
+    "names_json": {
+      "primary": "Boba Guys",
+      "common": null
+    },
+    "lat": 37.585319,
+    "lng": -122.386218,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "cafe",
+      "bubble_tea_shop"
+    ],
+    "primary_category": "bubble_tea_shop",
+    "operating_status": "open",
+    "confidence": 0.79,
+    "brand": "Boba Guys",
+    "address": "106 El Camino Real, Millbrae, CA 94030",
+    "sub_cuisine": "boba",
+    "sub_cuisine_confidence": 0.95,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300038a2d71d05",
+    "metro": "sf-bay",
+    "name": "Burlingame Dim Sum Palace",
+    "names_json": {
+      "primary": "Burlingame Dim Sum Palace",
+      "common": {
+        "zh": "点心皇宫"
+      }
+    },
+    "lat": 37.600962,
+    "lng": -122.388334,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "restaurant",
+      "dim_sum_restaurant"
+    ],
+    "primary_category": "dim_sum_restaurant",
+    "operating_status": "open",
+    "confidence": 0.912,
+    "brand": null,
+    "address": "393 Millbrae Ave, Millbrae, CA 94030",
+    "sub_cuisine": "dim_sum",
+    "sub_cuisine_confidence": 0.9,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300039corner",
+    "metro": "sf-bay",
+    "name": "Corner Cafe 45",
+    "names_json": {
+      "primary": "Corner Cafe 45",
+      "common": null
+    },
+    "lat": 37.612171,
+    "lng": -122.369941,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "cafe"
+    ],
+    "primary_category": "cafe",
+    "operating_status": "open",
+    "confidence": 0.7,
+    "brand": null,
+    "address": null,
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  },
+  {
+    "id": "08f28300040corner",
+    "metro": "sf-bay",
+    "name": "Corner Cafe 225",
+    "names_json": {
+      "primary": "Corner Cafe 225",
+      "common": null
+    },
+    "lat": 37.584827,
+    "lng": -122.404453,
+    "taxonomy_path": [
+      "eat_and_drink",
+      "cafe"
+    ],
+    "primary_category": "cafe",
+    "operating_status": "open",
+    "confidence": 0.7,
+    "brand": null,
+    "address": null,
+    "sub_cuisine": null,
+    "sub_cuisine_confidence": null,
+    "google_place_id": null,
+    "release": "2026-08-20.0"
+  }
+]

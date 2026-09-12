@@ -1,0 +1,27 @@
+{
+  "input": { "lat": 37.5994987, "lon": -122.3894612, "censusYear": "2020" },
+  "results": [
+    {
+      "block_fips": "060816023001005",
+      "bbox": [-122.3921054, 37.5981497, -122.3881122, 37.6008476],
+      "county_fips": "06081",
+      "county_name": "San Mateo",
+      "state_fips": "06",
+      "state_code": "CA",
+      "state_name": "California",
+      "block_pop_2020": 61,
+      "amt": "AMT001",
+      "bea": "BEA163",
+      "bta": "BTA404",
+      "cma": "CMA006",
+      "eag": "EAG006",
+      "ivm": "IVM006",
+      "mea": "MEA044",
+      "mta": "MTA007",
+      "pea": "PEA006",
+      "rea": "REA006",
+      "rpc": "RPC006",
+      "vpc": "VPC006"
+    }
+  ]
+}

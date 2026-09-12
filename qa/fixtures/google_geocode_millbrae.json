@@ -1,0 +1,28 @@
+{
+  "results": [
+    {
+      "address_components": [
+        { "long_name": "1711", "short_name": "1711", "types": ["street_number"] },
+        { "long_name": "El Camino Real", "short_name": "El Camino Real", "types": ["route"] },
+        { "long_name": "Millbrae", "short_name": "Millbrae", "types": ["locality", "political"] },
+        { "long_name": "San Mateo County", "short_name": "San Mateo County", "types": ["administrative_area_level_2", "political"] },
+        { "long_name": "California", "short_name": "CA", "types": ["administrative_area_level_1", "political"] },
+        { "long_name": "United States", "short_name": "US", "types": ["country", "political"] },
+        { "long_name": "94030", "short_name": "94030", "types": ["postal_code"] }
+      ],
+      "formatted_address": "1711 El Camino Real, Millbrae, CA 94030, USA",
+      "geometry": {
+        "location": { "lat": 37.5994987, "lng": -122.3894612 },
+        "location_type": "ROOFTOP",
+        "viewport": {
+          "northeast": { "lat": 37.6008476802915, "lng": -122.3881122197085 },
+          "southwest": { "lat": 37.5981497197085, "lng": -122.3908101802915 }
+        }
+      },
+      "place_id": "ChIJx2p3KoV7j4ARkQx1gN9Q0Ww",
+      "plus_code": { "compound_code": "HJX6+Q6 Millbrae, CA, USA", "global_code": "849VHJX6+Q6" },
+      "types": ["street_address"]
+    }
+  ],
+  "status": "OK"
+}

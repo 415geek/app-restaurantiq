@@ -303,3 +303,10 @@
 - 新增 `qa/golden_set/millbrae_1711.json`：把 Millbrae 报告（编号 5c361b95）暴露的 R1–R8 缺陷固化为回归基线（输入 + 观测到的缺陷 + 对应拦截门槛）。
 - 新增 `npm run replay:golden -- millbrae_1711`（`scripts/replay-golden.ts`）：用当前付费链路重放该用例（不落库），输出到 `qa/out/`，并逐项扫描 R1–R8 是否仍然出现；缺少 API key 时以退出码 2 明确报错。
 - 新增 `npm run test:iq`（Node 内置 test runner + tsx）与 `npm run qa:gates` 占位，供后续 Phase 使用；依赖新增 `tsx`（dev）与 `yaml`（参数表）。
+
+## 360° 升级 · Phase 1 数据层（2026-09-12）
+- 新增 `lib/iq/data/`：D1–D12 十二个数据模块，统一接口 `fetch(site, ctx) → DataResult{status: ok|partial|failed, data, source, fetched_at, license, cost_usd, coverage_note}`；任何失败都如实写入 `sources[]`，**绝不用估算值填充**。
+  - D1 Census Geocoder（备用 Google Geocoding + Census coordinates / FCC）→ 经纬度 + block / block group / tract / county / ZCTA；D2 ACS 5-year **按 block group + tract 查询**（B01003 / B11001 / B19013 / B19001 / B01001 / B25010 / B11003 / B08301 / B25064 / B25077 / B25003 / C16001 中文使用者 + B02018 华裔）并从 TIGERweb 取 block group 几何——从根源消除「ZIP 无 ACS」（R2）；D3 LODES v8 WAC（`iq_lodes_wac`，`scripts/load-lodes.ts`）；D4 Mapbox 等时圈（步行 10 / 车程 5·10·15），无 token 时退化为直线半径并标 `[直线半径]`；D5 Overture Places 落库 `iq_poi`（`scripts/load_overture.py`，DuckDB 直读 S3）；D6 Google Places API (New) Nearby，Pro 字段掩码、**每报告 ≤ 6 次**、30 天缓存、免费额度内计 $0（`GOOGLE_PLACES_BILLED=1` 后按 $0.032/次记账）；D7 评论增速快照（`iq_poi_snapshot`，`scripts/snapshot-reviews.ts`）→ 相对客流等级；D8 租金对标（用户输入 + 挂牌页解析 + 一次联网检索），**对标 < 3 个不输出溢价 %**；D9 BART / Caltrain 站点表 + Caltrans AADT；D10 BLS CEX 2023 五分位外出就餐支出；D11 开发管线（一次检索，须带 URL）；D12 用户输入归一化（缺 CapEx → 回收期隐藏）。
+- 参数表 `lib/iq/params/{defaults,cuisine_taxonomy,hubs}.yaml`（附录 A/B/C，zod 校验），`lib/iq/geo.ts` 几何工具（等时圈 × block group 面积加权采样），`lib/iq/model/schema.ts`（`report_model.json` 唯一事实源 schema，附录 D）。
+- 迁移 `0009_iq_360_data_layer.sql`：`iq_poi`、`iq_poi_snapshot`、`iq_lodes_wac`、`iq_cost_log` 与报告行 `report_model_json / narrative_json / report_tier / report_cost_usd`。
+- 验收：`qa/e2e-data.test.ts` 离线重放 Millbrae 用例——D2 返回 tract 级华裔与收入、D5 1 英里内 ≥ 30 家餐饮 POI 且中餐 ≥ 10、D6 ≤ 6 次、`sources[]` 12 项全部有状态、数据成本 ≤ $0.10；降级路径（无 Mapbox / 竞品源失效）逐一断言。`npm run test:iq` 99 项通过。本沙箱无法访问外网，线上首跑请以 `sources[]` 表为准核对各源状态。
