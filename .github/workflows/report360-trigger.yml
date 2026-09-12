@@ -1,0 +1,51 @@
+name: Trigger 360° report
+
+# Manually (re)generate the 360° report for a paid report id from GitHub's
+# runners — handy when the operator cannot reach the site from their tooling.
+# The endpoint only requires the row to be paid; `force=1` regenerates an
+# existing model. Poll the GET endpoint until `ready: true`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      report_id:
+        description: 'iq_location_reports.id (UUID)'
+        required: true
+        type: string
+      force:
+        description: 'Regenerate even if a 360° model already exists'
+        required: false
+        default: 'false'
+        type: string
+      base_url:
+        description: 'Site base URL'
+        required: false
+        default: 'https://app.restaurantiq.ai'
+        type: string
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Kick generation
+        run: |
+          set -euo pipefail
+          URL="${{ inputs.base_url }}/api/iq/report360/${{ inputs.report_id }}"
+          if [ "${{ inputs.force }}" = "true" ]; then URL="$URL?force=1"; fi
+          echo "POST $URL"
+          code=$(curl -s -o /tmp/kick.json -w '%{http_code}' -X POST "$URL")
+          echo "HTTP $code"; cat /tmp/kick.json; echo
+          case "$code" in 200|202) ;; *) echo "kick failed"; exit 1 ;; esac
+      - name: Poll status (up to 10 min)
+        run: |
+          set -euo pipefail
+          URL="${{ inputs.base_url }}/api/iq/report360/${{ inputs.report_id }}"
+          for i in $(seq 1 60); do
+            body=$(curl -s "$URL")
+            echo "$body"
+            if echo "$body" | grep -q '"ready":true'; then echo "READY"; exit 0; fi
+            if echo "$body" | grep -q '"migration_needed":true'; then echo "migration needed"; exit 1; fi
+            sleep 10
+          done
+          echo "timed out waiting for the report"; exit 1
