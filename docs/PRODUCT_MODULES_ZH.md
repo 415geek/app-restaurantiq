@@ -376,3 +376,4 @@
 - Google Places (New) 的 `bubble_tea_shop` / `hunan_restaurant` 等类型不在 Table A（返回 INVALID_ARGUMENT）：调用计划改为 `tea_house` + `dessert_shop`，直接竞品（L1）改用 **Text Search (New)**「<菜系> restaurant」偏置 5 英里（Nearby 每次最多 20 条会漏掉 L1）；Bootstrap 模式接受 Google `partial`。
 - block group 级 C16001 中文使用者缺失时，中文家庭占比与 p_cn 回退到 B02018 华裔祖源 ÷ 人口（此前四圈层均为「未获取」）。
 - 叙事守卫支持 `[src:a.b[3].c]` 引用；正文上限放宽到 200 / 560 字并要求点号路径；`precheck_reasons` 去重。新增 `.github/workflows/report360-trigger.yml`（手动 / 推送 `.github/report360-queue.txt` 触发生成）。
+- 第二次生产运行修正：2023 ACS 的 B02018 / B02015 表布局已变（`_002E` = 华裔除台湾、`_008E` = 台湾；此前用的 `_007E` 是冲绳人），已改正；叙事模型输出上限降为 420 / 950 token 并在提示词中把 120 字设为硬上限；页面 JSON 片段新增 `_derived`（L1 数、L1+L2 合计、替代菜系数等派生计数），避免 NumberGuard 误拦合理的合计数。新增 `.github/workflows/census-probe.yml` 用于在有网的 runner 上核对 Census 变量。

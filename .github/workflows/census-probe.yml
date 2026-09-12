@@ -1,0 +1,39 @@
+name: Census probe
+
+# Diagnostic: print ACS variable labels and live values for the Millbrae tract /
+# block groups so data-layer assumptions (variable ids, geography availability)
+# can be verified from a networked runner. Runs on changes to .github/census-probe.txt.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/census-probe.txt'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Chinese / Taiwanese variables in B02018, B02015, C16001 (2023 layout)
+        run: |
+          set -u
+          for g in B02018 B02015 C16001; do
+            echo "=== $g"
+            curl -s "https://api.census.gov/data/2023/acs/acs5/groups/$g.json" | python3 -c '
+          import sys,json
+          d=json.load(sys.stdin)
+          for k,v in sorted(d.get("variables",{}).items()):
+              lab=v.get("label","")
+              if k.endswith("E") and ("Chinese" in lab or "Taiwanese" in lab or lab.endswith("Total:") or lab.endswith("Total Groups Tallied:")):
+                  print(k, "|", lab)
+          '
+          done
+      - name: Live values with HTTP codes
+        run: |
+          q() { echo "--- $1"; curl -s -w '\nHTTP %{http_code}\n' "$2"; }
+          q "tract 605000 pop + B02018 total" "https://api.census.gov/data/2023/acs/acs5?get=NAME,B01003_001E,B02018_001E&for=tract:605000&in=state:06%20county:081"
+          q "all tracts count (first 3 rows)" "https://api.census.gov/data/2023/acs/acs5?get=NAME,B02018_001E&for=tract:*&in=state:06%20county:081" | head -c 600
+          q "block groups C16001 (tract 605000)" "https://api.census.gov/data/2023/acs/acs5?get=NAME,B01003_001E,C16001_001E,C16001_021E&for=block%20group:*&in=state:06%20county:081%20tract:605000"
+          q "block groups B02018 total (tract 605000)" "https://api.census.gov/data/2023/acs/acs5?get=NAME,B02018_001E&for=block%20group:*&in=state:06%20county:081%20tract:605000"
+          q "county C16001" "https://api.census.gov/data/2023/acs/acs5?get=NAME,C16001_001E,C16001_021E,B02018_001E&for=county:081&in=state:06"
