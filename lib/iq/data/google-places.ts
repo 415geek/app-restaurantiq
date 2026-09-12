@@ -106,11 +106,13 @@ export function buildCallPlan(cuisineId: string, maxCalls?: number): PlaceCall[]
     { includedTypes: ['chinese_restaurant'], radiusM: THREE_MILES_M, label: 'chinese_restaurant @3mi' },
     { includedTypes: ['restaurant'], radiusM: ONE_MILE_M, label: 'restaurant @1mi' },
     { includedTypes: ['asian_grocery_store', 'supermarket'], radiusM: ONE_MILE_M, label: 'grocery @1mi' },
-    { includedTypes: ['bubble_tea_shop', 'dessert_shop'], radiusM: ONE_MILE_M, label: 'boba/dessert @1mi' },
+    // Places (New) Table A has no bubble_tea_shop; tea_house + dessert_shop cover boba/dessert anchors.
+    { includedTypes: ['tea_house', 'dessert_shop'], radiusM: ONE_MILE_M, label: 'tea/dessert @1mi' },
+    // Table A has no per-Chinese-cuisine types (hunan_restaurant etc. → INVALID_ARGUMENT); the wider
+    // asian_restaurant pool at 3 mi feeds the classifier instead. `cuisineId` stays for future types.
+    { includedTypes: ['asian_restaurant'], radiusM: THREE_MILES_M, label: 'asian_restaurant @3mi' },
   ];
-  const cuisine = cuisineById(cuisineId);
-  const specific = cuisine.mappings.find((m) => /_restaurant$|_house$|_cafe$/.test(m) && !GENERIC_TYPES.has(m));
-  if (specific) plan.push({ includedTypes: [specific], radiusM: THREE_MILES_M, label: `${specific} @3mi` });
+  void cuisineById(cuisineId);
   return plan.slice(0, cap);
 }
 

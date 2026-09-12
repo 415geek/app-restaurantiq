@@ -80,3 +80,4 @@ supabase/.temp/
 
 # Optional: put n8n API key here and keep it local
 .vscode/settings.local.jsonqa/out/
+qa/fixtures/report_model_prod.json

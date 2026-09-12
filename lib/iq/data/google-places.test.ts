@@ -49,12 +49,12 @@ test('D6 call plan: ≤ 6 calls, cuisine-specific type appended, cap respected',
   assert.equal(hunan.length, 6);
   assert.deepEqual(hunan[0], { includedTypes: ['chinese_restaurant'], radiusM: 1609, label: 'chinese_restaurant @1mi' });
   assert.equal(hunan[1].radiusM, 4828);
-  assert.deepEqual(hunan[5].includedTypes, ['hunan_restaurant']);
+  assert.deepEqual(hunan[5].includedTypes, ['asian_restaurant']);
   assert.equal(hunan[5].radiusM, 4828);
-  assert.deepEqual(buildCallPlan('hot_pot')[5].includedTypes, ['hot_pot_restaurant']);
-  // other_chinese maps to chinese_restaurant which is already in the plan → 5 calls.
-  assert.equal(buildCallPlan('other_chinese').length, 5);
-  assert.equal(buildCallPlan('dongbei').length, 5);
+  assert.deepEqual(hunan[4].includedTypes, ['tea_house', 'dessert_shop']);
+  // Every cuisine uses the same six Table-A-valid calls (no per-cuisine Google types exist).
+  assert.equal(buildCallPlan('other_chinese').length, 6);
+  assert.equal(buildCallPlan('dongbei').length, 6);
   assert.equal(buildCallPlan('hunan', 3).length, 3);
   assert.equal(buildCallPlan('hunan', 99).length, 6);
 });
@@ -76,7 +76,7 @@ test('D6 ok: 6 calls, Pro field mask, cost accounting, dedupe, price mapping, 30
   }
   assert.deepEqual(
     ctx.reqs.map((q) => `${q.body.includedTypes.join('+')}@${q.body.locationRestriction.circle.radius}`),
-    ['chinese_restaurant@1609', 'chinese_restaurant@4828', 'restaurant@1609', 'asian_grocery_store+supermarket@1609', 'bubble_tea_shop+dessert_shop@1609', 'hunan_restaurant@4828'],
+    ['chinese_restaurant@1609', 'chinese_restaurant@4828', 'restaurant@1609', 'asian_grocery_store+supermarket@1609', 'tea_house+dessert_shop@1609', 'asian_restaurant@4828'],
   );
   // Cost: 6 × per-call price, attributed to D6.
   assert.equal(r.cost_usd, Math.round(6 * COST * 10_000) / 10_000);
