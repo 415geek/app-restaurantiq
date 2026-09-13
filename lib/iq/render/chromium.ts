@@ -12,9 +12,10 @@
  *     then a well-known system Chrome path.
  */
 import { existsSync } from 'node:fs';
-import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import type { Browser } from 'puppeteer-core';
+
+type ChromiumModule = typeof import('@sparticuz/chromium').default;
 
 export const PDF_VIEWPORT = { width: 1200, height: 1600 };
 
@@ -38,12 +39,31 @@ export function isVercelServerless(): boolean {
   return process.platform === 'linux' && existsSync('/var/task');
 }
 
+let chromiumModule: Promise<ChromiumModule> | null = null;
+
+/**
+ * @sparticuz/chromium decides *at module load* whether to extract its Amazon
+ * Linux 2023 shared libraries (libnspr4 etc.) and to put /tmp/al2023/lib on
+ * LD_LIBRARY_PATH: only when AWS_EXECUTION_ENV names a Node 20+ runtime or
+ * `VERCEL` is set. Vercel Fluid Compute exposes neither unless system env vars
+ * are enabled, so the binary then fails with "libnspr4.so: cannot open shared
+ * object file". Import the module lazily and set the marker first.
+ */
+export function loadChromium(): Promise<ChromiumModule> {
+  if (!chromiumModule) {
+    if (isVercelServerless() && !process.env.VERCEL) process.env.VERCEL = '1';
+    chromiumModule = import('@sparticuz/chromium').then((m) => m.default);
+  }
+  return chromiumModule;
+}
+
 let bundledPathPromise: Promise<string> | null = null;
 
 /** Bundled bin/ first; fall back to the release pack downloaded into /tmp (cached per instance). */
 export function bundledChromiumPath(): Promise<string> {
   if (!bundledPathPromise) {
     bundledPathPromise = (async () => {
+      const chromium = await loadChromium();
       try {
         return await chromium.executablePath();
       } catch (e) {
@@ -59,6 +79,7 @@ export function bundledChromiumPath(): Promise<string> {
 }
 
 export async function launchPdfBrowser(): Promise<Browser> {
+  const chromium = await loadChromium();
   if (isVercelServerless()) {
     // D-2: drop the graphics stack (no GPU on Lambda). This also avoids
     // extracting swiftshader.tar.br at runtime, shaving ~15MB off cold-start.
@@ -74,6 +95,7 @@ export async function launchPdfBrowser(): Promise<Browser> {
     } catch (e) {
       throw new Error(`Chromium is not available on this serverless instance: ${e instanceof Error ? e.message : String(e)}`);
     }
+    console.log(`[iq/render/chromium] launch exe=${executablePath} ld=${process.env.LD_LIBRARY_PATH ?? '-'} al2023=${existsSync('/tmp/al2023/lib')}`);
     return puppeteer.launch({ args, defaultViewport: PDF_VIEWPORT, executablePath, headless: true });
   }
 
