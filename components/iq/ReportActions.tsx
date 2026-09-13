@@ -20,8 +20,8 @@ const translations = {
     downloadingBtn: 'Generating PDF…',
     downloadTip:
       'If nothing downloads after ~60s or you see an error, use Print below and choose “Save as PDF”.',
-    printFallbackTitle: 'Print this page',
-    printFallbackDesc: 'Use your browser’s print dialog and choose “Save as PDF”.',
+    printFallbackTitle: 'Print / preview',
+    printFallbackDesc: 'Opens the light print edition (cover + 15 pages); use your browser’s print dialog and choose “Save as PDF”.',
     printFallbackBtn: 'Print / Save as PDF',
     pdfError: 'Could not generate PDF. Try Print / Save as PDF instead.',
     regenTitle: 'Professional depth version',
@@ -44,8 +44,8 @@ const translations = {
     downloadBtn: '下载 PDF',
     downloadingBtn: '正在生成 PDF…',
     downloadTip: '若约 60 秒内未开始下载或提示错误，请使用下方「打印 / 另存为 PDF」。',
-    printFallbackTitle: '打印本页',
-    printFallbackDesc: '使用浏览器打印，并选择「另存为 PDF」。',
+    printFallbackTitle: '打印 / 在线预览',
+    printFallbackDesc: '打开浅色打印版（封面 + 15 页），再用浏览器打印并选择「另存为 PDF」。',
     printFallbackBtn: '打印 / 另存为 PDF',
     pdfError: '无法生成 PDF，请改用打印并另存为 PDF。',
     regenTitle: '升级为专业深度版',
@@ -189,7 +189,25 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
     }
   };
 
-  const handlePrintFallback = () => {
+  /**
+   * Print fallback: reports with a 360° model open the light, paginated /print
+   * page (cover + 15 pages, @page CSS) in a new tab, where the browser's
+   * "Save as PDF" gives the same document the server renders. Only legacy
+   * reports without a model print this (dark) page.
+   */
+  const handlePrintFallback = async () => {
+    try {
+      const res = await fetch(`/api/iq/report360/${encodeURIComponent(reportId)}`, { cache: 'no-store' });
+      if (res.ok) {
+        const j = (await res.json()) as { ready?: boolean };
+        if (j.ready) {
+          window.open(`/print/${encodeURIComponent(reportId)}`, '_blank', 'noopener');
+          return;
+        }
+      }
+    } catch {
+      /* fall through to printing this page */
+    }
     try {
       window.print();
     } catch (err) {
@@ -239,7 +257,7 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
             <p className="mb-3 text-xs text-zinc-500">{t.printFallbackDesc}</p>
             <button
               type="button"
-              onClick={handlePrintFallback}
+              onClick={() => void handlePrintFallback()}
               disabled={isDownloading || regenBusy}
               className="rounded-xl border border-zinc-600 bg-zinc-800/80 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800 disabled:opacity-50"
             >
