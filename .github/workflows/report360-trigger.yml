@@ -63,7 +63,11 @@ jobs:
                 # Server PDF probe: the 360° PDF must come back as application/pdf (not a JSON error).
                 pcode=$(curl -s -o /tmp/probe.pdf -w '%{http_code}' -m 150 "$BASE_URL/api/iq/report/$id/pdf?lang=zh")
                 ptype=$(file -b /tmp/probe.pdf | cut -c1-40); psize=$(stat -c %s /tmp/probe.pdf)
-                echo "PDF HTTP $pcode size=$psize type=$ptype"
+                # `file` reads the first /Pages node (Skia nests 8 kids per node); count leaf pages instead.
+                pages=$( (grep -a -o '/Type */Page[^s]' /tmp/probe.pdf || true) | wc -l)
+                counts=$( (grep -a -o '/Count [0-9]*' /tmp/probe.pdf || true) | sort -t' ' -k2 -n | tail -1)
+                echo "PDF page objects=$pages max /Count=${counts:-none}"
+                echo "PDF HTTP $pcode size=$psize pages=$pages type=$ptype"
                 if [ "$pcode" != "200" ] || ! head -c 5 /tmp/probe.pdf | grep -q '%PDF'; then echo "PDF probe failed: $(head -c 300 /tmp/probe.pdf)"; rc=1; fi
                 break
               fi
