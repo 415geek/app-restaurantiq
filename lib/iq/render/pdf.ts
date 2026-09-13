@@ -53,7 +53,7 @@ export async function renderReportPdf(opts: RenderReportPdfOptions): Promise<Buf
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
 
     const pages = await page.$$eval('h1.action-title', (els) => els.length);
-    if (pages !== 14) console.warn(`[iq/render/pdf] expected 14 action titles, found ${pages} (${url})`);
+    if (pages !== 15) console.warn(`[iq/render/pdf] expected 15 action titles, found ${pages} (${url})`);
 
     const pdf = await page.pdf({ format: 'Letter', printBackground: true, preferCSSPageSize: true, timeout: 60_000 });
     console.log(`[iq/render/pdf] done id=${opts.reportId} bytes=${pdf.length} elapsed_ms=${Date.now() - t0}`);
