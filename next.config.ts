@@ -10,10 +10,13 @@ const nextConfig: NextConfig = {
   // Force-include the @sparticuz/chromium binary tarball and its launcher into
   // the deployed function's file trace so it can be loaded at runtime from
   // /var/task/node_modules/@sparticuz/chromium/bin/chromium.br.
+  // Keys are picomatch globs matched against the normalized app route
+  // ("/api/iq/report/[id]/pdf"); `[id]` must be escaped so it is not read as a
+  // character class. The runtime also falls back to downloading the release
+  // pack when these files are missing (lib/iq/render/chromium.ts).
   outputFileTracingIncludes: {
-    '/api/iq/report/*/pdf': [
-      './node_modules/@sparticuz/chromium/bin/**/*',
-    ],
+    '/api/iq/report/*/pdf': ['./node_modules/@sparticuz/chromium/bin/**/*'],
+    '/api/iq/report/\\[id\\]/pdf': ['./node_modules/@sparticuz/chromium/bin/**/*'],
   },
 };
 
