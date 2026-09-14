@@ -29,6 +29,8 @@ export const RUNTIME_CONFIG_KEYS = [
   'IQ_EMAIL_FROM',
   'YELP_API_KEY',
   'DATABASE_URL',
+  'SUPPORT_WHATSAPP',
+  'SUPPORT_EMAIL',
 ] as const;
 
 const TTL_MS = 5 * 60_000;

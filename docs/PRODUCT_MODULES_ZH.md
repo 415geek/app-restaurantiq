@@ -405,3 +405,7 @@
 - **中文字体改为专业报告排版**：标题用思源宋体（Noto Serif SC 700 / 900：封面大标题、每页行动标题、章节 h2），正文与表格用思源黑体（Noto Sans SC），数字用 Inter——即国内咨询 / 券商研报的常见搭配；`/print` 与 `/iq` 布局通过 Google Fonts 加载，系统字体（PingFang / 微软雅黑 / 宋体）作回退。首页大标题与各节标题同样使用思源宋体。触发工作流把探测到的线上 PDF 作为 artifact 上传（7 天），便于核对真实字体渲染。
 - 首页：去掉「报告页截图」展示区与对应导航项（`public/marketing/iq` 截图删除）；主标题改为页面加载后从空白逐字打出第一句（光标闪烁），停顿后擦除、随机换下一句，不再因系统「减少动态效果」而停用；SEO / 无 JS 读者通过 sr-only 文本获得完整标题。
 - 首页地址输入框占位文案改为通用示例「123 Main St, San Francisco, CA 94105」（含邮编），不再展示真实客户地址。
+
+## 在线客服气泡（2026-09-14）
+- `components/iq/SupportBubble.tsx` 挂在 `/iq` 布局右下角，所有漏斗页（首页、免费结果、付费生成中、报告页）都有；脚本化对话，不接大模型。核心场景：付费后刷新 / 后退丢失页面——生成页与报告页把报告 id 写入 `localStorage`（`iq:last_paid_report`，30 天），气泡通过 `POST /api/iq/support/recover` 核对该报告已付费后直接给出「回到报告页」链接（生成中 / 已生成状态）；没有记录时让用户输入付款邮箱，按 `customer_email / notify_email` 查已付费报告（最多 5 条），只返回已付费的。另有「生成要多久 / 怎么下载 PDF / 付款有问题」三条固定回答。
+- 「转人工客服」小按钮：跳转 `https://wa.me/<号码>`（WhatsApp），预填报告编号与地址；号码取自运行时配置 `SUPPORT_WHATSAPP`（`iq_settings`，国际区号纯数字），未配置时退回 `SUPPORT_EMAIL` 的 mailto，两者都没有则提示暂未接入。`GET /api/iq/support/config` 提供这两项。默认中文，`?lang=en` 或面板内切换英文。

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { rememberPaidReport } from '@/components/iq/SupportBubble';
 import Link from 'next/link';
 import {
   FULL_REPORT_PHASES,
@@ -178,6 +179,10 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
     }, 1000);
     return () => window.clearInterval(tick);
   }, [error, done]);
+
+  useEffect(() => {
+    rememberPaidReport(reportId, location);
+  }, [reportId, location]);
 
   useEffect(() => {
     setElapsedSec(0);
