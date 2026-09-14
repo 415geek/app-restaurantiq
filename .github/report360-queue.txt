@@ -1,4 +1,4 @@
 # One paid report id per line; append " force" to regenerate. Pushing a change
 # to this file runs .github/workflows/report360-trigger.yml.
-# run: 2026-09-14T03:07:59Z (font check)
+# run: 2026-09-14T03:14:11Z (font check on build 8bbed14)
 5c361b95-0ccf-4550-bd3e-5a33ca3a6fe9
