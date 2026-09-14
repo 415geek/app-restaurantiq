@@ -18,7 +18,7 @@
  */
 import { haversineM, METERS_PER_MILE, pointInGeometry } from '../geo';
 import type { Geometry, LatLng } from '../data/types';
-import { conceptSearchProfile, isChineseCategory, matchesLayer1, typesMatch, type ConceptSearchProfile } from '../data/search-profile';
+import { conceptSearchProfile, isChineseCategory, matchesLayer1, nameMatchesKeywords, typesMatch, type ConceptSearchProfile } from '../data/search-profile';
 import type { BrandAnchor, Competitor, Ring } from '../model/schema';
 import { classifyCuisineText, cuisineById, getDefaults, getTaxonomy } from '../params';
 
@@ -297,6 +297,11 @@ export function isLayer1(m: Pick<MergedPoi, 'name' | 'name_zh' | 'categories' | 
   // A category-mapping rule is not: a `bakery`-typed record maps to the sibling `bakery` id, which says nothing
   // about whether the Layer-1 keyword query that returned it was right — the profile match below decides.
   if (specific && specific !== profile.id && m.classified_by !== 'rule') return false;
+  // The POI keyword layer (§3.3) is Chinese-only, so egg_tart / korean / … never get a classified id from
+  // classifyCandidate. A name that still carries this concept's Layer-1 keywords stays Layer 1 even when
+  // the query-hit path is off (alternative-cuisine runs). Types alone do not count here — "bakery" would
+  // otherwise pull every bakery into egg_tart without a Layer-1 query.
+  if (nameMatchesKeywords(`${m.name} ${m.name_zh ?? ''}`, profile.keywords)) return true;
   if (!queryHitsEnabled || !m.layers.includes('direct')) return false;
   return matchesLayer1(`${m.name} ${m.name_zh ?? ''}`, [m.primary_category, ...m.categories], profile);
 }

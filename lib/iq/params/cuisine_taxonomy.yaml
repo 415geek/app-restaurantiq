@@ -310,7 +310,8 @@ cuisines:
     range_class: everyday
     price_tier: "$"
     ticket_in: 16
-    keywords: [烧腊, 烧味, 烧鹅, 烧鸭, 叉烧, 烧腊店, BBQ, Roast, Siu Mei, Char Siu, Roast Duck, Roast Goose]
+    # Bare "BBQ" is ambiguous (Korean BBQ / American BBQ); keep Cantonese BBQ like search.keywords.
+    keywords: [烧腊, 烧味, 烧鹅, 烧鸭, 叉烧, 烧腊店, Cantonese BBQ, Roast, Siu Mei, Char Siu, Roast Duck, Roast Goose]
     mappings: []
     fte_default: 8
     takeout_share: 0.55

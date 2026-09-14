@@ -72,3 +72,54 @@ test('rent provided: the fixture renders without any ex-rent wording or rent cei
     assert.ok(pageOf(html, 10).includes(rentRowYourInput(lang)));
   }
 });
+
+/** §4.2 page-7 brand anchors: city-wide table + in-trade-area tag on the overlapping L1 card. */
+test('page 7: brand anchors render as a city-wide table and tag overlapping L1 cards', () => {
+  const base = loadModel();
+  const l1 = base.competitors.l1[0]!;
+  const model: ReportModel = {
+    ...base,
+    competitors: {
+      ...base.competitors,
+      brand_anchors: [
+        {
+          id: 'anchor-city',
+          name: 'Citywide Brand Anchor',
+          name_zh: '全城品牌锚点',
+          lat: l1.lat + 0.05,
+          lng: l1.lng + 0.05,
+          distance_mi: 3.6,
+          rating: 4.7,
+          rating_count: 3200,
+          price_level: 2,
+          primary_type: 'chinese_restaurant',
+          in_trade_area: false,
+        },
+        {
+          id: l1.id,
+          name: l1.name,
+          name_zh: l1.name_zh,
+          lat: l1.lat,
+          lng: l1.lng,
+          distance_mi: l1.distance_mi,
+          rating: l1.rating,
+          rating_count: l1.rating_count,
+          price_level: l1.price_level,
+          primary_type: 'chinese_restaurant',
+          in_trade_area: true,
+        },
+      ],
+    },
+  };
+  for (const lang of LOCALES) {
+    const html = render(model, lang);
+    const S = strings(lang);
+    const p7 = pageOf(html, 7);
+    assert.ok(p7.includes(S.p7.anchors), `${lang}: page 7 missing brand-anchors heading`);
+    assert.ok(p7.includes(S.p7.anchorsNote), `${lang}: page 7 missing brand-anchors note`);
+    assert.ok(p7.includes('Citywide Brand Anchor'), `${lang}: city-wide anchor name missing`);
+    assert.ok(p7.includes(l1.name), `${lang}: in-trade-area anchor name missing`);
+    assert.ok(p7.includes(S.p7.anchorTag), `${lang}: overlapping L1 card missing brand-anchor tag`);
+    assert.ok(p7.includes(S.p7.yes) && p7.includes(S.p7.no), `${lang}: in_trade_area yes/no cells missing`);
+  }
+});
