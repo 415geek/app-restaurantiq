@@ -7,9 +7,33 @@ import { runPartialAnalysis } from '@/lib/funnel/iq-llm';
 import { analyzeWithN8n, getAnalyzeWebhookUrl } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
 import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
+import { toLocale, type Locale } from '@/lib/i18n/locale';
 
 export const runtime = 'nodejs';
-type AnalysisLanguage = 'en' | 'zh';
+
+const MOCK_COPY: Record<Locale, { headline: string; subheadline: string; snapshot: string[]; risk: string; teaser: string }> = {
+  en: {
+    headline: 'Proceed with caution',
+    subheadline: 'This is mock data. Configure an analysis provider for real results.',
+    snapshot: ['Competition density: unknown', 'Demand pattern: unknown', 'Price band: unknown'],
+    risk: 'Analysis is not configured, so real risks cannot be identified.',
+    teaser: 'Configure n8n or OpenAI to unlock the full analysis.',
+  },
+  zh: {
+    headline: '谨慎推进',
+    subheadline: '此为模拟数据，请配置分析服务以获取真实结果。',
+    snapshot: ['竞争密度：未知', '需求模式：未知', '价格带：未知'],
+    risk: '未配置分析服务，无法识别真实风险。',
+    teaser: '配置 N8N 或 OpenAI 以解锁完整分析能力。',
+  },
+  es: {
+    headline: 'Proceder con cautela',
+    subheadline: 'Estos son datos de prueba. Configura un proveedor de análisis para obtener resultados reales.',
+    snapshot: ['Densidad de competencia: desconocida', 'Patrón de demanda: desconocido', 'Rango de precios: desconocido'],
+    risk: 'El análisis no está configurado, así que no se pueden identificar riesgos reales.',
+    teaser: 'Configura n8n u OpenAI para desbloquear el análisis completo.',
+  },
+};
 
 /**
  * Free-tier provider prompts (especially the n8n analyze workflow) don't read
@@ -87,7 +111,8 @@ export async function POST(req: Request) {
             ...(Number.isFinite(sqft) && sqft! > 0 ? { sqft } : {}),
           }
         : undefined;
-    const language: AnalysisLanguage = String(body.language ?? 'en').toLowerCase() === 'zh' ? 'zh' : 'en';
+    // Visitor locale ('en' | 'zh' | 'es'); every provider call and the stored report row use it.
+    const language: Locale = toLocale(body.language);
 
     if (!location) {
       return NextResponse.json({ error: 'Location is required' }, { status: 400 });
@@ -107,24 +132,15 @@ export async function POST(req: Request) {
       const isDevLike = process.env.NODE_ENV !== 'production';
       const allowMock = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true';
       if (isDevLike || allowMock) {
+        const mock = MOCK_COPY[language];
         return NextResponse.json({
           reportId: '',
           verdict: 'mock',
-          headline: language === 'zh' ? '谨慎推进' : 'Proceed with caution',
-          subheadline: language === 'zh' 
-            ? '此为模拟数据，请配置分析服务以获取真实结果。' 
-            : 'This is mock data. Configure analysis provider for real results.',
-          market_snapshot: [
-            language === 'zh' ? '竞争密度：未知' : 'Competition density: Unknown',
-            language === 'zh' ? '需求模式：未知' : 'Demand pattern: Unknown',
-            language === 'zh' ? '价格带：未知' : 'Price band: Unknown',
-          ],
-          hidden_risk: language === 'zh' 
-            ? '未配置分析服务，无法识别真实风险。' 
-            : 'Analysis not configured, cannot identify real risks.',
-          paywall_teaser: language === 'zh' 
-            ? '配置 N8N 或 OpenAI 以解锁完整分析能力。' 
-            : 'Configure N8N or OpenAI to unlock full analysis capabilities.',
+          headline: mock.headline,
+          subheadline: mock.subheadline,
+          market_snapshot: mock.snapshot,
+          hidden_risk: mock.risk,
+          paywall_teaser: mock.teaser,
         });
       }
       return NextResponse.json(

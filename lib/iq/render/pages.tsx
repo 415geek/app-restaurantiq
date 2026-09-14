@@ -3,16 +3,18 @@
  * the same fixed structure:
  *   <h1 class="action-title">  — judgment title from model.narrative (LLM) or
  *                                templateNarrative() fallback; never invented here
- *   one-line English subtitle
+ *   (Chinese edition only) one-line English subtitle
  *   ONE core chart or table
  *   interpretation (narrative body, citations stripped)
  *   source chips
- * Only report_model fields are shown; null → 「未获取」.
+ * Only report_model fields are shown; null → "n/a" in the report language.
  *
- * Wording: the reader is a restaurant owner. Customer-facing text is plain
- * Chinese — no ring ids (walk10), layer codes (L1), field names
- * (coverage_ratio), model names (Huff) or Greek letters. Engine strings that
- * reach the page (drivers, conditions, notes) pass through plainZh().
+ * Language: the whole document renders in ONE report language (`lang`: en by
+ * default, zh or es) — headings, table headers, legends, chips, footnotes,
+ * verdict labels and narratives. Labels come from render/i18n.ts; engine
+ * strings that reach the page (drivers, conditions, notes) pass through
+ * plainText() so no ring ids (walk10), layer codes (L1), field names
+ * (coverage_ratio), model names (Huff) or Greek letters reach the reader.
  */
 import type { ComponentType, ReactNode } from 'react';
 import {
@@ -33,8 +35,9 @@ import {
   UtensilsCrossed,
   X,
 } from 'lucide-react';
+import { LOCALE_TAG, toLocale, type Locale } from '@/lib/i18n/locale';
 import type { Competitor, ReportModel } from '../model/schema';
-import { PAGES, templateNarrative, type PageId } from '../narrative/templates';
+import { PAGES, cuisineName, dimensionName, localizedField, plainText, segmentName, sensitivityName, templateNarrative, type PageId } from '../narrative/templates';
 import { SourceChips, type SourceKind } from './chips';
 import {
   ClusterCurve,
@@ -51,37 +54,8 @@ import {
   Timeline,
   TwinBars,
 } from './charts';
-import {
-  BAND_METHOD_ZH,
-  CONFIDENCE_COMPONENT_ZH,
-  LEVEL_LABEL,
-  NA,
-  PROB_LABEL,
-  RING_LABEL,
-  SCENARIO_LABEL,
-  SEGMENT_LABEL,
-  SOURCE_ZH,
-  dataNotesZh,
-  fmtDate,
-  fmtInt,
-  fmtMiles,
-  fmtMinutes,
-  fmtMulti,
-  fmtNum,
-  fmtPct,
-  fmtUsd,
-  nameKey,
-  plainZh,
-  precheckReasonsZh,
-  priceLevelLabel,
-  probColor,
-  ring,
-  scoreColor,
-  sourceShortZh,
-  stripCitations,
-  verdictLabel,
-  PALETTE,
-} from './format';
+import { PALETTE, dataNotes, fmtDate, makeFormatters, nameKey, precheckReasons, probColor, ring, scoreColor, stripCitations, verdictLabel, type Formatters } from './format';
+import { fill, strings, type ReportStrings } from './i18n';
 import { MapFigure } from './map';
 import type { StaticMaps } from './static-map';
 
@@ -91,6 +65,24 @@ type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?:
 export interface PageProps {
   model: ReportModel;
   staticMaps?: StaticMaps;
+  /** Report language; defaults to the model's own language. */
+  lang?: Locale;
+}
+
+/** Per-render context: the language, its dictionary and its formatters. */
+interface Ctx {
+  lang: Locale;
+  S: ReportStrings;
+  F: Formatters;
+  /** Engine string → plain words in the report language. */
+  t: (s: string | null | undefined) => string;
+  /** Bilingual engine field → the report language. */
+  field: (zh: string | null | undefined, en: string | null | undefined) => string;
+}
+
+function ctxOf(model: ReportModel, lang?: Locale): Ctx {
+  const l = lang ?? toLocale(model.meta.language);
+  return { lang: l, S: strings(l), F: makeFormatters(l), t: (s) => plainText(s, l), field: (zh, en) => localizedField(zh, en, l) };
 }
 
 const PAGE_ICON: Record<PageId, IconType> = {
@@ -111,6 +103,7 @@ const PAGE_ICON: Record<PageId, IconType> = {
   page_15: Flag,
 };
 
+/** Chinese edition keeps a one-line English subtitle under the title; en / es render in one language only. */
 const SUBTITLE_EN: Record<PageId, string> = {
   page_1: '360° site-selection report for a Chinese restaurant concept',
   page_2: 'Executive Summary · verdict, evidence, risks and pre-lease conditions',
@@ -130,37 +123,47 @@ const SUBTITLE_EN: Record<PageId, string> = {
 };
 
 /** Narratives stored by earlier engine versions counted sources and quoted the report cost; page 14 is a lineage page now. */
-const LEGACY_SOURCES_NARRATIVE = /个数据源中|报告成本|数据源状态：|\bD\d+ (ok|partial|failed)\b/;
+const LEGACY_SOURCES_NARRATIVE = /个数据源中|报告成本|数据源状态：|\bD\d+ (ok|partial|failed)\b|\b\d+ (?:of \d+ )?data sources? (?:are |is )?(?:complete|ok)\b|\breport cost\b|\bsource status:|\bcosto del informe\b|\bfuentes? de datos completas?\b/i;
 
-export function narrativeFor(model: ReportModel, pageId: PageId) {
-  const n = model.narrative?.[pageId];
-  if (n && typeof n.title === 'string' && n.title.trim() && typeof n.body === 'string') {
-    if (pageId === 'page_14' && LEGACY_SOURCES_NARRATIVE.test(`${n.title} ${n.body}`)) return templateNarrative(model, pageId);
-    return n;
-  }
-  return templateNarrative(model, pageId);
+/** Language the stored narrative was written in (loader sets `narrative_language` from narrative_json.__lang). */
+export function narrativeLanguage(model: ReportModel): Locale {
+  return toLocale(model.meta.narrative_language ?? model.meta.language);
 }
 
-function PageShell({ model, pageId, chips, children, tail }: { model: ReportModel; pageId: PageId; chips: ReactNode; children: ReactNode; tail?: ReactNode }) {
+/**
+ * The page narrative in `lang`: the stored (LLM) narrative when it was written
+ * in that language, else the deterministic template for the language.
+ */
+export function narrativeFor(model: ReportModel, pageId: PageId, lang: Locale = toLocale(model.meta.language)) {
+  const n = model.narrative?.[pageId];
+  if (n && typeof n.title === 'string' && n.title.trim() && typeof n.body === 'string') {
+    if (narrativeLanguage(model) !== lang) return templateNarrative(model, pageId, lang);
+    if (pageId === 'page_14' && LEGACY_SOURCES_NARRATIVE.test(`${n.title} ${n.body}`)) return templateNarrative(model, pageId, lang);
+    return n;
+  }
+  return templateNarrative(model, pageId, lang);
+}
+
+function PageShell({ c, model, pageId, chips, children, tail }: { c: Ctx; model: ReportModel; pageId: PageId; chips: ReactNode; children: ReactNode; tail?: ReactNode }) {
   const spec = PAGES.find((p) => p.id === pageId)!;
-  const n = narrativeFor(model, pageId);
+  const n = narrativeFor(model, pageId, c.lang);
   const Icon = PAGE_ICON[pageId];
+  const kicker = c.S.pages[pageId];
+  const zh = c.lang === 'zh';
   return (
-    <section className={`page page-${spec.n}`} data-page={spec.n} aria-label={`${spec.zh} · ${spec.en}`}>
+    <section className={`page page-${spec.n}`} data-page={spec.n} aria-label={zh ? `${kicker} · ${spec.en}` : kicker}>
       <header className="page-head">
         <div className="kicker">
           <Icon size={12} strokeWidth={1.75} aria-hidden />
-          <span>
-            {spec.zh} · {spec.en}
-          </span>
+          <span>{zh ? `${kicker} · ${spec.en}` : kicker}</span>
         </div>
-        <h1 className="action-title">{plainZh(n.title)}</h1>
-        <p className="subtitle-en">{SUBTITLE_EN[pageId]}</p>
+        <h1 className="action-title">{c.t(n.title)}</h1>
+        {zh ? <p className="subtitle-en">{SUBTITLE_EN[pageId]}</p> : null}
       </header>
       <div className="page-body">{children}</div>
       <div className="page-tail">
         {tail}
-        <p className="interp">{stripCitations(plainZh(n.body)) || NA}</p>
+        <p className="interp">{stripCitations(c.t(n.body)) || c.S.na}</p>
         {chips}
       </div>
       <footer className="page-foot">
@@ -174,14 +177,16 @@ function PageShell({ model, pageId, chips, children, tail }: { model: ReportMode
   );
 }
 
-const Cell = ({ children, num, className }: { children: ReactNode; num?: boolean; className?: string }) => <td className={[num ? 'num' : '', className ?? ''].join(' ').trim() || undefined}>{children ?? NA}</td>;
+function Cell({ children, num, className, na }: { children: ReactNode; num?: boolean; className?: string; na: string }) {
+  return <td className={[num ? 'num' : '', className ?? ''].join(' ').trim() || undefined}>{children ?? na}</td>;
+}
 
-function VerdictBadge({ verdict, size = 'lg' }: { verdict: ReportModel['score']['verdict']; size?: 'lg' | 'sm' }) {
-  const v = verdictLabel(verdict);
+function VerdictBadge({ c, verdict, size = 'lg' }: { c: Ctx; verdict: ReportModel['score']['verdict']; size?: 'lg' | 'sm' }) {
+  const v = verdictLabel(verdict, c.lang);
   return (
     <span className={`verdict-badge verdict-${size}`} data-verdict={verdict}>
-      <span className="verdict-en">{v.en}</span>
-      <span className="verdict-zh">{v.zh}</span>
+      <span className={`verdict-en${v.badge.length > 12 ? ' verdict-long' : ''}`}>{v.badge}</span>
+      <span className="verdict-zh">{v.sub}</span>
     </span>
   );
 }
@@ -200,11 +205,11 @@ function XRef({ children }: { children: ReactNode }) {
   return <p className="xref">{children}</p>;
 }
 
-/** One line per competitor: Chinese name first, English smaller on the same line. */
-function CompetitorName({ c }: { c: Pick<Competitor, 'name' | 'name_zh'> }) {
+/** One line per competitor: Chinese edition shows the Chinese name first with the English smaller; en / es show the listed name. */
+function CompetitorName({ c, lang }: { c: Pick<Competitor, 'name' | 'name_zh'>; lang: Locale }) {
   const zh = c.name_zh?.trim();
   const en = c.name.trim();
-  if (zh && nameKey(zh) !== nameKey(en)) {
+  if (lang === 'zh' && zh && nameKey(zh) !== nameKey(en)) {
     return (
       <span className="comp-name">
         {zh}
@@ -212,7 +217,7 @@ function CompetitorName({ c }: { c: Pick<Competitor, 'name' | 'name_zh'> }) {
       </span>
     );
   }
-  return <span className="comp-name">{zh || en}</span>;
+  return <span className="comp-name">{lang === 'zh' ? zh || en : en || zh}</span>;
 }
 
 /**
@@ -237,56 +242,62 @@ function uniqueCompetitors(list: Competitor[]): Competitor[] {
   return out;
 }
 
-const rangeClassZh = (rc: ReportModel['input']['range_class']) => (rc === 'destination' ? '目的地型（顾客愿意专程开车来）' : rc === 'regular' ? '常规型' : '日常型（就近吃）');
+/** Cuisine label in the report language; the Chinese edition shows "中文 · English". */
+function cuisineLabel(c: Ctx, m: ReportModel): string {
+  return c.lang === 'zh' ? `${m.input.cuisine_label_zh} · ${m.input.cuisine_label_en}` : cuisineName(m.input, c.lang);
+}
 
 /* ------------------------------------------------------------------ */
 /* 0 · Cover page (unnumbered title page before the 15 analysis pages)   */
 /* ------------------------------------------------------------------ */
-function CoverPage({ model, staticMaps }: PageProps) {
+function CoverPage({ model, staticMaps, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S } = c;
   const m = model;
   const address = m.input.matched_address ?? m.input.address;
   const region = m.geo.county_name ?? null;
+  const cuisine = c.lang === 'zh' ? `${m.input.cuisine_label_zh}（${m.input.cuisine_label_en}）` : cuisineName(m.input, c.lang);
   return (
-    <section className="page page-cover" data-page="0" aria-label="封面 · Cover">
+    <section className="page page-cover" data-page="0" aria-label={c.lang === 'zh' ? '封面 · Cover' : S.cover.title}>
       <div className="cover-page">
         <div className="cover-page-brand">
-          <span className="brand-name">RestaurantIQ</span>
-          <span className="brand-sub">餐饮选址智能分析 · Restaurant Site Intelligence</span>
+          <span className="brand-name">{S.brand.name}</span>
+          <span className="brand-sub">{S.brand.sub}</span>
         </div>
         <div className="cover-page-title">
-          <div className="cover-page-kicker">{m.meta.tier === 'paid' ? '付费专业版 · Professional Edition' : '预检版 · Precheck Edition'}</div>
-          <h2 className="cover-page-h">商圈选址分析报告</h2>
-          <p className="cover-page-sub">360° Site Selection Report</p>
+          <div className="cover-page-kicker">{m.meta.tier === 'paid' ? S.cover.kickerPaid : S.cover.kickerPrecheck}</div>
+          <h2 className="cover-page-h">{S.cover.title}</h2>
+          <p className="cover-page-sub">{S.cover.sub}</p>
         </div>
         <div className="cover-page-site">
           <div className="cover-page-address">{address}</div>
           <div className="cover-page-cuisine">
-            拟开业态：{m.input.cuisine_label_zh}（{m.input.cuisine_label_en}）
+            {fill(S.cover.cuisine, { cuisine })}
             {region ? <span className="muted"> · {region}</span> : null}
           </div>
         </div>
         <div className="cover-page-map">
-          <MapFigure model={m} staticMap={staticMaps?.thumb ?? null} variant="thumb" />
+          <MapFigure model={m} staticMap={staticMaps?.thumb ?? null} variant="thumb" lang={c.lang} />
         </div>
         <div className="cover-page-meta">
           <div>
-            <div className="cover-label">报告编号 · Report ID</div>
+            <div className="cover-label">{S.cover.reportId}</div>
             <div className="cover-page-meta-v">{m.meta.report_id}</div>
           </div>
           <div>
-            <div className="cover-label">生成日期 · Generated</div>
+            <div className="cover-label">{S.cover.generated}</div>
             <div className="cover-page-meta-v">{fmtDate(m.meta.generated_at)}</div>
           </div>
           <div>
-            <div className="cover-label">数据截止 · Data as of</div>
+            <div className="cover-label">{S.cover.dataAsOf}</div>
             <div className="cover-page-meta-v">{m.meta.data_as_of}</div>
           </div>
           <div>
-            <div className="cover-label">编制 · Prepared by</div>
-            <div className="cover-page-meta-v">RestaurantIQ 360° 分析引擎</div>
+            <div className="cover-label">{S.cover.preparedBy}</div>
+            <div className="cover-page-meta-v">{S.brand.engine}</div>
           </div>
         </div>
-        <p className="cover-page-foot">本报告基于美国人口普查、公开地图与平台数据及您提供的信息，按统一模型计算；每个数字都可追溯到来源（见第 14 页）。报告仅供选址决策参考，不构成投资、法律或租赁建议。</p>
+        <p className="cover-page-foot">{S.cover.foot}</p>
       </div>
     </section>
   );
@@ -295,34 +306,36 @@ function CoverPage({ model, staticMaps }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 1 · At a glance                                                       */
 /* ------------------------------------------------------------------ */
-function Page1({ model, staticMaps }: PageProps) {
+function Page1({ model, staticMaps, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
   const m = model;
   return (
-    <PageShell model={m} pageId="page_1" chips={<SourceChips model={m} ids={['D1', 'D12']} model_labels={['综合评分 · Score']} />}>
+    <PageShell c={c} model={m} pageId="page_1" chips={<SourceChips model={m} ids={['D1', 'D12']} model_labels={[S.p1.chipScore]} lang={c.lang} />}>
       <div className="cover">
         <div className="cover-brand">
-          <span className="brand-name">RestaurantIQ</span>
-          <span className="brand-sub">360° 选址报告 · Site Selection Report</span>
+          <span className="brand-name">{S.brand.name}</span>
+          <span className="brand-sub">{S.brand.reportSub}</span>
         </div>
         <div className="cover-grid">
           <div className="cover-left">
             <div className="cover-field">
-              <div className="cover-label">地址 · Address</div>
+              <div className="cover-label">{S.p1.address}</div>
               <div className="cover-value">{m.input.matched_address ?? m.input.address}</div>
-              {m.input.matched_address && m.input.matched_address !== m.input.address ? <div className="cover-note">您填写的地址：{m.input.address}</div> : null}
+              {m.input.matched_address && m.input.matched_address !== m.input.address ? <div className="cover-note">{fill(S.p1.addressGiven, { address: m.input.address })}</div> : null}
             </div>
             <div className="cover-field">
-              <div className="cover-label">菜系 · Cuisine</div>
+              <div className="cover-label">{S.p1.cuisine}</div>
               <div className="cover-value">
-                {m.input.cuisine_label_zh} · {m.input.cuisine_label_en}
-                <span className="muted"> · {rangeClassZh(m.input.range_class)}</span>
+                {cuisineLabel(c, m)}
+                <span className="muted"> · {S.rangeClass[m.input.range_class]}</span>
               </div>
             </div>
             <div className="cover-verdict">
-              <VerdictBadge verdict={m.score.verdict} />
+              <VerdictBadge c={c} verdict={m.score.verdict} />
               <div className="cover-keys">
-                <KeyNumber label="综合评分 · Score" value={`${fmtNum(m.score.total, 1)} / 100`} />
-                <KeyNumber label="数据完整度 · Data completeness" value={`${fmtInt(m.confidence.total)} / 100`} sub={LEVEL_LABEL[m.confidence.level]} />
+                <KeyNumber label={S.p1.score} value={`${F.num(m.score.total, 1)} / 100`} />
+                <KeyNumber label={S.p1.completeness} value={`${F.int(m.confidence.total)} / 100`} sub={S.level[m.confidence.level]} />
               </div>
             </div>
           </div>
@@ -330,24 +343,24 @@ function Page1({ model, staticMaps }: PageProps) {
             <table className="meta-table">
               <tbody>
                 <tr>
-                  <th>报告编号</th>
-                  <Cell>{m.meta.report_id}</Cell>
+                  <th>{S.p1.reportId}</th>
+                  <Cell na={S.na}>{m.meta.report_id}</Cell>
                 </tr>
                 <tr>
-                  <th>生成日期</th>
-                  <Cell>{fmtDate(m.meta.generated_at)}</Cell>
+                  <th>{S.p1.generated}</th>
+                  <Cell na={S.na}>{fmtDate(m.meta.generated_at)}</Cell>
                 </tr>
                 <tr>
-                  <th>数据截止</th>
-                  <Cell>{m.meta.data_as_of}</Cell>
+                  <th>{S.p1.dataAsOf}</th>
+                  <Cell na={S.na}>{m.meta.data_as_of}</Cell>
                 </tr>
                 <tr>
-                  <th>报告版本</th>
-                  <Cell>{m.meta.tier === 'paid' ? '完整版 · Paid' : '预检版 · Precheck'}</Cell>
+                  <th>{S.p1.edition}</th>
+                  <Cell na={S.na}>{m.meta.tier === 'paid' ? S.p1.editionPaid : S.p1.editionPrecheck}</Cell>
                 </tr>
                 <tr>
-                  <th>所在地区</th>
-                  <Cell>
+                  <th>{S.p1.region}</th>
+                  <Cell na={S.na}>
                     {m.geo.county_name ?? m.geo.county}
                     {m.geo.metro ? ` · ${m.geo.metro}` : ''}
                   </Cell>
@@ -357,11 +370,9 @@ function Page1({ model, staticMaps }: PageProps) {
           </div>
         </div>
         <div className="cover-map">
-          <MapFigure model={m} staticMap={staticMaps?.thumb ?? null} variant="thumb" />
+          <MapFigure model={m} staticMap={staticMaps?.thumb ?? null} variant="thumb" lang={c.lang} />
         </div>
-        <div className="cover-map-caption">
-          主商圈 {RING_LABEL[m.trade_area.primary_ring].zh} · 图中为步行 10 分钟与开车 5·10·15 分钟可达范围 · 同菜系竞品 {m.competitors.l1.length} 家 · 华人客流聚集点 {m.competitors.l4.length} 处 · 详见第 3 页
-        </div>
+        <div className="cover-map-caption">{fill(S.p1.caption, { ring: S.ring[m.trade_area.primary_ring].label, l1: m.competitors.l1.length, l4: m.competitors.l4.length })}</div>
       </div>
     </PageShell>
   );
@@ -370,70 +381,70 @@ function Page1({ model, staticMaps }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 2 · Executive summary                                                 */
 /* ------------------------------------------------------------------ */
-function Page2({ model }: PageProps) {
+function Page2({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
   const m = model;
   const reasons = [...m.score.dimensions].sort((a, b) => b.score - a.score).slice(0, 3);
   const probRank = { high: 0, medium: 1, low: 2 } as const;
   const risks = [...m.risks].sort((a, b) => probRank[a.prob] - probRank[b.prob] || (b.impact_usd ?? 0) - (a.impact_usd ?? 0)).slice(0, 3);
   const conds = m.score.conditions.slice(0, 3);
   return (
-    <PageShell model={m} pageId="page_2" chips={<SourceChips model={m} ids={['D2', 'D5', 'D6', 'D12']} model_labels={['需求分流模型', '保本模型']} />}>
+    <PageShell c={c} model={m} pageId="page_2" chips={<SourceChips model={m} ids={['D2', 'D5', 'D6', 'D12']} model_labels={[S.p2.chipHuff, S.p2.chipBreakeven]} lang={c.lang} />}>
       <div className="summary-top">
-        <VerdictBadge verdict={m.score.verdict} />
+        <VerdictBadge c={c} verdict={m.score.verdict} />
         <div className="summary-keys">
-          <KeyNumber label="综合评分" value={`${fmtNum(m.score.total, 1)}`} sub="/ 100 · 六项加权，见第 11 页" />
-          <KeyNumber label="需求覆盖率" value={fmtPct(m.demand.coverage_ratio)} sub="预计月需求 ÷ 保本线" />
-          <KeyNumber label="数据完整度" value={`${fmtInt(m.confidence.total)}`} sub={`/ 100 · ${LEVEL_LABEL[m.confidence.level]} · 见第 14 页`} />
+          <KeyNumber label={S.p2.score} value={`${F.num(m.score.total, 1)}`} sub={S.p2.scoreSub} />
+          <KeyNumber label={S.p2.coverage} value={F.pct(m.demand.coverage_ratio)} sub={S.p2.coverageSub} />
+          <KeyNumber label={S.p2.completeness} value={`${F.int(m.confidence.total)}`} sub={fill(S.p2.completenessSub, { level: S.level[m.confidence.level] })} />
         </div>
       </div>
       <div className="twin-wrap">
-        <h2 className="h2">保本线 vs 预计需求 · Break-even vs Captured Demand</h2>
-        <TwinBars breakeven={m.finance.breakeven_monthly} captured={m.demand.captured_monthly_usd} safety={m.finance.safety_monthly} />
+        <h2 className="h2">{S.p2.chart}</h2>
+        <TwinBars breakeven={m.finance.breakeven_monthly} captured={m.demand.captured_monthly_usd} safety={m.finance.safety_monthly} lang={c.lang} />
       </div>
       <div className="three-col">
         <div className="panel">
-          <div className="panel-title">三个支撑 · Evidence</div>
+          <div className="panel-title">{S.p2.evidence}</div>
           <ol className="tight-list">
             {reasons.map((d) => (
               <li key={d.id}>
                 <span className="li-head">
-                  {d.label_zh} {fmtNum(d.score, 0)} 分
+                  {dimensionName(d, c.lang)} {fill(S.p2.points, { n: F.num(d.score, 0) })}
                 </span>
-                <span className="li-body">{plainZh(d.drivers[0]) || NA}</span>
+                <span className="li-body">{c.t(d.drivers[0]) || S.na}</span>
               </li>
             ))}
           </ol>
         </div>
         <div className="panel">
-          <div className="panel-title">三个风险 · Risks</div>
+          <div className="panel-title">{S.p2.risks}</div>
           <ol className="tight-list">
-            {risks.length === 0 ? <li>{NA}</li> : null}
+            {risks.length === 0 ? <li>{S.na}</li> : null}
             {risks.map((r) => (
               <li key={r.id}>
                 <span className="dot" style={{ background: probColor(r.prob) }} />
                 <span className="li-body">
-                  {plainZh(r.risk_zh)}
-                  <span className="muted">（概率{PROB_LABEL[r.prob]}）</span>
+                  {c.field(r.risk_zh, r.risk_en)}
+                  <span className="muted"> {fill(S.p2.probability, { p: S.prob[r.prob] })}</span>
                 </span>
               </li>
             ))}
           </ol>
         </div>
         <div className="panel">
-          <div className="panel-title">签约前条件 · Conditions</div>
+          <div className="panel-title">{S.p2.conditions}</div>
           <ol className="tight-list">
-            {conds.length === 0 ? <li>无附加条件</li> : null}
-            {conds.map((c, i) => (
+            {conds.length === 0 ? <li>{S.p2.noConditions}</li> : null}
+            {conds.map((x, i) => (
               <li key={i}>
-                <span className="li-body">{plainZh(c.text_zh)}</span>
+                <span className="li-body">{c.field(x.text_zh, x.text_en)}</span>
               </li>
             ))}
           </ol>
         </div>
       </div>
-      <XRef>
-        主商圈 {RING_LABEL[m.trade_area.primary_ring].zh}（第 3–4 页）· 同菜系竞品 {m.competitors.l1.length} 家、其他中餐 {m.competitors.l2_count} 家（第 6–7 页）· 保本线 {fmtUsd(m.finance.breakeven_monthly)}（第 10 页）· 总结与建议见第 15 页
-      </XRef>
+      <XRef>{fill(S.p2.xref, { ring: S.ring[m.trade_area.primary_ring].label, l1: m.competitors.l1.length, l2: m.competitors.l2_count, be: F.usd(m.finance.breakeven_monthly) })}</XRef>
     </PageShell>
   );
 }
@@ -441,21 +452,23 @@ function Page2({ model }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 3 · Trade-area map                                                    */
 /* ------------------------------------------------------------------ */
-function Page3({ model, staticMaps }: PageProps) {
+function Page3({ model, staticMaps, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
   const m = model;
   const p = ring(m, m.trade_area.primary_ring);
-  const c = m.competitors;
+  const cc = m.competitors;
   return (
-    <PageShell model={m} pageId="page_3" chips={<SourceChips model={m} ids={['D4', 'D5', 'D6', 'D9']} />}>
+    <PageShell c={c} model={m} pageId="page_3" chips={<SourceChips model={m} ids={['D4', 'D5', 'D6', 'D9']} lang={c.lang} />}>
       <div className="map-wrap">
-        <MapFigure model={m} staticMap={staticMaps?.hero ?? null} variant="hero" />
+        <MapFigure model={m} staticMap={staticMaps?.hero ?? null} variant="hero" lang={c.lang} />
       </div>
       <div className="map-facts">
-        <KeyNumber label="主商圈（客源主要来自的范围）" value={RING_LABEL[m.trade_area.primary_ring].zh} sub={`面积 ${fmtNum(p?.area_sq_mi, 2)} 平方英里 · 覆盖 ${p?.block_groups ?? 0} 个人口普查小区`} />
-        <KeyNumber label="范围怎么算" value={m.trade_area.isochrone_method === 'mapbox' ? '按实际路网' : '按直线半径近似'} sub="步行 10 分钟 · 开车 5 / 10 / 15 分钟" />
-        <KeyNumber label="周边餐饮门店" value={fmtInt(c.candidates_total)} sub={`同菜系 ${c.l1.length} · 其他中餐 ${c.l2_count} · 其他亚洲餐 ${c.l3_count} · 华人聚集点 ${c.l4.length}`} />
+        <KeyNumber label={S.p3.primary} value={S.ring[m.trade_area.primary_ring].label} sub={fill(S.p3.primarySub, { area: F.num(p?.area_sq_mi, 2), bg: p?.block_groups ?? 0 })} />
+        <KeyNumber label={S.p3.method} value={m.trade_area.isochrone_method === 'mapbox' ? S.p3.methodMapbox : S.p3.methodRadius} sub={S.p3.methodSub} />
+        <KeyNumber label={S.p3.places} value={F.int(cc.candidates_total)} sub={fill(S.p3.placesSub, { l1: cc.l1.length, l2: cc.l2_count, l3: cc.l3_count, l4: cc.l4.length })} />
       </div>
-      <XRef>各范围的人口与消费见第 4 页；竞品明细见第 6–7 页。</XRef>
+      <XRef>{S.p3.xref}</XRef>
     </PageShell>
   );
 }
@@ -463,68 +476,74 @@ function Page3({ model, staticMaps }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 4 · Ring table                                                        */
 /* ------------------------------------------------------------------ */
-function Page4({ model }: PageProps) {
+function Page4({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
   const m = model;
   const rings = m.trade_area.rings;
   const cb = m.trade_area.county_benchmark;
-  const NOT_APPLICABLE = '不适用';
-  const rows: Array<{ label: string; en: string; get: (r: ReportModel['trade_area']['rings'][number]) => string; county: string }> = [
-    { label: '常住人口', en: 'Population', get: (r) => fmtInt(r.pop), county: NOT_APPLICABLE },
-    { label: '户数', en: 'Households', get: (r) => fmtInt(r.hh), county: NOT_APPLICABLE },
-    { label: '家庭收入中位', en: 'Median HH income', get: (r) => fmtUsd(r.median_income), county: fmtUsd(cb.median_income) },
-    { label: '中文家庭占比', en: 'Chinese-speaking HH', get: (r) => fmtPct(r.chinese_hh_share, 1), county: fmtPct(cb.chinese_hh_share, 1) },
-    { label: '华裔人口', en: 'Chinese population', get: (r) => fmtInt(r.chinese_pop), county: NOT_APPLICABLE },
-    { label: '白天上班岗位', en: 'Daytime jobs', get: (r) => fmtInt(r.jobs), county: NOT_APPLICABLE },
-    { label: '年餐饮支出', en: 'Restaurant spend / yr', get: (r) => fmtUsd(r.restaurant_spend_usd), county: NOT_APPLICABLE },
-    { label: '年中餐支出', en: 'Chinese-food spend / yr', get: (r) => fmtUsd(r.chinese_spend_usd), county: NOT_APPLICABLE },
-    { label: `${m.input.cuisine_label_zh}年需求`, en: 'Cuisine demand / yr', get: (r) => fmtUsd(r.cuisine_demand_usd), county: NOT_APPLICABLE },
-    { label: '25–44 岁占比', en: 'Age 25–44', get: (r) => fmtPct(r.age_25_44_share, 1), county: NOT_APPLICABLE },
-    { label: '有孩家庭占比', en: 'Families w/ children', get: (r) => fmtPct(r.family_share, 1), county: NOT_APPLICABLE },
-    { label: '面积（平方英里）', en: 'Area (sq mi)', get: (r) => fmtNum(r.area_sq_mi, 2), county: NOT_APPLICABLE },
+  const NOT_APPLICABLE = S.notApplicable;
+  const R = S.p4.rows;
+  const zh = c.lang === 'zh';
+  const cuisine = zh ? m.input.cuisine_label_zh : cuisineName(m.input, c.lang);
+  const rows: Array<{ key: string; label: string; en: string; get: (r: ReportModel['trade_area']['rings'][number]) => string; county: string }> = [
+    { key: 'pop', label: R.pop, en: 'Population', get: (r) => F.int(r.pop), county: NOT_APPLICABLE },
+    { key: 'hh', label: R.hh, en: 'Households', get: (r) => F.int(r.hh), county: NOT_APPLICABLE },
+    { key: 'income', label: R.income, en: 'Median HH income', get: (r) => F.usd(r.median_income), county: F.usd(cb.median_income) },
+    { key: 'chinese_share', label: R.chinese_share, en: 'Chinese-speaking HH', get: (r) => F.pct(r.chinese_hh_share, 1), county: F.pct(cb.chinese_hh_share, 1) },
+    { key: 'chinese_pop', label: R.chinese_pop, en: 'Chinese population', get: (r) => F.int(r.chinese_pop), county: NOT_APPLICABLE },
+    { key: 'jobs', label: R.jobs, en: 'Daytime jobs', get: (r) => F.int(r.jobs), county: NOT_APPLICABLE },
+    { key: 'spend', label: R.spend, en: 'Restaurant spend / yr', get: (r) => F.usd(r.restaurant_spend_usd), county: NOT_APPLICABLE },
+    { key: 'chinese_spend', label: R.chinese_spend, en: 'Chinese-food spend / yr', get: (r) => F.usd(r.chinese_spend_usd), county: NOT_APPLICABLE },
+    { key: 'cuisine_demand', label: fill(R.cuisine_demand, { cuisine }), en: 'Cuisine demand / yr', get: (r) => F.usd(r.cuisine_demand_usd), county: NOT_APPLICABLE },
+    { key: 'age', label: R.age, en: 'Age 25–44', get: (r) => F.pct(r.age_25_44_share, 1), county: NOT_APPLICABLE },
+    { key: 'family', label: R.family, en: 'Families w/ children', get: (r) => F.pct(r.family_share, 1), county: NOT_APPLICABLE },
+    { key: 'area', label: R.area, en: 'Area (sq mi)', get: (r) => F.num(r.area_sq_mi, 2), county: NOT_APPLICABLE },
   ];
   const jobsMethod = rings.find((r) => r.jobs_method !== 'none')?.jobs_method;
-  const jobsMethodZh = jobsMethod === 'lodes_wac' ? '人口普查局就业点数据' : jobsMethod === 'acs_b08301_estimate' ? '按通勤人口反推（就业点数据未加载，精度较低）' : NA;
+  const jobsMethodText = jobsMethod === 'lodes_wac' ? S.p4.jobsLodes : jobsMethod === 'acs_b08301_estimate' ? S.p4.jobsAcs : S.na;
   return (
-    <PageShell model={m} pageId="page_4" chips={<SourceChips model={m} ids={['D2', 'D3', 'D10']} model_labels={[`菜系份额 ${fmtPct(m.demand.cuisine_share, 1)}`]} />}>
+    <PageShell c={c} model={m} pageId="page_4" chips={<SourceChips model={m} ids={['D2', 'D3', 'D10']} model_labels={[fill(S.p4.chipShare, { pct: F.pct(m.demand.cuisine_share, 1) })]} lang={c.lang} />}>
       <table className="data-table ring-table">
         <thead>
           <tr>
-            <th className="row-head">指标 · Metric</th>
+            <th className="row-head">{S.p4.metric}</th>
             {rings.map((r) => (
               <th key={r.id} className={r.id === m.trade_area.primary_ring ? 'primary' : undefined}>
-                {RING_LABEL[r.id].zh}
-                <span className="th-en">{RING_LABEL[r.id].en}{r.id === m.trade_area.primary_ring ? ' · 主商圈' : ''}</span>
+                {zh ? S.ring[r.id].label : S.ring[r.id].short}
+                <span className="th-en">
+                  {zh ? `${r.id === 'walk10' ? 'walk' : 'drive'} ${r.minutes}` : ''}
+                  {r.id === m.trade_area.primary_ring ? `${zh ? ' · ' : ''}${S.p4.primaryTag}` : zh ? '' : ' '}
+                </span>
               </th>
             ))}
             <th className="county">
-              全县基准
+              {S.p4.county}
               <span className="th-en">{m.geo.county_name ?? m.geo.county}</span>
             </th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.en}>
+            <tr key={row.key}>
               <th className="row-head">
                 {row.label}
-                <span className="th-en">{row.en}</span>
+                {zh ? <span className="th-en">{row.en}</span> : null}
               </th>
               {rings.map((r) => (
-                <Cell key={r.id} num className={r.id === m.trade_area.primary_ring ? 'primary' : undefined}>
+                <Cell key={r.id} num className={r.id === m.trade_area.primary_ring ? 'primary' : undefined} na={S.na}>
                   {row.get(r)}
                 </Cell>
               ))}
-              <Cell num className="county">
+              <Cell num className="county" na={S.na}>
                 {row.county}
               </Cell>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className="table-note">
-        计算方式：按每个人口普查小区落在范围内的面积比例加权，数据来自美国人口普查局 2023 年五年调查；白天上班岗位：{jobsMethodZh}；「不适用」= 全县基准只提供收入与中文家庭占比。
-      </p>
-      <XRef>预计能拿到多少需求见第 9 页；客群画像见第 5 页。</XRef>
+      <p className="table-note">{fill(S.p4.note, { jobs: jobsMethodText })}</p>
+      <XRef>{S.p4.xref}</XRef>
     </PageShell>
   );
 }
@@ -532,53 +551,55 @@ function Page4({ model }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 5 · Audience                                                          */
 /* ------------------------------------------------------------------ */
-function Page5({ model }: PageProps) {
+function Page5({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
   const m = model;
-  const segs = m.audience.segments.map((s) => ({ ...s, label: SEGMENT_LABEL[s.id]?.zh ?? s.id }));
+  const segs = m.audience.segments.map((s) => ({ ...s, label: segmentName(s.id, c.lang) }));
   const [lunch, dinner] = m.audience.lunch_dinner_split;
   return (
-    <PageShell model={m} pageId="page_5" chips={<SourceChips model={m} ids={['D2', 'D3']} model_labels={['客群指数', '午晚市拆分']} />}>
-      <h2 className="h2">四类客群 · Segments</h2>
-      <SegmentBars rows={segs.map((s) => ({ label: s.label, share: s.share, index: s.index }))} />
+    <PageShell c={c} model={m} pageId="page_5" chips={<SourceChips model={m} ids={['D2', 'D3']} model_labels={[S.p5.chipIndex, S.p5.chipSplit]} lang={c.lang} />}>
+      <h2 className="h2">{S.p5.segments}</h2>
+      <SegmentBars rows={segs.map((s) => ({ label: s.label, share: s.share, index: s.index }))} lang={c.lang} />
       <div className="two-col">
         <div>
-          <h2 className="h2">午市 / 晚市 · Daypart</h2>
-          <SplitBar a={lunch} b={dinner} labelA="午市" labelB="晚市" valueA="靠上班人群" valueB="靠周边居民" />
+          <h2 className="h2">{S.p5.daypart}</h2>
+          <SplitBar a={lunch} b={dinner} labelA={S.p5.lunch} labelB={S.p5.dinner} valueA={S.p5.lunchSub} valueB={S.p5.dinnerSub} />
           <table className="data-table compact">
             <tbody>
               <tr>
-                <th>步行 10 分钟范围内岗位</th>
-                <Cell num>{fmtInt(ring(m, 'walk10')?.jobs)}</Cell>
+                <th>{S.p5.jobsWalk}</th>
+                <Cell num na={S.na}>{F.int(ring(m, 'walk10')?.jobs)}</Cell>
               </tr>
               <tr>
-                <th>主商圈户均人数</th>
-                <Cell num>{fmtNum(ring(m, m.trade_area.primary_ring)?.avg_hh_size, 2)}</Cell>
+                <th>{S.p5.hhSize}</th>
+                <Cell num na={S.na}>{F.num(ring(m, m.trade_area.primary_ring)?.avg_hh_size, 2)}</Cell>
               </tr>
               <tr>
-                <th>主商圈租房家庭占比</th>
-                <Cell num>{fmtPct(ring(m, m.trade_area.primary_ring)?.renter_share, 1)}</Cell>
+                <th>{S.p5.renters}</th>
+                <Cell num na={S.na}>{F.pct(ring(m, m.trade_area.primary_ring)?.renter_share, 1)}</Cell>
               </tr>
             </tbody>
           </table>
         </div>
         <div>
-          <h2 className="h2">怎么算的 · Basis</h2>
+          <h2 className="h2">{S.p5.basis}</h2>
           <table className="data-table compact">
             <tbody>
               {segs.map((s) => (
                 <tr key={s.id}>
                   <th>
                     {s.label}
-                    <span className="th-en">{SEGMENT_LABEL[s.id]?.en}</span>
+                    {c.lang === 'zh' ? <span className="th-en">{segmentName(s.id, 'en')}</span> : null}
                   </th>
-                  <Cell>{plainZh(s.basis)}</Cell>
+                  <Cell na={S.na}>{c.t(s.basis)}</Cell>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
-      <XRef>午市 / 晚市各能拿到多少营收见第 9 页。</XRef>
+      <XRef>{S.p5.xref}</XRef>
     </PageShell>
   );
 }
@@ -586,83 +607,87 @@ function Page5({ model }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 6 · Competitive landscape                                             */
 /* ------------------------------------------------------------------ */
-function Page6({ model }: PageProps) {
-  const c = model.competitors;
+function Page6({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
+  const cc = model.competitors;
+  const cuisine = c.lang === 'zh' ? model.input.cuisine_label_zh : cuisineName(model.input, c.lang);
+  const na = S.na;
   return (
-    <PageShell model={model} pageId="page_6" chips={<SourceChips model={model} ids={['D5', 'D6', 'D7']} model_labels={['集聚分']} />}>
+    <PageShell c={c} model={model} pageId="page_6" chips={<SourceChips model={model} ids={['D5', 'D6', 'D7']} model_labels={[S.p6.chipCluster]} lang={c.lang} />}>
       <div className="two-col">
         <div>
           <table className="data-table">
             <thead>
               <tr>
-                <th>类别 · Group</th>
-                <th className="num">数量</th>
-                <th>说明</th>
+                <th>{S.p6.group}</th>
+                <th className="num">{S.p6.count}</th>
+                <th>{S.p6.note}</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <th>同菜系竞品</th>
-                <Cell num>{fmtInt(c.l1.length)}</Cell>
-                <Cell>同样做{model.input.cuisine_label_zh}的店</Cell>
+                <th>{S.p6.l1}</th>
+                <Cell num na={na}>{F.int(cc.l1.length)}</Cell>
+                <Cell na={na}>{fill(S.p6.l1Note, { cuisine })}</Cell>
               </tr>
               <tr>
-                <th>其他中餐</th>
-                <Cell num>{fmtInt(c.l2_count)}</Cell>
-                <Cell>其他菜系的中餐店</Cell>
+                <th>{S.p6.l2}</th>
+                <Cell num na={na}>{F.int(cc.l2_count)}</Cell>
+                <Cell na={na}>{S.p6.l2Note}</Cell>
               </tr>
               <tr>
-                <th>其他亚洲餐饮</th>
-                <Cell num>{fmtInt(c.l3_count)}</Cell>
-                <Cell>日 / 韩 / 越 / 泰等</Cell>
+                <th>{S.p6.l3}</th>
+                <Cell num na={na}>{F.int(cc.l3_count)}</Cell>
+                <Cell na={na}>{S.p6.l3Note}</Cell>
               </tr>
               <tr>
-                <th>华人客流聚集点</th>
-                <Cell num>{fmtInt(c.l4.length)}</Cell>
-                <Cell>华人超市 / 银行 / 学校 / 茶饮</Cell>
+                <th>{S.p6.l4}</th>
+                <Cell num na={na}>{F.int(cc.l4.length)}</Cell>
+                <Cell na={na}>{S.p6.l4Note}</Cell>
               </tr>
               <tr>
-                <th>步行 10 分钟内的中餐店</th>
-                <Cell num>{fmtInt(c.walk10_l1_l2_count)}</Cell>
-                <Cell>同菜系 + 其他中餐，用于算集聚分</Cell>
+                <th>{S.p6.walk10}</th>
+                <Cell num na={na}>{F.int(cc.walk10_l1_l2_count)}</Cell>
+                <Cell na={na}>{S.p6.walk10Note}</Cell>
               </tr>
               <tr>
-                <th>每万居民的中餐店数</th>
-                <Cell num>{fmtNum(c.density_per_10k_residents, 1)}</Cell>
-                <Cell>中餐店 ÷ 主商圈人口</Cell>
+                <th>{S.p6.perResidents}</th>
+                <Cell num na={na}>{F.num(cc.density_per_10k_residents, 1)}</Cell>
+                <Cell na={na}>{S.p6.perResidentsNote}</Cell>
               </tr>
               <tr>
-                <th>每万华裔的中餐店数</th>
-                <Cell num>{fmtNum(c.density_per_10k_chinese, 1)}</Cell>
-                <Cell>用于品类缺口检验，见第 8 页</Cell>
+                <th>{S.p6.perChinese}</th>
+                <Cell num na={na}>{F.num(cc.density_per_10k_chinese, 1)}</Cell>
+                <Cell na={na}>{S.p6.perChineseNote}</Cell>
               </tr>
               <tr>
-                <th>集中度</th>
-                <Cell num>{fmtNum(c.hhi, 3)}</Cell>
-                <Cell>少数几家店占多大份额（按评论数），越接近 1 越集中</Cell>
+                <th>{S.p6.hhi}</th>
+                <Cell num na={na}>{F.num(cc.hhi, 3)}</Cell>
+                <Cell na={na}>{S.p6.hhiNote}</Cell>
               </tr>
               <tr>
-                <th>同菜系竞品 Google 评分</th>
-                <Cell num>
-                  {fmtNum(c.avg_rating_l1, 1)} / {fmtNum(c.weighted_rating_l1, 2)}
+                <th>{S.p6.rating}</th>
+                <Cell num na={na}>
+                  {F.num(cc.avg_rating_l1, 1)} / {F.num(cc.weighted_rating_l1, 2)}
                 </Cell>
-                <Cell>平均 / 按评论数加权</Cell>
+                <Cell na={na}>{S.p6.ratingNote}</Cell>
               </tr>
             </tbody>
           </table>
         </div>
         <div>
-          <h2 className="h2">价位分布 · Price ladder</h2>
-          <PriceLadder ladder={c.price_ladder} />
+          <h2 className="h2">{S.p6.ladder}</h2>
+          <PriceLadder ladder={cc.price_ladder} lang={c.lang} />
           <div className="key-row">
-            <KeyNumber label="关店率 · Closure" value={fmtPct(c.closure_rate, 1)} sub="Google 标记永久关闭 ÷ 去重后门店数" />
-            <KeyNumber label="集聚分 · Cluster" value={fmtNum(c.cluster_score, 0)} sub="满分 100：周边中餐店太少或太多都扣分" />
+            <KeyNumber label={S.p6.closure} value={F.pct(cc.closure_rate, 1)} sub={S.p6.closureSub} />
+            <KeyNumber label={S.p6.cluster} value={F.num(cc.cluster_score, 0)} sub={S.p6.clusterSub} />
           </div>
         </div>
       </div>
-      <h2 className="h2">集聚曲线 · Cluster curve</h2>
-      <ClusterCurve walk10Count={c.walk10_l1_l2_count} clusterScore={c.cluster_score} />
-      {!c.guard_passed ? <p className="table-note">竞品数据异常：{c.guard_notes.map(plainZh).join('；') || NA}</p> : null}
+      <h2 className="h2">{S.p6.curve}</h2>
+      <ClusterCurve walk10Count={cc.walk10_l1_l2_count} clusterScore={cc.cluster_score} lang={c.lang} />
+      {!cc.guard_passed ? <p className="table-note">{fill(S.p6.guard, { notes: cc.guard_notes.map(c.t).join(c.lang === 'zh' ? '；' : '; ') || na })}</p> : null}
     </PageShell>
   );
 }
@@ -670,78 +695,76 @@ function Page6({ model }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 7 · Competitor cards                                                  */
 /* ------------------------------------------------------------------ */
-function Page7({ model }: PageProps) {
+function Page7({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
   const m = model;
+  const na = S.na;
   const sorted = [...m.competitors.l1].sort((a, b) => (b.huff_share ?? 0) - (a.huff_share ?? 0) || a.distance_mi - b.distance_mi);
   const cards = uniqueCompetitors(sorted).slice(0, 8);
   const b = m.competitors.benchmark_revenue_band;
   const be = m.finance.breakeven_monthly;
+  const cuisine = c.lang === 'zh' ? m.input.cuisine_label_zh : cuisineName(m.input, c.lang);
   const bandRows = [
-    { label: '低位（较差的店）', value: b.p25 },
-    { label: '中位（一般的店）', value: b.median },
-    { label: '高位（较好的店）', value: b.p75 },
-    { label: '本址保本线', value: be, color: PALETTE.coral },
+    { label: S.p7.bandLow, value: b.p25 },
+    { label: S.p7.bandMedian, value: b.median },
+    { label: S.p7.bandHigh, value: b.p75 },
+    { label: S.p7.bandBreakeven, value: be, color: PALETTE.coral },
   ];
-  const tierLabel = (t: number | null) => (t == null ? NA : `${t} / 5 级`);
+  const tierLabel = (t: number | null) => (t == null ? na : fill(S.p7.tierValue, { n: t }));
+  const near = m.competitors.l1_nearest_outside_pool;
   return (
-    <PageShell model={m} pageId="page_7" chips={<SourceChips model={m} ids={['D5', 'D6', 'D7']} model_labels={['分流比例']} />}>
+    <PageShell c={c} model={m} pageId="page_7" chips={<SourceChips model={m} ids={['D5', 'D6', 'D7']} model_labels={[S.p7.chipShare]} lang={c.lang} />}>
       <div className="cards-grid">
         {cards.length === 0 ? (
           m.competitors.guard_passed ? (
             <div className="panel void-panel">
-              <div className="panel-title">同菜系竞品 · Same-cuisine competitors</div>
+              <div className="panel-title">{S.p7.voidTitle}</div>
               <p>
-                周边 <strong>{m.competitors.pool_radius_mi ?? 5} 英里</strong>内没有一家{m.input.cuisine_label_zh}餐厅
-                {m.competitors.l1_nearest_outside_pool ? (
-                  <>
-                    ，最近的一家「{m.competitors.l1_nearest_outside_pool.name}」在 <strong>{fmtMiles(m.competitors.l1_nearest_outside_pool.distance_mi)}</strong> 外
-                  </>
-                ) : null}
-                。这是一个空档：没有同行分走客流，但也没有同行替你把这个菜系的市场培育起来，需求要靠自己做。
+                {fill(S.p7.voidBody, { cuisine, radius: m.competitors.pool_radius_mi ?? 5 })}
+                {near ? fill(S.p7.voidNearest, { name: near.name, dist: F.miles(near.distance_mi) }) : null}
+                {S.p7.voidTail}
               </p>
             </div>
           ) : (
-            <div className="panel">同菜系竞品：{NA}（竞品数据源未获取）</div>
+            <div className="panel">{fill(S.p7.noData, { na })}</div>
           )
         ) : null}
-        {cards.map((c, i) => (
-          <div className="comp-card" key={c.id}>
+        {cards.map((x, i) => (
+          <div className="comp-card" key={x.id}>
             <div className="comp-head">
               <span className="comp-rank">{i + 1}</span>
-              <CompetitorName c={c} />
-              {c.is_chain ? <span className="tag">连锁</span> : null}
+              <CompetitorName c={x} lang={c.lang} />
+              {x.is_chain ? <span className="tag">{S.p7.chain}</span> : null}
             </div>
             <dl className="comp-facts">
-              <dt>距离</dt>
-              <dd className="num">{fmtMiles(c.distance_mi)}</dd>
-              <dt>车程</dt>
-              <dd className="num">{fmtMinutes(c.drive_min)}</dd>
-              <dt>Google 评分</dt>
-              <dd className="num">{fmtNum(c.rating, 1)}</dd>
-              <dt>Google 评论数</dt>
-              <dd className="num">{fmtInt(c.rating_count)}</dd>
-              <dt>价位</dt>
-              <dd className="num">{priceLevelLabel(c.price_level)}</dd>
-              <dt>客流等级</dt>
-              <dd className="num">{tierLabel(c.traffic_tier)}</dd>
-              <dt>每周营业时长</dt>
-              <dd className="num">{c.hours_per_week == null ? NA : `${fmtInt(c.hours_per_week)} 小时`}</dd>
-              <dt>分流比例</dt>
-              <dd className="num">{fmtPct(c.huff_share, 1)}</dd>
-              <dt>月新增评论</dt>
-              <dd className="num">{fmtInt(c.monthly_review_growth)}</dd>
-              <dt>外卖</dt>
-              <dd>{c.offers_delivery == null ? NA : c.offers_delivery ? '提供' : '不提供'}</dd>
+              <dt>{S.p7.distance}</dt>
+              <dd className="num">{F.miles(x.distance_mi)}</dd>
+              <dt>{S.p7.drive}</dt>
+              <dd className="num">{F.minutes(x.drive_min)}</dd>
+              <dt>{S.p7.rating}</dt>
+              <dd className="num">{F.num(x.rating, 1)}</dd>
+              <dt>{S.p7.reviews}</dt>
+              <dd className="num">{F.int(x.rating_count)}</dd>
+              <dt>{S.p7.price}</dt>
+              <dd className="num">{F.price(x.price_level)}</dd>
+              <dt>{S.p7.tier}</dt>
+              <dd className="num">{tierLabel(x.traffic_tier)}</dd>
+              <dt>{S.p7.hours}</dt>
+              <dd className="num">{x.hours_per_week == null ? na : fill(S.p7.hoursValue, { n: F.int(x.hours_per_week) })}</dd>
+              <dt>{S.p7.share}</dt>
+              <dd className="num">{F.pct(x.huff_share, 1)}</dd>
+              <dt>{S.p7.growth}</dt>
+              <dd className="num">{F.int(x.monthly_review_growth)}</dd>
+              <dt>{S.p7.delivery}</dt>
+              <dd>{x.offers_delivery == null ? na : x.offers_delivery ? S.p7.yes : S.p7.no}</dd>
             </dl>
           </div>
         ))}
       </div>
-      <h2 className="h2">同类门店月营收区间 vs 本址保本线 · Benchmark band</h2>
-      <HBars rows={bandRows} valueLabel={(v) => fmtUsd(v)} labelWidth={110} valueWidth={90} height={16} gap={6} />
-      <p className="table-note">
-        营收区间怎么来的：{BAND_METHOD_ZH[b.method] ?? plainZh(b.method)}
-        {b.median == null ? '；因此这里只有本址保本线，没有同类门店的营收数字' : ''}。分流比例 = 需求分流模型算出的该店在周边中餐消费中占的份额。
-      </p>
+      <h2 className="h2">{S.p7.band}</h2>
+      <HBars rows={bandRows} valueLabel={(v) => F.usd(v)} labelWidth={c.lang === 'zh' ? 110 : 150} valueWidth={90} height={16} gap={6} />
+      <p className="table-note">{fill(S.p7.bandNote, { method: S.bandMethod[b.method] ?? c.t(b.method), onlyBreakeven: b.median == null ? S.p7.bandOnlyBreakeven : '' })}</p>
     </PageShell>
   );
 }
@@ -749,75 +772,80 @@ function Page7({ model }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 8 · Void analysis + alternatives                                      */
 /* ------------------------------------------------------------------ */
-function Page8({ model }: PageProps) {
+function Page8({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
   const m = model;
   const v = m.competitors.void;
   const alts = m.score.alternatives.filter((a) => a.cuisine !== m.input.cuisine).slice(0, 3);
   const mine = m.score.alternatives.find((a) => a.cuisine === m.input.cuisine);
   const conds = [
-    { ok: v.conditions.chinese_pop_ok, label: '华裔人口达到门槛', en: 'Chinese population' },
-    { ok: v.conditions.density_ok, label: '每万华裔的中餐店数低于华人聚居区的中位', en: 'Density vs hub median' },
-    { ok: v.conditions.l2_ok, label: '其他中餐店数量足够', en: 'Other Chinese supply present' },
+    { ok: v.conditions.chinese_pop_ok, label: S.p8.condPop, en: 'Chinese population' },
+    { ok: v.conditions.density_ok, label: S.p8.condDensity, en: 'Density vs hub median' },
+    { ok: v.conditions.l2_ok, label: S.p8.condL2, en: 'Other Chinese supply present' },
   ];
   const rankOf = (cuisine: string) => m.score.alternatives.findIndex((a) => a.cuisine === cuisine) + 1;
+  const zh = c.lang === 'zh';
+  const altName = (a: ReportModel['score']['alternatives'][number]) => cuisineName(a, c.lang);
   return (
-    <PageShell model={m} pageId="page_8" chips={<SourceChips model={m} ids={['D2', 'D5']} model_labels={['品类缺口三条件', '替代菜系评分']} />}>
+    <PageShell c={c} model={m} pageId="page_8" chips={<SourceChips model={m} ids={['D2', 'D5']} model_labels={[S.p8.chipGap, S.p8.chipAlt]} lang={c.lang} />}>
       <div className="two-col">
         <div>
-          <h2 className="h2">门店密度 vs 华人聚居区中位 · Density</h2>
-          <DensityBar density={m.competitors.density_per_10k_chinese} ratioVsHub={v.density_vs_hub_median} />
-          <p className="table-note">本址每万华裔的中餐店数 ÷ 华人聚居区中位 = {fmtMulti(v.density_vs_hub_median)}；整个都会区同菜系门店 {fmtInt(m.competitors.metro_sub_cuisine_total)} 家。</p>
+          <h2 className="h2">{S.p8.density}</h2>
+          <DensityBar density={m.competitors.density_per_10k_chinese} ratioVsHub={v.density_vs_hub_median} lang={c.lang} />
+          <p className="table-note">{fill(S.p8.densityNote, { ratio: F.multi(v.density_vs_hub_median), n: F.int(m.competitors.metro_sub_cuisine_total) })}</p>
         </div>
         <div>
-          <h2 className="h2">品类缺口三条件 · Gap test</h2>
+          <h2 className="h2">{S.p8.gap}</h2>
           <ul className="check-list">
-            {conds.map((c) => (
-              <li key={c.en} className={c.ok ? 'ok' : 'fail'}>
-                {c.ok ? <Check size={14} strokeWidth={2.5} aria-hidden /> : <X size={14} strokeWidth={2.5} aria-hidden />}
+            {conds.map((x) => (
+              <li key={x.en} className={x.ok ? 'ok' : 'fail'}>
+                {x.ok ? <Check size={14} strokeWidth={2.5} aria-hidden /> : <X size={14} strokeWidth={2.5} aria-hidden />}
                 <span>
-                  {c.label} <span className="muted">{c.en}</span>
+                  {x.label} {zh ? <span className="muted">{x.en}</span> : null}
                 </span>
               </li>
             ))}
           </ul>
           <div className="verdict-line">
-            结论：<strong>{v.is_void ? '品类空白（这类店明显不够）' : '供给较少，但算不上空白'}</strong>
-            <span className="muted"> · {plainZh(v.reason)}</span>
+            {S.p8.conclusion}
+            <strong>{v.is_void ? S.p8.isVoid : S.p8.notVoid}</strong>
+            <span className="muted"> · {c.t(v.reason)}</span>
           </div>
         </div>
       </div>
-      <h2 className="h2">更适合的替代菜系前三 · Alternatives</h2>
+      <h2 className="h2">{S.p8.alternatives}</h2>
       <table className="data-table">
         <thead>
           <tr>
-            <th className="num">名次</th>
-            <th>菜系 · Cuisine</th>
-            <th className="num">综合分</th>
-            <th>判定</th>
+            <th className="num">{S.p8.rank}</th>
+            <th>{S.p8.cuisine}</th>
+            <th className="num">{S.p8.score}</th>
+            <th>{S.p8.verdict}</th>
           </tr>
         </thead>
         <tbody>
           {alts.map((a) => (
             <tr key={a.cuisine}>
-              <Cell num>{rankOf(a.cuisine)}</Cell>
-              <Cell>
-                {a.label_zh} <span className="muted">{a.label_en}</span>
+              <Cell num na={S.na}>{rankOf(a.cuisine)}</Cell>
+              <Cell na={S.na}>
+                {altName(a)} {zh ? <span className="muted">{a.label_en}</span> : null}
               </Cell>
-              <Cell num>{fmtNum(a.total, 1)}</Cell>
-              <Cell>{verdictLabel(a.verdict).zh}</Cell>
+              <Cell num na={S.na}>{F.num(a.total, 1)}</Cell>
+              <Cell na={S.na}>{verdictLabel(a.verdict, c.lang).label}</Cell>
             </tr>
           ))}
           <tr className="highlight">
-            <Cell num>{fmtInt(m.score.user_cuisine_rank)}</Cell>
-            <Cell>
-              {m.input.cuisine_label_zh} <span className="muted">{m.input.cuisine_label_en} · 您选的菜系</span>
+            <Cell num na={S.na}>{F.int(m.score.user_cuisine_rank)}</Cell>
+            <Cell na={S.na}>
+              {zh ? m.input.cuisine_label_zh : cuisineName(m.input, c.lang)} <span className="muted">{zh ? `${m.input.cuisine_label_en} · ` : ''}{S.p8.yours}</span>
             </Cell>
-            <Cell num>{fmtNum(mine?.total ?? m.score.total, 1)}</Cell>
-            <Cell>{verdictLabel(mine?.verdict ?? m.score.verdict).zh}</Cell>
+            <Cell num na={S.na}>{F.num(mine?.total ?? m.score.total, 1)}</Cell>
+            <Cell na={S.na}>{verdictLabel(mine?.verdict ?? m.score.verdict, c.lang).label}</Cell>
           </tr>
         </tbody>
       </table>
-      <XRef>共比较了 {m.score.alternatives.length} 个菜系；您选的菜系的六项得分见第 11 页。</XRef>
+      <XRef>{fill(S.p8.xref, { n: m.score.alternatives.length })}</XRef>
     </PageShell>
   );
 }
@@ -825,54 +853,56 @@ function Page8({ model }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 9 · Demand capture                                                    */
 /* ------------------------------------------------------------------ */
-function Page9({ model }: PageProps) {
+function Page9({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
   const d = model.demand;
-  const parts = d.by_ring.map((r) => ({ label: RING_LABEL[r.ring].en, value: r.monthly_usd, share: r.share }));
+  const parts = d.by_ring.map((r) => ({ label: S.ring[r.ring].short, value: r.monthly_usd, share: r.share }));
   return (
-    <PageShell model={model} pageId="page_9" chips={<SourceChips model={model} ids={['D2', 'D10', 'D5', 'D6']} model_labels={['需求分流模型']} />}>
-      <h2 className="h2">各范围能拿到的月需求 · Captured demand by ring</h2>
-      {parts.length ? <StackedRingBar parts={parts} total={d.captured_monthly_usd} /> : <p className="table-note">{NA}</p>}
+    <PageShell c={c} model={model} pageId="page_9" chips={<SourceChips model={model} ids={['D2', 'D10', 'D5', 'D6']} model_labels={[S.p9.chipHuff]} lang={c.lang} />}>
+      <h2 className="h2">{S.p9.byRing}</h2>
+      {parts.length ? <StackedRingBar parts={parts} total={d.captured_monthly_usd} lang={c.lang} /> : <p className="table-note">{S.na}</p>}
       <div className="two-col">
         <div>
-          <h2 className="h2">午市 / 晚市 · Daypart</h2>
-          <SplitBar a={d.lunch_usd ?? 0} b={d.dinner_usd ?? 0} labelA="午市" labelB="晚市" valueA={fmtUsd(d.lunch_usd)} valueB={fmtUsd(d.dinner_usd)} />
+          <h2 className="h2">{S.p9.daypart}</h2>
+          <SplitBar a={d.lunch_usd ?? 0} b={d.dinner_usd ?? 0} labelA={S.p9.lunch} labelB={S.p9.dinner} valueA={F.usd(d.lunch_usd)} valueB={F.usd(d.dinner_usd)} />
           <table className="data-table compact">
             <tbody>
               <tr>
-                <th>预计每月能拿到的需求</th>
-                <Cell num>{fmtUsd(d.captured_monthly_usd)}</Cell>
+                <th>{S.p9.captured}</th>
+                <Cell num na={S.na}>{F.usd(d.captured_monthly_usd)}</Cell>
               </tr>
               <tr>
-                <th>预计每天单数</th>
-                <Cell num>{fmtInt(d.captured_covers_day)}</Cell>
+                <th>{S.p9.covers}</th>
+                <Cell num na={S.na}>{F.int(d.captured_covers_day)}</Cell>
               </tr>
               <tr>
-                <th>菜系份额（本菜系占中餐消费的比例）</th>
-                <Cell num>{fmtPct(d.cuisine_share, 1)}</Cell>
+                <th>{S.p9.share}</th>
+                <Cell num na={S.na}>{F.pct(d.cuisine_share, 1)}</Cell>
               </tr>
               <tr>
-                <th>分流参数（吸引力 / 距离衰减）</th>
-                <Cell num>
-                  {fmtNum(d.huff.alpha, 2)} / {fmtNum(d.huff.beta, 2)}
+                <th>{S.p9.params}</th>
+                <Cell num na={S.na}>
+                  {F.num(d.huff.alpha, 2)} / {F.num(d.huff.beta, 2)}
                 </Cell>
               </tr>
               <tr>
-                <th>本址吸引力</th>
-                <Cell num>{fmtNum(d.huff.site_attractiveness, 2)}</Cell>
+                <th>{S.p9.attractiveness}</th>
+                <Cell num na={S.na}>{F.num(d.huff.site_attractiveness, 2)}</Cell>
               </tr>
               <tr>
-                <th>参与分流的竞品数</th>
-                <Cell num>{fmtInt(d.huff.competitor_set)}</Cell>
+                <th>{S.p9.competitors}</th>
+                <Cell num na={S.na}>{F.int(d.huff.competitor_set)}</Cell>
               </tr>
             </tbody>
           </table>
         </div>
         <div>
-          <h2 className="h2">需求覆盖率 · Coverage</h2>
-          <CoverageGauge ratio={d.coverage_ratio} />
+          <h2 className="h2">{S.p9.coverage}</h2>
+          <CoverageGauge ratio={d.coverage_ratio} lang={c.lang} />
         </div>
       </div>
-      <XRef>需求分流模型 = 把周边居民的中餐消费按各店的吸引力和距离远近分摊。保本线与安全线见第 10 页；菜系份额怎么算见第 14 页。</XRef>
+      <XRef>{S.p9.xref}</XRef>
     </PageShell>
   );
 }
@@ -880,82 +910,83 @@ function Page9({ model }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 10 · Finance                                                          */
 /* ------------------------------------------------------------------ */
-function Page10({ model }: PageProps) {
+function Page10({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
   const f = model.finance;
   const fc = f.fixed_cost;
   const base = f.scenarios.find((s) => s.id === 'base');
-  const costRows: Array<[string, number | null]> = [
-    ['租金', fc.rent],
-    ['人工', fc.labor],
-    ['水电', fc.utilities],
-    ['保险', fc.insurance],
-    ['收银系统 / 软件', fc.pos],
-    ['营销', fc.marketing],
-    ['其他', fc.misc],
+  const costRows: Array<[string, string, number | null]> = [
+    ['rent', S.p10.rent, fc.rent],
+    ['labor', S.p10.labor, fc.labor],
+    ['utilities', S.p10.utilities, fc.utilities],
+    ['insurance', S.p10.insurance, fc.insurance],
+    ['pos', S.p10.pos, fc.pos],
+    ['marketing', S.p10.marketing, fc.marketing],
+    ['misc', S.p10.misc, fc.misc],
   ];
+  const zh = c.lang === 'zh';
   return (
-    <PageShell model={model} pageId="page_10" chips={<SourceChips model={model} ids={['D12', 'D8']} model_labels={['保本模型', '敏感性']} />}>
+    <PageShell c={c} model={model} pageId="page_10" chips={<SourceChips model={model} ids={['D12', 'D8']} model_labels={[S.p10.chipBreakeven, S.p10.chipSensitivity]} lang={c.lang} />}>
       <div className="two-col">
         <div>
           <table className="data-table">
             <thead>
               <tr>
-                <th>固定成本 / 月 · Fixed cost</th>
-                <th className="num">USD</th>
+                <th>{S.p10.fixed}</th>
+                <th className="num">{S.p10.usd}</th>
               </tr>
             </thead>
             <tbody>
-              {costRows.map(([label, v]) => (
-                <tr key={label}>
+              {costRows.map(([key, label, v]) => (
+                <tr key={key}>
                   <th>
                     {label}
-                    {label === '租金' ? <span className="muted"> · {f.rent_source === 'user_input' ? '您的输入' : plainZh(f.rent_source)}</span> : null}
+                    {key === 'rent' ? <span className="muted"> · {f.rent_source === 'user_input' ? S.p10.yourInput : c.t(f.rent_source)}</span> : null}
                   </th>
-                  <Cell num>{fmtUsd(v)}</Cell>
+                  <Cell num na={S.na}>{F.usd(v)}</Cell>
                 </tr>
               ))}
               <tr className="total">
-                <th>合计</th>
-                <Cell num>{fmtUsd(fc.total)}</Cell>
+                <th>{S.p10.total}</th>
+                <Cell num na={S.na}>{F.usd(fc.total)}</Cell>
               </tr>
               <tr>
-                <th>边际贡献率</th>
-                <Cell num>{fmtPct(f.contribution_margin, 1)}</Cell>
+                <th>{S.p10.margin}</th>
+                <Cell num na={S.na}>{F.pct(f.contribution_margin, 1)}</Cell>
               </tr>
               <tr>
-                <th>占用成本比（租金 ÷ 预计营收）</th>
-                <Cell num>{fmtPct(f.occupancy_cost_ratio, 1)}</Cell>
+                <th>{S.p10.occupancy}</th>
+                <Cell num na={S.na}>{F.pct(f.occupancy_cost_ratio, 1)}</Cell>
               </tr>
             </tbody>
           </table>
         </div>
         <div>
           <div className="key-row">
-            <KeyNumber label="保本线 / 月" value={fmtUsd(f.breakeven_monthly)} sub="固定成本 ÷ 边际贡献率（营收扣掉变动成本后剩下的比例）" />
-            <KeyNumber label="安全线 / 月" value={fmtUsd(f.safety_monthly)} sub="保本线 × 1.28，留出缓冲" />
+            <KeyNumber label={S.p10.breakeven} value={F.usd(f.breakeven_monthly)} sub={S.p10.breakevenSub} />
+            <KeyNumber label={S.p10.safety} value={F.usd(f.safety_monthly)} sub={S.p10.safetySub} />
           </div>
-          {f.payback_months != null ? <KeyNumber label="回收期" value={`${fmtInt(f.payback_months)} 个月`} sub={`开办投入 ${fmtUsd(model.input.capex_usd)}`} /> : null}
+          {f.payback_months != null ? <KeyNumber label={S.p10.payback} value={fill(S.p10.paybackValue, { n: F.int(f.payback_months) })} sub={fill(S.p10.paybackSub, { capex: F.usd(model.input.capex_usd) })} /> : null}
           <table className="data-table compact">
             <tbody>
               <tr>
-                <th>输入：租金 / 面积 / 座位</th>
-                <Cell num>
-                  {fmtUsd(model.input.rent_usd)} / {fmtInt(model.input.sqft)} 平方英尺 / {fmtInt(model.input.seats)}
+                <th>{S.p10.inputs}</th>
+                <Cell num na={S.na}>{fill(S.p10.inputsValue, { rent: F.usd(model.input.rent_usd), sqft: F.int(model.input.sqft), seats: F.int(model.input.seats) })}</Cell>
+              </tr>
+              <tr>
+                <th>{S.p10.ticket}</th>
+                <Cell num na={S.na}>
+                  {F.usd(model.input.ticket_in)} / {F.usd(model.input.ticket_delivery)}
                 </Cell>
               </tr>
               <tr>
-                <th>客单价 堂食 / 外卖</th>
-                <Cell num>
-                  {fmtUsd(model.input.ticket_in)} / {fmtUsd(model.input.ticket_delivery)}
-                </Cell>
+                <th>{S.p10.deliveryRatio}</th>
+                <Cell num na={S.na}>{F.pct(model.input.delivery_ratio)}</Cell>
               </tr>
               <tr>
-                <th>外卖占比（输入）</th>
-                <Cell num>{fmtPct(model.input.delivery_ratio)}</Cell>
-              </tr>
-              <tr>
-                <th>变动成本率</th>
-                <Cell num>{fmtPct(f.variable_rate, 1)}</Cell>
+                <th>{S.p10.variable}</th>
+                <Cell num na={S.na}>{F.pct(f.variable_rate, 1)}</Cell>
               </tr>
             </tbody>
           </table>
@@ -964,45 +995,46 @@ function Page10({ model }: PageProps) {
       <table className="data-table scenarios">
         <thead>
           <tr>
-            <th>情景 · Scenario</th>
-            <th className="num">座位</th>
-            <th className="num">翻台 / 天</th>
-            <th className="num">堂食 / 天</th>
-            <th className="num">外卖单 / 天</th>
-            <th className="num">总单 / 天</th>
-            <th className="num">客单 堂食 / 外卖</th>
-            <th className="num">月营收</th>
-            <th className="num">vs 保本</th>
+            <th>{S.p10.scenario}</th>
+            <th className="num">{S.p10.seats}</th>
+            <th className="num">{S.p10.turns}</th>
+            <th className="num">{S.p10.dineIn}</th>
+            <th className="num">{S.p10.deliveryOrders}</th>
+            <th className="num">{S.p10.orders}</th>
+            <th className="num">{S.p10.ticketCol}</th>
+            <th className="num">{S.p10.revenue}</th>
+            <th className="num">{S.p10.vsBreakeven}</th>
           </tr>
         </thead>
         <tbody>
           {f.scenarios.map((s) => (
             <tr key={s.id} className={s.id === 'base' ? 'highlight' : undefined}>
               <th>
-                {SCENARIO_LABEL[s.id].zh} <span className="muted">{SCENARIO_LABEL[s.id].en}</span>
+                {S.scenario[s.id]} {zh ? <span className="muted">{strings('en').scenario[s.id]}</span> : null}
               </th>
-              <Cell num>{fmtInt(s.seats)}</Cell>
-              <Cell num>{fmtNum(s.turns_per_day, 1)}</Cell>
-              <Cell num>{fmtInt(s.dine_in_covers_day)}</Cell>
-              <Cell num>{fmtNum(s.delivery_orders_day, 1)}</Cell>
-              <Cell num>{fmtNum(s.orders_day, 1)}</Cell>
-              <Cell num>
-                ${fmtNum(s.ticket_in, 1)} / ${fmtNum(s.ticket_delivery, 1)}
+              <Cell num na={S.na}>{F.int(s.seats)}</Cell>
+              <Cell num na={S.na}>{F.num(s.turns_per_day, 1)}</Cell>
+              <Cell num na={S.na}>{F.int(s.dine_in_covers_day)}</Cell>
+              <Cell num na={S.na}>{F.num(s.delivery_orders_day, 1)}</Cell>
+              <Cell num na={S.na}>{F.num(s.orders_day, 1)}</Cell>
+              <Cell num na={S.na}>
+                ${F.num(s.ticket_in, 1)} / ${F.num(s.ticket_delivery, 1)}
               </Cell>
-              <Cell num>{fmtUsd(s.monthly_revenue)}</Cell>
-              <Cell num className={s.vs_breakeven == null ? undefined : s.vs_breakeven >= 1 ? 'ink-green' : 'ink-red'}>
-                {fmtMulti(s.vs_breakeven)}
+              <Cell num na={S.na}>{F.usd(s.monthly_revenue)}</Cell>
+              <Cell num className={s.vs_breakeven == null ? undefined : s.vs_breakeven >= 1 ? 'ink-green' : 'ink-red'} na={S.na}>
+                {F.multi(s.vs_breakeven)}
               </Cell>
             </tr>
           ))}
         </tbody>
       </table>
-      <h2 className="h2">哪一项变动最要命 · Sensitivity</h2>
+      <h2 className="h2">{S.p10.sensitivity}</h2>
       <div className="waterfall-wrap">
-        <SensitivityWaterfall base={base?.monthly_revenue ?? null} breakeven={f.breakeven_monthly} items={f.sensitivity.map((s) => ({ label: s.label_zh, delta: s.monthly_revenue_delta, breaks: s.breaks_breakeven }))} />
+        <SensitivityWaterfall base={base?.monthly_revenue ?? null} breakeven={f.breakeven_monthly} items={f.sensitivity.map((s) => ({ label: sensitivityName(s, c.lang), delta: s.monthly_revenue_delta, breaks: s.breaks_breakeven }))} lang={c.lang} />
       </div>
       <p className="table-note">
-        计算口径：{plainZh(f.method)}。{f.payback_months == null ? '未提供开办投入（装修与设备），回收期不显示。' : ''}
+        {fill(S.p10.note, { method: c.t(f.method) })}
+        {f.payback_months == null ? S.p10.noCapex : ''}
       </p>
     </PageShell>
   );
@@ -1011,88 +1043,91 @@ function Page10({ model }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 11 · Six-dimension score                                              */
 /* ------------------------------------------------------------------ */
-function Page11({ model }: PageProps) {
+function Page11({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
   const s = model.score;
   const weightSum = s.dimensions.reduce((a, d) => a + d.weight, 0);
+  const zh = c.lang === 'zh';
+  const sep = zh ? '；' : '; ';
   return (
-    <PageShell model={model} pageId="page_11" chips={<SourceChips model={model} ids={[]} model_labels={['六项加权评分', '判定门槛']} />}>
+    <PageShell c={c} model={model} pageId="page_11" chips={<SourceChips model={model} ids={[]} model_labels={[S.p11.chipScore, S.p11.chipThreshold]} lang={c.lang} />}>
       <table className="data-table score-table">
         <thead>
           <tr>
-            <th>维度 · Dimension</th>
-            <th className="num">得分</th>
-            <th>量表</th>
-            <th className="num">权重</th>
-            <th className="num">加权分</th>
-            <th>依据 · Drivers</th>
+            <th>{S.p11.dimension}</th>
+            <th className="num">{S.p11.score}</th>
+            <th>{S.p11.meter}</th>
+            <th className="num">{S.p11.weight}</th>
+            <th className="num">{S.p11.weighted}</th>
+            <th>{S.p11.drivers}</th>
           </tr>
         </thead>
         <tbody>
           {s.dimensions.map((d) => (
             <tr key={d.id}>
               <th>
-                {d.label_zh}
-                <span className="th-en">{d.label_en}</span>
+                {dimensionName(d, c.lang)}
+                {zh ? <span className="th-en">{d.label_en}</span> : null}
               </th>
-              <Cell num>{fmtNum(d.score, 1)}</Cell>
+              <Cell num na={S.na}>{F.num(d.score, 1)}</Cell>
               <td>
-                <ScoreMeter score={d.score} />
+                <ScoreMeter score={d.score} lang={c.lang} />
               </td>
-              <Cell num>{fmtInt(d.weight)}%</Cell>
-              <Cell num>{fmtNum(d.weighted, 2)}</Cell>
-              <Cell>{d.drivers.length ? d.drivers.map(plainZh).join('；') : NA}</Cell>
+              <Cell num na={S.na}>{F.int(d.weight)}%</Cell>
+              <Cell num na={S.na}>{F.num(d.weighted, 2)}</Cell>
+              <Cell na={S.na}>{d.drivers.length ? d.drivers.map(c.t).join(sep) : S.na}</Cell>
             </tr>
           ))}
           <tr className="total">
-            <th>合计 · Total</th>
-            <Cell num>—</Cell>
+            <th>{S.p11.total}</th>
+            <Cell num na={S.na}>—</Cell>
             <td>
-              <ScoreMeter score={s.total} />
+              <ScoreMeter score={s.total} lang={c.lang} />
             </td>
-            <Cell num>{fmtInt(weightSum)}%</Cell>
-            <Cell num className="key-inline">
-              {fmtNum(s.total, 1)}
+            <Cell num na={S.na}>{F.int(weightSum)}%</Cell>
+            <Cell num className="key-inline" na={S.na}>
+              {F.num(s.total, 1)}
             </Cell>
-            <Cell>
-              <VerdictBadge verdict={s.verdict} size="sm" />
+            <Cell na={S.na}>
+              <VerdictBadge c={c} verdict={s.verdict} size="sm" />
             </Cell>
           </tr>
         </tbody>
       </table>
       <div className="two-col">
         <div className="panel">
-          <div className="panel-title">签约前条件 · Conditions</div>
+          <div className="panel-title">{S.p11.conditions}</div>
           <ol className="tight-list">
-            {s.conditions.length === 0 ? <li>无附加条件</li> : null}
-            {s.conditions.map((c, i) => (
-              <li key={i}>
-                <span className="li-head">{s.dimensions.find((d) => d.id === c.dimension)?.label_zh ?? plainZh(c.dimension)}</span>
-                <span className="li-body">{plainZh(c.text_zh)}</span>
-              </li>
-            ))}
+            {s.conditions.length === 0 ? <li>{S.p11.noConditions}</li> : null}
+            {s.conditions.map((x, i) => {
+              const dim = s.dimensions.find((d) => d.id === x.dimension);
+              return (
+                <li key={i}>
+                  <span className="li-head">{dim ? dimensionName(dim, c.lang) : c.t(x.dimension)}</span>
+                  <span className="li-body">{c.field(x.text_zh, x.text_en)}</span>
+                </li>
+              );
+            })}
           </ol>
         </div>
         <div className="panel">
-          <div className="panel-title">判定规则 · Verdict rule</div>
+          <div className="panel-title">{S.p11.rule}</div>
           <ul className="tight-list">
             <li>
               <span className="dot" style={{ background: scoreColor(80) }} />
-              <span className="li-body">GO 可做：综合 ≥ 70 分，且没有一票否决项</span>
+              <span className="li-body">{S.verdictRule.go}</span>
             </li>
             <li>
               <span className="dot" style={{ background: scoreColor(55) }} />
-              <span className="li-body">CONDITIONAL GO 有条件可做：55–69 分，或签约前条件能落实</span>
+              <span className="li-body">{S.verdictRule.conditional}</span>
             </li>
             <li>
               <span className="dot" style={{ background: scoreColor(20) }} />
-              <span className="li-body">NO GO 不建议：{'< 55'} 分，或财务 / 需求这两项触发否决</span>
+              <span className="li-body">{S.verdictRule.noGo}</span>
             </li>
           </ul>
-          {s.cannibalization.length ? (
-            <p className="table-note">
-              自家分流（已有门店被分走的客流）：{s.cannibalization.map((c) => `${c.store} ${fmtPct(c.diverted_share, 1)}`).join('；')}
-            </p>
-          ) : null}
+          {s.cannibalization.length ? <p className="table-note">{fill(S.p11.cannibalization, { list: s.cannibalization.map((x) => `${x.store} ${F.pct(x.diverted_share, 1)}`).join(sep) })}</p> : null}
         </div>
       </div>
     </PageShell>
@@ -1102,56 +1137,58 @@ function Page11({ model }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 12 · Risk register                                                    */
 /* ------------------------------------------------------------------ */
-function Page12({ model }: PageProps) {
+function Page12({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
   const risks = model.risks;
   return (
-    <PageShell model={model} pageId="page_12" chips={<SourceChips model={model} ids={['D11', 'D12']} model_labels={['风险评估']} />}>
-      <h2 className="h2">概率 × 影响 · Matrix</h2>
+    <PageShell c={c} model={model} pageId="page_12" chips={<SourceChips model={model} ids={['D11', 'D12']} model_labels={[S.p12.chipRisk]} lang={c.lang} />}>
+      <h2 className="h2">{S.p12.matrix}</h2>
       <div className="risk-matrix-wrap">
-        <RiskMatrix risks={risks} />
+        <RiskMatrix risks={risks} lang={c.lang} />
       </div>
       <div className="key-row three">
-        <KeyNumber label="高概率风险" value={`${fmtInt(risks.filter((r) => r.prob === 'high').length)} 项`} sub={`共 ${risks.length} 项`} />
-        <KeyNumber label="已算出的影响合计 / 月" value={fmtUsd(risks.reduce((a, r) => a + (r.impact_usd ?? 0), 0))} sub={`${risks.filter((r) => r.impact_usd != null).length} 项已算出金额`} />
-        <KeyNumber label="未算出金额的风险" value={`${fmtInt(risks.filter((r) => r.impact_usd == null).length)} 项`} sub="表中显示为「未获取」" />
+        <KeyNumber label={S.p12.highCount} value={fill(S.p12.items, { n: F.int(risks.filter((r) => r.prob === 'high').length) })} sub={fill(S.p12.ofTotal, { n: risks.length })} />
+        <KeyNumber label={S.p12.impactSum} value={F.usd(risks.reduce((a, r) => a + (r.impact_usd ?? 0), 0))} sub={fill(S.p12.impactSumSub, { n: risks.filter((r) => r.impact_usd != null).length })} />
+        <KeyNumber label={S.p12.unquantified} value={fill(S.p12.items, { n: F.int(risks.filter((r) => r.impact_usd == null).length) })} sub={S.p12.unquantifiedSub} />
       </div>
       <table className="data-table risk-table">
         <thead>
           <tr>
             <th className="num">#</th>
-            <th>风险 · Risk</th>
-            <th>概率</th>
-            <th className="num">影响 / 月</th>
-            <th>什么时候会发生 · Trigger</th>
-            <th>怎么应对 · Hedge</th>
+            <th>{S.p12.risk}</th>
+            <th>{S.p12.prob}</th>
+            <th className="num">{S.p12.impact}</th>
+            <th>{S.p12.trigger}</th>
+            <th>{S.p12.hedge}</th>
           </tr>
         </thead>
         <tbody>
           {risks.length === 0 ? (
             <tr>
-              <Cell num>—</Cell>
-              <Cell>{NA}</Cell>
-              <Cell>{NA}</Cell>
-              <Cell num>{NA}</Cell>
-              <Cell>{NA}</Cell>
-              <Cell>{NA}</Cell>
+              <Cell num na={S.na}>—</Cell>
+              <Cell na={S.na}>{S.na}</Cell>
+              <Cell na={S.na}>{S.na}</Cell>
+              <Cell num na={S.na}>{S.na}</Cell>
+              <Cell na={S.na}>{S.na}</Cell>
+              <Cell na={S.na}>{S.na}</Cell>
             </tr>
           ) : null}
           {risks.map((r) => (
             <tr key={r.id}>
-              <Cell num>{r.id}</Cell>
-              <Cell>{plainZh(r.risk_zh)}</Cell>
+              <Cell num na={S.na}>{r.id}</Cell>
+              <Cell na={S.na}>{c.field(r.risk_zh, r.risk_en)}</Cell>
               <td>
-                <span className="dot" style={{ background: probColor(r.prob) }} /> {PROB_LABEL[r.prob]}
+                <span className="dot" style={{ background: probColor(r.prob) }} /> {S.prob[r.prob]}
               </td>
-              <Cell num>{fmtUsd(r.impact_usd)}</Cell>
-              <Cell>{r.trigger && r.trigger !== '—' ? plainZh(r.trigger) : NA}</Cell>
-              <Cell>{plainZh(r.hedge) || NA}</Cell>
+              <Cell num na={S.na}>{F.usd(r.impact_usd)}</Cell>
+              <Cell na={S.na}>{r.trigger && r.trigger !== '—' ? c.t(r.trigger) : S.na}</Cell>
+              <Cell na={S.na}>{c.t(r.hedge) || S.na}</Cell>
             </tr>
           ))}
         </tbody>
       </table>
-      <XRef>占用成本比与保本线见第 10 页；需求覆盖率见第 9 页；对应的签约条件见第 13 页。</XRef>
+      <XRef>{S.p12.xref}</XRef>
     </PageShell>
   );
 }
@@ -1159,42 +1196,22 @@ function Page12({ model }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 13 · Pre-lease checklist + 90-day plan                                */
 /* ------------------------------------------------------------------ */
-const GENERIC_LEASE_DOCS = [
-  '租约草案：租期、免租期、阶梯租金、百分比租金',
-  '公共区域费（CAM）与三净费用（NNN）上限',
-  '装修条款：业主装修补贴（TI）、施工许可责任',
-  '排烟 / 燃气 / 油脂分离器现状与改造责任',
-  '用途限制与排他条款（同菜系竞品）',
-  '转租 / 退出条款与个人担保范围',
-  '停车与装卸位分配（含外卖取餐）',
-  '施工期租金减免条款（周边在建项目）',
-];
-
-const NINETY_DAY_STEPS: Array<{ day: string; label: string }> = [
-  { day: 'D0–7', label: '落实签约前条件、补齐缺失输入，重跑报告' },
-  { day: 'D8–14', label: '租金谈判：以占用成本比 ≤ 10% 为目标' },
-  { day: 'D15–21', label: '实地踩点 3 次：午市 / 晚市 / 周末客流' },
-  { day: 'D22–30', label: '菜单与客单价定稿（用套餐锚定）' },
-  { day: 'D31–45', label: '签约 · 报建 · 排烟与燃气改造' },
-  { day: 'D46–60', label: '外卖平台上线，先验证需求' },
-  { day: 'D61–75', label: '招聘与培训；试营业' },
-  { day: 'D76–90', label: '复盘：实际营收 vs 保本线，启动风险应对' },
-];
-
-function Page13({ model }: PageProps) {
+function Page13({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S } = c;
   const m = model;
   const missing = m.finance.inputs_missing;
   return (
-    <PageShell model={m} pageId="page_13" chips={<SourceChips model={m} ids={['D12']} model_labels={['条件生成']} extra={[{ kind: 'model' as SourceKind, label: '通用签约清单' }]} />}>
+    <PageShell c={c} model={m} pageId="page_13" chips={<SourceChips model={m} ids={['D12']} model_labels={[S.p13.chipConditions]} extra={[{ kind: 'model' as SourceKind, label: S.p13.chipChecklist }]} lang={c.lang} />}>
       <div className="two-col">
         <div className="panel">
-          <div className="panel-title">签约前核查 · Pre-lease checklist</div>
+          <div className="panel-title">{S.p13.checklist}</div>
           <ul className="check-list boxes">
-            {m.score.conditions.map((c, i) => (
+            {m.score.conditions.map((x, i) => (
               <li key={`c${i}`}>
                 <span className="box" />
                 <span>
-                  <strong>条件</strong> {plainZh(c.text_zh)}
+                  <strong>{S.p13.condition}</strong> {c.field(x.text_zh, x.text_en)}
                 </span>
               </li>
             ))}
@@ -1202,22 +1219,22 @@ function Page13({ model }: PageProps) {
               <li key={`m${i}`}>
                 <span className="box" />
                 <span>
-                  <strong>补充输入</strong> {plainZh(s)}
+                  <strong>{S.p13.input}</strong> {c.t(s)}
                 </span>
               </li>
             ))}
             {m.score.conditions.length === 0 && missing.length === 0 ? (
               <li>
                 <span className="box" />
-                <span>无附加条件与缺失输入</span>
+                <span>{S.p13.nothing}</span>
               </li>
             ) : null}
           </ul>
         </div>
         <div className="panel">
-          <div className="panel-title">租约文件 · Lease documents</div>
+          <div className="panel-title">{S.p13.docs}</div>
           <ul className="check-list boxes">
-            {GENERIC_LEASE_DOCS.map((d) => (
+            {S.p13.leaseDocs.map((d) => (
               <li key={d}>
                 <span className="box" />
                 <span>{d}</span>
@@ -1226,8 +1243,8 @@ function Page13({ model }: PageProps) {
           </ul>
         </div>
       </div>
-      <h2 className="h2">90 天计划 · 90-day timeline</h2>
-      <Timeline steps={NINETY_DAY_STEPS} />
+      <h2 className="h2">{S.p13.plan}</h2>
+      <Timeline steps={S.p13.steps} lang={c.lang} />
     </PageShell>
   );
 }
@@ -1235,41 +1252,46 @@ function Page13({ model }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 14 · Sources & method (data lineage)                                  */
 /* ------------------------------------------------------------------ */
-function Page14({ model }: PageProps) {
+function Page14({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
   const m = model;
-  const notes = dataNotesZh(m);
-  const precheck = precheckReasonsZh(m);
+  const notes = dataNotes(m, c.lang);
+  const precheck = precheckReasons(m, c.lang);
   const comps = Object.entries(m.confidence.components);
   const rings = m.trade_area.rings;
+  const zh = c.lang === 'zh';
+  const sep = zh ? '；' : '; ';
+  const src = S.source as Record<string, { short: string; content: string; org: string; license: string } | undefined>;
   return (
-    <PageShell model={m} pageId="page_14" chips={<SourceChips model={m} ids={m.sources.map((s) => s.id)} />}>
+    <PageShell c={c} model={m} pageId="page_14" chips={<SourceChips model={m} ids={m.sources.map((s) => s.id)} lang={c.lang} />}>
       <table className="data-table sources-table lineage-table">
         <thead>
           <tr>
-            <th>数据源 · Source</th>
-            <th>内容 · What it provides</th>
-            <th>更新日期 · Updated</th>
-            <th>来源机构 · Provider</th>
-            <th>许可 · License</th>
+            <th>{S.p14.source}</th>
+            <th>{S.p14.content}</th>
+            <th>{S.p14.updated}</th>
+            <th>{S.p14.provider}</th>
+            <th>{S.p14.license}</th>
           </tr>
         </thead>
         <tbody>
           {m.sources.map((s) => {
-            const g = SOURCE_ZH[s.id];
+            const g = src[s.id];
             return (
               <tr key={s.id}>
-                <Cell>
-                  <span className="clamp2">{sourceShortZh(s)}</span>
+                <Cell na={S.na}>
+                  <span className="clamp2">{g?.short ?? s.name.split(' (')[0].split(' · ')[0].trim()}</span>
                 </Cell>
-                <Cell className="wrap">
-                  <span className="clamp2">{g?.content ?? (plainZh(s.coverage_note) || NA)}</span>
+                <Cell className="wrap" na={S.na}>
+                  <span className="clamp2">{g?.content ?? (c.t(s.coverage_note) || S.na)}</span>
                 </Cell>
-                <Cell>{fmtDate(s.fetched_at)}</Cell>
-                <Cell className="wrap">
+                <Cell na={S.na}>{fmtDate(s.fetched_at)}</Cell>
+                <Cell className="wrap" na={S.na}>
                   <span className="clamp2">{g?.org ?? s.source}</span>
                 </Cell>
-                <Cell className="wrap">
-                  <span className="clamp2">{g?.license ?? s.license ?? NA}</span>
+                <Cell className="wrap" na={S.na}>
+                  <span className="clamp2">{g?.license ?? s.license ?? S.na}</span>
                 </Cell>
               </tr>
             );
@@ -1278,48 +1300,42 @@ function Page14({ model }: PageProps) {
       </table>
       {notes.length ? (
         <p className="data-notes">
-          <span className="data-notes-title">数据说明</span>
-          {notes.map((n, i) => `${i + 1}. ${n}`).join('　')}
+          <span className="data-notes-title">{S.p14.notes}</span>
+          {notes.map((n, i) => `${i + 1}. ${n}`).join(zh ? '　' : '  ')}
         </p>
       ) : null}
       <div className="two-col sources-panels">
         <div className="panel">
-          <div className="panel-title">怎么算的 · Method</div>
+          <div className="panel-title">{S.p14.method}</div>
           <ul className="tight-list small">
             <li>
-              <span className="li-head">财务</span>
-              <span className="li-body">{plainZh(m.finance.method)}</span>
+              <span className="li-head">{S.p14.finance}</span>
+              <span className="li-body">{c.t(m.finance.method)}</span>
             </li>
             <li>
-              <span className="li-head">菜系份额</span>
-              <span className="li-body">{plainZh(m.demand.cuisine_share_method)}</span>
+              <span className="li-head">{S.p14.cuisineShare}</span>
+              <span className="li-body">{c.t(m.demand.cuisine_share_method)}</span>
             </li>
             <li>
-              <span className="li-head">需求分流</span>
-              <span className="li-body">把周边居民的中餐消费按各店的吸引力（评分、评论数）和距离远近分摊到每家店：离得越远、吸引力越低，分到的越少。参与分流的竞品 {fmtInt(m.demand.huff.competitor_set)} 家。</span>
+              <span className="li-head">{S.p14.demandSplit}</span>
+              <span className="li-body">{fill(S.p14.demandSplitText, { n: F.int(m.demand.huff.competitor_set) })}</span>
             </li>
             <li>
-              <span className="li-head">评分</span>
-              <span className="li-body">综合评分 = 六项得分 × 各自权重后相加；判定门槛见第 11 页</span>
+              <span className="li-head">{S.p14.scoring}</span>
+              <span className="li-body">{S.p14.scoringText}</span>
             </li>
           </ul>
         </div>
         <div className="panel">
-          <div className="panel-title">参数与数据完整度 · Parameters</div>
-          <p className="params-line">
-            数据完整度 <strong>{fmtInt(m.confidence.total)}/100</strong>（{LEVEL_LABEL[m.confidence.level]}）= 各数据源的权重 × 质量相加：{comps.map(([k, c]) => `${CONFIDENCE_COMPONENT_ZH[k] ?? k} ${fmtInt(c.weight)}%×${fmtNum(c.quality, 2)}`).join(' · ')}
-          </p>
-          <p className="params-line">
-            范围：{rings.map((r) => `${RING_LABEL[r.id].zh.replace('范围', '')}`).join(' · ')} · 主商圈 {RING_LABEL[m.trade_area.primary_ring].zh} · 范围计算 {m.trade_area.isochrone_method === 'mapbox' ? '按实际路网' : '按直线半径近似'}
-          </p>
-          <p className="params-line">
-            分流参数：吸引力 {fmtNum(m.demand.huff.alpha, 2)} · 距离衰减 {fmtNum(m.demand.huff.beta, 2)} · 引擎版本 {m.meta.engine_version}
-          </p>
+          <div className="panel-title">{S.p14.params}</div>
+          <p className="params-line">{fill(S.p14.completenessLine, { score: F.int(m.confidence.total), level: S.level[m.confidence.level], parts: comps.map(([k, x]) => `${S.confidenceComponent[k] ?? k} ${F.int(x.weight)}%×${F.num(x.quality, 2)}`).join(' · ') })}</p>
+          <p className="params-line">{fill(S.p14.ringsLine, { rings: rings.map((r) => (zh ? S.ring[r.id].label.replace('范围', '') : S.ring[r.id].short)).join(' · '), primary: zh ? S.ring[m.trade_area.primary_ring].label : S.ring[m.trade_area.primary_ring].short, method: m.trade_area.isochrone_method === 'mapbox' ? S.p14.methodMapbox : S.p14.methodRadius })}</p>
+          <p className="params-line">{fill(S.p14.huffLine, { alpha: F.num(m.demand.huff.alpha, 2), beta: F.num(m.demand.huff.beta, 2), version: m.meta.engine_version })}</p>
         </div>
       </div>
       <p className="disclaimer">
-        免责声明：本报告基于公开统计、平台数据与您的输入，按固定模型计算；所有「未获取」的字段都没有做估计。评分与判定仅供选址决策参考，不构成投资、法律或租赁建议；签约前请以实地核查、租约文本与专业顾问意见为准。
-        {m.meta.tier === 'precheck' ? ` 本报告为预检版：部分关键数据未获取或未通过校验${precheck.length ? `（${precheck.join('；')}）` : ''}，详见上方「数据说明」。` : ''}
+        {S.p14.disclaimer}
+        {m.meta.tier === 'precheck' ? fill(S.p14.precheck, { reasons: precheck.length ? (zh ? `（${precheck.join(sep)}）` : ` (${precheck.join(sep)})`) : '' }) : ''}
       </p>
     </PageShell>
   );
@@ -1328,10 +1344,13 @@ function Page14({ model }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 15 · Summary & recommendations                                        */
 /* ------------------------------------------------------------------ */
-function Page15({ model }: PageProps) {
+function Page15({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
   const m = model;
-  const v = verdictLabel(m.score.verdict);
-  const cuisine = m.input.cuisine_label_zh;
+  const zh = c.lang === 'zh';
+  const v = verdictLabel(m.score.verdict, c.lang);
+  const cuisine = zh ? m.input.cuisine_label_zh : cuisineName(m.input, c.lang);
   const cov = m.demand.coverage_ratio;
   const occ = m.finance.occupancy_cost_ratio;
   const weakest = [...m.score.dimensions].sort((a, b) => a.score - b.score)[0];
@@ -1342,99 +1361,98 @@ function Page15({ model }: PageProps) {
   const missing = m.finance.inputs_missing;
   const conds = m.score.conditions;
   const rankOf = (cuisine: string) => m.score.alternatives.findIndex((a) => a.cuisine === cuisine) + 1;
+  const altName = (a: ReportModel['score']['alternatives'][number]) => cuisineName(a, c.lang);
 
   const conclusion =
-    `${cuisine}在这个地址的判定是「${v.zh}」。` +
-    `模型预计每月能拿到 ${fmtUsd(m.demand.captured_monthly_usd)} 的需求，保本线（每月至少要做到的营收）是 ${fmtUsd(m.finance.breakeven_monthly)}，需求覆盖率 ${fmtPct(cov)}；` +
-    `租金占预计营收 ${fmtPct(occ, 1)}（警戒线 10%）；综合评分 ${fmtNum(m.score.total, 1)} 分（满分 100）` +
-    (weakest ? `，六项里最弱的是${weakest.label_zh}（${fmtNum(weakest.score, 0)} 分）。` : '。') +
-    (topRisk ? `最要紧的风险：${plainZh(topRisk.risk_zh)}。` : '') +
-    (bestAlt && m.score.verdict !== 'GO' ? `如果坚持这个地址，更适合做${bestAlt.label_zh}（${fmtNum(bestAlt.total, 1)} 分，${verdictLabel(bestAlt.verdict).zh}）。` : '');
+    fill(S.p15.conclusion, { cuisine, verdict: v.label, captured: F.usd(m.demand.captured_monthly_usd), breakeven: F.usd(m.finance.breakeven_monthly), coverage: F.pct(cov), occupancy: F.pct(occ, 1), score: F.num(m.score.total, 1) }) +
+    (weakest ? fill(S.p15.weakest, { dim: dimensionName(weakest, c.lang), score: F.num(weakest.score, 0) }) : S.p15.weakestNone) +
+    (topRisk ? fill(S.p15.topRisk, { risk: c.field(topRisk.risk_zh, topRisk.risk_en) }) : '') +
+    (bestAlt && m.score.verdict !== 'GO' ? fill(S.p15.bestAlt, { alt: altName(bestAlt), score: F.num(bestAlt.total, 1), verdict: verdictLabel(bestAlt.verdict, c.lang).label }) : '');
 
   const nextSteps = [
-    conds.length ? `先落实「签约前必须做的事」（${conds.length} 条），再谈租约` : '没有附加条件，可直接进入租约谈判',
-    occ != null && occ > 0.1 ? `租金谈判：目标租金 ≤ 预计营收的 10%（现在 ${fmtPct(occ, 1)}），争取免租期或阶梯租金` : '租金已在 10% 警戒线内：锁定租期、免租期与转租条款',
-    missing.length ? '补齐缺失输入后重跑报告，再决定签约' : '实地踩点午市、晚市、周末各一次，对照第 9 页的预计单数',
+    conds.length ? fill(S.p15.step1, { n: conds.length }) : S.p15.step1None,
+    occ != null && occ > 0.1 ? fill(S.p15.step2, { occ: F.pct(occ, 1) }) : S.p15.step2Ok,
+    missing.length ? S.p15.step3 : S.p15.step3Ok,
   ];
 
   return (
-    <PageShell model={m} pageId="page_15" chips={<SourceChips model={m} ids={['D2', 'D6', 'D12']} model_labels={['综合评分', '需求分流模型', '保本模型']} />}>
+    <PageShell c={c} model={m} pageId="page_15" chips={<SourceChips model={m} ids={['D2', 'D6', 'D12']} model_labels={[S.p15.chipScore, S.p15.chipHuff, S.p15.chipBreakeven]} lang={c.lang} />}>
       <div className="summary-top">
-        <VerdictBadge verdict={m.score.verdict} />
+        <VerdictBadge c={c} verdict={m.score.verdict} />
         <div className="summary-keys">
-          <KeyNumber label="需求覆盖率" value={fmtPct(cov)} sub="预计月需求 ÷ 保本线，≥ 100% 才够保本" />
-          <KeyNumber label="占用成本比" value={fmtPct(occ, 1)} sub="租金 ÷ 预计营收，警戒线 10%" />
-          <KeyNumber label="综合评分" value={`${fmtNum(m.score.total, 1)}`} sub="/ 100 · ≥ 70 可做，55–69 有条件可做" />
+          <KeyNumber label={S.p15.coverage} value={F.pct(cov)} sub={S.p15.coverageSub} />
+          <KeyNumber label={S.p15.occupancy} value={F.pct(occ, 1)} sub={S.p15.occupancySub} />
+          <KeyNumber label={S.p15.score} value={`${F.num(m.score.total, 1)}`} sub={S.p15.scoreSub} />
         </div>
       </div>
       <p className="final-conclusion">{conclusion}</p>
       <div className="two-col">
         <div className="panel">
-          <div className="panel-title">签约前必须做的事 · Must do before signing</div>
+          <div className="panel-title">{S.p15.mustDo}</div>
           <ul className="check-list boxes">
-            {conds.map((c, i) => (
+            {conds.map((x, i) => (
               <li key={`c${i}`}>
                 <span className="box" />
-                <span>{plainZh(c.text_zh)}</span>
+                <span>{c.field(x.text_zh, x.text_en)}</span>
               </li>
             ))}
             {missing.length ? (
               <li>
                 <span className="box" />
                 <span>
-                  <strong>补齐缺失输入</strong> {missing.map(plainZh).join('、')}（见第 13 页）
+                  <strong>{S.p15.fillInputs}</strong> {missing.map(c.t).join(zh ? '、' : ', ')} {S.p15.seePage13}
                 </span>
               </li>
             ) : null}
             {conds.length === 0 && missing.length === 0 ? (
               <li>
                 <span className="box" />
-                <span>无附加条件与缺失输入</span>
+                <span>{S.p15.nothing}</span>
               </li>
             ) : null}
           </ul>
         </div>
         <div className="panel">
-          <div className="panel-title">更适合的替代菜系前三 · Better-fit alternatives</div>
+          <div className="panel-title">{S.p15.alternatives}</div>
           <table className="data-table compact alt-table">
             <thead>
               <tr>
-                <th className="num">名次</th>
-                <th>菜系</th>
-                <th className="num">综合分</th>
-                <th>判定</th>
+                <th className="num">{S.p15.rank}</th>
+                <th>{S.p15.cuisine}</th>
+                <th className="num">{S.p15.score2}</th>
+                <th>{S.p15.verdict}</th>
               </tr>
             </thead>
             <tbody>
               {alts.length === 0 ? (
                 <tr>
-                  <Cell num>—</Cell>
-                  <Cell>{NA}</Cell>
-                  <Cell num>{NA}</Cell>
-                  <Cell>{NA}</Cell>
+                  <Cell num na={S.na}>—</Cell>
+                  <Cell na={S.na}>{S.na}</Cell>
+                  <Cell num na={S.na}>{S.na}</Cell>
+                  <Cell na={S.na}>{S.na}</Cell>
                 </tr>
               ) : null}
               {alts.map((a) => (
                 <tr key={a.cuisine}>
-                  <Cell num>{rankOf(a.cuisine)}</Cell>
-                  <Cell>{a.label_zh}</Cell>
-                  <Cell num>{fmtNum(a.total, 1)}</Cell>
-                  <Cell className="nowrap">{verdictLabel(a.verdict).zh}</Cell>
+                  <Cell num na={S.na}>{rankOf(a.cuisine)}</Cell>
+                  <Cell na={S.na}>{altName(a)}</Cell>
+                  <Cell num na={S.na}>{F.num(a.total, 1)}</Cell>
+                  <Cell className="nowrap" na={S.na}>{verdictLabel(a.verdict, c.lang).label}</Cell>
                 </tr>
               ))}
               <tr className="highlight">
-                <Cell num>{fmtInt(m.score.user_cuisine_rank)}</Cell>
-                <Cell>
-                  {cuisine} <span className="muted">您选的</span>
+                <Cell num na={S.na}>{F.int(m.score.user_cuisine_rank)}</Cell>
+                <Cell na={S.na}>
+                  {cuisine} <span className="muted">{S.p15.yours}</span>
                 </Cell>
-                <Cell num>{fmtNum(m.score.total, 1)}</Cell>
-                <Cell className="nowrap">{v.zh}</Cell>
+                <Cell num na={S.na}>{F.num(m.score.total, 1)}</Cell>
+                <Cell className="nowrap" na={S.na}>{v.label}</Cell>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
-      <h2 className="h2">下一步 · Next steps</h2>
+      <h2 className="h2">{S.p15.next}</h2>
       <ol className="next-steps">
         {nextSteps.map((s, i) => (
           <li key={i}>
@@ -1465,14 +1483,19 @@ export const PAGE_COMPONENTS: Record<PageId, ComponentType<PageProps>> = {
   page_15: Page15,
 };
 
-/** An unnumbered cover page, then all fifteen pages in PAGES order. `staticMaps` (optional) is the raster basemap pair for the cover, page 1 and page 3. */
-export function ReportDocument({ model, staticMaps }: PageProps) {
+/**
+ * An unnumbered cover page, then all fifteen pages in PAGES order, rendered in
+ * ONE report language (`lang`, default: the model's language). `staticMaps`
+ * (optional) is the raster basemap pair for the cover, page 1 and page 3.
+ */
+export function ReportDocument({ model, staticMaps, lang }: PageProps) {
+  const l = lang ?? toLocale(model.meta.language);
   return (
-    <main className="report" data-report-id={model.meta.report_id} lang="zh-CN">
-      <CoverPage model={model} staticMaps={staticMaps} />
+    <main className="report" data-report-id={model.meta.report_id} data-lang={l} lang={LOCALE_TAG[l]}>
+      <CoverPage model={model} staticMaps={staticMaps} lang={l} />
       {PAGES.map((p) => {
         const C = PAGE_COMPONENTS[p.id];
-        return <C key={p.id} model={model} staticMaps={staticMaps} />;
+        return <C key={p.id} model={model} staticMaps={staticMaps} lang={l} />;
       })}
     </main>
   );

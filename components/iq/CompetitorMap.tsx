@@ -3,11 +3,12 @@
 import { useState } from 'react';
 
 import type { CompetitorMapPin, CompetitorMapTier } from '@/lib/funnel/iq-competitor-map';
+import type { Locale } from '@/lib/i18n/locale';
 
 type Props = {
   center: { lat: number; lng: number } | null;
   pins: CompetitorMapPin[];
-  lang: 'en' | 'zh';
+  lang: Locale;
   staticMapUrl?: string | null;
   /**
    * Total named competitors retrieved from market_data (Google ∪ Yelp ∪ BrightData).
@@ -23,35 +24,41 @@ type Props = {
 
 const MIN_USEFUL_PINS = 2;
 
-function InsufficientPanel({
-  lang,
-  whitelistTotal,
-}: {
-  lang: 'en' | 'zh';
-  whitelistTotal?: number;
-}) {
+const INSUFFICIENT: Record<
+  Locale,
+  { title: string; before: string; after: (count: number) => string; emphasis: string; tail: string; hint: string }
+> = {
+  en: {
+    title: 'Competitor data is too thin to plot a reliable map',
+    before: 'Only ',
+    after: (n) => ` named competitor${n === 1 ? '' : 's'} were retrieved (Google / Yelp / BrightData combined). Other sections remain useful, but treat the`,
+    emphasis: ' competitor mix, threat levels, and revenue benchmarks ',
+    tail: 'as low-confidence.',
+    hint: 'Enable Yelp Fusion in settings or widen the search radius before regenerating for a high-fidelity competitive picture.',
+  },
+  zh: {
+    title: '竞品数据不足以绘制可信地图',
+    before: '本次仅检索到 ',
+    after: () => ' 家具名竞品（Google / Yelp / BrightData 合计）。报告其他部分仍可参考，但',
+    emphasis: '竞品分布、威胁等级、收入对标',
+    tail: '请视为低置信度。',
+    hint: '如需精准竞品分析，可在系统设置中接入 Yelp Fusion API 或扩大检索半径后重新生成。',
+  },
+  es: {
+    title: 'Los datos de competidores son insuficientes para trazar un mapa confiable',
+    before: 'Solo se recuperaron ',
+    after: (n) => ` competidor${n === 1 ? '' : 'es'} con nombre (Google / Yelp / BrightData combinados). Las demás secciones siguen siendo útiles, pero considera la`,
+    emphasis: ' mezcla de competidores, los niveles de amenaza y las referencias de ingresos ',
+    tail: 'como de baja confianza.',
+    hint: 'Activa Yelp Fusion en la configuración o amplía el radio de búsqueda antes de volver a generar para obtener un panorama competitivo de alta fidelidad.',
+  },
+};
+
+const MAP_ALT: Record<Locale, string> = { en: 'Competitor map', zh: '竞品分布地图', es: 'Mapa de competidores' };
+
+function InsufficientPanel({ lang, whitelistTotal }: { lang: Locale; whitelistTotal?: number }) {
   const count = whitelistTotal ?? 0;
-  if (lang === 'zh') {
-    return (
-      <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-5">
-        <div className="flex items-start gap-3">
-          <span className="text-2xl" aria-hidden>
-            ⚠️
-          </span>
-          <div className="space-y-2 text-sm leading-relaxed text-amber-100">
-            <p className="font-semibold">竞品数据不足以绘制可信地图</p>
-            <p className="text-amber-100/85">
-              本次仅检索到 <strong>{count}</strong> 家具名竞品（Google / Yelp / BrightData 合计）。
-              报告其他部分仍可参考，但<strong>竞品分布、威胁等级、收入对标</strong>请视为低置信度。
-            </p>
-            <p className="text-amber-100/75">
-              如需精准竞品分析，可在系统设置中接入 Yelp Fusion API 或扩大检索半径后重新生成。
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const t = INSUFFICIENT[lang];
   return (
     <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-5">
       <div className="flex items-start gap-3">
@@ -59,30 +66,28 @@ function InsufficientPanel({
           ⚠️
         </span>
         <div className="space-y-2 text-sm leading-relaxed text-amber-100">
-          <p className="font-semibold">Competitor data is too thin to plot a reliable map</p>
+          <p className="font-semibold">{t.title}</p>
           <p className="text-amber-100/85">
-            Only <strong>{count}</strong> named competitor(s) were retrieved (Google / Yelp / BrightData
-            combined). Other sections remain useful, but treat the
-            <strong> competitor mix, threat levels, and revenue benchmarks </strong>
-            as low-confidence.
+            {t.before}
+            <strong>{count}</strong>
+            {t.after(count)}
+            <strong>{t.emphasis}</strong>
+            {t.tail}
           </p>
-          <p className="text-amber-100/75">
-            Enable Yelp Fusion in settings or widen the search radius before regenerating for a high-fidelity
-            competitive picture.
-          </p>
+          <p className="text-amber-100/75">{t.hint}</p>
         </div>
       </div>
     </div>
   );
 }
 
-const TIER_STYLE: Record<CompetitorMapTier, { fill: string; label: { en: string; zh: string } }> = {
-  site: { fill: '#34d399', label: { en: 'Your site', zh: '目标址' } },
-  direct: { fill: '#f87171', label: { en: 'Direct competitor', zh: '直接竞品' } },
-  semi_direct: { fill: '#fb923c', label: { en: 'Semi-direct', zh: '半直接竞品' } },
-  substitute: { fill: '#60a5fa', label: { en: 'Substitute', zh: '替代竞品' } },
-  traffic: { fill: '#a78bfa', label: { en: 'Traffic competitor', zh: '流量竞品' } },
-  other: { fill: '#94a3b8', label: { en: 'Other dining', zh: '其他餐饮' } },
+const TIER_STYLE: Record<CompetitorMapTier, { fill: string; label: Record<Locale, string> }> = {
+  site: { fill: '#34d399', label: { en: 'Your site', zh: '目标址', es: 'Tu local' } },
+  direct: { fill: '#f87171', label: { en: 'Direct competitor', zh: '直接竞品', es: 'Competidor directo' } },
+  semi_direct: { fill: '#fb923c', label: { en: 'Semi-direct', zh: '半直接竞品', es: 'Semidirecto' } },
+  substitute: { fill: '#60a5fa', label: { en: 'Substitute', zh: '替代竞品', es: 'Sustituto' } },
+  traffic: { fill: '#a78bfa', label: { en: 'Traffic competitor', zh: '流量竞品', es: 'Competidor por tráfico' } },
+  other: { fill: '#94a3b8', label: { en: 'Other dining', zh: '其他餐饮', es: 'Otros restaurantes' } },
 };
 
 function projectPins(
@@ -150,7 +155,7 @@ export function CompetitorMap({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={staticMapUrl as string}
-            alt={lang === 'zh' ? '竞品分布地图' : 'Competitor map'}
+            alt={MAP_ALT[lang]}
             className="h-auto w-full"
             width={640}
             height={360}
@@ -159,7 +164,7 @@ export function CompetitorMap({
         </div>
       ) : projected ? (
         <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/60">
-          <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img">
+          <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={MAP_ALT[lang]}>
             <rect width={W} height={H} fill="#0f172a" />
             <circle
               cx={projected.site.x}

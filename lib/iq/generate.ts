@@ -5,6 +5,7 @@
  * a failing report is stored as tier 'precheck' with its reasons.
  */
 import { iqGetReport, iqSetReportModel, isMissingColumnError } from '@/lib/funnel/iq-repository';
+import { toLocale, type Locale } from '@/lib/i18n/locale';
 import { createFetchContext } from './data/context';
 import { persistCostLog, REPORT_COST_CAP_USD } from './data/cost-log';
 import { generateNarratives } from './narrative/generate';
@@ -22,7 +23,7 @@ export interface Generate360Result {
 }
 
 export async function generateReport360(
-  input: { reportId: string; address: string; cuisineText: string | null; language: 'en' | 'zh'; user?: Record<string, unknown> },
+  input: { reportId: string; address: string; cuisineText: string | null; language: Locale; user?: Record<string, unknown> },
   opts: Report360Options & { persist?: boolean; narrative?: boolean } = {},
 ): Promise<Generate360Result> {
   const t0 = Date.now();
@@ -38,8 +39,10 @@ export async function generateReport360(
     ctx.log(`[iq360] narrative: llm=${stats.llm_pages} template=${stats.template_pages} regen=${stats.regenerated}`);
   } else {
     const { PAGES, templateNarrative } = await import('./narrative/templates');
-    for (const p of PAGES) model.narrative[p.id] = templateNarrative(model, p.id);
+    for (const p of PAGES) model.narrative[p.id] = templateNarrative(model, p.id, input.language);
   }
+  model.meta.language = input.language;
+  model.meta.narrative_language = input.language;
 
   const gates = runQaGates(model);
   if (!gates.passed) {
@@ -56,8 +59,10 @@ export async function generateReport360(
   let persisted = false;
   if (opts.persist !== false) {
     const { narrative, ...rest } = model;
+    // `__lang` records the narrative language so the renderer can fall back to templates when a report is printed in another language.
+    const narrativeJson: Record<string, unknown> = { ...narrative, __lang: input.language };
     const persist = () =>
-      iqSetReportModel({ reportId: input.reportId, reportModelJson: rest as unknown as Record<string, unknown>, narrativeJson: narrative, tier: model.meta.tier, costUsd: model.meta.cost_usd });
+      iqSetReportModel({ reportId: input.reportId, reportModelJson: rest as unknown as Record<string, unknown>, narrativeJson, tier: model.meta.tier, costUsd: model.meta.cost_usd });
     try {
       await persist();
       persisted = true;
@@ -108,7 +113,7 @@ export async function generateReport360ForRow(reportId: string, opts: Report360O
       reportId,
       address: row.location,
       cuisineText: row.business_type,
-      language: row.language === 'zh' ? 'zh' : 'en',
+      language: toLocale(row.language),
       user: {
         rent_usd: u.monthly_rent_usd ?? null,
         sqft: u.sqft ?? null,

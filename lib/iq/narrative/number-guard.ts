@@ -13,8 +13,22 @@ export interface NumberGuardResult {
   numbers_checked: number;
 }
 
-const BANNED_ALWAYS = ['保守估计', '大约', '约莫'];
-const BANNED_UNLESS_VOID = ['零竞争', '空白'];
+import type { Locale } from '@/lib/i18n/locale';
+
+/** Banned phrases per report language (门槛 6). `unlessVoid` entries are allowed only when competitors.void.is_void is true. */
+export const BANNED_WORDS: Record<Locale, { always: string[]; unlessVoid: string[] }> = {
+  zh: { always: ['保守估计', '大约', '约莫'], unlessVoid: ['零竞争', '空白'] },
+  en: { always: ['conservative estimate', 'approximately'], unlessVoid: ['zero competition', 'white space', 'no competition'] },
+  es: { always: ['estimación conservadora', 'aproximadamente'], unlessVoid: ['cero competencia', 'competencia cero', 'sin competencia', 'espacio en blanco'] },
+};
+
+function bannedFor(lang: Locale | undefined): { always: string[]; unlessVoid: string[] } {
+  if (lang) return BANNED_WORDS[lang];
+  const all = Object.values(BANNED_WORDS);
+  return { always: all.flatMap((b) => b.always), unlessVoid: all.flatMap((b) => b.unlessVoid) };
+}
+
+const containsPhrase = (text: string, phrase: string) => (/[a-z]/i.test(phrase) ? text.toLowerCase().includes(phrase.toLowerCase()) : text.includes(phrase));
 
 /** Collect every numeric value reachable in the fragment (raw + common formattings). */
 export function collectNumbers(fragment: unknown, out = new Set<number>()): Set<number> {
@@ -79,7 +93,8 @@ function matches(v: number, kind: string, pool: Set<number>): boolean {
   return false;
 }
 
-export function numberGuard(text: string, fragment: unknown, opts: { isVoid?: boolean } = {}): NumberGuardResult {
+/** `lang` narrows the banned list to one language; omitted → every language's list applies. */
+export function numberGuard(text: string, fragment: unknown, opts: { isVoid?: boolean; lang?: Locale } = {}): NumberGuardResult {
   const pool = collectNumbers(fragment);
   const found = extractNarrativeNumbers(text);
   const unmatched: string[] = [];
@@ -87,8 +102,9 @@ export function numberGuard(text: string, fragment: unknown, opts: { isVoid?: bo
     if (!matches(n.value, n.kind, pool)) unmatched.push(n.raw);
   }
   const banned: string[] = [];
-  for (const b of BANNED_ALWAYS) if (text.includes(b)) banned.push(b);
-  if (!opts.isVoid) for (const b of BANNED_UNLESS_VOID) if (text.includes(b)) banned.push(b);
+  const words = bannedFor(opts.lang);
+  for (const b of words.always) if (containsPhrase(text, b)) banned.push(b);
+  if (!opts.isVoid) for (const b of words.unlessVoid) if (containsPhrase(text, b)) banned.push(b);
   const missing_refs = !/\[src:[\w.[\]-]+\]/.test(text);
   return { ok: unmatched.length === 0 && banned.length === 0 && !missing_refs, unmatched, banned, missing_refs, numbers_checked: found.length };
 }

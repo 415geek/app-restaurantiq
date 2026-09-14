@@ -4,6 +4,7 @@
  * Stripe webhook, /api/funnel/full-report, and /iq/report/[id].
  */
 
+import type { Locale } from '@/lib/i18n/locale';
 import { generateFullReportWithN8n, shouldUseN8nForIqFullReport } from '@/lib/n8n';
 import { stripInternalIqReportFields } from '@/lib/funnel/iq-report-sanitize';
 import {
@@ -27,7 +28,7 @@ export type GenerateIqFullReportInput = {
   headline: string;
   reason: string;
   marketData: Record<string, unknown> | undefined;
-  language: 'en' | 'zh';
+  language: Locale;
   /** Skip C-5 cross-verify to finish within serverless time budget (browser-triggered path). */
   skipDualVerify?: boolean;
   /** Skip completeness/competitor regen retries (faster, single LLM pass). */
@@ -87,8 +88,8 @@ export async function generateIqFullReportWithN8nFallback(
         language: input.language,
         reportId: input.reportId,
       });
-      const grounded = applyCompetitorWhitelist(parseIqFullReport(parsed), whitelist);
-      const withFinance = applyFinanceModelOverride(grounded, financeModel);
+      const grounded = applyCompetitorWhitelist(parseIqFullReport(parsed), whitelist, input.language);
+      const withFinance = applyFinanceModelOverride(grounded, financeModel, input.language);
       logFullReportQuality(withFinance, `reportId=${input.reportId} multi-agent`);
       return stripInternalIqReportFields(withFinance);
     } catch (e) {
@@ -100,8 +101,8 @@ export async function generateIqFullReportWithN8nFallback(
     try {
       const raw = await generateFullReportWithN8n(payload);
       const parsed = parseIqFullReport(raw);
-      const grounded = applyCompetitorWhitelist(parsed, whitelist);
-      const withFinance = applyFinanceModelOverride(grounded, financeModel);
+      const grounded = applyCompetitorWhitelist(parsed, whitelist, input.language);
+      const withFinance = applyFinanceModelOverride(grounded, financeModel, input.language);
       logFullReportQuality(withFinance, `reportId=${input.reportId} n8n`);
       const out = skipVerify
         ? withFinance
@@ -128,7 +129,7 @@ export async function generateIqFullReportWithN8nFallback(
     leanGeneration: input.leanGeneration,
     timeoutMs: input.timeoutMs,
   });
-  const withFinance = applyFinanceModelOverride(parsed, financeModel);
+  const withFinance = applyFinanceModelOverride(parsed, financeModel, input.language);
   logFullReportQuality(withFinance, `reportId=${input.reportId} llm`);
   const out = skipVerify
     ? withFinance

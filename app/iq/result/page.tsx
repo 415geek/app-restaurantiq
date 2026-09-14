@@ -27,8 +27,11 @@ import {
   parseRiskAuditPreview,
   type RiskAuditPreview,
 } from '@/lib/funnel/iq-risk-audit-model';
+import { LOCALE_TAG, type Locale } from '@/lib/i18n/locale';
+import { useLocale } from '@/lib/i18n/use-locale';
 
 const LEAD_STORAGE_KEY = 'iq:lead:v1';
+const PRICE_USD = process.env.NEXT_PUBLIC_STRIPE_PRICE_USD?.trim() || '19';
 
 type StoredLead = {
   email: string;
@@ -94,78 +97,80 @@ function formatAnalyzeApiFailure(json: Record<string, unknown> | null, fallback:
   return `${base}\n${short}`;
 }
 
-type Locale = 'en' | 'zh';
+type Copy = {
+  missingLocation: string;
+  requestFailed: string;
+  analyzing: string;
+  aiVerdict: string;
+  marketSnapshot: string;
+  keyRisk: string;
+  lockedFullReport: string;
+  redirecting: string;
+  unlockReport: string;
+  promoCodeHint: string;
+  accessCodePlaceholder: string;
+  accessCodeSubmit: string;
+  accessCodeSubmitting: string;
+  accessCodeVerified: string;
+  accessCodeInvalid: string;
+  accessCodeGenericError: string;
+  footnote: string;
+  checkoutFailed: string;
+  paymentUnavailable: string;
+  reportNotSaved: string;
+  fallbackLoadFailed: string;
+  loadingPage: string;
+  riskAudit: string;
+  addDetails: string;
+  addDetailsHide: string;
+  verdict: Record<'go' | 'caution' | 'no', string>;
+};
 
-const resultCopy: Record<
-  Locale,
-  {
-    missingLocation: string;
-    requestFailed: string;
-    loading: [string, string, string];
-    aiVerdict: string;
-    marketSnapshot: string;
-    keyRisk: string;
-    lockedFullReport: string;
-    redirecting: string;
-    unlockReport: string;
-    promoCodeHint: string;
-    accessCodePlaceholder: string;
-    accessCodeSubmit: string;
-    accessCodeSubmitting: string;
-    accessCodeInvalid: string;
-    accessCodeGenericError: string;
-    footnote: string;
-    checkoutFailed: string;
-    paymentUnavailable: string;
-    reportNotSaved: string;
-    fallbackLoadFailed: string;
-    loadingPage: string;
-    riskAudit: string;
-    addDetails: string;
-    addDetailsHide: string;
-  }
-> = {
+const resultCopy: Record<Locale, Copy> = {
   en: {
     missingLocation: 'Missing location',
     requestFailed: 'Request failed',
-    loading: ['Scanning market data…', 'Analyzing competition…', 'Detecting hidden risks…'],
-    aiVerdict: 'Preliminary Assessment',
-    marketSnapshot: 'Market Snapshot',
-    keyRisk: 'Hidden Risk',
-    lockedFullReport: 'Full Analysis Locked',
+    analyzing: 'Analyzing your location…',
+    aiVerdict: 'Preliminary assessment',
+    marketSnapshot: 'Market snapshot',
+    keyRisk: 'Hidden risk',
+    lockedFullReport: 'Full analysis locked',
     redirecting: 'Redirecting…',
-    unlockReport: 'Unlock Risk Audit — $19',
+    unlockReport: `Unlock the full risk audit — $${PRICE_USD}`,
     riskAudit: 'Location risk scorecard',
-    promoCodeHint: '🔑 Enter access code to unlock the report',
+    promoCodeHint: '🔑 Have an access code? Enter it to unlock the report',
     accessCodePlaceholder: 'Access code',
     accessCodeSubmit: 'Unlock',
     accessCodeSubmitting: 'Unlocking…',
+    accessCodeVerified: 'Verified — opening your report…',
     accessCodeInvalid: 'Invalid access code',
-    accessCodeGenericError: 'Could not redeem code. Please try again.',
+    accessCodeGenericError: 'Could not redeem that code. Please try again.',
     footnote: 'Know before you invest. Avoid costly mistakes.',
     checkoutFailed: 'Checkout failed',
     paymentUnavailable: 'Payment is temporarily unavailable.',
-    reportNotSaved: 'Report was not saved — please rerun the analysis, then unlock.',
-    fallbackLoadFailed: 'Failed to load result.',
+    reportNotSaved: 'The report was not saved — please rerun the analysis, then unlock.',
+    fallbackLoadFailed: 'Could not load the result.',
     loadingPage: 'Loading…',
     addDetails: 'Add details (optional, 1 min)',
     addDetailsHide: 'Hide details',
+    verdict: { go: 'Opportunity', caution: 'Proceed with caution', no: 'High risk' },
   },
   zh: {
     missingLocation: '缺少地址信息',
     requestFailed: '请求失败',
-    loading: ['正在扫描市场数据…', '正在分析竞争格局…', '正在识别隐藏风险…'],
+    analyzing: '正在分析选址风险…',
     aiVerdict: '初步判断',
     marketSnapshot: '市场快照',
     keyRisk: '关键风险',
     lockedFullReport: '完整分析（已锁定）',
     redirecting: '正在跳转…',
-    unlockReport: '解锁完整风险审计 — $19',
+    unlockReport: `解锁完整风险审计 — $${PRICE_USD}`,
     riskAudit: '选址风险评分卡',
     promoCodeHint: '🔑 输入 access code 解锁报告',
     accessCodePlaceholder: '请输入 access code',
     accessCodeSubmit: '解锁',
     accessCodeSubmitting: '解锁中…',
+    accessCodeVerified: '验证成功，正在打开报告页…',
     accessCodeInvalid: 'Access code 无效',
     accessCodeGenericError: '无法兑换 access code，请稍后重试。',
     footnote: '投资前先看清，避免高成本失误。',
@@ -176,6 +181,35 @@ const resultCopy: Record<
     loadingPage: '加载中…',
     addDetails: '补充信息（可选，1 分钟）',
     addDetailsHide: '收起补充信息',
+    verdict: { go: '可进入', caution: '谨慎推进', no: '风险较高' },
+  },
+  es: {
+    missingLocation: 'Falta la dirección',
+    requestFailed: 'La solicitud falló',
+    analyzing: 'Analizando tu ubicación…',
+    aiVerdict: 'Evaluación preliminar',
+    marketSnapshot: 'Panorama del mercado',
+    keyRisk: 'Riesgo oculto',
+    lockedFullReport: 'Análisis completo bloqueado',
+    redirecting: 'Redirigiendo…',
+    unlockReport: `Desbloquear la auditoría de riesgo completa — $${PRICE_USD}`,
+    riskAudit: 'Tarjeta de riesgo de la ubicación',
+    promoCodeHint: '🔑 ¿Tienes un código de acceso? Ingrésalo para desbloquear el informe',
+    accessCodePlaceholder: 'Código de acceso',
+    accessCodeSubmit: 'Desbloquear',
+    accessCodeSubmitting: 'Desbloqueando…',
+    accessCodeVerified: 'Verificado; abriendo tu informe…',
+    accessCodeInvalid: 'Código de acceso no válido',
+    accessCodeGenericError: 'No se pudo canjear ese código. Inténtalo de nuevo.',
+    footnote: 'Infórmate antes de invertir. Evita errores costosos.',
+    checkoutFailed: 'No se pudo iniciar el pago',
+    paymentUnavailable: 'El pago no está disponible por el momento.',
+    reportNotSaved: 'El informe no se guardó. Vuelve a ejecutar el análisis y luego desbloquéalo.',
+    fallbackLoadFailed: 'No se pudo cargar el resultado.',
+    loadingPage: 'Cargando…',
+    addDetails: 'Agregar datos (opcional, 1 min)',
+    addDetailsHide: 'Ocultar datos',
+    verdict: { go: 'Oportunidad', caution: 'Proceder con cautela', no: 'Riesgo alto' },
   },
 };
 
@@ -206,17 +240,12 @@ function VerdictBadge({
     );
   }
   const v = verdict.toLowerCase();
-  const labels: Record<string, Record<Locale, string>> = {
-    go: { en: 'Opportunity', zh: '可进入' },
-    caution: { en: 'Proceed with Caution', zh: '谨慎推进' },
-    no: { en: 'High Risk', zh: '风险较高' },
-  };
   const colors: Record<string, string> = {
     go: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
     caution: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
     no: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
   };
-  const label = labels[v]?.[locale] || verdict;
+  const label = (v === 'go' || v === 'caution' || v === 'no' ? resultCopy[locale].verdict[v] : null) || verdict;
   const color = colors[v] || 'bg-white/10 text-white/80 border-white/20';
   return (
     <span className={`inline-block rounded-full border px-4 py-1.5 text-sm font-medium ${color}`}>
@@ -231,8 +260,8 @@ function ResultContent() {
   const businessType = params.get('businessType') || '';
   const monthlyRentUsd = params.get('monthlyRentUsd') || '';
   const sqft = params.get('sqft') || '';
-  const langParam = (params.get('lang') || 'en').toLowerCase();
-  const locale: Locale = langParam === 'zh' ? 'zh' : 'en';
+  // ?lang= (always set by the landing form) > iq_lang cookie/localStorage > browser language > English.
+  const { locale } = useLocale({ param: params.get('lang') });
   const t = resultCopy[locale];
   const [loading, setLoading] = useState(true);
   const [loadingStep, setLoadingStep] = useState(0);
@@ -361,7 +390,7 @@ function ResultContent() {
       const res = await fetch('/api/funnel/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportId: data.reportId }),
+        body: JSON.stringify({ reportId: data.reportId, language: locale }),
       });
       const raw = await res.text();
       let json: { url?: string; error?: string } = {};
@@ -443,17 +472,17 @@ function ResultContent() {
     />
   );
 
+  const htmlLang = LOCALE_TAG[locale];
+
   if (loading) {
-    const analyzeTitle =
-      locale === 'zh' ? '正在分析选址风险…' : 'Analyzing your location…';
     return (
       <>
         {leadModal}
-        <main className="flex min-h-screen items-center justify-center px-6 py-12">
+        <main lang={htmlLang} className="flex min-h-screen items-center justify-center px-6 py-12">
           <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8">
             <IqAnalysisProgressBar
               lang={locale}
-              title={analyzeTitle}
+              title={t.analyzing}
               subtitle={location}
               stages={getFreeAnalyzeStages(locale)}
               percent={analyzeProgressPct}
@@ -469,7 +498,7 @@ function ResultContent() {
     return (
       <>
         {leadModal}
-        <main className="flex min-h-screen items-center justify-center px-6">
+        <main lang={htmlLang} className="flex min-h-screen items-center justify-center px-6">
           <p className="whitespace-pre-line text-center text-sm text-white/80 sm:text-base">
             {error || t.fallbackLoadFailed}
           </p>
@@ -486,7 +515,7 @@ function ResultContent() {
   return (
     <>
       {leadModal}
-      <main className="flex min-h-screen items-center justify-center px-6 py-12">
+      <main lang={htmlLang} className="flex min-h-screen items-center justify-center px-6 py-12">
         <div className="w-full max-w-2xl space-y-6">
           {/* Social Proof Badge */}
           <div className="text-center">
@@ -653,9 +682,7 @@ function ResultContent() {
                 <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
                   <div className="h-full w-2/5 animate-pulse rounded-full bg-gradient-to-r from-emerald-600 to-teal-400" />
                 </div>
-                <p className="mt-2 text-center text-xs text-white/50">
-                  {locale === 'zh' ? '验证成功，正在打开报告页…' : 'Verified — opening report…'}
-                </p>
+                <p className="mt-2 text-center text-xs text-white/50">{t.accessCodeVerified}</p>
               </div>
             ) : null}
             {accessCodeError && (

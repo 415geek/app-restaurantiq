@@ -4,24 +4,26 @@
  * `MapFigure` is the component the pages use: a Google Maps Static API raster
  * (resolved server-side in static-map.ts, delivered as a data URL so the key
  * never reaches the HTML) with our rings/markers drawn by Google on top, plus
- * a plain-Chinese legend. When the basemap is unavailable it falls back to
+ * a plain-language legend in the report language. When the basemap is unavailable it falls back to
  * `SvgTradeAreaMap` — the pure-SVG equirectangular map (Overture / Mapbox
  * layers only, no Google imagery) — with a note.
  */
 import type { CSSProperties } from 'react';
+import { DEFAULT_LOCALE, type Locale } from '@/lib/i18n/locale';
 import { bboxOf, polygonsOf } from '../geo';
 import type { Competitor, ReportModel, RingId } from '../model/schema';
 import { PALETTE } from './format';
+import { fill, strings } from './i18n';
 import { L1_MARKER_CAP, MARKER_COLOR, rankedL1, railStations, type ResolvedStaticMap, type StaticMapVariant } from './static-map';
 
 export const MAP_W = 640;
 export const MAP_H = 420;
 
-const RING_STYLE: Record<RingId, { fill: string; stroke: string; label: string }> = {
-  walk10: { fill: 'rgba(11,18,32,0.16)', stroke: '#0B1220', label: '步行 10 分钟' },
-  drive5: { fill: 'rgba(11,18,32,0.11)', stroke: '#3D4E7A', label: '车程 5 分钟' },
-  drive10: { fill: 'rgba(11,18,32,0.07)', stroke: '#6B7AA1', label: '车程 10 分钟' },
-  drive15: { fill: 'rgba(11,18,32,0.04)', stroke: '#9AA6C4', label: '车程 15 分钟' },
+const RING_STYLE: Record<RingId, { fill: string; stroke: string }> = {
+  walk10: { fill: 'rgba(11,18,32,0.16)', stroke: '#0B1220' },
+  drive5: { fill: 'rgba(11,18,32,0.11)', stroke: '#3D4E7A' },
+  drive10: { fill: 'rgba(11,18,32,0.07)', stroke: '#6B7AA1' },
+  drive15: { fill: 'rgba(11,18,32,0.04)', stroke: '#9AA6C4' },
 };
 
 /** CSS colours matching the Static Maps marker palette so one legend serves both renderers. */
@@ -93,7 +95,7 @@ const FONT = "'Inter','Noto Sans SC','WenQuanYi Zen Hei',sans-serif";
  * Pure-SVG fallback map (no Google imagery). L1 numbering follows page 7's
  * ranking so the numbers match the competitor cards.
  */
-export function SvgTradeAreaMap({ model, compact = false }: { model: ReportModel; compact?: boolean }) {
+export function SvgTradeAreaMap({ model, compact = false, lang = DEFAULT_LOCALE }: { model: ReportModel; compact?: boolean; lang?: Locale }) {
   const p = makeProjection(model, { pad: compact ? 0.04 : 0.06 });
   const order: RingId[] = ['drive15', 'drive10', 'drive5', 'walk10'];
   const rings = order.map((id) => model.trade_area.rings.find((r) => r.id === id)).filter((r): r is NonNullable<typeof r> => Boolean(r));
@@ -105,10 +107,11 @@ export function SvgTradeAreaMap({ model, compact = false }: { model: ReportModel
     .filter(({ c }) => visible(c));
   const l2 = model.competitors.l2.filter(visible);
   const l4 = model.competitors.l4.filter(visible);
-  const label = (c: Competitor) => c.name_zh ?? c.name;
+  // Chinese edition labels places by their Chinese name; English / Spanish by the listed (Latin) name.
+  const label = (c: Competitor) => (lang === 'zh' ? (c.name_zh ?? c.name) : c.name);
 
   return (
-    <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} width="100%" className="trade-map" role="img" aria-label="商圈示意图">
+    <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} width="100%" className="trade-map" role="img" aria-label={strings(lang).map.aria}>
       <rect x={0} y={0} width={MAP_W} height={MAP_H} fill={PALETTE.panel} />
       {[0.25, 0.5, 0.75].map((f) => (
         <g key={f}>
@@ -167,17 +170,18 @@ export const TradeAreaMap = SvgTradeAreaMap;
 
 type LegendItem = { kind: 'dot' | 'swatch'; color: string; fill?: string; size: number; text: string; glyph?: string; glyphColor?: string };
 
-function legendItems(model: ReportModel): LegendItem[] {
+function legendItems(model: ReportModel, lang: Locale): LegendItem[] {
+  const M = strings(lang).map;
   const l1n = Math.min(model.competitors.l1.length, L1_MARKER_CAP);
   const items: LegendItem[] = [
-    { kind: 'dot', color: LAYER_COLOR.site, size: 12, text: '站点（拟选址）', glyph: 'S', glyphColor: PALETTE.navy }, // navy on coral ≥ 4.5:1
-    { kind: 'dot', color: LAYER_COLOR.l1, size: 11, text: l1n > 0 ? `同菜系竞品 1–${l1n}（编号同第 7 页）` : '同菜系竞品', glyph: '1' },
-    { kind: 'dot', color: LAYER_COLOR.l2, size: 8, text: `其他中餐（${model.competitors.l2_count}）` },
-    { kind: 'dot', color: LAYER_COLOR.l4, size: 8, text: `华人锚点（${model.competitors.l4.length}）` },
-    { kind: 'swatch', color: '#0B1220', fill: 'rgba(11,18,32,0.26)', size: 12, text: '步行 10 分钟' },
-    { kind: 'swatch', color: '#4A5A85', fill: 'rgba(11,18,32,0.10)', size: 12, text: '车程 5·10·15 分钟' },
+    { kind: 'dot', color: LAYER_COLOR.site, size: 12, text: M.site, glyph: 'S', glyphColor: PALETTE.navy }, // navy on coral ≥ 4.5:1
+    { kind: 'dot', color: LAYER_COLOR.l1, size: 11, text: l1n > 0 ? fill(M.l1Numbered, { n: l1n }) : M.l1, glyph: '1' },
+    { kind: 'dot', color: LAYER_COLOR.l2, size: 8, text: fill(M.l2, { n: model.competitors.l2_count }) },
+    { kind: 'dot', color: LAYER_COLOR.l4, size: 8, text: fill(M.l4, { n: model.competitors.l4.length }) },
+    { kind: 'swatch', color: '#0B1220', fill: 'rgba(11,18,32,0.26)', size: 12, text: M.walk },
+    { kind: 'swatch', color: '#4A5A85', fill: 'rgba(11,18,32,0.10)', size: 12, text: M.drives },
   ];
-  if (railStations(model).length) items.push({ kind: 'dot', color: LAYER_COLOR.rail, size: 6, text: '轨道站' });
+  if (railStations(model).length) items.push({ kind: 'dot', color: LAYER_COLOR.rail, size: 6, text: M.rail });
   return items;
 }
 
@@ -210,8 +214,8 @@ function Swatch({ item }: { item: LegendItem }) {
   );
 }
 
-/** Plain-Chinese legend for restaurant owners (no L1/L2 jargon). */
-export function MapFigureLegend({ model, variant = 'hero' }: { model: ReportModel; variant?: StaticMapVariant }) {
+/** Plain-language legend for restaurant owners (no L1/L2 jargon), in the report language. */
+export function MapFigureLegend({ model, variant = 'hero', lang = DEFAULT_LOCALE }: { model: ReportModel; variant?: StaticMapVariant; lang?: Locale }) {
   const compact = variant === 'thumb';
   const style: CSSProperties = {
     display: 'flex',
@@ -225,7 +229,7 @@ export function MapFigureLegend({ model, variant = 'hero' }: { model: ReportMode
   };
   return (
     <div className={`map-figure-legend map-figure-legend-${variant}`} style={style}>
-      {legendItems(model).map((it) => (
+      {legendItems(model, lang).map((it) => (
         <span key={it.text} style={{ display: 'inline-flex', alignItems: 'center', gap: '4pt' }}>
           <Swatch item={it} />
           <span>{it.text}</span>
@@ -246,18 +250,19 @@ const IMG_STYLE: Record<StaticMapVariant, CSSProperties> = {
 
 /**
  * Trade-area map figure: Google Static Maps raster with our layers + legend,
- * or the SVG fallback with a "底图暂不可用" note when `staticMap` is null.
+ * or the SVG fallback with a "basemap unavailable" note when `staticMap` is null.
  */
-export function MapFigure({ model, staticMap, variant }: { model: ReportModel; staticMap: ResolvedStaticMap | null; variant: StaticMapVariant }) {
+export function MapFigure({ model, staticMap, variant, lang = DEFAULT_LOCALE }: { model: ReportModel; staticMap: ResolvedStaticMap | null; variant: StaticMapVariant; lang?: Locale }) {
   const compact = variant === 'thumb';
+  const M = strings(lang).map;
   return (
     <figure className={`map-figure map-figure-${variant}`} style={{ margin: 0, width: '100%' }}>
       {staticMap ? (
         // eslint-disable-next-line @next/next/no-img-element -- server-rendered print page, data: URL, no next/image optimisation wanted
-        <img src={staticMap.dataUrl} alt="商圈地图：等时圈、同菜系竞品、其他中餐、华人锚点" style={IMG_STYLE[variant]} />
+        <img src={staticMap.dataUrl} alt={M.alt} style={IMG_STYLE[variant]} />
       ) : (
         <div style={{ position: 'relative' }}>
-          <SvgTradeAreaMap model={model} compact={compact} />
+          <SvgTradeAreaMap model={model} compact={compact} lang={lang} />
           <span
             style={{
               position: 'absolute',
@@ -271,14 +276,14 @@ export function MapFigure({ model, staticMap, variant }: { model: ReportModel; s
               borderRadius: 2,
             }}
           >
-            地图底图暂不可用 · 显示示意图
+            {M.fallback}
           </span>
         </div>
       )}
-      <MapFigureLegend model={model} variant={variant} />
+      <MapFigureLegend model={model} variant={variant} lang={lang} />
       {staticMap ? (
         <figcaption style={{ fontSize: '7pt', color: PALETTE.muted, marginTop: '2pt' }}>
-          {staticMap.attribution} · 等时圈 Mapbox · POI Overture / Google
+          {staticMap.attribution} · {M.attribution}
         </figcaption>
       ) : null}
     </figure>
@@ -286,7 +291,9 @@ export function MapFigure({ model, staticMap, variant }: { model: ReportModel; s
 }
 
 /** Legacy legend (grid layout from print.css). Prefer MapFigure, which carries its own legend. */
-export function MapLegend({ model }: { model: ReportModel }) {
+export function MapLegend({ model, lang = DEFAULT_LOCALE }: { model: ReportModel; lang?: Locale }) {
+  const S = strings(lang);
+  const M = S.map;
   const rings = model.trade_area.rings;
   const rail = model.access.transit.filter((t) => !/bus|muni bus|shuttle/i.test(t.system));
   return (
@@ -296,8 +303,8 @@ export function MapLegend({ model }: { model: ReportModel }) {
           <div key={r.id} className="legend-row">
             <span className="legend-swatch" style={{ background: RING_STYLE[r.id].fill, borderColor: RING_STYLE[r.id].stroke, borderStyle: r.method === 'radius' ? 'dashed' : 'solid' }} />
             <span>
-              {RING_STYLE[r.id].label}
-              {r.method === 'radius' ? '（直线半径近似）' : ''}
+              {S.ring[r.id].legend}
+              {r.method === 'radius' ? ` ${M.radiusApprox}` : ''}
             </span>
           </div>
         ))}
@@ -305,24 +312,24 @@ export function MapLegend({ model }: { model: ReportModel }) {
       <div className="legend-group">
         <div className="legend-row">
           <span className="legend-dot" style={{ background: LAYER_COLOR.site, width: 12, height: 12 }} />
-          <span>站点（拟选址）</span>
+          <span>{M.site}</span>
         </div>
         <div className="legend-row">
           <span className="legend-dot" style={{ background: LAYER_COLOR.l1 }} />
-          <span>同菜系竞品（{model.competitors.l1.length}）</span>
+          <span>{fill(M.l1Numbered, { n: model.competitors.l1.length })}</span>
         </div>
         <div className="legend-row">
           <span className="legend-dot" style={{ background: LAYER_COLOR.l2, width: 7, height: 7 }} />
-          <span>其他中餐（{model.competitors.l2_count}）</span>
+          <span>{fill(M.l2, { n: model.competitors.l2_count })}</span>
         </div>
         <div className="legend-row">
           <span className="legend-dot" style={{ background: LAYER_COLOR.l4, width: 7, height: 7 }} />
-          <span>华人锚点（{model.competitors.l4.length}）</span>
+          <span>{fill(M.l4, { n: model.competitors.l4.length })}</span>
         </div>
       </div>
       <div className="legend-group">
-        <div className="legend-title">轨道站 · Rail</div>
-        {rail.length === 0 ? <div className="legend-row">未获取</div> : null}
+        <div className="legend-title">{M.railTitle}</div>
+        {rail.length === 0 ? <div className="legend-row">{S.na}</div> : null}
         {rail.slice(0, 4).map((t) => (
           <div key={`${t.system}-${t.name}`} className="legend-row">
             <span className="legend-rail" />

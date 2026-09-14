@@ -10,8 +10,56 @@
  * - workflows/n8n_c8geek_cloud_maxwell_l/personal/RestaurantIQ - Full Report.workflow.ts
  */
 
+import { type Locale, pick } from '@/lib/i18n/locale';
+
+/**
+ * The one-line output-language instruction for each locale. Reused by every
+ * prompt the funnel sends (free / premium / verify / agents / research) so the
+ * wording stays identical everywhere.
+ */
+export const LANGUAGE_INSTRUCTION: Record<Locale, string> = {
+  en: 'Write in standard U.S. English.',
+  zh: '全文中文；专有名词、地址、品牌可保留英文。',
+  es: 'Escribe en español neutro (Estados Unidos / Latinoamérica), claro y profesional.',
+};
+
+export function languageInstruction(lang: Locale): string {
+  return pick(lang, LANGUAGE_INSTRUCTION);
+}
+
+/**
+ * Language instruction plus the structured-output rule: every JSON *value* the
+ * UI renders must be in the target language while JSON *keys* stay exactly as
+ * specified (English snake_case) so the schema keeps parsing.
+ */
+export function outputLanguageBlock(lang: Locale): string {
+  return pick(lang, {
+    en: [
+      '',
+      '[OUTPUT LANGUAGE]',
+      LANGUAGE_INSTRUCTION.en,
+      'Every JSON string value (headline, sections, labels, scenario names, checklist items, notes) must be in English. Keep JSON keys exactly as specified. Keep proper nouns, addresses, and brand names as they are.',
+      '',
+    ].join('\n'),
+    zh: [
+      '',
+      '【输出语言】',
+      LANGUAGE_INSTRUCTION.zh,
+      '所有 JSON 字符串值（标题、章节、标签、场景名称、清单条目、备注）必须使用简体中文；JSON 键名保持与约定完全一致（英文 snake_case）。',
+      '',
+    ].join('\n'),
+    es: [
+      '',
+      '[IDIOMA DE SALIDA]',
+      LANGUAGE_INSTRUCTION.es,
+      'Todos los valores de texto del JSON (titular, secciones, etiquetas, nombres de escenarios, puntos de la lista de verificación, notas) deben estar en español. Conserva las claves del JSON exactamente como se especifican (snake_case en inglés). Conserva nombres propios, direcciones y marcas tal como están.',
+      '',
+    ].join('\n'),
+  });
+}
+
 /** Six-layer risk audit + five-tier lease decision (align n8n embedded prompts when editing workflows). */
-export function locationRiskAuditEngineBlock(lang: 'zh' | 'en'): string {
+export function locationRiskAuditEngineBlock(lang: Locale): string {
   if (lang === 'zh') {
     return [
       '',
@@ -32,6 +80,28 @@ export function locationRiskAuditEngineBlock(lang: 'zh' | 'en'): string {
       '',
       '【置信度】',
       '输出 data_confidence_pct 0–100，并列出 acquired_data 与 missing_data（如租金、面积、hood、租约条款）。',
+      '',
+    ].join('\n');
+  }
+  if (lang === 'es') {
+    return [
+      '',
+      '[PRODUCTO: Auditoría de riesgo de ubicación RestaurantIQ]',
+      'Vendes control de la tasa de fracaso antes de firmar el contrato de arrendamiento, no prosa genérica de IA. Entrega una decisión de arrendamiento accionable con supuestos explícitos.',
+      '',
+      '[MOTOR DE SEIS CAPAS — puntúa cada una de 0 a 100 a partir de los anclajes; marca [estimación] cuando falten datos]',
+      '1. location_base: tráfico peatonal, visibilidad, estacionamiento, transporte público, vitalidad comercial, potencial nocturno',
+      '2. cuisine_fit: encaje del concepto del usuario (prioriza la gastronomía asiática de Norteamérica: cafetería estilo Hong Kong, asados cantoneses, hot pot, boba, pho, etc.)',
+      '3. competition_pressure: competidores directos / semidirectos / sustitutos / de tráfico — a mayor puntaje, mayor presión',
+      '4. revenue_potential: tres escenarios de ingresos mensuales con el cálculo explícito (órdenes/día × ticket × 30)',
+      '5. cost_pressure: renta, mano de obra, % de alimentos, comisiones de delivery — a mayor puntaje, mayor carga de costos',
+      '6. success_probability: perspectiva combinada, incluida la fricción del arranque en frío',
+      '',
+      '[decision_tier DE CINCO NIVELES — obligatorio]',
+      'strong_go | go_with_conditions | need_more_data | high_risk | no_go',
+      'Emite también el verdict heredado go|caution|no derivado del nivel (strong_go→go; go_with_conditions/need_more_data→caution; high_risk/no_go→no).',
+      '',
+      '[CONFIANZA] data_confidence_pct 0–100 más acquired_data[] y missing_data[] (renta, pies cuadrados, campana de extracción, términos del contrato, etc.).',
       '',
     ].join('\n');
   }
@@ -61,7 +131,7 @@ export function locationRiskAuditEngineBlock(lang: 'zh' | 'en'): string {
  * 菜系专属分析视角知识块
  * 根据 businessType 自动识别菜系类别，调整分析角度
  */
-export function cuisineKnowledgeBlock(lang: 'zh' | 'en'): string {
+export function cuisineKnowledgeBlock(lang: Locale): string {
   if (lang === 'zh') {
     return [
       '',
@@ -111,6 +181,59 @@ export function cuisineKnowledgeBlock(lang: 'zh' | 'en'): string {
       '4. revenue_model 中使用该菜系的典型翻台率/客单价基准',
       '5. risk_matrix 中包含菜系特有风险（如火锅的淡季、奶茶的竞争饱和）',
       '6. action_plan 中给出菜系针对性建议（如火锅的会员锁客、奶茶的外卖优化）',
+      '',
+    ].join('\n');
+  }
+
+  if (lang === 'es') {
+    return [
+      '',
+      '[MARCO DE ANÁLISIS POR TIPO DE COCINA]',
+      'Identifica la categoría de cocina a partir de businessType y ajusta el análisis en consecuencia:',
+      '',
+      '■ Hot pot / parrilla (hot pot, parrilla coreana, yakiniku, asador)',
+      '  - Cliente objetivo: 20-40 años, comidas sociales, gasto alto ($25-60 por persona)',
+      '  - Factores del sitio: estacionamiento > tráfico peatonal; horario nocturno; ventilación y normativa contra incendios; quejas por ruido',
+      '  - Competidores: densidad de la misma categoría + otros formatos sociales (asadores, coreano)',
+      '  - Riesgos: baja de verano (caída de ingresos del 30-40%), volatilidad de insumos, quejas por olores',
+      '  - Referencia de rotaciones: 1.5-2.5 turns_per_day (enfoque en cena; fines de semana hasta 3)',
+      '',
+      '■ Té de burbujas / café (boba, café, postres, jugos)',
+      '  - Cliente objetivo: 15-35 años, estudiantes y oficinistas, alta frecuencia, ticket bajo ($5-12)',
+      '  - Factores del sitio: tráfico peatonal > estacionamiento; cerca de centros comerciales, oficinas y escuelas; el radio de delivery importa',
+      '  - Competidores: cuenta las tiendas en 500 m; anota el nivel de marca (cadena nacional vs. independiente)',
+      '  - Riesgos: competencia saturada, rotación de marcas, estacionalidad (bebidas frías caen en invierno)',
+      '  - Referencia de rotaciones: N/A (usa vasos diarios: 200-500/día es saludable)',
+      '',
+      '■ Servicio completo (regional china, japonesa, occidental, etc.)',
+      '  - Cliente objetivo: varía — Sichuan/Hunan tiende a jóvenes y relación calidad-precio; cantonesa/japonesa a negocios y familias',
+      '  - Factores del sitio: locales de barrio → densidad residencial e ingresos; locales en centros comerciales → poder adquisitivo y estacionamiento',
+      '  - Competidores: directos de la misma cocina + de otra cocina en el mismo nivel de precio',
+      '  - Riesgos: costo laboral (25-35% de los ingresos), sensibilidad a la renta, mezcla almuerzo vs. cena',
+      '  - Referencia de rotaciones: 2-3 turns_per_day (fast casual puede llegar a 4)',
+      '',
+      '■ Cafetería estilo Hong Kong / asados cantoneses (cha chaan teng, carnes asadas, fideos wonton)',
+      '  - Cliente objetivo: comunidad china/asiática + público local de almuerzo; todos los horarios; ticket $12–25',
+      '  - Sitio: mezcla de oficinas y residencial; alta participación de delivery; menú ligero (≤40 SKU); sensible a la renta',
+      '  - Competidores: cafeterías HK directas + sustitutos de boba/brunch/comida china rápida',
+      '  - Rotaciones: almuerzo 3–5, cena 2–3; delivery suele ser 30–45%',
+      '',
+      '■ Comida rápida / servicio rápido (QSR, fideos, lunch boxes, ensaladas)',
+      '  - Cliente objetivo: oficinistas y obreros, hora pico de almuerzo, enfoque en rapidez ($8-15)',
+      '  - Factores del sitio: parques de oficinas, zonas industriales, nodos de transporte; el tiempo de servicio define las rotaciones',
+      '  - Competidores: competencia por nivel de precio + penetración de delivery (a menudo 40-60% del mix)',
+      '  - Riesgos: comisiones de plataformas (15-30%), exigencia de eficiencia laboral, techo del ticket',
+      '  - Referencia de rotaciones: 4-8 turns_per_day (un QSR eficiente puede superar 10)',
+      '',
+      'Si businessType no coincide con estas categorías, usa el marco general de restaurantes y anota "Sin coincidencia de cocina específica: se aplica el análisis general".',
+      '',
+      'Integra las conclusiones de cocina en:',
+      '1. executive_summary: refleja el posicionamiento de la cocina y el cliente objetivo',
+      '2. trade_area_analysis: ajusta el radio del área de influencia a la cocina (hot pot 3-5 mi, boba 0.5-1 mi)',
+      '3. competitors: prioriza competidores de la misma cocina con niveles de amenaza',
+      '4. revenue_model: usa las referencias de rotaciones/ticket típicas de la cocina',
+      '5. risk_matrix: incluye riesgos propios de la cocina (estacionalidad del hot pot, saturación del boba)',
+      '6. action_plan: tácticas específicas por cocina (programas de lealtad para hot pot, optimización de delivery para boba)',
       '',
     ].join('\n');
   }
@@ -168,7 +291,7 @@ export function cuisineKnowledgeBlock(lang: 'zh' | 'en'): string {
 }
 
 /** McKinsey-style free-tier rules: conversion-focused, anti-fluff. */
-export function locationIqMcKinseyFreeConversionBlock(lang: 'zh' | 'en'): string {
+export function locationIqMcKinseyFreeConversionBlock(lang: Locale): string {
   if (lang === 'zh') {
     return [
       '',
@@ -186,6 +309,26 @@ export function locationIqMcKinseyFreeConversionBlock(lang: 'zh' | 'en'): string
       '7. headline：决策标签｜一句赌注；分数可写「综合约XX/100」但不用 emoji 串代替判断。',
       '8. subheadline：「若现在签 lease，你赌的是___」。',
       '9. risk_audit_preview.one_line_conclusion 必须是决策句，禁止空泛表扬。',
+      '',
+    ].join('\n');
+  }
+  if (lang === 'es') {
+    return [
+      '',
+      '[NIVEL GRATUITO ESTILO McKINSEY]',
+      'Memorando de 30 segundos antes de firmar: veredicto + 3 evidencias + 1 riesgo costoso + 3 preguntas que solo responde el informe pagado.',
+      'No es un informe completo comprimido: sin tres escenarios de ingresos, sin matriz completa de competidores ni plan de 90 días.',
+      '',
+      '[REGLAS DE HIERRO]',
+      '1. Abre con firmar / firmar con condiciones / no firmar; nunca solo con un puntaje.',
+      '2. Cada hallazgo necesita ≥2 anclajes (nombres de negocios, conteos, distancias, tipo de vía, % de ingresos o etnia).',
+      '3. Prohibido el relleno: "la oportunidad supera al riesgo", "gran potencial", "ubicación conveniente", repetir "estimación típica de la zona" tres veces.',
+      '4. market_snapshot ≤~35 palabras cada uno: [hecho verificable] → [significado para el P&L] → [cifra o lista que solo da el informe pagado].',
+      '5. hidden_risk: "Si se ignora, es probable que ___" con $/mes, %, rotaciones o relación renta/ventas cuando sea posible.',
+      '6. paywall_teaser: "El informe completo responde 3 decisiones que hoy no puedes tomar: ①…②…③…".',
+      '7. headline: etiqueta de decisión + una apuesta; puntaje opcional; sin titulares solo de emojis.',
+      '8. subheadline: "Si firmas hoy, apuestas a que ___".',
+      '9. risk_audit_preview.one_line_conclusion debe ser una frase de decisión.',
       '',
     ].join('\n');
   }
@@ -210,7 +353,7 @@ export function locationIqMcKinseyFreeConversionBlock(lang: 'zh' | 'en'): string
 }
 
 /** Partner-grade evidence discipline — no speculation without label. */
-export function locationIqMcKinseyPartnerEvidenceBlock(lang: 'zh' | 'en'): string {
+export function locationIqMcKinseyPartnerEvidenceBlock(lang: Locale): string {
   if (lang === 'zh') {
     return [
       '',
@@ -224,6 +367,22 @@ export function locationIqMcKinseyPartnerEvidenceBlock(lang: 'zh' | 'en'): strin
       '5. 禁止空洞套话：「加强营销」「注重差异化」「市场前景广阔」「交通便利」「竞争适中」。',
       '6. 营收三情景必须写清公式（座位×翻台×客单价×营业日×入座率或客流×转化×复购），并与 D-4 盈亏锚点自洽。',
       '7. 若数据矛盾（如车流高但步行低），必须解释机制，不得回避。',
+      '',
+    ].join('\n');
+  }
+  if (lang === 'es') {
+    return [
+      '',
+      '[ESTÁNDAR DE SOCIO McKINSEY — evidencia primero, sin especulación]',
+      'Entregas una decisión de arrendamiento a un propietario, no texto de marketing.',
+      'Reglas:',
+      '1. Toda afirmación cuantitativa necesita etiqueta de fuente: [ACS], [Census], [Places], [Yelp], [Investigación profunda], [Búsqueda]; si no hay fuente, marca la frase completa como [estimación] + paso de verificación.',
+      '2. Nunca presentes suposiciones como hechos: nada de "probablemente/típicamente" sin anclajes; no inventes años de cierre ni ingresos.',
+      '3. comparables/failure_scenarios: solo nombres de la lista blanca o de los anclajes; si no hay, dilo y explica cómo verificar.',
+      '4. Profundidad: cada sección necesita un "¿y qué?" que conecte los hechos con la utilidad mensual, el retorno o los términos del contrato (USD).',
+      '5. Prohibido el relleno: "mejorar el marketing", "diferenciación", "gran potencial", "ubicación conveniente", "competencia moderada".',
+      '6. Los escenarios de ingresos deben mostrar la fórmula y alinearse con los anclajes deterministas de punto de equilibrio.',
+      '7. Explica las contradicciones en los datos (p. ej., alto tráfico vehicular vs. baja caminabilidad); no las ignores.',
       '',
     ].join('\n');
   }
@@ -244,7 +403,7 @@ export function locationIqMcKinseyPartnerEvidenceBlock(lang: 'zh' | 'en'): strin
 }
 
 /** Paid report density + anti-template rules. */
-export function locationIqMcKinseyPremiumDensityBlock(lang: 'zh' | 'en'): string {
+export function locationIqMcKinseyPremiumDensityBlock(lang: Locale): string {
   if (lang === 'zh') {
     return [
       '',
@@ -257,6 +416,20 @@ export function locationIqMcKinseyPremiumDensityBlock(lang: 'zh' | 'en'): string
       '5. 无数据处单点 [估算] 并写「完整版需核实：___」；禁止用占位竞品 A/B/C。',
       '6. opportunities 与 risks 不得重复同一论点；failure_scenarios 须引用真实或可查案例逻辑（店名+区域+启示）。',
       '7. trade_area_analysis 表格 ≥5 行；demographic_profile 首段必须是数字表格。',
+      '',
+    ].join('\n');
+  }
+  if (lang === 'es') {
+    return [
+      '',
+      '[NIVEL PAGADO ESTILO McKINSEY]',
+      'El lector va a firmar un contrato e invertir capital: cada sección necesita hecho verificable → significado para el P&L → siguiente acción.',
+      '1. executive_summary usa SCR: situación → complicación → recomendación (firmar/con condiciones/no + alternativas).',
+      '2. Cada sección principal necesita un hallazgo no obvio que cambie la decisión de arrendamiento.',
+      '3. Prohibidas las frases de plantilla: "mejorar el marketing", "enfocarse en la diferenciación", "gran potencial de mercado".',
+      '4. key_evidence_points ≥8, cada uno con un número/nombre/distancia + etiqueta de fuente.',
+      '5. Marca [estimación] en los vacíos; nunca uses marcadores como Competidor A/B/C.',
+      '6. opportunities no debe duplicar risks; failure_scenarios necesita precedentes plausibles con nombre o regionales.',
       '',
     ].join('\n');
   }
@@ -285,6 +458,7 @@ export function locationIqV2FreeSystemZh(): string {
   ].join(' ');
   return (
     base +
+    outputLanguageBlock('zh') +
     locationRiskAuditEngineBlock('zh') +
     cuisineKnowledgeBlock('zh') +
     locationIqMcKinseyFreeConversionBlock('zh')
@@ -359,10 +533,12 @@ export function locationIqV2FreeSystemEn(): string {
     'Data: prioritize pre-fetched anchors in the user message; label single gaps [estimate] and note "paid report needs: rent/sqft/lease terms"—never fill all three bullets with the same generic estimate phrase.',
     'Tone: 3-minute elevator brief—short sentences, numbers, store names, distances; zero marketing fluff.',
     'verdict must be lowercase only: go | caution | no (aligned with decision_tier).',
+    LANGUAGE_INSTRUCTION.en,
     'Output STRICT JSON only, no markdown, no prose outside JSON.',
   ].join(' ');
   return (
     base +
+    outputLanguageBlock('en') +
     locationRiskAuditEngineBlock('en') +
     cuisineKnowledgeBlock('en') +
     locationIqMcKinseyFreeConversionBlock('en')
@@ -458,11 +634,12 @@ export function locationIqV2PremiumSystemZh(): string {
     '- 若白名单不足 5 行，输出更少行（最少 0 行）并在 competition_landscape 写「本次仅检索到 N 家具名竞品（已列出）」，绝不补造。',
     '- 若白名单为空，competitors=[]，competition_landscape 必须明确说「未检索到附近具名竞品」并提供基于业态/商圈一般规律的定性分析（不写虚假店名）。',
     '',
-    '全文中文；专有名词、地址、品牌可保留英文。',
+    LANGUAGE_INSTRUCTION.zh,
     '严格输出 JSON，键名与调用方约定一致。',
   ].join('\n');
   return (
     base +
+    outputLanguageBlock('zh') +
     locationRiskAuditEngineBlock('zh') +
     cuisineKnowledgeBlock('zh') +
     locationIqMcKinseyPartnerEvidenceBlock('zh') +
@@ -666,10 +843,12 @@ export function locationIqV2PremiumSystemEn(): string {
     '- If the whitelist has fewer than 5 rows, output fewer rows (down to 0) and note in competition_landscape: "Only N named competitors found within sample radius (listed above)." Never fabricate to fill the quota.',
     '- If the whitelist is empty, set competitors=[] and write in competition_landscape that no named competitors were retrieved nearby, then provide a qualitative description based on concept and trade-area patterns (no invented names).',
     '',
+    LANGUAGE_INSTRUCTION.en,
     'Output strict JSON with the requested keys.',
   ].join('\n');
   return (
     base +
+    outputLanguageBlock('en') +
     locationRiskAuditEngineBlock('en') +
     cuisineKnowledgeBlock('en') +
     locationIqMcKinseyPartnerEvidenceBlock('en') +
@@ -790,7 +969,7 @@ Return JSON shape (replace placeholders; satisfy array lengths above):
 }
 
 /** IQ v3 methodology extensions (B/C workflow) — appended to paid system prompts. */
-export function locationIqV3PremiumExtensionsBlock(lang: 'en' | 'zh'): string {
+export function locationIqV3PremiumExtensionsBlock(lang: Locale): string {
   if (lang === 'zh') {
     return [
       '',
@@ -808,6 +987,23 @@ export function locationIqV3PremiumExtensionsBlock(lang: 'en' | 'zh'): string {
       '- data_sources_and_disclaimer：每条数据源带检索日期；区分实测 vs [估算]。',
     ].join('\n');
   }
+  if (lang === 'es') {
+    return [
+      '',
+      '[METODOLOGÍA IQ v3 — completa las claves JSON correspondientes]',
+      '- Área de influencia: prefiere isócronas de 5/10/15 min en auto o a pie, no solo radios; si faltan, indica que es una aproximación por tiempo de manejo y baja la confianza.',
+      '- dayparts: arreglo ≥4 filas (daypart, traffic_level, audience_type, fit_for_concept); almuerzo de oficinas vs. cena residencial sin coincidir = bandera roja.',
+      '- occupancy_cost_pct: en dashboard — costo de ocupación / ingreso mensual base; medianas NRA 2025 ~5.7% servicio completo, ~5.2% servicio limitado; banda saludable 5–8%; debe coincidir con los anclajes D-4.',
+      '- comparables: ≥1 success_cases y ≥1 failure_cases solo de la lista blanca/Places/Yelp.',
+      '- site_history: DEBE basarse en el bloque [NEGOCIOS EN ESTA DIRECCIÓN EXACTA] cuando exista: completa prior_business_name / prior_business_status / review_themes_positive / review_themes_negative / lessons_for_new_operator / note; un negocio de comida cerrado permanentemente aquí → prior_failures_detected=true y decision_tier no superior a go_with_conditions; solo sin ese bloque puedes [estimar], y baja la confianza.',
+      '- cannibalization: solo si el usuario proporcionó locales existentes; de lo contrario omite la clave.',
+      '- revenue_model: contrasta asientos×rotaciones con tráfico×conversión(2–8%)×recompra; brecha grande → baja la confianza.',
+      '- verdict_sensitivity: 2–4 condiciones que cambiarían el veredicto (renta $X, tráfico nocturno +Y%, Z meses de renta gratis).',
+      '- deal_terms_guidance: tope de renta saludable, renta gratis, TI, escalamiento derivados del cálculo de ocupación.',
+      '- Los tres escenarios de ingresos deben incluir bandas (p. ej., base $82k ±15%), no puntos de falsa precisión.',
+      '- data_sources_and_disclaimer: fuentes con fechas de consulta; separa lo medido de lo [estimación].',
+    ].join('\n');
+  }
   return [
     '',
     '[IQ v3 METHODOLOGY — populate matching JSON keys]',
@@ -823,4 +1019,279 @@ export function locationIqV3PremiumExtensionsBlock(lang: 'en' | 'zh'): string {
     '- Three revenue scenarios must include bands (e.g. base $82k ±15%), not false precision point estimates.',
     '- data_sources_and_disclaimer: sources with retrieval dates; separate measured vs [estimate].',
   ].join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Español (Estados Unidos / Latinoamérica)
+// ---------------------------------------------------------------------------
+
+export function locationIqV2FreeSystemEs(): string {
+  const base = [
+    'Eres LocationIQ: un socio de bienes raíces para restaurantes con estilo McKinsey que redacta un memorando previo a la firma del contrato para operadores.',
+    'Puntúa seis capas de 0 a 100 y define decision_tier antes de comprimir al JSON gratuito; el puntaje compuesto es secundario frente a una decisión clara de firmar / no firmar.',
+    'Datos: prioriza los anclajes precargados del mensaje del usuario; marca cada vacío puntual como [estimación] y anota "el informe pagado necesita: renta / pies cuadrados / términos del contrato"; nunca llenes los tres puntos con la misma frase genérica de estimación.',
+    'Tono: informe de ascensor de 3 minutos — frases cortas, números, nombres de negocios, distancias; cero relleno de marketing.',
+    'verdict solo en minúsculas: go | caution | no (alineado con decision_tier).',
+    LANGUAGE_INSTRUCTION.es,
+    'Devuelve ÚNICAMENTE JSON estricto, sin markdown ni texto fuera del JSON.',
+  ].join(' ');
+  return (
+    base +
+    outputLanguageBlock('es') +
+    locationRiskAuditEngineBlock('es') +
+    cuisineKnowledgeBlock('es') +
+    locationIqMcKinseyFreeConversionBlock('es')
+  );
+}
+
+export function locationIqV2FreeUserEs(input: {
+  location: string;
+  businessType: string;
+  marketDataBrief?: string;
+  monthlyRentUsd?: number;
+  sqft?: number;
+}): string {
+  const anchorBlock = input.marketDataBrief?.trim()
+    ? [
+        '',
+        '[Anclajes precargados para esta dirección — cita ≥2 hechos concretos, cifras o nombres de negocios textuales entre headline + market_snapshot; no los ignores; usa [estimación] + ruta de verificación donde haya vacíos]',
+        input.marketDataBrief.trim(),
+        '',
+      ].join('\n')
+    : '';
+  return [
+    'Genera la evaluación rápida GRATUITA de ubicación LocationIQ V2.0 a partir de los datos siguientes.',
+    `Dirección: ${input.location}`,
+    `Tipo de negocio: ${input.businessType || 'Restaurante'}`,
+    input.monthlyRentUsd
+      ? `Renta mensual indicada por el usuario (USD, opcional): ${input.monthlyRentUsd}`
+      : 'Renta mensual no proporcionada — incluye rent en missing_data',
+    input.sqft
+      ? `Superficie indicada por el usuario (pies cuadrados, opcional): ${input.sqft}`
+      : 'Superficie no proporcionada — incluye sqft en missing_data',
+    anchorBlock,
+    '',
+    'Tras puntuar las seis capas y definir decision_tier, comprime todo en JSON (sin tablas markdown separadas):',
+    '',
+    'headline: preferiblemente "{decisión de arrendamiento} | {una apuesta}"; puntaje opcional; prohibido el vago "la oportunidad supera al riesgo"; incluye ≥1 anclaje (nombre/N/distancia/tipo de vía).',
+    'subheadline: una línea "Si firmas hoy, apuestas a que ___".',
+    'market_snapshot: exactamente 3 cadenas, ≤~35 palabras cada una: [hecho verificable] → [significado para el P&L] → [cifra o lista que solo da el informe pagado]; cubre estructura competitiva, demanda/tráfico y gancho económico.',
+    'hidden_risk: el riesgo principal como "Si se ignora, es probable que ___" con impacto cuantificado cuando sea posible; no repitas paywall_teaser.',
+    'paywall_teaser: "El informe completo responde 3 decisiones que hoy no puedes tomar: ①…②…③…" (elige 3 entre ingresos de equilibrio, banda de 3 escenarios, matriz de amenaza de competidores, lista de verificación del contrato, corredores alternativos, comparables de fracaso).',
+    'verdict: go | caution | no; usa caution cuando haya incertidumbre con un riesgo a la baja relevante.',
+    'decision_tier: strong_go | go_with_conditions | need_more_data | high_risk | no_go (obligatorio; coherente con verdict).',
+    'risk_audit_preview: overall_score, one_line_conclusion (frase de firmar/con condiciones/no), layers (≥4 con id+score), radar opcional de 7 dimensiones, data_confidence_pct, missing_data, acquired_data.',
+    '',
+    'Devuelve JSON ESTRICTO:',
+    '{',
+    '  "verdict": "go|caution|no",',
+    '  "decision_tier": "go_with_conditions",',
+    '  "headline": "...",',
+    '  "subheadline": "...",',
+    '  "market_snapshot": ["...", "...", "..."],',
+    '  "hidden_risk": "...",',
+    '  "paywall_teaser": "...",',
+    '  "risk_audit_preview": { "overall_score": 76, "one_line_conclusion": "...", "layers": [], "radar": {}, "data_confidence_pct": 58, "missing_data": [], "acquired_data": [] }',
+    '}',
+    '',
+    'No incluyas un campo reason; sé conciso; no entregues la solución completa.',
+  ].join('\n');
+}
+
+export function locationIqV2PremiumSystemEs(): string {
+  const base = [
+    'Eres el motor premium de selección de ubicaciones de LocationIQ: un consultor sénior con 15 años de experiencia en McKinsey y en consultoría de restaurantes.',
+    '',
+    '【REQUISITO CENTRAL: INFORME DE CONSULTORÍA NARRATIVO】',
+    'Esto NO es llenar un formulario JSON. Escribe como un **informe de consultoría real para un cliente**:',
+    '1. **Flujo narrativo**: cada sección de análisis se desarrolla como una historia con lógica, causalidad y conclusiones',
+    '2. **Densidad de datos**: cada juicio necesita cifras concretas — dólares, población, pies cuadrados',
+    '3. **Citas de fuente**: cada dato DEBE citar su fuente: [Census], [Yelp], [Google Maps], [DeepRes], [ACS], [estimación]',
+    '4. **Ejemplos reales**: usa nombres de negocios reales, direcciones reales, casos reales — NUNCA marcadores como "Competidor A/B/C"',
+    '',
+    '【ESTILO DE REDACCIÓN DE REFERENCIA】',
+    'BIEN: "Esta dirección está sobre 19th Ave, una arteria de 6 carriles con límite de 35 mph y 38,000 viajes vehiculares diarios [Caltrans]. Este patrón de corredor de paso significa que los autos pasan rápido en lugar de detenerse a consumir, lo que es inadecuado para comida rápida impulsada por compras de impulso."',
+    'MAL: "Esta ubicación tiene buen acceso vial y tráfico peatonal moderado, adecuada para abrir un restaurante."',
+    '',
+    '【USO DE LA INVESTIGACIÓN PROFUNDA】',
+    'Cuando el mensaje del usuario contenga datos etiquetados como [DeepRes], son datos de alta calidad verificados en la web con Tavily Deep Research. DEBES:',
+    '- Priorizar las citas de datos [DeepRes]',
+    '- Conservar las etiquetas [DeepRes] en el informe para que el lector conozca la fuente',
+    '- Si [DeepRes] contradice a [ACS]/[Places], explicar la discrepancia y sus posibles causas',
+    '',
+    '【REQUISITOS DE CONTENIDO】',
+    '1. executive_summary: 3-4 párrafos completos con veredicto, datos clave y acciones recomendadas',
+    '2. demographic_profile: DEBE abrir con una tabla que liste TODAS las cifras de población e ingresos, y luego interpretar el encaje con el concepto',
+    '3. trade_area_analysis: DEBE incluir una tabla Markdown de ≥5 filas (radio/horario/demanda/evidencia); la evidencia DEBE citar [ACS] y [Places]',
+    '4. competition_landscape: párrafo narrativo del panorama competitivo, incluido el análisis de "vacío sin competencia" y lecciones de casos fallidos',
+    '5. competitors: nombres reales, direcciones, calificaciones, niveles de amenaza, con 1-2 frases de análisis cada uno',
+    '6. alternative_corridors: si esta dirección no se recomienda, DEBES proponer locales alternativos concretos (dirección, pies cuadrados, renta mensual)',
+    '',
+    '【CUMPLIMIENTO DE LA LISTA BLANCA — CLÁUSULA ANTIALUCINACIÓN (MÁXIMA PRIORIDAD)】',
+    '- El bloque [LISTA BLANCA DE COMPETIDORES] del mensaje del usuario enumera los **únicos competidores con nombre que puedes citar** en este informe.',
+    '- competitors[].name DEBE aparecer **textualmente** en la lista blanca. Cualquier nombre fuera de la lista (incluidos nombres verosímiles como "Boba Express" o "Tasty Pot") será **eliminado silenciosamente** por el servidor y dejará el arreglo vacío.',
+    '- Si la lista blanca tiene menos de 5 filas, devuelve menos filas (hasta 0) y anota en competition_landscape: "Solo se encontraron N competidores con nombre en el radio de muestra (listados arriba)". Nunca inventes para completar la cuota.',
+    '- Si la lista blanca está vacía, pon competitors=[] y escribe en competition_landscape que no se recuperaron competidores con nombre cerca; luego ofrece una descripción cualitativa basada en el concepto y los patrones del área de influencia (sin nombres inventados).',
+    '',
+    LANGUAGE_INSTRUCTION.es,
+    'Devuelve JSON estricto con las claves solicitadas.',
+  ].join('\n');
+  return (
+    base +
+    outputLanguageBlock('es') +
+    locationRiskAuditEngineBlock('es') +
+    cuisineKnowledgeBlock('es') +
+    locationIqMcKinseyPartnerEvidenceBlock('es') +
+    locationIqMcKinseyPremiumDensityBlock('es') +
+    locationIqV3PremiumExtensionsBlock('es')
+  );
+}
+
+export function locationIqV2PremiumUserEs(input: {
+  location: string;
+  businessType: string;
+  headline: string;
+  reason: string;
+  marketDataSection: string;
+}): string {
+  return `Genera el informe PROFUNDO PAGADO LocationIQ V2.0. Devuelve un único objeto JSON válido con EXACTAMENTE las claves indicadas abajo. No omitas los arreglos estructurados (usa [] si hace falta; nunca null para arreglos).
+
+**Requisito central de redacción: estándar de entrega de socio McKinsey — estructura SCR (situación → complicación → recomendación), al menos un hallazgo no obvio por sección, sin frases de plantilla. Escribe como un informe de consultoría real, no como un formulario. Cada dato debe llevar etiqueta de fuente [DeepRes]/[ACS]/[Census]/[Yelp]/[Google Maps]/[estimación]. Todo el texto en español; conserva nombres propios, direcciones y marcas.**
+
+UBICACIÓN: ${input.location}
+TIPO DE NEGOCIO: ${input.businessType || 'Restaurante'}
+TITULAR DEL NIVEL GRATUITO: ${input.headline}
+NOTAS DEL NIVEL GRATUITO: ${input.reason}
+${input.marketDataSection}
+
+Requisitos obligatorios:
+- Lee los [ANCLAJES DE DATOS DEL SISTEMA] al inicio del mensaje del usuario cuando existan: usa esos nombres de competidores textualmente; alinea monthly_revenue_usd de revenue_model.scenarios con las bandas de los anclajes.
+- Si hay JSON DE DATOS DE MERCADO, prefiere los nombres/calificaciones/distancias reales de competidores que contiene; marca [estimación] donde los datos sean insuficientes; nunca finjas precisión censal.
+- competitors: al menos 5 filas (directos/indirectos a ~1 milla); threat_level exactamente Alta/Media/Baja; analysis con una frase que explique por qué.
+- risk_matrix: exactamente 5 objetos; cada uno con probability (Alta|Media|Baja), financial_impact (banda USD/mes o % de la utilidad mensual), trigger, mitigation.
+- revenue_model.scenarios: exactamente 3 con name Conservador/Base/Optimista; key_assumptions DEBE incluir unidades: asientos, **turns_per_day (nunca "rotaciones por mes")**, ticket promedio (separa comedor vs. delivery si aplica), ocupación (por horario o promedio diario), days_open, mezcla de canales. methodology debe definir turns_per_day y la conversión a ingreso mensual en prosa.
+- action_plan_structured: 8–12 objetos; cada uno con task; completa owner, budget_band, deliverable, success_metric, timeframe cuando sea posible.
+- decision_matrix: 5 filas con estos pesos: tráfico/ubicación 25%, encaje demográfico 20%, competencia 20%, viabilidad financiera 20%, factibilidad operativa 15% — incluye score_100, weight_pct, weighted_score.
+- comparables: al menos 1 cadena en success_cases y 1 en failure_cases (nombres reales o verosímiles + lección).
+- acquisition_channels: al menos 4 filas con priority (P0/P1…).
+- confidence debe ser exactamente Alta, Media o Baja; pon la justificación en confidence_rationale.
+- La prosa de competition_landscape y revenue_estimate debe coincidir con los campos estructurados competitors/revenue_model (sin contradicciones).
+- data_sources_and_disclaimer: fuentes en formato de lista + una línea de "no constituye asesoría de inversión".
+- demographic_profile: el **primer bloque** debe ser una tabla Markdown O una lista ordenada que cite **todas** las líneas numéricas de [DEMOGRAFÍA — ANCLAJES OFICIALES] (tramo censal + condado; escribe "suprimido" si falta); solo después agrega interpretación — nada de un párrafo inicial sin cifras.
+- trade_area_analysis: debe incluir una tabla Markdown con **≥5 filas** (columnas sugeridas: radio/rango, horario, juicio de demanda/tráfico, evidencia). La evidencia debe incluir **[ACS]** (población/ingresos vs. capacidad de pago del ticket) y **[Places]** (conteo de muestra N de Google o densidad de competidores con nombre de market_data). Sin un vago "tráfico alto/medio/bajo" sin radio + horario + cifra de referencia.
+Validación adicional:
+- "Renta +10%" es una sensibilidad de **costo**: indica el impacto en utilidad/flujo de caja (no en ingresos). "Rotaciones −0.5" debe ser "turns_per_day − 0.5" con impacto basado en la fórmula.
+
+Entrega de nivel referencia (igualar las muestras PDF premium):
+- site_and_access_assessment: un bloque narrativo sobre visibilidad del inmueble, clasificación de la vía, sensación de velocidad/tráfico, señales de estacionamiento; marca [estimación] cuando no haya fuentes primarias.
+- key_evidence_points: ≥6 viñetas cortas; cada una con un hecho o cifra verificable más etiqueta de fuente (Maps/Yelp/ACS/ciudad o DOT/datos abiertos/[búsqueda]/[estimación]).
+- alternative_corridors: ≥3 objetos con corridor_name, rationale, listings (≥2 filas: address_or_listing, sqft, monthly_rent_usd, highlights, source_tag); si no hay un local real, marca [estimación] e indica los pasos de verificación.
+- risk_audit: objeto OBLIGATORIO — decision_tier, overall_score, one_line_conclusion, seis puntajes de capa, radar (7 dimensiones), break_even_revenue_monthly_usd, safe_revenue_monthly_usd, top_risks (3), playbook (3–5 tácticas), lease_checklist (≥10 puntos), filas de cost_breakdown, competitor_tiers_note (directos/semidirectos/sustitutos/de tráfico), data_confidence_pct, missing_data, acquired_data.
+  · [D-4 CRÍTICO] break_even_revenue_monthly_usd, safe_revenue_monthly_usd y cost_breakdown DEBEN coincidir con el bloque de anclaje "MODELO DETERMINISTA DE PUNTO DE EQUILIBRIO" del mensaje del usuario — textualmente, sin redondeos ni estimaciones aparte. Solo si ese bloque falta puedes estimar; en ese caso marca cada cifra como [estimación].
+- one_line_conclusion: repite la respuesta principal en el nivel superior para la interfaz.
+- differentiation_strategy debe leerse como un manual de operador (número de SKU del menú, bandas de precio, estrategia de SKU para delivery).
+
+Devuelve esta estructura JSON (reemplaza los marcadores; cumple las longitudes de arreglo indicadas arriba):
+{
+  "report_title": "…",
+  "one_line_conclusion": "…",
+  "decision_tier": "go_with_conditions",
+  "risk_audit": {
+    "decision_tier": "go_with_conditions",
+    "overall_score": 76,
+    "one_line_conclusion": "…",
+    "location_base_score": 78,
+    "cuisine_fit_score": 82,
+    "competition_pressure_score": 61,
+    "revenue_potential_score": 74,
+    "cost_pressure_score": 55,
+    "success_probability_score": 69,
+    "radar": { "location_potential": 78, "cuisine_match": 82, "competition_pressure": 61, "spending_power_match": 74, "delivery_potential": 80, "cost_pressure": 55, "success_probability": 69 },
+    "break_even_revenue_monthly_usd": 82000,
+    "safe_revenue_monthly_usd": 100000,
+    "top_risks": ["…", "…", "…"],
+    "playbook": ["…", "…"],
+    "lease_checklist": ["…"],
+    "cost_breakdown": [{ "item": "Renta + NNN", "amount_usd": 9800, "note": "…" }],
+    "competitor_tiers_note": "…",
+    "data_confidence_pct": 72,
+    "missing_data": [],
+    "acquired_data": []
+  },
+  "dashboard": { "overall_score": 0, "foot_traffic_index": 0, "competition_intensity": 0, "payback_months": "…", "recommendation": "ADELANTE|PRECAUCIÓN|NO AVANZAR|ADELANTE CON CONDICIONES" },
+  "executive_summary": "…",
+  "final_verdict": "…",
+  "trade_area_analysis": "…",
+  "demographic_profile": "…",
+  "competition_landscape": "…",
+  "revenue_estimate": "…",
+  "competitors": [{ "name": "…", "distance_mi": 0, "category": "…", "rating": 0, "review_count": 0, "price_tier": "…", "threat_level": "Alta", "analysis": "…" }],
+  "risk_matrix": [{ "risk": "…", "probability": "Media", "financial_impact": "…", "trigger": "…", "mitigation": "…" }],
+  "revenue_model": { "methodology": "…", "scenarios": [{ "name": "Conservador", "monthly_revenue_usd": 0, "key_assumptions": "…" }, { "name": "Base", "monthly_revenue_usd": 0, "key_assumptions": "…" }, { "name": "Optimista", "monthly_revenue_usd": 0, "key_assumptions": "…" }], "sensitivity": ["…"], "breakeven": "…", "monthly_costs_note": "…" },
+  "risks": ["5 frases resumen alineadas con risk_matrix"],
+  "opportunities": ["…","…","…"],
+  "failure_scenarios": ["…","…","…"],
+  "differentiation_strategy": "…",
+  "acquisition_channels": [{ "channel": "…", "priority": "P0", "rationale": "…", "expected_cac_band": "…" }],
+  "action_plan": ["…"],
+  "action_plan_structured": [{ "task": "…", "owner": "…", "budget_band": "…", "deliverable": "…", "success_metric": "…", "timeframe": "…" }],
+  "comparables": { "success_cases": ["…"], "failure_cases": ["…"] },
+  "decision_matrix": [{ "dimension": "…", "score_100": 0, "weight_pct": 25, "weighted_score": 0 }],
+  "confidence": "Media",
+  "confidence_rationale": "…",
+  "data_sources_and_disclaimer": "…",
+  "site_and_access_assessment": "…",
+  "key_evidence_points": ["hecho + fuente …", "…", "…", "…", "…", "…"],
+  "alternative_corridors": [
+    {
+      "corridor_name": "…",
+      "rationale": "…",
+      "listings": [
+        {
+          "address_or_listing": "…",
+          "sqft": 1200,
+          "monthly_rent_usd": 4500,
+          "highlights": "…",
+          "source_tag": "[estimación] o LoopNet …"
+        }
+      ]
+    }
+  ]
+}`;
+}
+
+/** Locale-dispatched prompt builders so callers never branch on language themselves. */
+export function locationIqV2FreeSystem(lang: Locale): string {
+  if (lang === 'zh') return locationIqV2FreeSystemZh();
+  if (lang === 'es') return locationIqV2FreeSystemEs();
+  return locationIqV2FreeSystemEn();
+}
+
+export function locationIqV2FreeUser(
+  lang: Locale,
+  input: Parameters<typeof locationIqV2FreeUserEn>[0],
+): string {
+  if (lang === 'zh') return locationIqV2FreeUserZh(input);
+  if (lang === 'es') return locationIqV2FreeUserEs(input);
+  return locationIqV2FreeUserEn(input);
+}
+
+export function locationIqV2PremiumSystem(lang: Locale): string {
+  if (lang === 'zh') return locationIqV2PremiumSystemZh();
+  if (lang === 'es') return locationIqV2PremiumSystemEs();
+  return locationIqV2PremiumSystemEn();
+}
+
+export function locationIqV2PremiumUser(
+  lang: Locale,
+  input: Parameters<typeof locationIqV2PremiumUserEn>[0],
+): string {
+  if (lang === 'zh') return locationIqV2PremiumUserZh(input);
+  if (lang === 'es') return locationIqV2PremiumUserEs(input);
+  return locationIqV2PremiumUserEn(input);
+}
+
+/** Default business-type label when the visitor left it blank. */
+export function defaultBusinessTypeLabel(lang: Locale): string {
+  return pick(lang, { en: 'Restaurant', zh: '餐厅', es: 'Restaurante' });
 }

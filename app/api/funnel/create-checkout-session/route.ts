@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getPublicBaseUrl } from '@/lib/funnel/base-url';
 import { iqGetReport, iqUpdateStripeSession } from '@/lib/funnel/iq-repository';
+import { pick, toLocale, type Locale } from '@/lib/i18n/locale';
 
 export const runtime = 'nodejs';
+
+/** Stripe Checkout `locale` values we can map the site locale onto. */
+const STRIPE_LOCALE: Record<Locale, string> = { en: 'en', zh: 'zh', es: 'es' };
 
 async function createStripeCheckoutSession(params: {
   priceId?: string;
@@ -10,6 +14,7 @@ async function createStripeCheckoutSession(params: {
   reportId: string;
   successUrl: string;
   cancelUrl: string;
+  lang: Locale;
 }): Promise<{ id: string; url: string }> {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) throw new Error('STRIPE_SECRET_KEY not set');
@@ -21,6 +26,8 @@ async function createStripeCheckoutSession(params: {
   body.append('metadata[reportId]', params.reportId);
   body.append('success_url', params.successUrl);
   body.append('cancel_url', params.cancelUrl);
+  // Stripe's hosted Checkout page follows the visitor's language too.
+  body.append('locale', STRIPE_LOCALE[params.lang]);
 
   if (params.priceId) {
     body.append('line_items[0][price]', params.priceId);
@@ -29,8 +36,18 @@ async function createStripeCheckoutSession(params: {
     body.append('line_items[0][quantity]', '1');
     body.append('line_items[0][price_data][currency]', 'usd');
     body.append('line_items[0][price_data][unit_amount]', String(Math.round(params.amountUsd * 100)));
-    body.append('line_items[0][price_data][product_data][name]', 'RestaurantIQ Full Report');
-    body.append('line_items[0][price_data][product_data][description]', 'Unlock the complete AI decision report');
+    body.append(
+      'line_items[0][price_data][product_data][name]',
+      pick(params.lang, { en: 'RestaurantIQ Full Report', zh: 'RestaurantIQ 完整报告', es: 'Informe completo de RestaurantIQ' }),
+    );
+    body.append(
+      'line_items[0][price_data][product_data][description]',
+      pick(params.lang, {
+        en: 'Unlock the complete AI decision report',
+        zh: '解锁完整的 AI 选址决策报告',
+        es: 'Desbloquea el informe completo de decisión con IA',
+      }),
+    );
   }
 
   const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
@@ -51,7 +68,7 @@ async function createStripeCheckoutSession(params: {
 
 export async function POST(req: Request) {
   try {
-    const { reportId } = (await req.json()) as { reportId?: string };
+    const { reportId, language } = (await req.json()) as { reportId?: string; language?: string };
     if (!reportId) {
       return NextResponse.json({ error: 'Missing reportId' }, { status: 400 });
     }
@@ -60,6 +77,8 @@ export async function POST(req: Request) {
     if (!report) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
+    // Visitor's current language first, then the language the report was created in, then English.
+    const lang = toLocale(language, toLocale(report.language));
 
     if (!process.env.STRIPE_SECRET_KEY?.trim()) {
       return NextResponse.json(
@@ -76,8 +95,9 @@ export async function POST(req: Request) {
       priceId,
       amountUsd,
       reportId,
-      successUrl: `${baseUrl}/iq/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancelUrl: `${baseUrl}/iq/cancel?reportId=${encodeURIComponent(reportId)}`,
+      successUrl: `${baseUrl}/iq/success?session_id={CHECKOUT_SESSION_ID}&lang=${lang}`,
+      cancelUrl: `${baseUrl}/iq/cancel?reportId=${encodeURIComponent(reportId)}&lang=${lang}`,
+      lang,
     });
 
     if (session.id) {

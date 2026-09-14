@@ -19,6 +19,7 @@
  * The whitelist is lowercase + punctuation-stripped; exact case + accents are
  * preserved on `originalByKey` for re-display.
  */
+import { type Locale, pick } from '@/lib/i18n/locale';
 
 export const MIN_WHITELIST_FOR_GROUNDED_REPORT = 3;
 
@@ -309,14 +310,29 @@ export function isCompetitorWhitelisted(name: unknown, wl: CompetitorWhitelist):
  */
 export function buildCompetitorWhitelistPromptBlock(
   wl: CompetitorWhitelist,
-  lang: 'en' | 'zh',
+  lang: Locale,
 ): string {
   if (wl.total === 0) {
-    return lang === 'zh'
-      ? '\n\n【竞品白名单】无 — 系统未检索到任何具名竞品。本次报告 competitors 数组必须为空数组 []，并在 competition_landscape 中明确写「未检索到附近具名竞品（Google/Yelp/Foursquare 同时返回空）」。禁止编造 A/B/C 占位名。\n'
-      : '\n\n[COMPETITOR WHITELIST] EMPTY — no named competitors were retrieved. Return competitors as []; competition_landscape must say "no named competitors retrieved from Google/Yelp/Foursquare"; do NOT invent A/B/C placeholders.\n';
+    return pick(lang, {
+      en: '\n\n[COMPETITOR WHITELIST] EMPTY — no named competitors were retrieved. Return competitors as []; competition_landscape must say "no named competitors retrieved from Google/Yelp/Foursquare"; do NOT invent A/B/C placeholders.\n',
+      zh: '\n\n【竞品白名单】无 — 系统未检索到任何具名竞品。本次报告 competitors 数组必须为空数组 []，并在 competition_landscape 中明确写「未检索到附近具名竞品（Google/Yelp/Foursquare 同时返回空）」。禁止编造 A/B/C 占位名。\n',
+      es: '\n\n[LISTA BLANCA DE COMPETIDORES] VACÍA — no se recuperó ningún competidor con nombre. Devuelve competitors como []; competition_landscape debe indicar "no se recuperaron competidores con nombre de Google/Yelp/Foursquare"; NO inventes marcadores A/B/C.\n',
+    });
   }
   const lines = wl.displayNames.map((n, i) => `  ${i + 1}. ${n}`).join('\n');
+  if (lang === 'es') {
+    return [
+      '\n\n[LISTA BLANCA DE COMPETIDORES — RESTRICCIÓN ESTRICTA]',
+      `Competidores con nombre recuperados (total ${wl.total}; Google=${wl.countsBySource.google} / Yelp=${wl.countsBySource.yelp} / Foursquare=${wl.countsBySource.foursquare} / BrightData=${wl.countsBySource.brightdata}):`,
+      lines,
+      '',
+      'Reglas:',
+      `- Cada competitors[].name DEBE aparecer TEXTUALMENTE en la lista blanca anterior (conserva mayúsculas y espacios).`,
+      `- Los nombres fuera de esta lista serán eliminados silenciosamente por el servidor, así que NO inventes A/B/C, "Boba Express" ni marcadores similares.`,
+      `- Si la lista blanca tiene menos de 5 entradas, devuelve MENOS filas (mínimo 0) en lugar de inventar; menciona N=${wl.total} en confidence_rationale.`,
+      '',
+    ].join('\n');
+  }
   if (lang === 'zh') {
     return [
       '\n\n【竞品白名单——硬约束】',

@@ -14,6 +14,7 @@
  */
 
 import { envValue } from '@/lib/env-value';
+import { type Locale, pick } from '@/lib/i18n/locale';
 import { readMarketCache, writeMarketCache, roundCoord } from '@/lib/funnel/iq-market-cache';
 import { runIqProviderJson } from '@/lib/funnel/iq-provider-router';
 import { fetchGooglePlaceDetail } from '@/lib/funnel/external-data/google-place-details';
@@ -74,6 +75,8 @@ export interface SiteHistoryAnalysis {
   risk_flag: 'low' | 'medium' | 'high';
   summary_zh: string;
   summary_en: string;
+  /** Spanish summary; may be absent on packs cached before Spanish support. */
+  summary_es?: string;
   provider?: string;
   model?: string;
 }
@@ -369,7 +372,7 @@ export async function fetchSiteHistoryPack(input: {
 
 export async function analyzeSiteHistory(
   pack: SiteHistoryPack,
-  opts: { cuisine: string; lang: 'en' | 'zh' },
+  opts: { cuisine: string; lang: Locale },
 ): Promise<SiteHistoryAnalysis | null> {
   if (pack.businesses.length === 0) return null;
   const excerpts = pack.businesses.flatMap((b) =>
@@ -385,7 +388,8 @@ export async function analyzeSiteHistory(
   const system = [
     'You are a restaurant site-selection analyst. You are given the businesses that operate or operated AT THE EXACT ADDRESS a client wants to lease, with their Google/Yelp review excerpts.',
     'Extract what the site itself taught previous operators. Every theme MUST trace to a supplied excerpt or status field — never invent. If reviews are too few, say so in status_summary and keep arrays short.',
-    'Output ONLY a JSON object with keys: prior_business_name (string|null), status_summary (string), positive_themes (string[]), negative_themes (string[]), closure_signals (string[]), lessons_for_new_operator (string[]), risk_flag ("low"|"medium"|"high"), summary_zh (string, 中文 2-3 句), summary_en (string, 2-3 sentences).',
+    'Output ONLY a JSON object with keys: prior_business_name (string|null), status_summary (string), positive_themes (string[]), negative_themes (string[]), closure_signals (string[]), lessons_for_new_operator (string[]), risk_flag ("low"|"medium"|"high"), summary_zh (string, 中文 2-3 句), summary_en (string, 2-3 sentences in standard U.S. English), summary_es (string, 2-3 oraciones en español neutro).',
+    `Write status_summary, the theme arrays and lessons_for_new_operator in the report language: ${pick(opts.lang, { en: 'standard U.S. English', zh: '简体中文', es: 'español neutro (Estados Unidos / Latinoamérica)' })}. The three summary_* fields are always produced in their own language.`,
     'risk_flag: high = a food business at this address closed permanently with location/operations complaints; medium = closed or mixed signals; low = operational with good reviews or no prior food business.',
   ].join('\n');
   const user = JSON.stringify(
@@ -429,6 +433,7 @@ export async function analyzeSiteHistory(
     risk_flag: flag === 'high' || flag === 'medium' || flag === 'low' ? flag : 'medium',
     summary_zh: String(d.summary_zh ?? ''),
     summary_en: String(d.summary_en ?? ''),
+    summary_es: String(d.summary_es ?? ''),
     provider: routed?.provider,
     model: routed?.model,
   };
@@ -440,7 +445,7 @@ export async function analyzeSiteHistory(
  */
 export async function enrichMarketDataWithSiteHistory(
   base: Record<string, unknown>,
-  opts: { address: string; cuisine: string; lang: 'en' | 'zh' },
+  opts: { address: string; cuisine: string; lang: Locale },
 ): Promise<Record<string, unknown>> {
   const existing = base.site_history as SiteHistoryPack | undefined;
   if (existing && typeof existing === 'object' && existing.analysis) return base;
@@ -472,29 +477,50 @@ export async function enrichMarketDataWithSiteHistory(
 // Prompt anchors
 // ---------------------------------------------------------------------------
 
-export function buildSiteHistoryBlock(pack: SiteHistoryPack | null | undefined, lang: 'en' | 'zh'): string {
+const STATUS_LABEL: Record<SiteBusinessStatus, Record<Locale, string>> = {
+  operational: { en: 'operational', zh: '营业中', es: 'en operación' },
+  closed_temporarily: { en: 'closed temporarily', zh: '暂停营业', es: 'cerrado temporalmente' },
+  closed_permanently: { en: 'closed permanently', zh: '已永久关闭', es: 'cerrado permanentemente' },
+  unknown: { en: 'status unknown', zh: '状态未知', es: 'estado desconocido' },
+};
+
+/** Localized one-line summary of the site-history analysis (English fallback for older packs). */
+export function siteHistorySummary(analysis: SiteHistoryAnalysis | null | undefined, lang: Locale): string {
+  if (!analysis) return '';
+  return pick(lang, {
+    en: analysis.summary_en,
+    zh: analysis.summary_zh,
+    es: analysis.summary_es || analysis.summary_en,
+  });
+}
+
+export function buildSiteHistoryBlock(pack: SiteHistoryPack | null | undefined, lang: Locale): string {
   if (!pack || typeof pack !== 'object') return '';
-  const zh = lang === 'zh';
   const L: string[] = [];
   L.push(
-    zh
-      ? '\n\n【该地址过往/现有商家（实测数据 — site_history 字段必须基于此，禁止臆测）】'
-      : '\n\n[BUSINESSES AT THIS EXACT ADDRESS — retrieved; site_history MUST be grounded here, never guessed]',
+    pick(lang, {
+      en: '\n\n[BUSINESSES AT THIS EXACT ADDRESS — retrieved; site_history MUST be grounded here, never guessed]',
+      zh: '\n\n【该地址过往/现有商家（实测数据 — site_history 字段必须基于此，禁止臆测）】',
+      es: '\n\n[NEGOCIOS EN ESTA DIRECCIÓN EXACTA — recuperados; site_history DEBE basarse aquí, nunca adivinarse]',
+    }),
   );
   if (pack.businesses.length === 0) {
     L.push(
-      zh
-        ? `- 在 ${pack.match_radius_m}m 半径内未检索到任何商家记录（Google: ${pack.api_status.google}, Yelp: ${pack.api_status.yelp}）。site_history.prior_failures_detected 写 false 并说明「无历史商家记录」。`
-        : `- No business found within ${pack.match_radius_m} m (Google: ${pack.api_status.google}, Yelp: ${pack.api_status.yelp}). Set site_history.prior_failures_detected=false and state "no prior business on record".`,
+      pick(lang, {
+        en: `- No business found within ${pack.match_radius_m} m (Google: ${pack.api_status.google}, Yelp: ${pack.api_status.yelp}). Set site_history.prior_failures_detected=false and state "no prior business on record".`,
+        zh: `- 在 ${pack.match_radius_m}m 半径内未检索到任何商家记录（Google: ${pack.api_status.google}, Yelp: ${pack.api_status.yelp}）。site_history.prior_failures_detected 写 false 并说明「无历史商家记录」。`,
+        es: `- No se encontró ningún negocio en un radio de ${pack.match_radius_m} m (Google: ${pack.api_status.google}, Yelp: ${pack.api_status.yelp}). Establece site_history.prior_failures_detected=false e indica "sin negocios previos registrados".`,
+      }),
     );
     return L.join('\n');
   }
+  const reviewsWord = pick(lang, { en: 'reviews', zh: '条评论', es: 'reseñas' });
+  const foodWord = pick(lang, { en: 'food', zh: '餐饮', es: 'alimentos' });
+  const nonFoodWord = pick(lang, { en: 'non-food', zh: '非餐饮', es: 'no alimentos' });
   for (const b of pack.businesses) {
-    const status = zh
-      ? { operational: '营业中', closed_temporarily: '暂停营业', closed_permanently: '已永久关闭', unknown: '状态未知' }[b.status]
-      : b.status.replace('_', ' ');
+    const status = pick(lang, STATUS_LABEL[b.status]);
     L.push(
-      `- ${b.name} [${b.source}] — ${status}; ${b.rating ?? '?'}★ / ${b.review_count ?? '?'} reviews; ${b.categories.slice(0, 3).join(', ') || (b.is_food ? 'food' : 'non-food')}${b.distance_m != null ? `; ${b.distance_m} m` : ''}`,
+      `- ${b.name} [${b.source}] — ${status}; ${b.rating ?? '?'}★ / ${b.review_count ?? '?'} ${reviewsWord}; ${b.categories.slice(0, 3).join(', ') || (b.is_food ? foodWord : nonFoodWord)}${b.distance_m != null ? `; ${b.distance_m} m` : ''}`,
     );
     for (const r of b.reviews.slice(0, 3)) {
       L.push(`    · (${r.rating ?? '?'}★ ${r.time}) "${r.text.slice(0, 220).replace(/\s+/g, ' ')}"`);
@@ -502,16 +528,26 @@ export function buildSiteHistoryBlock(pack: SiteHistoryPack | null | undefined, 
   }
   if (pack.analysis) {
     const a = pack.analysis;
-    L.push(zh ? `- 评论主题提炼（${a.risk_flag} 风险）：` : `- Review theme extraction (${a.risk_flag} risk):`);
-    if (a.negative_themes.length) L.push(`  ${zh ? '负面' : 'negative'}: ${a.negative_themes.join(' | ')}`);
-    if (a.positive_themes.length) L.push(`  ${zh ? '正面' : 'positive'}: ${a.positive_themes.join(' | ')}`);
-    if (a.closure_signals.length) L.push(`  ${zh ? '关店信号' : 'closure signals'}: ${a.closure_signals.join(' | ')}`);
-    if (a.lessons_for_new_operator.length) L.push(`  ${zh ? '对新经营者的启示' : 'lessons'}: ${a.lessons_for_new_operator.join(' | ')}`);
+    L.push(
+      pick(lang, {
+        en: `- Review theme extraction (${a.risk_flag} risk):`,
+        zh: `- 评论主题提炼（${a.risk_flag} 风险）：`,
+        es: `- Extracción de temas de reseñas (riesgo ${a.risk_flag}):`,
+      }),
+    );
+    if (a.negative_themes.length) L.push(`  ${pick(lang, { en: 'negative', zh: '负面', es: 'negativos' })}: ${a.negative_themes.join(' | ')}`);
+    if (a.positive_themes.length) L.push(`  ${pick(lang, { en: 'positive', zh: '正面', es: 'positivos' })}: ${a.positive_themes.join(' | ')}`);
+    if (a.closure_signals.length) L.push(`  ${pick(lang, { en: 'closure signals', zh: '关店信号', es: 'señales de cierre' })}: ${a.closure_signals.join(' | ')}`);
+    if (a.lessons_for_new_operator.length) L.push(`  ${pick(lang, { en: 'lessons', zh: '对新经营者的启示', es: 'lecciones' })}: ${a.lessons_for_new_operator.join(' | ')}`);
+    const summary = siteHistorySummary(a, lang);
+    if (summary) L.push(`  ${pick(lang, { en: 'summary', zh: '摘要', es: 'resumen' })}: ${summary}`);
   }
   L.push(
-    zh
-      ? `- 要求：site_history 须填 prior_business_name / prior_business_status / review_themes_positive / review_themes_negative / lessons_for_new_operator；若餐饮商家已永久关闭，prior_failures_detected=true 且 decision_tier 不高于 go_with_conditions；并在 risks 与 site_and_access_assessment 中引用具体评论主题。`
-      : `- Required: fill site_history.prior_business_name / prior_business_status / review_themes_positive / review_themes_negative / lessons_for_new_operator; if a food business here closed permanently, prior_failures_detected=true and decision_tier no higher than go_with_conditions; cite the concrete review themes in risks and site_and_access_assessment.`,
+    pick(lang, {
+      en: `- Required: fill site_history.prior_business_name / prior_business_status / review_themes_positive / review_themes_negative / lessons_for_new_operator; if a food business here closed permanently, prior_failures_detected=true and decision_tier no higher than go_with_conditions; cite the concrete review themes in risks and site_and_access_assessment.`,
+      zh: `- 要求：site_history 须填 prior_business_name / prior_business_status / review_themes_positive / review_themes_negative / lessons_for_new_operator；若餐饮商家已永久关闭，prior_failures_detected=true 且 decision_tier 不高于 go_with_conditions；并在 risks 与 site_and_access_assessment 中引用具体评论主题。`,
+      es: `- Obligatorio: completa site_history.prior_business_name / prior_business_status / review_themes_positive / review_themes_negative / lessons_for_new_operator; si un negocio de comida cerró aquí permanentemente, prior_failures_detected=true y decision_tier no superior a go_with_conditions; cita los temas concretos de las reseñas en risks y site_and_access_assessment.`,
+    }),
   );
   return L.join('\n');
 }

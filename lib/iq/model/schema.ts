@@ -94,7 +94,10 @@ export const reportModelSchema = z.object({
     cost_usd: z.number(),
     cost_breakdown: z.record(z.string(), z.number()),
     elapsed_ms: z.number(),
-    language: z.enum(['en', 'zh']),
+    /** Report language (the language the narratives were generated in). */
+    language: z.enum(['en', 'zh', 'es']),
+    /** Language of the stored narrative_json when it differs from `language` (set by the loader from `narrative_json.__lang`). */
+    narrative_language: z.enum(['en', 'zh', 'es']).optional(),
     precheck_reasons: z.array(z.string()),
     /** Declared fallbacks that keep the report deliverable (e.g. Overture not loaded → Google-only POI base). */
     degradations: z.array(z.string()),

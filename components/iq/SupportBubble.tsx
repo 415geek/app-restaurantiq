@@ -10,10 +10,13 @@
  * /api/iq/support/recover, and hands out the link; otherwise it asks for the
  * checkout email and looks the reports up by email. A small button hands the
  * conversation to a human on WhatsApp (number from /api/iq/support/config,
- * i.e. iq_settings SUPPORT_WHATSAPP) with the report context pre-filled.
+ * i.e. iq_settings SUPPORT_WHATSAPP) with the report context pre-filled in the
+ * customer's language.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { LOCALES, type Locale } from '@/lib/i18n/locale';
+import { useLocale } from '@/lib/i18n/use-locale';
 
 export const LAST_PAID_REPORT_KEY = 'iq:last_paid_report';
 
@@ -40,11 +43,43 @@ function readRememberedReport(): { id: string; location: string } | null {
   }
 }
 
-type Lang = 'zh' | 'en';
 type Recovered = { id: string; location: string; status: 'ready' | 'generating'; url: string; created_at: string | null };
 type Msg = { from: 'bot' | 'me'; text?: string; links?: Recovered[]; askEmail?: boolean };
 
-const T = {
+type Copy = {
+  open: string;
+  title: string;
+  sub: string;
+  close: string;
+  hello: string;
+  q_lost: string;
+  q_time: string;
+  q_pdf: string;
+  q_refund: string;
+  a_time: string;
+  a_pdf: string;
+  a_refund: string;
+  checking: string;
+  found_one: string;
+  found_many: string;
+  ask_email: string;
+  email_ph: string;
+  email_btn: string;
+  not_found: string;
+  error: string;
+  status_ready: string;
+  status_generating: string;
+  go: string;
+  human: string;
+  human_mail: string;
+  human_none: string;
+  mail_subject: string;
+  wa_text: (ctx: string) => string;
+  ctx_report: (id: string, loc: string) => string;
+  back: string;
+};
+
+const T: Record<Locale, Copy> = {
   zh: {
     open: '在线客服',
     title: 'RestaurantIQ 客服',
@@ -72,42 +107,78 @@ const T = {
     human: '转人工客服（WhatsApp）',
     human_mail: '转人工客服（邮件）',
     human_none: '人工客服暂未接入，请稍后再试。',
-    wa_text: (ctx: string) => `你好，我是 RestaurantIQ 用户，需要人工帮助。${ctx}`,
-    ctx_report: (id: string, loc: string) => `报告编号 ${id}${loc ? `（${loc}）` : ''}。`,
+    mail_subject: 'RestaurantIQ 客服',
+    wa_text: (ctx) => `你好，我是 RestaurantIQ 用户，需要人工帮助。${ctx}`,
+    ctx_report: (id, loc) => `报告编号 ${id}${loc ? `（${loc}）` : ''}。`,
     back: '返回菜单',
   },
   en: {
     open: 'Support',
     title: 'RestaurantIQ Support',
-    sub: 'Refreshed or went back after paying? We can take you back.',
+    sub: 'Refreshed or hit back after paying? We can take you right back.',
     close: 'Close',
-    hello: 'Hi! If you refreshed, went back or closed the page after paying, your report is still generating in the background — nothing is lost. Pick one:',
+    hello: 'Hi! If you refreshed, went back, or closed the page after paying, your report is still generating in the background — nothing is lost. Pick one:',
     q_lost: 'I paid but lost the page',
     q_time: 'How long does generation take?',
     q_pdf: 'How do I download the PDF?',
     q_refund: 'Payment problem',
-    a_time: 'The free verdict takes about 60 seconds; the paid report usually 1–3 minutes, 5 at most. You can leave and reopen the same link, or leave your email on the generating page and we will send it when ready.',
-    a_pdf: 'On the report page, the "360° Professional Report" panel has "Download 360° PDF"; "Print / preview" opens the light print edition, which you can also save as PDF from the browser.',
-    a_refund: 'For payment issues please hand off to a human with the email you paid with and the approximate time; we check the Stripe record and sort it out.',
+    a_time: 'The free verdict takes about 60 seconds; the paid report usually 1–3 minutes, 5 at most. You can leave and reopen the same link, or leave your email on the generating page and we’ll send it when it’s ready.',
+    a_pdf: 'On the report page, the “360° Professional Report” panel has “Download 360° PDF”; “Print / preview” opens the light print edition, which you can also save as a PDF from your browser.',
+    a_refund: 'For payment issues, hand off to a human with the email you paid with and the approximate time; we’ll check the Stripe record and sort it out.',
     checking: 'Checking your payment record…',
     found_one: 'Found it — your payment is confirmed. Use the link below to get back to your report:',
-    found_many: 'Found these paid reports. Click a link to get back:',
-    ask_email: 'Enter the email you used at checkout and I will look it up:',
+    found_many: 'Found these paid reports. Tap a link to go back:',
+    ask_email: 'Enter the email you used at checkout and I’ll look it up:',
     email_ph: 'Checkout email',
     email_btn: 'Find',
-    not_found: 'No paid report matches that email. It may have been a different email, or the payment did not complete. You can hand off to a human and we will check.',
+    not_found: 'No paid report matches that email. It may have been a different email, or the payment didn’t complete. You can hand off to a human and we’ll check.',
     error: 'Lookup failed — please try again shortly or hand off to a human.',
     status_ready: 'ready',
     status_generating: 'generating',
     go: 'Back to the report',
     human: 'Talk to a human (WhatsApp)',
     human_mail: 'Talk to a human (email)',
-    human_none: 'Human support is not connected yet — please try again later.',
-    wa_text: (ctx: string) => `Hi, I am a RestaurantIQ customer and need help. ${ctx}`,
-    ctx_report: (id: string, loc: string) => `Report ${id}${loc ? ` (${loc})` : ''}.`,
+    human_none: 'Human support isn’t connected yet — please try again later.',
+    mail_subject: 'RestaurantIQ support',
+    wa_text: (ctx) => `Hi, I’m a RestaurantIQ customer and need help. ${ctx}`,
+    ctx_report: (id, loc) => `Report ${id}${loc ? ` (${loc})` : ''}.`,
     back: 'Back to menu',
   },
+  es: {
+    open: 'Soporte',
+    title: 'Soporte de RestaurantIQ',
+    sub: '¿Actualizaste o retrocediste después de pagar? Te llevamos de vuelta.',
+    close: 'Cerrar',
+    hello: '¡Hola! Si actualizaste, retrocediste o cerraste la página después de pagar, tu informe sigue generándose en segundo plano; no se pierde nada. Elige una opción:',
+    q_lost: 'Pagué pero perdí la página',
+    q_time: '¿Cuánto tarda la generación?',
+    q_pdf: '¿Cómo descargo el PDF?',
+    q_refund: 'Problema con el pago',
+    a_time: 'El veredicto gratuito tarda unos 60 segundos; el informe de pago normalmente de 1 a 3 minutos, 5 como máximo. Puedes salir y volver a abrir el mismo enlace, o dejar tu correo en la página de generación y te lo enviamos cuando esté listo.',
+    a_pdf: 'En la página del informe, el panel “Informe profesional 360°” tiene “Descargar PDF 360°”; “Imprimir / vista previa” abre la edición clara para impresión, que también puedes guardar como PDF desde el navegador.',
+    a_refund: 'Para problemas con el pago, pasa con una persona e indícanos el correo con el que pagaste y la hora aproximada; revisamos el registro en Stripe y lo resolvemos.',
+    checking: 'Verificando tu registro de pago…',
+    found_one: 'Lo encontramos: tu pago está confirmado. Usa el enlace de abajo para volver a tu informe:',
+    found_many: 'Encontramos estos informes pagados. Toca un enlace para volver:',
+    ask_email: 'Escribe el correo que usaste al pagar y lo busco:',
+    email_ph: 'Correo de la compra',
+    email_btn: 'Buscar',
+    not_found: 'Ningún informe pagado coincide con ese correo. Puede que hayas usado otro correo o que el pago no se haya completado. Puedes pasar con una persona y lo revisamos.',
+    error: 'La búsqueda falló. Inténtalo de nuevo en un momento o pasa con una persona.',
+    status_ready: 'listo',
+    status_generating: 'generando',
+    go: 'Volver al informe',
+    human: 'Hablar con una persona (WhatsApp)',
+    human_mail: 'Hablar con una persona (correo)',
+    human_none: 'El soporte humano aún no está conectado; inténtalo más tarde.',
+    mail_subject: 'Soporte de RestaurantIQ',
+    wa_text: (ctx) => `Hola, soy cliente de RestaurantIQ y necesito ayuda. ${ctx}`,
+    ctx_report: (id, loc) => `Informe ${id}${loc ? ` (${loc})` : ''}.`,
+    back: 'Volver al menú',
+  },
 };
+
+const SHORT_LABEL: Record<Locale, string> = { en: 'EN', zh: '中文', es: 'ES' };
 
 function pathReportId(pathname: string | null): string | null {
   const m = pathname?.match(/^\/iq\/report\/([0-9a-f-]{36})/i);
@@ -117,7 +188,8 @@ function pathReportId(pathname: string | null): string | null {
 export function SupportBubble() {
   const pathname = usePathname();
   const search = useSearchParams();
-  const [lang, setLang] = useState<Lang>('zh');
+  // Same resolution as every funnel page: ?lang > iq_lang cookie/localStorage > browser language > English.
+  const { locale: lang, setLocale: setLang } = useLocale({ param: search?.get('lang') });
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [email, setEmail] = useState('');
@@ -125,12 +197,6 @@ export function SupportBubble() {
   const [contact, setContact] = useState<{ whatsapp: string | null; email: string | null } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const t = T[lang];
-
-  // Chinese by default (same as the landing page); `?lang=en` switches, and the header toggle always works.
-  useEffect(() => {
-    const q = search?.get('lang');
-    if (q === 'en' || q === 'zh') setLang(q);
-  }, [search]);
 
   const known = useMemo(() => {
     const fromPath = pathReportId(pathname);
@@ -194,9 +260,16 @@ export function SupportBubble() {
     const ctx = known?.id ? t.ctx_report(known.id, known.location) : '';
     const text = encodeURIComponent(t.wa_text(ctx));
     if (contact?.whatsapp) return `https://wa.me/${contact.whatsapp}?text=${text}`;
-    if (contact?.email) return `mailto:${contact.email}?subject=${encodeURIComponent('RestaurantIQ support')}&body=${text}`;
+    if (contact?.email) return `mailto:${contact.email}?subject=${encodeURIComponent(t.mail_subject)}&body=${text}`;
     return null;
   })();
+
+  /** Switching language restarts the scripted conversation in that language. */
+  const switchLang = (next: Locale) => {
+    if (next === lang) return;
+    setLang(next);
+    setMsgs([{ from: 'bot', text: T[next].hello }]);
+  };
 
   return (
     <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3 print:hidden" data-support-bubble>
@@ -208,9 +281,19 @@ export function SupportBubble() {
               <div className="text-[11px] text-zinc-400">{t.sub}</div>
             </div>
             <div className="flex items-center gap-1">
-              <button type="button" onClick={() => setLang((l) => (l === 'zh' ? 'en' : 'zh'))} className="rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-white/10">
-                {lang === 'zh' ? 'EN' : '中文'}
-              </button>
+              <div className="inline-flex rounded-full border border-white/15 p-0.5" role="group" aria-label="Language">
+                {LOCALES.map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => switchLang(l)}
+                    aria-pressed={l === lang}
+                    className={`rounded-full px-1.5 py-0.5 text-[11px] ${l === lang ? 'bg-white/15 text-white' : 'text-zinc-400 hover:text-white'}`}
+                  >
+                    {SHORT_LABEL[l]}
+                  </button>
+                ))}
+              </div>
               <button type="button" onClick={() => setOpen(false)} aria-label={t.close} className="rounded-full p-1 text-zinc-300 hover:bg-white/10">
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" /></svg>
               </button>

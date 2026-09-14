@@ -1,10 +1,13 @@
+import type { Locale } from '@/lib/i18n/locale';
+
 type N8nAnalyzeInput = {
   address: string;
   industry: 'restaurant' | 'retail' | 'service' | 'cafe';
   cuisine_type?: string;
   budget_range?: string;
   target_audience?: string;
-  language?: 'en' | 'zh';
+  /** Visitor locale ('en' | 'zh' | 'es'); the workflow must generate every field in this language. */
+  language?: Locale;
   /** Optional: server pre-fetched Places/ACS pack so the workflow can skip duplicate fetches or enrich the LLM. */
   market_data?: Record<string, unknown>;
 };
@@ -31,7 +34,8 @@ type N8nFullReportInput = {
   cuisine_type?: string;
   budget_range?: string;
   target_audience?: string;
-  language?: 'en' | 'zh';
+  /** Visitor locale ('en' | 'zh' | 'es'); the workflow must generate every field in this language. */
+  language?: Locale;
   market_data?: Record<string, unknown>;
   /** Free-tier headline — anchors paid V2.0 report continuity */
   headline?: string;

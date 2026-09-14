@@ -13,6 +13,8 @@
  * doubles the delivered pixels — the hero preset therefore requests
  * 600×360 @ scale 2 = a 1200×720 px image.
  */
+import { toLocale, type Locale } from '@/lib/i18n/locale';
+import { MAP_LANGUAGE } from './i18n';
 import type { Geometry, LatLng, Position } from '../data/types';
 import { areaM2, polygonsOf } from '../geo';
 import type { Competitor, ReportModel, RingId } from '../model/schema';
@@ -262,7 +264,7 @@ export interface StaticMapUrlOptions {
   height: number;
   scale?: 1 | 2;
   key: string;
-  lang: 'zh' | 'en';
+  lang: Locale;
   /** Total URL length budget (default 8000). Layers are dropped L2 → rail → L4 → coarser rings → drive15 until it fits. */
   maxUrlLength?: number;
 }
@@ -299,7 +301,7 @@ function assemble(a: Assembly, opts: StaticMapUrlOptions): string {
   add('scale', String(opts.scale ?? 1));
   add('maptype', 'roadmap');
   add('format', 'png');
-  add('language', opts.lang === 'zh' ? 'zh-CN' : 'en');
+  add('language', MAP_LANGUAGE[opts.lang] ?? 'en');
   for (const s of STATIC_MAP_STYLES) add('style', s);
   // Paths: largest ring first so the smaller ones paint on top (no center/zoom → Google fits to these).
   for (const r of a.plan.rings) {
@@ -351,7 +353,7 @@ export interface ResolveStaticMapOptions {
   width: number;
   height: number;
   scale?: 1 | 2;
-  lang: 'zh' | 'en';
+  lang: Locale;
   /** Test hooks. */
   fetchImpl?: typeof fetch;
   now?: () => number;
@@ -421,8 +423,8 @@ export async function resolveStaticMap(model: ReportModel, opts: ResolveStaticMa
 }
 
 /** Both report sizes in parallel; each is null independently when unavailable. */
-export async function resolveStaticMaps(model: ReportModel, opts: { lang?: 'zh' | 'en'; fetchImpl?: typeof fetch } = {}): Promise<StaticMaps> {
-  const lang = opts.lang ?? model.meta.language ?? 'zh';
+export async function resolveStaticMaps(model: ReportModel, opts: { lang?: Locale; fetchImpl?: typeof fetch } = {}): Promise<StaticMaps> {
+  const lang = opts.lang ?? toLocale(model.meta.language);
   const [hero, thumb] = await Promise.all([
     resolveStaticMap(model, { ...STATIC_MAP_PRESETS.hero, lang, fetchImpl: opts.fetchImpl }),
     resolveStaticMap(model, { ...STATIC_MAP_PRESETS.thumb, lang, fetchImpl: opts.fetchImpl }),

@@ -10,15 +10,48 @@ import {
   scoreBarColorHex,
   scoreBarWidthPercent,
   scoreLayerFootnote,
-  type IqLocale,
   type RiskAuditPreview,
 } from '@/lib/funnel/iq-risk-audit-model';
+import type { Locale } from '@/lib/i18n/locale';
 
 type Props = {
   audit: RiskAuditPreview;
-  lang: IqLocale;
+  lang: Locale;
   businessType?: string;
   compact?: boolean;
+};
+
+const COPY: Record<
+  Locale,
+  {
+    overall: (n: number) => string;
+    confidence: (n: string | number) => string;
+    concept: (c: string) => string;
+    dimensions: string;
+    missing: string;
+  }
+> = {
+  en: {
+    overall: (n) => `Overall ${n}/100`,
+    confidence: (n) => `Data confidence ${n}%`,
+    concept: (c) => `Concept: ${c}`,
+    dimensions: 'Score dimensions',
+    missing: 'Missing inputs (add them for higher accuracy)',
+  },
+  zh: {
+    overall: (n) => `综合 ${n}/100`,
+    confidence: (n) => `数据置信度 ${n}%`,
+    concept: (c) => `业态：${c}`,
+    dimensions: '多维评分',
+    missing: '缺失数据（补充后可显著提高精度）',
+  },
+  es: {
+    overall: (n) => `General ${n}/100`,
+    confidence: (n) => `Confianza de los datos ${n}%`,
+    concept: (c) => `Concepto: ${c}`,
+    dimensions: 'Dimensiones de la puntuación',
+    missing: 'Datos faltantes (agrégalos para mayor precisión)',
+  },
 };
 
 function ScoreBar({ score, higherIsWorse }: { score: number; higherIsWorse?: boolean }) {
@@ -41,6 +74,7 @@ function ScoreBar({ score, higherIsWorse }: { score: number; higherIsWorse?: boo
 }
 
 export function RiskAuditScorecard({ audit, lang, businessType, compact }: Props) {
+  const t = COPY[lang];
   const tier = parseDecisionTier(audit.decision_tier);
   const tierCopy = decisionTierDisplay(tier, lang);
   const overall = numScore(audit.overall_score);
@@ -72,14 +106,12 @@ export function RiskAuditScorecard({ audit, lang, businessType, compact }: Props
         )}
         {overall !== undefined && (
           <span className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-sm font-medium text-white/90">
-            {lang === 'zh' ? `综合 ${overall}/100` : `Overall ${overall}/100`}
+            {t.overall(overall)}
           </span>
         )}
         {audit.data_confidence_pct !== undefined && (
           <span className="text-xs text-white/50">
-            {lang === 'zh'
-              ? `数据置信度 ${numScore(audit.data_confidence_pct) ?? audit.data_confidence_pct}%`
-              : `Data confidence ${numScore(audit.data_confidence_pct) ?? audit.data_confidence_pct}%`}
+            {t.confidence(numScore(audit.data_confidence_pct) ?? audit.data_confidence_pct)}
           </span>
         )}
       </div>
@@ -89,9 +121,7 @@ export function RiskAuditScorecard({ audit, lang, businessType, compact }: Props
       )}
 
       {businessType && (
-        <p className="text-xs uppercase tracking-wide text-white/40">
-          {lang === 'zh' ? `业态：${businessType}` : `Concept: ${businessType}`}
-        </p>
+        <p className="text-xs uppercase tracking-wide text-white/40">{t.concept(businessType)}</p>
       )}
 
       {layers.length > 0 && (
@@ -119,9 +149,7 @@ export function RiskAuditScorecard({ audit, lang, businessType, compact }: Props
 
       {radarEntries.length > 0 && !compact && (
         <div>
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/50">
-            {lang === 'zh' ? '多维评分' : 'Score dimensions'}
-          </h3>
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/50">{t.dimensions}</h3>
           <div className="space-y-2">
             {radarEntries.map(([key, val]) => {
               const s = numScore(val)!;
@@ -143,9 +171,7 @@ export function RiskAuditScorecard({ audit, lang, businessType, compact }: Props
 
       {(audit.missing_data?.length ?? 0) > 0 && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-100/80">
-          <div className="mb-1 font-medium">
-            {lang === 'zh' ? '缺失数据（补充后可显著提高精度）' : 'Missing inputs (add for higher accuracy)'}
-          </div>
+          <div className="mb-1 font-medium">{t.missing}</div>
           <ul className="list-inside list-disc space-y-0.5 text-amber-100/60">
             {audit.missing_data!.map((item) => (
               <li key={item}>{item}</li>

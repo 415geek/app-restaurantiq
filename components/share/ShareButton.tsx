@@ -3,22 +3,24 @@
 import { useState } from 'react';
 import { ShareModal } from './ShareModal';
 import type { SharePlatform } from '@/lib/share/utm';
+import type { Locale } from '@/lib/i18n/locale';
 
 type ShareButtonProps = {
   shareUrl: string;
   title: string;
   description?: string;
   reportId?: string;
-  locale?: 'en' | 'zh';
+  locale?: Locale;
   variant?: 'primary' | 'secondary' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   onShare?: (platform: SharePlatform) => void;
 };
 
-const copy = {
+const copy: Record<Locale, { share: string }> = {
   en: { share: 'Share' },
   zh: { share: '分享' },
+  es: { share: 'Compartir' },
 };
 
 const variants = {

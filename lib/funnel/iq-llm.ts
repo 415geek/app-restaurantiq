@@ -1,18 +1,18 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
+import { type Locale, pick, toLocale } from '@/lib/i18n/locale';
 import {
-  locationIqV2FreeSystemEn,
-  locationIqV2FreeSystemZh,
-  locationIqV2FreeUserEn,
-  locationIqV2FreeUserZh,
-  locationIqV2PremiumSystemEn,
-  locationIqV2PremiumSystemZh,
-  locationIqV2PremiumUserEn,
-  locationIqV2PremiumUserZh,
+  defaultBusinessTypeLabel,
+  locationIqV2FreeSystem,
+  locationIqV2FreeUser,
+  locationIqV2PremiumSystem,
+  locationIqV2PremiumUser,
 } from '@/lib/funnel/iq-prompts-locationiq-v2';
 import { getAnalyzeWebhookUrl } from '@/lib/n8n';
 import {
   applyCompetitorWhitelist,
+  isHighConfidenceText,
+  confidenceLabel,
   parseIqFullReport,
   scoreFullReportCompleteness,
   shouldRetryForCompetitorGrounding,
@@ -100,7 +100,7 @@ async function postN8nJson<T>(url: string, body: unknown): Promise<T> {
 export async function runPartialAnalysis(input: {
   location: string;
   businessType: string;
-  language?: 'en' | 'zh';
+  language?: Locale | string | null;
   /** Places/ACS digest from resolveMarketDataForIqReport (free tier). */
   marketDataBrief?: string;
   monthlyRentUsd?: number;
@@ -118,7 +118,7 @@ export async function runPartialAnalysis(input: {
   decision_tier?: string;
   risk_audit_preview?: z.infer<typeof riskAuditPreviewSchema>;
 }> {
-  const language = input.language === 'zh' ? 'zh' : 'en';
+  const language = toLocale(input.language);
   const n8nUrl = input.openAiOnly ? null : getAnalyzeWebhookUrl();
   if (n8nUrl) {
     const raw = await postN8nJson<unknown>(n8nUrl, {
@@ -130,24 +130,15 @@ export async function runPartialAnalysis(input: {
     return partialSchema.parse(raw);
   }
 
-  const systemPrompt = language === 'zh' ? locationIqV2FreeSystemZh() : locationIqV2FreeSystemEn();
+  const systemPrompt = locationIqV2FreeSystem(language);
 
-  const userPrompt =
-    language === 'zh'
-      ? locationIqV2FreeUserZh({
-          location: input.location,
-          businessType: input.businessType || '餐饮',
-          marketDataBrief: input.marketDataBrief,
-          monthlyRentUsd: input.monthlyRentUsd,
-          sqft: input.sqft,
-        })
-      : locationIqV2FreeUserEn({
-          location: input.location,
-          businessType: input.businessType || 'Restaurant',
-          marketDataBrief: input.marketDataBrief,
-          monthlyRentUsd: input.monthlyRentUsd,
-          sqft: input.sqft,
-        });
+  const userPrompt = locationIqV2FreeUser(language, {
+    location: input.location,
+    businessType: input.businessType || defaultBusinessTypeLabel(language),
+    marketDataBrief: input.marketDataBrief,
+    monthlyRentUsd: input.monthlyRentUsd,
+    sqft: input.sqft,
+  });
 
   const routed = await runIqProviderJson<Record<string, unknown>>({
     task: 'iq_partial',
@@ -191,17 +182,18 @@ export function buildPremiumPrompts(
     reason: string;
     marketData?: Record<string, unknown>;
   },
-  language: 'en' | 'zh',
+  language: Locale,
   whitelist: CompetitorWhitelist,
   opts: { stricter?: boolean; lean?: boolean } = {},
 ): { systemPrompt: string; userPrompt: string } {
-  const systemBase =
-    language === 'zh' ? locationIqV2PremiumSystemZh() : locationIqV2PremiumSystemEn();
+  const systemBase = locationIqV2PremiumSystem(language);
 
   const stricterReminder = opts.stricter
-    ? language === 'zh'
-      ? '\n\n【重试纠错通知】上一次输出包含**白名单外的店名**，已被后端剔除。本次请严格逐字使用上方白名单，宁可少于 5 行，绝不补造。'
-      : '\n\n[RETRY NOTICE] The previous output included names NOT in the whitelist; they were dropped. This retry MUST use ONLY verbatim whitelist entries. Output fewer rows rather than fabricate.'
+    ? pick(language, {
+        en: '\n\n[RETRY NOTICE] The previous output included names NOT in the whitelist; they were dropped. This retry MUST use ONLY verbatim whitelist entries. Output fewer rows rather than fabricate.',
+        zh: '\n\n【重试纠错通知】上一次输出包含**白名单外的店名**，已被后端剔除。本次请严格逐字使用上方白名单，宁可少于 5 行，绝不补造。',
+        es: '\n\n[AVISO DE REINTENTO] La salida anterior incluyó nombres que NO están en la lista blanca y fueron eliminados. Este reintento DEBE usar ÚNICAMENTE entradas textuales de la lista blanca. Devuelve menos filas antes que inventar.',
+      })
     : '';
 
   // Lean/browser path keeps the prompt compact so prefill + generation fit the serverless budget.
@@ -211,22 +203,13 @@ export function buildPremiumPrompts(
     buildCompetitorWhitelistPromptBlock(whitelist, language) +
     stricterReminder;
 
-  const userPrompt =
-    language === 'zh'
-      ? locationIqV2PremiumUserZh({
-          location: input.location,
-          businessType: input.businessType || '餐厅',
-          headline: input.headline,
-          reason: input.reason,
-          marketDataSection,
-        })
-      : locationIqV2PremiumUserEn({
-          location: input.location,
-          businessType: input.businessType || 'Restaurant',
-          headline: input.headline,
-          reason: input.reason,
-          marketDataSection,
-        });
+  const userPrompt = locationIqV2PremiumUser(language, {
+    location: input.location,
+    businessType: input.businessType || defaultBusinessTypeLabel(language),
+    headline: input.headline,
+    reason: input.reason,
+    marketDataSection,
+  });
 
   return { systemPrompt: systemBase, userPrompt };
 }
@@ -235,7 +218,7 @@ async function callProviderForFullReport(
   systemPrompt: string,
   userPrompt: string,
   attemptLabel: string,
-  language: 'en' | 'zh',
+  language: Locale,
   lean = false,
   timeoutMs?: number,
   maxTokens?: number,
@@ -268,9 +251,11 @@ async function callProviderForFullReport(
         const w = Array.isArray(report._warnings) ? (report._warnings as string[]) : [];
         report._warnings = [
           ...w,
-          language === 'zh'
-            ? '主生成路径暂不可用，已自动切换备用分析通道。'
-            : 'Primary analysis path was unavailable; an alternate channel was used.',
+          pick(language, {
+            en: 'The primary analysis path was unavailable, so an alternate channel was used.',
+            zh: '主生成路径暂不可用，已自动切换备用分析通道。',
+            es: 'La ruta principal de análisis no estaba disponible, por lo que se utilizó un canal alternativo.',
+          }),
         ];
       }
       report._generation_provider = routed.provider;
@@ -353,13 +338,13 @@ export async function runFullPremiumReport(input: {
   headline: string;
   reason: string;
   marketData?: Record<string, unknown>;
-  language?: 'en' | 'zh';
+  language?: Locale | string | null;
   /** Single-pass generation (no completeness/competitor regen) for serverless time limits. */
   leanGeneration?: boolean;
   /** Hard budget for the LLM call, from the pipeline deadline. */
   timeoutMs?: number;
 }): Promise<IqReportWithGrounding> {
-  const language = input.language === 'zh' ? 'zh' : 'en';
+  const language = toLocale(input.language);
   // Ask only for as many output tokens as the remaining time can decode. The
   // rate is a property of the model: the lean path runs claude-sonnet-5
   // (~13ms/token), the quality path claude-opus-5 (~17ms/token).
@@ -394,7 +379,7 @@ export async function runFullPremiumReport(input: {
       remainingMs(),
       capForNow(),
     );
-    return applyCompetitorWhitelist(report, whitelist);
+    return applyCompetitorWhitelist(report, whitelist, language);
   };
 
   let grounded: IqReportWithGrounding;
@@ -465,12 +450,14 @@ export async function runFullPremiumReport(input: {
     const existing = Array.isArray(grounded._warnings) ? grounded._warnings : [];
     grounded._warnings = [
       ...existing,
-      `Competitor analysis runs in degraded mode: only ${whitelist.total} named competitor(s) were retrieved (threshold ${MIN_WHITELIST_FOR_GROUNDED_REPORT}).`,
+      pick(language, {
+        en: `Competitor analysis is running in degraded mode: only ${whitelist.total} named competitor(s) were retrieved (threshold ${MIN_WHITELIST_FOR_GROUNDED_REPORT}).`,
+        zh: `竞品分析处于降级模式：仅检索到 ${whitelist.total} 家具名竞品（阈值 ${MIN_WHITELIST_FOR_GROUNDED_REPORT} 家）。`,
+        es: `El análisis de competidores se ejecuta en modo degradado: solo se recuperaron ${whitelist.total} competidor(es) con nombre (umbral ${MIN_WHITELIST_FOR_GROUNDED_REPORT}).`,
+      }),
     ];
-    if (typeof grounded.confidence === 'string') {
-      if (/high/i.test(grounded.confidence)) grounded.confidence = 'Low';
-    } else {
-      grounded.confidence = 'Low';
+    if (typeof grounded.confidence !== 'string' || isHighConfidenceText(grounded.confidence)) {
+      grounded.confidence = confidenceLabel('Low', language);
     }
   }
 

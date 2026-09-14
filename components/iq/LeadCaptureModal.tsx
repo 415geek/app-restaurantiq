@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import type { Locale } from '@/lib/i18n/locale';
 
 export type LeadCaptureSubmit = {
   email: string;
@@ -8,8 +9,6 @@ export type LeadCaptureSubmit = {
   phone: string;
   cuisine: string;
 };
-
-type Locale = 'en' | 'zh';
 
 type Props = {
   open: boolean;
@@ -55,15 +54,15 @@ const copy: Record<
     phoneLabel: 'Phone / WhatsApp / WeChat (optional)',
     phonePlaceholder: '+1 (415) 555-1234',
     cuisineLabel: 'Cuisine / concept',
-    cuisinePlaceholder: 'e.g. Boba tea, Hong Kong cafe, hot pot',
-    cta: 'Unlock free risk audit →',
+    cuisinePlaceholder: 'e.g. boba tea, Hong Kong café, hot pot',
+    cta: 'Unlock my free risk audit →',
     submitting: 'Unlocking…',
-    privacy: 'We will email you the PDF once the report is ready. Unsubscribe anytime.',
+    privacy: 'We’ll email you the PDF once the report is ready. Unsubscribe anytime.',
     locationLabel: 'Auditing',
     errEmail: 'Please enter a valid email.',
     errName: 'Please enter your name.',
     errCuisine: 'Please tell us your cuisine or concept.',
-    errNetwork: 'Could not save your details. Please retry.',
+    errNetwork: 'Could not save your details. Please try again.',
     bullets: [
       'Decision-grade scorecard for this exact address',
       '3 fact-based insights citing real nearby competitors',
@@ -94,6 +93,32 @@ const copy: Record<
       '本地址专属决策级评分卡',
       '3 条引用真实周边竞品的事实型洞察',
       '1 条多数老板会忽略的隐藏风险',
+    ],
+  },
+  es: {
+    headline: 'Ya casi: desbloquea tu auditoría de riesgo gratuita',
+    subhead:
+      'Dinos adónde enviar el informe. Usamos estos datos solo para entregarte el PDF y observaciones de seguimiento sobre la ubicación. Nunca vendemos tu información.',
+    emailLabel: 'Correo de trabajo o personal',
+    emailPlaceholder: 'tu@empresa.com',
+    nameLabel: 'Tu nombre',
+    namePlaceholder: 'p. ej., Ana García',
+    phoneLabel: 'Teléfono / WhatsApp / WeChat (opcional)',
+    phonePlaceholder: '+1 (415) 555-1234',
+    cuisineLabel: 'Tipo de cocina / concepto',
+    cuisinePlaceholder: 'p. ej., té de burbujas, cafetería hongkonesa, hot pot',
+    cta: 'Desbloquear mi auditoría gratuita →',
+    submitting: 'Desbloqueando…',
+    privacy: 'Te enviaremos el PDF por correo cuando el informe esté listo. Cancela cuando quieras.',
+    locationLabel: 'Auditando',
+    errEmail: 'Ingresa un correo válido.',
+    errName: 'Ingresa tu nombre.',
+    errCuisine: 'Dinos tu tipo de cocina o concepto.',
+    errNetwork: 'No se pudieron guardar tus datos. Inténtalo de nuevo.',
+    bullets: [
+      'Tarjeta de puntuación lista para decidir sobre esta dirección exacta',
+      '3 observaciones basadas en hechos que citan competidores reales cercanos',
+      '1 riesgo oculto que la mayoría de los operadores pasa por alto',
     ],
   },
 };

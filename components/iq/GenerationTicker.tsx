@@ -7,13 +7,12 @@
  *  - The message follows the real progress (percent) and is phrased around the
  *    customer's own address / city, alternating between two wordings per phase
  *    every few seconds so the line keeps moving even when the bar does not.
- *  - After a short grace period a countdown appears ("预计还需约 2 分 30 秒"),
+ *  - After a short grace period a countdown appears ("About 2:30 to go"),
  *    anchored on the typical 3-minute run; it stretches instead of hitting
- *    zero (5 min, then "正在收尾") so it never promises what it cannot keep.
+ *    zero (5 min, then "finishing up") so it never promises what it cannot keep.
  */
 import { useEffect, useMemo, useState } from 'react';
-
-type Lang = 'en' | 'zh';
+import type { Locale } from '@/lib/i18n/locale';
 
 /** "1115 Clement St, San Francisco, CA 94118" → "San Francisco"; falls back to the address. */
 export function cityOf(location: string): string {
@@ -29,7 +28,7 @@ function shortAddr(location: string): string {
 }
 
 /** Two wordings per phase; index = phase from percent, alternate = slow tick. */
-export function tickerMessages(lang: Lang, location: string): string[][] {
+export function tickerMessages(lang: Locale, location: string): string[][] {
   const city = cityOf(location);
   const addr = shortAddr(location);
   if (lang === 'zh') {
@@ -44,12 +43,24 @@ export function tickerMessages(lang: Lang, location: string): string[][] {
       [`正在复核每个数字的数据来源…`, `正在排版报告（封面 + 15 页）…`],
     ];
   }
+  if (lang === 'es') {
+    return [
+      [`Ubicando "${addr}" y su grupo de bloques censales…`, `Localizando la cuadra en ${city}…`],
+      [`Consultando el historial de negocios en esta dirección…`, `Revisando qué operó aquí antes y cómo lo calificaban…`],
+      [`Analizando la población y los hogares chinos alrededor de ${city}…`, `Contando residentes e ingresos a 10 min a pie y 15 min en auto…`],
+      [`Contando restaurantes cercanos y competidores del mismo tipo de cocina…`, `Comparando cada competidor: distancia, calificación, tráfico…`],
+      [`Modelando la demanda mensual que este local puede captar…`, `Calculando el punto de equilibrio y la presión de la renta…`],
+      [`Corriendo tres escenarios de ingresos y el retorno de la inversión…`, `Revisando señales de delivery y tráfico de almuerzo / cena…`],
+      [`Armando el registro de riesgos y las condiciones previas al contrato…`, `Calificando el local en seis dimensiones…`],
+      [`Verificando la fuente de cada cifra…`, `Maquetando el informe (portada + 15 páginas)…`],
+    ];
+  }
   return [
     [`Locating "${addr}" and its census block group…`, `Pinning down the block in ${city}…`],
     [`Pulling the history of businesses at this address…`, `Checking what operated here before and how it was rated…`],
-    [`Analysing population and Chinese households around ${city}…`, `Counting residents and income within a 10-min walk and 15-min drive…`],
-    [`Counting nearby restaurants and same-cuisine rivals…`, `Benchmarking each competitor: distance, rating, traffic…`],
-    [`Modelling the monthly demand this site can capture…`, `Computing the break-even line and rent pressure…`],
+    [`Analyzing population and Chinese households around ${city}…`, `Counting residents and income within a 10-min walk and 15-min drive…`],
+    [`Counting nearby restaurants and same-cuisine competitors…`, `Benchmarking each competitor: distance, rating, traffic…`],
+    [`Modeling the monthly demand this site can capture…`, `Computing the break-even line and rent pressure…`],
     [`Running three revenue scenarios and payback…`, `Checking delivery signals and lunch / dinner traffic…`],
     [`Assembling the risk register and pre-lease conditions…`, `Scoring the site on six dimensions…`],
     [`Verifying the source of every number…`, `Laying out the report (cover + 15 pages)…`],
@@ -61,29 +72,38 @@ const STRETCH_SEC = 300;
 const COUNTDOWN_AFTER_SEC = 15;
 const ALTERNATE_EVERY_SEC = 5;
 
-function fmtRemaining(lang: Lang, sec: number): string {
+function fmtRemaining(lang: Locale, sec: number): string {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   if (lang === 'zh') {
     if (sec < 60) return '不到 1 分钟';
     return s === 0 ? `约 ${m} 分钟` : `约 ${m} 分 ${String(s).padStart(2, '0')} 秒`;
   }
-  if (sec < 60) return 'under a minute';
+  if (sec < 60) return lang === 'es' ? 'menos de un minuto' : 'under a minute';
   return s === 0 ? `${m} min` : `${m}:${String(s).padStart(2, '0')}`;
 }
 
 /** Countdown copy for the current second, or null while still in the grace period. */
-export function etaLabel(lang: Lang, elapsedSec: number, percent: number): string | null {
+export function etaLabel(lang: Locale, elapsedSec: number, percent: number): string | null {
   if (elapsedSec < COUNTDOWN_AFTER_SEC) return null;
-  if (percent >= 90) return lang === 'zh' ? '正在收尾，马上就好' : 'Finishing up — almost there';
+  if (percent >= 90) {
+    if (lang === 'zh') return '正在收尾，马上就好';
+    if (lang === 'es') return 'Terminando; ya casi está';
+    return 'Finishing up — almost there';
+  }
   const target = elapsedSec < TYPICAL_SEC - 20 ? TYPICAL_SEC : STRETCH_SEC;
   const remaining = target - elapsedSec;
-  if (remaining <= 0) return lang === 'zh' ? '比平时慢一些，正在收尾…' : 'Taking a little longer than usual — finishing…';
+  if (remaining <= 0) {
+    if (lang === 'zh') return '比平时慢一些，正在收尾…';
+    if (lang === 'es') return 'Está tardando un poco más de lo normal; terminando…';
+    return 'Taking a little longer than usual — finishing…';
+  }
   if (lang === 'zh') return `预计还需${fmtRemaining(lang, remaining)}`;
+  if (lang === 'es') return remaining < 60 ? 'Falta menos de un minuto' : `Faltan unos ${fmtRemaining(lang, remaining)}`;
   return remaining < 60 ? 'Under a minute to go' : `About ${fmtRemaining(lang, remaining)} to go`;
 }
 
-export function GenerationTicker({ lang, location, elapsedSec, percent }: { lang: Lang; location: string; elapsedSec: number; percent: number }) {
+export function GenerationTicker({ lang, location, elapsedSec, percent }: { lang: Locale; location: string; elapsedSec: number; percent: number }) {
   const groups = useMemo(() => tickerMessages(lang, location), [lang, location]);
   const [alt, setAlt] = useState(0);
   useEffect(() => {

@@ -8,9 +8,17 @@ import {
   numScore,
   parseDecisionTier,
 } from '@/lib/funnel/iq-risk-audit-model';
+import {
+  competitorClusterSummary,
+  competitorGapsAndOpenings,
+  competitorTakeaway,
+} from '@/lib/funnel/iq-deepseek-competitor-insights';
+import { demographicNarrativeParagraph } from '@/lib/funnel/iq-demographic-narrative';
+import { financeArchetypeLabel } from '@/lib/funnel/iq-finance-model';
 import type { Browser } from 'puppeteer-core';
 import { isVercelServerless, launchPdfBrowser } from '@/lib/iq/render/chromium';
 import { renderReportPdf } from '@/lib/iq/render/pdf';
+import { LOCALE_TAG, toLocale, type Locale } from '@/lib/i18n/locale';
 import { getPublicBaseUrl } from '@/lib/funnel/base-url';
 import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 
@@ -91,7 +99,6 @@ function pdfResponse(bytes: Uint8Array, filename: string): NextResponse {
 }
 
 type FullShape = Record<string, unknown>;
-type Lang = 'en' | 'zh';
 
 function pickStr(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v : undefined;
@@ -144,157 +151,400 @@ function proseToHtml(text: string): string {
     .join('');
 }
 
-function labels(lang: Lang) {
-  if (lang === 'zh') {
-    return {
-      subtitle: '选址智能分析报告',
-      keyMetrics: '关键指标',
-      executiveSummary: '执行摘要',
-      finalVerdict: '最终判定',
-      tradeArea: '贸易区与客流',
-      demographic: '人口与消费力',
-      competition: '竞争格局',
-      revenueEstimate: '营收预估',
-      revenueModel: '营收模型与情景',
-      competitorMatrix: '竞争对手矩阵',
-      riskMatrix: '风险矩阵',
-      topRisks: '主要风险',
-      opportunities: '发展机会',
-      failureScenarios: '失败场景',
-      differentiation: '差异化策略',
-      actionPlan: '90 天行动计划',
-      actionStructured: '结构化路线图',
-      decisionMatrix: '加权决策矩阵',
-      comparables: '可比案例',
-      acquisition: '获客渠道',
-      dataSources: '数据来源与免责声明',
-      siteAccess: '物业与路况评估',
-      evidencePoints: '关键证据点',
-      alternativeCorridors: '备选商业走廊与在租线索',
-      listingAddr: '地址/房源',
-      listingSqft: '面积',
-      listingRent: '月租(USD)',
-      listingNotes: '亮点',
-      listingSource: '来源',
-      confidential: '保密文件 — 本报告仅供购买方使用，未经许可不得传播。',
-      generatedBy: '由 RestaurantIQ.ai 生成',
-      confidence: '置信度',
-      scenario: '情景',
-      monthlyRev: '月营收 (USD)',
-      assumptions: '关键假设',
-      name: '名称',
-      mi: '距离(mi)',
-      cat: '类别',
-      star: '评分',
-      threat: '威胁',
-      risk: '风险',
-      prob: '概率',
-      impact: '财务影响',
-      mit: '缓解措施',
-      dim: '维度',
-      score: '得分',
-      wt: '权重%',
-      wtd: '加权分',
-      task: '任务',
-      owner: '负责人',
-      budget: '预算档',
-      deliverable: '交付物',
-      metric: '成功指标',
-      time: '时间',
-      success: '成功案例',
-      failure: '失败案例',
-      channel: '渠道',
-      pri: '优先级',
-      rationale: '理由',
-      riskAudit: '选址风险审计',
-      oneLineConclusion: '一句话结论',
-      breakEven: '打平月营收',
-      safeRevenue: '安全月营收',
-      leaseChecklist: '签租前清单',
-      playbook: '打法建议',
-      competitorMap: '竞品分布',
-      competitorInsights: '竞品深度洞察',
-      dataConfidence: '数据置信度',
-      layer: '维度',
-    };
-  }
-  return {
+type PdfLabels = {
+  subtitle: string;
+  keyMetrics: string;
+  executiveSummary: string;
+  finalVerdict: string;
+  tradeArea: string;
+  demographic: string;
+  competition: string;
+  revenueEstimate: string;
+  revenueModel: string;
+  competitorMatrix: string;
+  riskMatrix: string;
+  topRisks: string;
+  opportunities: string;
+  failureScenarios: string;
+  differentiation: string;
+  actionPlan: string;
+  actionStructured: string;
+  decisionMatrix: string;
+  comparables: string;
+  acquisition: string;
+  dataSources: string;
+  siteAccess: string;
+  evidencePoints: string;
+  alternativeCorridors: string;
+  listingAddr: string;
+  listingSqft: string;
+  listingRent: string;
+  listingNotes: string;
+  listingSource: string;
+  confidential: string;
+  generatedBy: string;
+  confidence: string;
+  scenario: string;
+  monthlyRev: string;
+  assumptions: string;
+  name: string;
+  mi: string;
+  cat: string;
+  star: string;
+  threat: string;
+  risk: string;
+  prob: string;
+  impact: string;
+  mit: string;
+  dim: string;
+  score: string;
+  wt: string;
+  wtd: string;
+  task: string;
+  owner: string;
+  budget: string;
+  deliverable: string;
+  metric: string;
+  time: string;
+  success: string;
+  failure: string;
+  channel: string;
+  pri: string;
+  rationale: string;
+  riskAudit: string;
+  oneLineConclusion: string;
+  breakEven: string;
+  safeRevenue: string;
+  leaseChecklist: string;
+  playbook: string;
+  competitorMap: string;
+  competitorInsights: string;
+  dataConfidence: string;
+  layer: string;
+  overall: string;
+  breakeven: string;
+  calculated: string;
+  financeHow: string;
+  confHigh: string;
+  confMedium: string;
+  confLow: string;
+  archetype: string;
+  citations: string;
+  /** "(~$1,200/day · 48 covers @ $25)" */
+  dailyHint: (dailyUsd: number, covers: number, ticketUsd: number) => string;
+  reviews: string;
+  threatHigh: string;
+  threatMedium: string;
+  threatLow: string;
+  signatureItems: string;
+  topPraise: string;
+  topComplaints: string;
+  pricing: string;
+  clusterSummary: string;
+  gapsOpenings: string;
+  insightsIntro: (excerpts: number) => string;
+  insightsFooter: (provider: string, model: string) => string;
+  demographicBrief: string;
+  notReady: string;
+};
+
+const PDF_LABELS: Record<Locale, PdfLabels> = {
+  zh: {
+    subtitle: '选址智能分析报告',
+    keyMetrics: '关键指标',
+    executiveSummary: '执行摘要',
+    finalVerdict: '最终判定',
+    tradeArea: '贸易区与客流',
+    demographic: '人口与消费力',
+    competition: '竞争格局',
+    revenueEstimate: '营收预估',
+    revenueModel: '营收模型与情景',
+    competitorMatrix: '竞争对手矩阵',
+    riskMatrix: '风险矩阵',
+    topRisks: '主要风险',
+    opportunities: '发展机会',
+    failureScenarios: '失败场景',
+    differentiation: '差异化策略',
+    actionPlan: '90 天行动计划',
+    actionStructured: '结构化路线图',
+    decisionMatrix: '加权决策矩阵',
+    comparables: '可比案例',
+    acquisition: '获客渠道',
+    dataSources: '数据来源与免责声明',
+    siteAccess: '物业与路况评估',
+    evidencePoints: '关键证据点',
+    alternativeCorridors: '备选商业走廊与在租线索',
+    listingAddr: '地址/房源',
+    listingSqft: '面积',
+    listingRent: '月租(USD)',
+    listingNotes: '亮点',
+    listingSource: '来源',
+    confidential: '保密文件 — 本报告仅供购买方使用，未经许可不得传播。',
+    generatedBy: '由 RestaurantIQ.ai 生成',
+    confidence: '置信度',
+    scenario: '情景',
+    monthlyRev: '月营收 (USD)',
+    assumptions: '关键假设',
+    name: '名称',
+    mi: '距离(mi)',
+    cat: '类别',
+    star: '评分',
+    threat: '威胁',
+    risk: '风险',
+    prob: '概率',
+    impact: '财务影响',
+    mit: '缓解措施',
+    dim: '维度',
+    score: '得分',
+    wt: '权重%',
+    wtd: '加权分',
+    task: '任务',
+    owner: '负责人',
+    budget: '预算档',
+    deliverable: '交付物',
+    metric: '成功指标',
+    time: '时间',
+    success: '成功案例',
+    failure: '失败案例',
+    channel: '渠道',
+    pri: '优先级',
+    rationale: '理由',
+    riskAudit: '选址风险审计',
+    oneLineConclusion: '一句话结论',
+    breakEven: '打平月营收',
+    safeRevenue: '安全月营收',
+    leaseChecklist: '签租前清单',
+    playbook: '打法建议',
+    competitorMap: '竞品分布',
+    competitorInsights: '竞品深度洞察',
+    dataConfidence: '数据置信度',
+    layer: '维度',
+    overall: '综合分',
+    breakeven: '盈亏平衡',
+    calculated: '公式计算',
+    financeHow: '盈亏平衡计算方法（D-4 确定性模型）',
+    confHigh: '高置信度',
+    confMedium: '中等置信度',
+    confLow: '低置信度',
+    archetype: '业态原型：',
+    citations: '引用：',
+    dailyHint: (d, c, t) => `（约 $${d.toLocaleString('zh-CN')}/天 · ${c} 单@$${t}）`,
+    reviews: '条评论',
+    threatHigh: '高威胁',
+    threatMedium: '中等威胁',
+    threatLow: '低威胁',
+    signatureItems: '代表产品',
+    topPraise: '高频好评：',
+    topComplaints: '高频差评：',
+    pricing: '价格感知：',
+    clusterSummary: '竞品集群总结',
+    gapsOpenings: '可切入的市场缺口',
+    insightsIntro: (n) => `AI 评论分析 · 基于 ${n} 条 Google + Yelp 评论摘要`,
+    insightsFooter: (p, m) => `由 ${p} (${m}) 基于 Google Place Details + Yelp Fusion 评论摘要生成`,
+    demographicBrief: '人口与消费力数据简报 · ACS B03002/B19001/B15003',
+    notReady: '完整报告尚未生成或内容过短，请先在页面上等待「完整报告」生成完成后再下载 PDF。',
+  },
+  en: {
     subtitle: 'Location Intelligence Report',
-    keyMetrics: 'Key metrics',
+    keyMetrics: 'Key Metrics',
     executiveSummary: 'Executive Summary',
     finalVerdict: 'Final Verdict',
     tradeArea: 'Trade Area Analysis',
     demographic: 'Demographic Profile',
-    competition: 'Competition Landscape',
-    revenueEstimate: 'Revenue outlook',
-    revenueModel: 'Revenue model & scenarios',
-    competitorMatrix: 'Competitor matrix',
-    riskMatrix: 'Risk matrix',
-    topRisks: 'Top risks',
+    competition: 'Competitive Landscape',
+    revenueEstimate: 'Revenue Outlook',
+    revenueModel: 'Revenue Model & Scenarios',
+    competitorMatrix: 'Competitor Matrix',
+    riskMatrix: 'Risk Matrix',
+    topRisks: 'Top Risks',
     opportunities: 'Opportunities',
-    failureScenarios: 'Failure scenarios',
-    differentiation: 'Differentiation strategy',
-    actionPlan: '90-day action plan',
-    actionStructured: 'Structured roadmap',
-    decisionMatrix: 'Weighted decision matrix',
-    comparables: 'Comparable cases',
-    acquisition: 'Acquisition channels',
-    dataSources: 'Data sources & disclaimer',
-    siteAccess: 'Site & road context',
-    evidencePoints: 'Key evidence',
-    alternativeCorridors: 'Alternative corridors & listings',
-    listingAddr: 'Address',
-    listingSqft: 'sqft',
-    listingRent: 'Rent/mo',
-    listingNotes: 'Notes',
+    failureScenarios: 'Failure Scenarios',
+    differentiation: 'Differentiation Strategy',
+    actionPlan: '90-Day Action Plan',
+    actionStructured: 'Structured Roadmap',
+    decisionMatrix: 'Weighted Decision Matrix',
+    comparables: 'Comparable Cases',
+    acquisition: 'Customer Acquisition Channels',
+    dataSources: 'Data Sources & Disclaimer',
+    siteAccess: 'Site & Road Access',
+    evidencePoints: 'Key Evidence',
+    alternativeCorridors: 'Alternative Corridors & Listings',
+    listingAddr: 'Address / Listing',
+    listingSqft: 'Sq ft',
+    listingRent: 'Rent / mo (USD)',
+    listingNotes: 'Highlights',
     listingSource: 'Source',
     confidential:
-      'CONFIDENTIAL — This report is prepared exclusively for the purchaser and must not be distributed without permission.',
+      'CONFIDENTIAL — This report was prepared exclusively for the purchaser and may not be distributed without permission.',
     generatedBy: 'Generated by RestaurantIQ.ai',
     confidence: 'Confidence',
     scenario: 'Scenario',
-    monthlyRev: 'Monthly revenue (USD)',
-    assumptions: 'Key assumptions',
+    monthlyRev: 'Monthly Revenue (USD)',
+    assumptions: 'Key Assumptions',
     name: 'Name',
-    mi: 'mi',
+    mi: 'Distance (mi)',
     cat: 'Category',
     star: 'Rating',
     threat: 'Threat',
     risk: 'Risk',
-    prob: 'P',
-    impact: 'Impact',
+    prob: 'Probability',
+    impact: 'Financial Impact',
     mit: 'Mitigation',
     dim: 'Dimension',
-    score: '/100',
-    wt: 'Wt %',
+    score: 'Score',
+    wt: 'Weight %',
     wtd: 'Weighted',
     task: 'Task',
     owner: 'Owner',
-    budget: 'Budget',
+    budget: 'Budget Band',
     deliverable: 'Deliverable',
-    metric: 'Metric',
+    metric: 'Success Metric',
     time: 'Timeframe',
-    success: 'Success cases',
-    failure: 'Failure cases',
+    success: 'Success Cases',
+    failure: 'Failure Cases',
     channel: 'Channel',
-    pri: 'Pri.',
+    pri: 'Priority',
     rationale: 'Rationale',
-    riskAudit: 'Location risk audit',
-    oneLineConclusion: 'One-line conclusion',
+    riskAudit: 'Location Risk Audit',
+    oneLineConclusion: 'One-Line Conclusion',
     breakEven: 'Break-even revenue / mo',
     safeRevenue: 'Safe revenue / mo',
-    leaseChecklist: 'Pre-lease checklist',
+    leaseChecklist: 'Pre-Lease Checklist',
     playbook: 'Playbook',
-    competitorMap: 'Competitor map',
-    competitorInsights: 'Competitor deep insights',
+    competitorMap: 'Competitor Map',
+    competitorInsights: 'Competitor Deep Dive',
     dataConfidence: 'Data confidence',
     layer: 'Layer',
-  };
+    overall: 'Overall',
+    breakeven: 'Break-even',
+    calculated: 'Calculated',
+    financeHow: 'How break-even was calculated (D-4 deterministic model)',
+    confHigh: 'High confidence',
+    confMedium: 'Medium confidence',
+    confLow: 'Low confidence',
+    archetype: 'Archetype: ',
+    citations: 'Citations: ',
+    dailyHint: (d, c, t) => `(~$${d.toLocaleString('en-US')}/day · ${c} covers @ $${t})`,
+    reviews: 'reviews',
+    threatHigh: 'High threat',
+    threatMedium: 'Medium threat',
+    threatLow: 'Low threat',
+    signatureItems: 'Signature items',
+    topPraise: 'Top praise: ',
+    topComplaints: 'Top complaints: ',
+    pricing: 'Pricing: ',
+    clusterSummary: 'Cluster summary',
+    gapsOpenings: 'Gaps & openings',
+    insightsIntro: (n) => `AI review analysis · grounded in ${n} Google + Yelp review excerpts`,
+    insightsFooter: (p, m) => `Generated by ${p} (${m}) from Google Place Details + Yelp Fusion review excerpts`,
+    demographicBrief: 'Demographics & spending brief · ACS B03002/B19001/B15003',
+    notReady: 'The full report is not ready yet. Wait for the on-page full report to finish generating, then download the PDF.',
+  },
+  es: {
+    subtitle: 'Informe de inteligencia de ubicación',
+    keyMetrics: 'Métricas clave',
+    executiveSummary: 'Resumen ejecutivo',
+    finalVerdict: 'Veredicto final',
+    tradeArea: 'Análisis del área comercial',
+    demographic: 'Perfil demográfico',
+    competition: 'Panorama competitivo',
+    revenueEstimate: 'Proyección de ingresos',
+    revenueModel: 'Modelo de ingresos y escenarios',
+    competitorMatrix: 'Matriz de competidores',
+    riskMatrix: 'Matriz de riesgos',
+    topRisks: 'Principales riesgos',
+    opportunities: 'Oportunidades',
+    failureScenarios: 'Escenarios de fracaso',
+    differentiation: 'Estrategia de diferenciación',
+    actionPlan: 'Plan de acción de 90 días',
+    actionStructured: 'Hoja de ruta estructurada',
+    decisionMatrix: 'Matriz de decisión ponderada',
+    comparables: 'Casos comparables',
+    acquisition: 'Canales de captación de clientes',
+    dataSources: 'Fuentes de datos y aviso legal',
+    siteAccess: 'Local y acceso vial',
+    evidencePoints: 'Evidencia clave',
+    alternativeCorridors: 'Corredores alternativos y locales disponibles',
+    listingAddr: 'Dirección / local',
+    listingSqft: 'Pies²',
+    listingRent: 'Renta / mes (USD)',
+    listingNotes: 'Puntos destacados',
+    listingSource: 'Fuente',
+    confidential:
+      'CONFIDENCIAL — Este informe se preparó exclusivamente para el comprador y no puede distribuirse sin autorización.',
+    generatedBy: 'Generado por RestaurantIQ.ai',
+    confidence: 'Confianza',
+    scenario: 'Escenario',
+    monthlyRev: 'Ingresos mensuales (USD)',
+    assumptions: 'Supuestos clave',
+    name: 'Nombre',
+    mi: 'Distancia (mi)',
+    cat: 'Categoría',
+    star: 'Calificación',
+    threat: 'Amenaza',
+    risk: 'Riesgo',
+    prob: 'Probabilidad',
+    impact: 'Impacto financiero',
+    mit: 'Mitigación',
+    dim: 'Dimensión',
+    score: 'Puntaje',
+    wt: 'Peso %',
+    wtd: 'Ponderado',
+    task: 'Tarea',
+    owner: 'Responsable',
+    budget: 'Rango de presupuesto',
+    deliverable: 'Entregable',
+    metric: 'Métrica de éxito',
+    time: 'Plazo',
+    success: 'Casos de éxito',
+    failure: 'Casos de fracaso',
+    channel: 'Canal',
+    pri: 'Prioridad',
+    rationale: 'Justificación',
+    riskAudit: 'Auditoría de riesgo de ubicación',
+    oneLineConclusion: 'Conclusión en una línea',
+    breakEven: 'Ingresos de equilibrio / mes',
+    safeRevenue: 'Ingresos seguros / mes',
+    leaseChecklist: 'Lista previa al contrato',
+    playbook: 'Estrategia recomendada',
+    competitorMap: 'Mapa de competidores',
+    competitorInsights: 'Análisis profundo de competidores',
+    dataConfidence: 'Confianza de los datos',
+    layer: 'Dimensión',
+    overall: 'Puntaje general',
+    breakeven: 'Punto de equilibrio',
+    calculated: 'Calculado',
+    financeHow: 'Cómo se calculó el punto de equilibrio (modelo determinista D-4)',
+    confHigh: 'Confianza alta',
+    confMedium: 'Confianza media',
+    confLow: 'Confianza baja',
+    archetype: 'Arquetipo: ',
+    citations: 'Referencias: ',
+    dailyHint: (d, c, t) => `(~$${d.toLocaleString('en-US')}/día · ${c} cubiertos a $${t})`,
+    reviews: 'reseñas',
+    threatHigh: 'Amenaza alta',
+    threatMedium: 'Amenaza media',
+    threatLow: 'Amenaza baja',
+    signatureItems: 'Platos insignia',
+    topPraise: 'Elogios frecuentes: ',
+    topComplaints: 'Quejas frecuentes: ',
+    pricing: 'Percepción de precio: ',
+    clusterSummary: 'Resumen del grupo competitivo',
+    gapsOpenings: 'Brechas y oportunidades',
+    insightsIntro: (n) => `Análisis de reseñas con IA · basado en ${n} extractos de reseñas de Google y Yelp`,
+    insightsFooter: (p, m) => `Generado por ${p} (${m}) a partir de extractos de reseñas de Google Place Details y Yelp Fusion`,
+    demographicBrief: 'Informe demográfico y de gasto · ACS B03002/B19001/B15003',
+    notReady: 'El informe completo aún no está listo. Espere a que termine de generarse en la página y luego descargue el PDF.',
+  },
+};
+
+function labels(lang: Locale): PdfLabels {
+  return PDF_LABELS[lang];
 }
 
 function pdfRiskAuditBlock(
   full: FullShape,
-  lang: Lang,
+  lang: Locale,
   marketData: Record<string, unknown> | null,
 ): string {
   const L = labels(lang);
@@ -359,39 +609,50 @@ function pdfRiskAuditBlock(
           daily_covers_needed_safe: number;
           cuisine_archetype_label_en: string;
           cuisine_archetype_label_zh: string;
+          cuisine_archetype_label_es?: string;
           assumptions: string[];
           citations: string[];
         })
       : null;
-  const calcBadge = lang === 'zh' ? '公式计算' : 'Calculated';
   const calcBadgeHtml = financeApplied
-    ? `<span style="display:inline-block;margin-left:6px;padding:1px 6px;font-size:8pt;background:#dcfce7;color:#166534;border-radius:8px;border:1px solid #86efac;">${escapeHtml(calcBadge)}</span>`
+    ? `<span style="display:inline-block;margin-left:6px;padding:1px 6px;font-size:8pt;background:#dcfce7;color:#166534;border-radius:8px;border:1px solid #86efac;">${escapeHtml(L.calculated)}</span>`
     : '';
   const dailyBreakHint = financeSnapshot && breakEven != null
-    ? (lang === 'zh'
-        ? `（约 $${financeSnapshot.break_even_daily_revenue_usd.toLocaleString()}/天 · ${financeSnapshot.daily_covers_needed_breakeven} 单@$${financeSnapshot.avg_ticket_usd}）`
-        : `(~$${financeSnapshot.break_even_daily_revenue_usd.toLocaleString()}/day · ${financeSnapshot.daily_covers_needed_breakeven} covers @ $${financeSnapshot.avg_ticket_usd})`)
+    ? L.dailyHint(
+        financeSnapshot.break_even_daily_revenue_usd,
+        financeSnapshot.daily_covers_needed_breakeven,
+        financeSnapshot.avg_ticket_usd,
+      )
     : '';
   const dailySafeHint = financeSnapshot && safeRev != null
-    ? (lang === 'zh'
-        ? `（约 $${financeSnapshot.safe_daily_revenue_usd.toLocaleString()}/天 · ${financeSnapshot.daily_covers_needed_safe} 单@$${financeSnapshot.avg_ticket_usd}）`
-        : `(~$${financeSnapshot.safe_daily_revenue_usd.toLocaleString()}/day · ${financeSnapshot.daily_covers_needed_safe} covers @ $${financeSnapshot.avg_ticket_usd})`)
+    ? L.dailyHint(
+        financeSnapshot.safe_daily_revenue_usd,
+        financeSnapshot.daily_covers_needed_safe,
+        financeSnapshot.avg_ticket_usd,
+      )
+    : '';
+  const confLabel = financeSnapshot
+    ? financeSnapshot.confidence === 'high'
+      ? L.confHigh
+      : financeSnapshot.confidence === 'medium'
+        ? L.confMedium
+        : L.confLow
     : '';
 
   const financeNoteHtml = financeApplied && financeSnapshot
     ? `<div style="margin:8px 0 14px;padding:10px 12px;border-left:3px solid #16a34a;background:#f0fdf4;font-size:9pt;color:#14532d;">
         <div style="font-weight:600;margin-bottom:4px;">
-          ${escapeHtml(lang === 'zh' ? '盈亏平衡计算方法（D-4 确定性模型）' : 'How break-even was calculated (D-4 deterministic model)')}
-          · ${escapeHtml(financeSnapshot.confidence === 'high' ? (lang === 'zh' ? '高置信度' : 'High confidence') : financeSnapshot.confidence === 'medium' ? (lang === 'zh' ? '中等置信度' : 'Medium confidence') : (lang === 'zh' ? '低置信度' : 'Low confidence'))}
+          ${escapeHtml(L.financeHow)}
+          · ${escapeHtml(confLabel)}
         </div>
         <div style="margin-bottom:6px;font-size:8.5pt;">
-          ${escapeHtml(lang === 'zh' ? '业态原型：' : 'Archetype: ')}${escapeHtml(lang === 'zh' ? financeSnapshot.cuisine_archetype_label_zh : financeSnapshot.cuisine_archetype_label_en)}
+          ${escapeHtml(L.archetype)}${escapeHtml(financeArchetypeLabel(financeSnapshot, lang))}
         </div>
         <ul style="margin:0 0 0 16px;padding:0;font-size:8.5pt;line-height:1.45;">
           ${financeSnapshot.assumptions.map((a) => `<li>${escapeHtml(a)}</li>`).join('')}
         </ul>
         <div style="margin-top:6px;font-size:8pt;color:#15803d;">
-          ${escapeHtml(lang === 'zh' ? '引用：' : 'Citations: ')}${escapeHtml(financeSnapshot.citations.join(' · '))}
+          ${escapeHtml(L.citations)}${escapeHtml(financeSnapshot.citations.join(' · '))}
         </div>
       </div>`
     : '';
@@ -400,7 +661,7 @@ function pdfRiskAuditBlock(
   <div class="section">
     <h2><span class="head-mark">■</span> ${escapeHtml(L.riskAudit)}</h2>
     ${tierCopy ? `<p style="font-weight:700;color:#1a365d;margin-bottom:8px;">${escapeHtml(tierCopy.label)} — ${escapeHtml(tierCopy.desc)}</p>` : ''}
-    ${overall != null ? `<p style="margin-bottom:8px;"><strong>${lang === 'zh' ? '综合分' : 'Overall'}:</strong> ${overall}/100${conf != null ? ` · ${escapeHtml(L.dataConfidence)}: ${conf}%` : ''}</p>` : ''}
+    ${overall != null ? `<p style="margin-bottom:8px;"><strong>${escapeHtml(L.overall)}:</strong> ${overall}/100${conf != null ? ` · ${escapeHtml(L.dataConfidence)}: ${conf}%` : ''}</p>` : ''}
     ${audit.one_line_conclusion || pickStr(full.one_line_conclusion) ? `<p style="margin-bottom:12px;font-style:italic;">${escapeHtml(audit.one_line_conclusion || pickStr(full.one_line_conclusion) || '')}</p>` : ''}
     ${layerRows ? `<table style="width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:14px;"><tr style="background:#1a365d;color:#fff;"><th style="padding:8px;text-align:left;">${escapeHtml(L.layer)}</th><th style="padding:8px;">${escapeHtml(L.score)}</th></tr>${layerRows}</table>` : ''}
     ${breakEven != null || safeRev != null ? `<p style="margin-bottom:10px;">${breakEven != null ? `<strong>${escapeHtml(L.breakEven)}:</strong> $${breakEven.toLocaleString()}${calcBadgeHtml} <span style="color:#92400e;font-size:8.5pt;">${dailyBreakHint}</span>` : ''}${safeRev != null ? `<br /><strong>${escapeHtml(L.safeRevenue)}:</strong> $${safeRev.toLocaleString()}${calcBadgeHtml} <span style="color:#15803d;font-size:8.5pt;">${dailySafeHint}</span>` : ''}</p>` : ''}
@@ -414,26 +675,35 @@ function pdfRiskAuditBlock(
   </div>`;
 }
 
-function dashKeyLabel(key: string, lang: Lang): string {
-  const zh: Record<string, string> = {
+const DASH_KEY_LABELS: Record<Locale, Record<string, string>> = {
+  zh: {
     overall_score: '综合分',
     foot_traffic_index: '客流指数',
     competition_intensity: '竞争强度',
     payback_months: '回收期(月)',
     recommendation: '建议等级',
-  };
-  const en: Record<string, string> = {
+  },
+  en: {
     overall_score: 'Overall score',
     foot_traffic_index: 'Foot traffic index',
     competition_intensity: 'Competition intensity',
-    payback_months: 'Payback (mo)',
+    payback_months: 'Payback (months)',
     recommendation: 'Recommendation',
-  };
-  const m = lang === 'zh' ? zh : en;
-  return m[key] ?? key;
+  },
+  es: {
+    overall_score: 'Puntaje general',
+    foot_traffic_index: 'Índice de tráfico peatonal',
+    competition_intensity: 'Intensidad competitiva',
+    payback_months: 'Recuperación (meses)',
+    recommendation: 'Recomendación',
+  },
+};
+
+function dashKeyLabel(key: string, lang: Locale): string {
+  return DASH_KEY_LABELS[lang][key] ?? key;
 }
 
-function pdfDashboardTable(full: FullShape, lang: Lang): string {
+function pdfDashboardTable(full: FullShape, lang: Locale): string {
   const L = labels(lang);
   const d = full.dashboard;
   if (!d || typeof d !== 'object') return '';
@@ -471,25 +741,28 @@ type CompetitorInsightsForPdf = {
     threat_level: 'high' | 'medium' | 'low';
     ai_takeaway_zh: string;
     ai_takeaway_en: string;
+    ai_takeaway_es?: string;
   }>;
   cluster_summary_zh: string;
   cluster_summary_en: string;
+  cluster_summary_es?: string;
   gaps_and_openings_zh: string;
   gaps_and_openings_en: string;
+  gaps_and_openings_es?: string;
 };
 
 function pdfCompetitorInsightsBlock(
   marketData: Record<string, unknown> | null | undefined,
-  lang: Lang,
+  lang: Locale,
 ): string {
   const ci = (marketData?.competitor_insights as CompetitorInsightsForPdf | undefined) ?? undefined;
   if (!ci || !Array.isArray(ci.per_competitor) || ci.per_competitor.length === 0) return '';
   const L = labels(lang);
-  const isZh = lang === 'zh';
+  const numberLocale = LOCALE_TAG[lang];
 
-  const intro = isZh
-    ? `<p style="margin:4px 0 12px;font-size:9pt;color:#475569;">${escapeHtml(`AI 评论分析 · 基于 ${ci.reviews_fetched.total_review_excerpts} 条 Google + Yelp 评论摘要`)}</p>`
-    : `<p style="margin:4px 0 12px;font-size:9pt;color:#475569;">${escapeHtml(`AI review analysis · grounded in ${ci.reviews_fetched.total_review_excerpts} Google + Yelp review excerpts`)}</p>`;
+  const intro = `<p style="margin:4px 0 12px;font-size:9pt;color:#475569;">${escapeHtml(
+    L.insightsIntro(ci.reviews_fetched.total_review_excerpts),
+  )}</p>`;
 
   const rowHtml = ci.per_competitor
     .map((row) => {
@@ -499,18 +772,11 @@ function pdfCompetitorInsightsBlock(
           : row.threat_level === 'low'
             ? { border: '#86efac', bg: '#f0fdf4', text: '#166534' }
             : { border: '#fcd34d', bg: '#fffbeb', text: '#92400e' };
-      const threatLabel = isZh
-        ? row.threat_level === 'high'
-          ? '高威胁'
-          : row.threat_level === 'low'
-            ? '低威胁'
-            : '中等威胁'
-        : row.threat_level.toUpperCase();
+      const threatLabel =
+        row.threat_level === 'high' ? L.threatHigh : row.threat_level === 'low' ? L.threatLow : L.threatMedium;
       const meta = [
         row.rating != null ? `${row.rating}/5` : null,
-        row.review_count != null
-          ? `${row.review_count.toLocaleString(isZh ? 'zh-CN' : 'en-US')} ${isZh ? '条评论' : 'reviews'}`
-          : null,
+        row.review_count != null ? `${row.review_count.toLocaleString(numberLocale)} ${L.reviews}` : null,
         row.price_tier ?? null,
       ]
         .filter(Boolean)
@@ -523,15 +789,15 @@ function pdfCompetitorInsightsBlock(
         )
         .join('');
       const praise = row.top_praise.length
-        ? `<div style="margin-top:4px;font-size:8.5pt;color:#15803d;"><strong>${escapeHtml(isZh ? '高频好评：' : 'Top praise: ')}</strong>${escapeHtml(row.top_praise.join(' · '))}</div>`
+        ? `<div style="margin-top:4px;font-size:8.5pt;color:#15803d;"><strong>${escapeHtml(L.topPraise)}</strong>${escapeHtml(row.top_praise.join(' · '))}</div>`
         : '';
       const complaints = row.top_complaints.length
-        ? `<div style="margin-top:2px;font-size:8.5pt;color:#9f1239;"><strong>${escapeHtml(isZh ? '高频差评：' : 'Top complaints: ')}</strong>${escapeHtml(row.top_complaints.join(' · '))}</div>`
+        ? `<div style="margin-top:2px;font-size:8.5pt;color:#9f1239;"><strong>${escapeHtml(L.topComplaints)}</strong>${escapeHtml(row.top_complaints.join(' · '))}</div>`
         : '';
       const pricing = row.pricing_perception
-        ? `<div style="margin-top:2px;font-size:8.5pt;color:#475569;"><strong>${escapeHtml(isZh ? '价格感知：' : 'Pricing: ')}</strong>${escapeHtml(row.pricing_perception)}</div>`
+        ? `<div style="margin-top:2px;font-size:8.5pt;color:#475569;"><strong>${escapeHtml(L.pricing)}</strong>${escapeHtml(row.pricing_perception)}</div>`
         : '';
-      const takeaway = isZh ? row.ai_takeaway_zh : row.ai_takeaway_en;
+      const takeaway = competitorTakeaway(row, lang);
       const takeawayHtml = takeaway
         ? `<div style="margin-top:6px;padding:6px 8px;background:#fffbeb;border-left:3px solid #f59e0b;font-size:8.5pt;color:#78350f;">${escapeHtml(takeaway)}</div>`
         : '';
@@ -547,7 +813,7 @@ function pdfCompetitorInsightsBlock(
           <span style="flex-shrink:0;padding:1px 6px;font-size:8pt;border:1px solid ${threatColor.border};background:${threatColor.bg};color:${threatColor.text};border-radius:8px;font-weight:600;">${escapeHtml(threatLabel)}</span>
         </div>
         ${positioning}
-        ${items ? `<div style="margin-top:6px;"><div style="font-size:7.5pt;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">${escapeHtml(isZh ? '代表产品' : 'Signature items')}</div><div style="margin-top:3px;">${items}</div></div>` : ''}
+        ${items ? `<div style="margin-top:6px;"><div style="font-size:7.5pt;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">${escapeHtml(L.signatureItems)}</div><div style="margin-top:3px;">${items}</div></div>` : ''}
         ${praise}
         ${complaints}
         ${pricing}
@@ -556,26 +822,24 @@ function pdfCompetitorInsightsBlock(
     })
     .join('');
 
-  const cluster = isZh ? ci.cluster_summary_zh : ci.cluster_summary_en;
+  const cluster = competitorClusterSummary(ci, lang);
   const clusterHtml = cluster
-    ? `<div style="margin-top:8px;padding:10px 12px;background:#f1f5f9;border-left:3px solid #475569;font-size:9pt;color:#1e293b;line-height:1.5;"><div style="font-size:7.5pt;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">${escapeHtml(isZh ? '竞品集群总结' : 'Cluster summary')}</div>${escapeHtml(cluster)}</div>`
+    ? `<div style="margin-top:8px;padding:10px 12px;background:#f1f5f9;border-left:3px solid #475569;font-size:9pt;color:#1e293b;line-height:1.5;"><div style="font-size:7.5pt;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">${escapeHtml(L.clusterSummary)}</div>${escapeHtml(cluster)}</div>`
     : '';
 
-  const gaps = isZh ? ci.gaps_and_openings_zh : ci.gaps_and_openings_en;
+  const gaps = competitorGapsAndOpenings(ci, lang);
   const gapsHtml = gaps
-    ? `<div style="margin-top:8px;padding:10px 12px;background:#f0fdf4;border-left:3px solid #16a34a;font-size:9pt;color:#14532d;line-height:1.5;"><div style="font-size:7.5pt;color:#15803d;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">${escapeHtml(isZh ? '可切入的市场缺口' : 'Gaps & openings')}</div>${escapeHtml(gaps)}</div>`
+    ? `<div style="margin-top:8px;padding:10px 12px;background:#f0fdf4;border-left:3px solid #16a34a;font-size:9pt;color:#14532d;line-height:1.5;"><div style="font-size:7.5pt;color:#15803d;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">${escapeHtml(L.gapsOpenings)}</div>${escapeHtml(gaps)}</div>`
     : '';
 
   const footer = `<div style="margin-top:10px;font-size:7.5pt;color:#94a3b8;">${escapeHtml(
-    isZh
-      ? `由 ${ci.provider} (${ci.model}) 基于 Google Place Details + Yelp Fusion 评论摘要生成`
-      : `Generated by ${ci.provider} (${ci.model}) from Google Place Details + Yelp Fusion review excerpts`,
+    L.insightsFooter(ci.provider, ci.model),
   )}</div>`;
 
   return `<div class="section"><h2><span class="head-mark">■</span> ${escapeHtml(L.competitorInsights)}</h2>${intro}${rowHtml}${clusterHtml}${gapsHtml}${footer}</div>`;
 }
 
-function pdfCompetitorsTable(full: FullShape, lang: Lang): string {
+function pdfCompetitorsTable(full: FullShape, lang: Locale): string {
   const L = labels(lang);
   const rows = Array.isArray(full.competitors) ? full.competitors : [];
   if (rows.length === 0) return '';
@@ -596,7 +860,7 @@ function pdfCompetitorsTable(full: FullShape, lang: Lang): string {
   return `<div class="section"><h2>${escapeHtml(L.competitorMatrix)}</h2><table style="width:100%;border-collapse:collapse;font-size:9pt;">${head}${body}</table></div>`;
 }
 
-function pdfRiskMatrixTable(full: FullShape, lang: Lang): string {
+function pdfRiskMatrixTable(full: FullShape, lang: Locale): string {
   const L = labels(lang);
   const rows = Array.isArray(full.risk_matrix) ? full.risk_matrix : [];
   if (rows.length === 0) return '';
@@ -615,7 +879,7 @@ function pdfRiskMatrixTable(full: FullShape, lang: Lang): string {
   return `<div class="section"><h2>${escapeHtml(L.riskMatrix)}</h2><table style="width:100%;border-collapse:collapse;font-size:9pt;">${head}${body}</table></div>`;
 }
 
-function pdfRevenueModel(full: FullShape, lang: Lang): string {
+function pdfRevenueModel(full: FullShape, lang: Locale): string {
   const L = labels(lang);
   const rm = full.revenue_model;
   if (!rm || typeof rm !== 'object') return '';
@@ -652,12 +916,12 @@ function pdfRevenueModel(full: FullShape, lang: Lang): string {
     ${methodology ? `<div class="prose">${proseToHtml(methodology)}</div>` : ''}
     ${scenRows}
     ${sensHtml}
-    ${breakeven ? `<p style="margin-top:12px;"><strong>${lang === 'zh' ? '盈亏平衡' : 'Breakeven'}:</strong> ${escapeHtml(breakeven)}</p>` : ''}
+    ${breakeven ? `<p style="margin-top:12px;"><strong>${escapeHtml(L.breakeven)}:</strong> ${escapeHtml(breakeven)}</p>` : ''}
     ${costs ? `<p style="margin-top:8px;font-size:10pt;color:#64748b;">${escapeHtml(costs)}</p>` : ''}
   </div>`;
 }
 
-function pdfDecisionMatrix(full: FullShape, lang: Lang): string {
+function pdfDecisionMatrix(full: FullShape, lang: Locale): string {
   const L = labels(lang);
   const rows = Array.isArray(full.decision_matrix) ? full.decision_matrix : [];
   if (rows.length === 0) return '';
@@ -676,7 +940,7 @@ function pdfDecisionMatrix(full: FullShape, lang: Lang): string {
   return `<div class="section"><h2>${escapeHtml(L.decisionMatrix)}</h2><table style="width:100%;border-collapse:collapse;font-size:9pt;">${head}${body}</table></div>`;
 }
 
-function pdfActionStructured(full: FullShape, lang: Lang): string {
+function pdfActionStructured(full: FullShape, lang: Locale): string {
   const L = labels(lang);
   const rows = Array.isArray(full.action_plan_structured) ? full.action_plan_structured : [];
   if (rows.length === 0) return '';
@@ -704,7 +968,7 @@ function pdfActionStructured(full: FullShape, lang: Lang): string {
   return `<div class="section"><h2>${escapeHtml(L.actionStructured)}</h2><table style="width:100%;border-collapse:collapse;font-size:8pt;">${head}${body}</table></div>`;
 }
 
-function pdfAcquisitionTable(full: FullShape, lang: Lang): string {
+function pdfAcquisitionTable(full: FullShape, lang: Locale): string {
   const L = labels(lang);
   const rows = Array.isArray(full.acquisition_channels) ? full.acquisition_channels : [];
   if (rows.length === 0) return '';
@@ -722,7 +986,7 @@ function pdfAcquisitionTable(full: FullShape, lang: Lang): string {
   return `<div class="section"><h2>${escapeHtml(L.acquisition)}</h2><table style="width:100%;border-collapse:collapse;font-size:9pt;">${head}${body}</table></div>`;
 }
 
-function pdfComparablesBlock(full: FullShape, lang: Lang): string {
+function pdfComparablesBlock(full: FullShape, lang: Locale): string {
   const L = labels(lang);
   const c = full.comparables;
   if (!c || typeof c !== 'object') return '';
@@ -741,14 +1005,14 @@ function pdfComparablesBlock(full: FullShape, lang: Lang): string {
   return `<div class="section"><h2>${escapeHtml(L.comparables)}</h2>${succHtml}${failHtml}</div>`;
 }
 
-function pdfSiteAccess(full: FullShape, lang: Lang): string {
+function pdfSiteAccess(full: FullShape, lang: Locale): string {
   const L = labels(lang);
   const t = pickStr(full.site_and_access_assessment);
   if (!t) return '';
   return `<div class="section"><h2><span class="head-mark">■</span> ${escapeHtml(L.siteAccess)}</h2><div class="prose">${proseToHtml(t)}</div></div>`;
 }
 
-function pdfKeyEvidencePoints(full: FullShape, lang: Lang): string {
+function pdfKeyEvidencePoints(full: FullShape, lang: Locale): string {
   const L = labels(lang);
   const pts = pickStrArr(full.key_evidence_points).filter((s) => s.trim().length > 0);
   if (!pts.length) return '';
@@ -764,7 +1028,7 @@ function pdfKeyEvidencePoints(full: FullShape, lang: Lang): string {
   return `<div class="section"><h2><span class="head-mark">■</span> ${escapeHtml(L.evidencePoints)}</h2><div class="list">${items}</div></div>`;
 }
 
-function pdfAlternativeCorridors(full: FullShape, lang: Lang): string {
+function pdfAlternativeCorridors(full: FullShape, lang: Locale): string {
   const L = labels(lang);
   const corridors = Array.isArray(full.alternative_corridors) ? full.alternative_corridors : [];
   if (!corridors.length) return '';
@@ -812,16 +1076,13 @@ function generatePdfHtml(input: {
   business_type: string | null;
   headline: string;
   full: FullShape;
-  lang: Lang;
+  lang: Locale;
   marketData?: Record<string, unknown> | null;
   cjkFontDataUri?: string | null;
 }): string {
   const { location, business_type, headline, full, lang, marketData = null, cjkFontDataUri: cjkUri = null } = input;
   const L = labels(lang);
-  const dateStr =
-    lang === 'zh'
-      ? new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
-      : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const dateStr = new Date().toLocaleDateString(LOCALE_TAG[lang], { year: 'numeric', month: 'long', day: 'numeric' });
 
   const title = pickStr(full.report_title) || headline;
 
@@ -836,7 +1097,7 @@ function generatePdfHtml(input: {
     : '';
 
   return `<!DOCTYPE html>
-<html lang="${lang}">
+<html lang="${LOCALE_TAG[lang]}">
 <head>
   <meta charset="UTF-8">
   <style>
@@ -1048,19 +1309,20 @@ function generatePdfHtml(input: {
     ${(() => {
       const narr = (marketData && typeof marketData === 'object'
         ? (marketData as Record<string, unknown>).demographic_narrative
-        : null) as { paragraph_zh?: string; paragraph_en?: string } | null;
+        : null) as { paragraph_zh?: string; paragraph_en?: string; paragraph_es?: string } | null;
       const claudePara =
         narr && typeof narr === 'object'
-          ? lang === 'zh'
-            ? (narr.paragraph_zh || '').trim()
-            : (narr.paragraph_en || '').trim()
+          ? demographicNarrativeParagraph(
+              { paragraph_zh: narr.paragraph_zh ?? '', paragraph_en: narr.paragraph_en ?? '', paragraph_es: narr.paragraph_es },
+              lang,
+            ).trim()
           : '';
       const hasLlm = !!pickStr(full.demographic_profile);
       if (!claudePara && !hasLlm) return '';
       const claudeBlock = claudePara
         ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:12px;">
              <div style="font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#1d4ed8;margin-bottom:6px;">
-               ${lang === 'zh' ? '人口与消费力数据简报 · ACS B03002/B19001/B15003' : 'Demographics & spending brief · ACS B03002/B19001/B15003'}
+               ${escapeHtml(L.demographicBrief)}
              </div>
              ${proseToHtml(claudePara)}
            </div>`
@@ -1168,7 +1430,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   await ensureRuntimeConfig();
   const { id } = await params;
   const url = new URL(req.url);
-  const lang: Lang = url.searchParams.get('lang') === 'zh' ? 'zh' : 'en';
+  // Both paths: the report row's stored language (en / zh / es) unless ?lang= overrides it.
+  const langParam = url.searchParams.get('lang');
+  const resolveLang = (stored: unknown): Locale =>
+    langParam ? toLocale(langParam, toLocale(stored)) : toLocale(stored);
+  // Legacy path language; provisional (from ?lang= only) until the report row is loaded.
+  let lang: Locale = resolveLang(null);
   // Allow ?debug=1 to bypass auth gate locally and emit detailed error JSON.
   const debug = url.searchParams.get('debug') === '1' && process.env.NODE_ENV !== 'production';
   const t0 = Date.now();
@@ -1183,16 +1450,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       if (req.headers.get('x-iq-pdf-probe') === '1') {
         return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
       }
-      const bytes = await renderReportPdf({ reportId: id, baseUrl: resolvePrintBaseUrl(req), fixture });
+      const bytes = await renderReportPdf({ reportId: id, baseUrl: resolvePrintBaseUrl(req), fixture, lang: langParam ? toLocale(langParam) : null });
       console.log(`[api/iq/report/pdf] fixture=${fixture} bytes=${bytes.length} elapsed_ms=${Date.now() - t0}`);
       return pdfResponse(bytes, `RestaurantIQ-Report-${fixture}.pdf`);
     }
 
-    const fontPromise = lang === 'zh' ? loadCjkFontDataUri() : Promise.resolve(null);
     const report = await iqGetReport(id);
     if (!report) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
+    lang = resolveLang(report.language);
+    // The CJK subset is only needed for Chinese output (zh-only branch by design).
+    const fontPromise = lang === 'zh' ? loadCjkFontDataUri() : Promise.resolve(null);
 
     if (!report.paid && !debug) {
       return NextResponse.json({ error: 'Report not paid' }, { status: 403 });
@@ -1206,19 +1475,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
       }
       const baseUrl = resolvePrintBaseUrl(req);
-      console.log(`[api/iq/report/pdf] start id=${id} path=print base=${baseUrl} on=${isVercelServerless() ? 'vercel' : 'local'}`);
-      const bytes = await renderReportPdf({ reportId: id, baseUrl });
+      const printLang = lang;
+      console.log(`[api/iq/report/pdf] start id=${id} path=print lang=${printLang} base=${baseUrl} on=${isVercelServerless() ? 'vercel' : 'local'}`);
+      const bytes = await renderReportPdf({ reportId: id, baseUrl, lang: printLang });
       console.log(`[api/iq/report/pdf] done id=${id} path=print bytes=${bytes.length} elapsed_ms=${Date.now() - t0}`);
       return pdfResponse(bytes, `RestaurantIQ-Report-${id.slice(0, 8)}-360.pdf`);
     }
 
     const full = (report.full_report_json || {}) as FullShape;
     if (!hasExportableFullReport(full)) {
-      const msg =
-        lang === 'zh'
-          ? '完整报告尚未生成或内容过短，请先在页面上等待「完整报告」生成完成后再下载 PDF。'
-          : 'Full report is not ready yet. Wait for on-page full report generation to finish, then download PDF.';
-      return NextResponse.json({ error: msg, code: 'REPORT_NOT_READY' }, { status: 422 });
+      return NextResponse.json({ error: labels(lang).notReady, code: 'REPORT_NOT_READY' }, { status: 422 });
     }
 
     // Readiness probe from the report page (see ReportActions): all gates above
@@ -1266,7 +1532,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       timeout: 45_000,
     });
 
-    const suffix = lang === 'zh' ? '-zh' : '';
+    const suffix = lang === 'en' ? '' : `-${lang}`;
     const filename = `RestaurantIQ-Report-${id.slice(0, 8)}${suffix}.pdf`;
 
     console.log(

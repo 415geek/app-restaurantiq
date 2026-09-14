@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { type Locale, pick } from '@/lib/i18n/locale';
 
 /** Five-tier lease decision — product-facing (not legacy go/caution/no). */
 export const decisionTierSchema = z.enum([
@@ -66,48 +67,54 @@ export const riskAuditFullSchema = riskAuditPreviewSchema.extend({
 export type RiskAuditPreview = z.infer<typeof riskAuditPreviewSchema>;
 export type RiskAuditFull = z.infer<typeof riskAuditFullSchema>;
 
-export type IqLocale = 'en' | 'zh';
+/** @deprecated Use `Locale` from `@/lib/i18n/locale`; kept as an alias for existing imports. */
+export type IqLocale = Locale;
 
-const DECISION_TIER_COPY: Record<DecisionTier, Record<IqLocale, { label: string; desc: string }>> = {
+const DECISION_TIER_COPY: Record<DecisionTier, Record<Locale, { label: string; desc: string }>> = {
   strong_go: {
     en: { label: 'Strong Go', desc: 'Strong fit — proceed toward lease diligence.' },
     zh: { label: '强烈推荐', desc: '匹配度高，可推进租约尽调。' },
+    es: { label: 'Adelante con confianza', desc: 'Encaje sólido: avance hacia la diligencia debida del contrato.' },
   },
   go_with_conditions: {
     en: { label: 'Go with Conditions', desc: 'Viable only if cost, menu, and ops constraints are met.' },
     zh: { label: '有条件可做', desc: '满足租金、菜单与运营约束后再签。' },
+    es: { label: 'Adelante con condiciones', desc: 'Viable solo si se cumplen las condiciones de costo, menú y operación.' },
   },
   need_more_data: {
     en: { label: 'Need More Data', desc: 'Add rent, size, or lease terms before signing.' },
     zh: { label: '需补充数据', desc: '请补充租金、面积或租约条款后再决策。' },
+    es: { label: 'Faltan datos', desc: 'Agregue renta, superficie o términos del contrato antes de firmar.' },
   },
   high_risk: {
     en: { label: 'High Risk', desc: 'Material downside — avoid signing without renegotiation.' },
     zh: { label: '高风险', desc: '下行风险显著，未重谈条件前不建议签。' },
+    es: { label: 'Riesgo alto', desc: 'Riesgo a la baja importante: no firme sin renegociar.' },
   },
   no_go: {
     en: { label: 'No Go', desc: 'Not recommended for this concept at this site.' },
     zh: { label: '不建议', desc: '该址与当前业态组合不建议推进。' },
+    es: { label: 'No recomendado', desc: 'No se recomienda este concepto en esta ubicación.' },
   },
 };
 
-const LAYER_LABELS: Record<ScoreLayerId, Record<IqLocale, string>> = {
-  location_base: { en: 'Location base', zh: '位置基础分' },
-  cuisine_fit: { en: 'Cuisine fit', zh: '业态匹配' },
-  competition_pressure: { en: 'Competition pressure', zh: '竞争压力' },
-  revenue_potential: { en: 'Revenue potential', zh: '营收潜力' },
-  cost_pressure: { en: 'Cost pressure', zh: '成本压力' },
-  success_probability: { en: 'Success probability', zh: '成功概率' },
+const LAYER_LABELS: Record<ScoreLayerId, Record<Locale, string>> = {
+  location_base: { en: 'Location base', zh: '位置基础分', es: 'Base de ubicación' },
+  cuisine_fit: { en: 'Cuisine fit', zh: '业态匹配', es: 'Encaje del concepto' },
+  competition_pressure: { en: 'Competition pressure', zh: '竞争压力', es: 'Presión competitiva' },
+  revenue_potential: { en: 'Revenue potential', zh: '营收潜力', es: 'Potencial de ingresos' },
+  cost_pressure: { en: 'Cost pressure', zh: '成本压力', es: 'Presión de costos' },
+  success_probability: { en: 'Success probability', zh: '成功概率', es: 'Probabilidad de éxito' },
 };
 
-const RADAR_LABELS: Record<string, Record<IqLocale, string>> = {
-  location_potential: { en: 'Location potential', zh: '位置潜力' },
-  cuisine_match: { en: 'Cuisine match', zh: '业态匹配' },
-  competition_pressure: { en: 'Competition pressure', zh: '竞争压力' },
-  spending_power_match: { en: 'Spending power', zh: '消费力匹配' },
-  delivery_potential: { en: 'Delivery potential', zh: '外卖潜力' },
-  cost_pressure: { en: 'Cost pressure', zh: '成本压力' },
-  success_probability: { en: 'Success probability', zh: '成功概率' },
+const RADAR_LABELS: Record<string, Record<Locale, string>> = {
+  location_potential: { en: 'Location potential', zh: '位置潜力', es: 'Potencial de la ubicación' },
+  cuisine_match: { en: 'Cuisine match', zh: '业态匹配', es: 'Encaje del concepto' },
+  competition_pressure: { en: 'Competition pressure', zh: '竞争压力', es: 'Presión competitiva' },
+  spending_power_match: { en: 'Spending power', zh: '消费力匹配', es: 'Poder adquisitivo' },
+  delivery_potential: { en: 'Delivery potential', zh: '外卖潜力', es: 'Potencial de entrega a domicilio' },
+  cost_pressure: { en: 'Cost pressure', zh: '成本压力', es: 'Presión de costos' },
+  success_probability: { en: 'Success probability', zh: '成功概率', es: 'Probabilidad de éxito' },
 };
 
 export function parseDecisionTier(raw: unknown): DecisionTier | undefined {
@@ -115,17 +122,17 @@ export function parseDecisionTier(raw: unknown): DecisionTier | undefined {
   return r.success ? r.data : undefined;
 }
 
-export function decisionTierDisplay(tier: DecisionTier | undefined, lang: IqLocale) {
+export function decisionTierDisplay(tier: DecisionTier | undefined, lang: Locale) {
   if (!tier) return null;
   return DECISION_TIER_COPY[tier][lang];
 }
 
-export function layerLabel(id: string, lang: IqLocale): string {
+export function layerLabel(id: string, lang: Locale): string {
   const key = id as ScoreLayerId;
   return LAYER_LABELS[key]?.[lang] ?? id;
 }
 
-export function radarLabel(key: string, lang: IqLocale): string {
+export function radarLabel(key: string, lang: Locale): string {
   return RADAR_LABELS[key]?.[lang] ?? key.replace(/_/g, ' ');
 }
 
@@ -189,10 +196,12 @@ export function scoreBarColorHex(score: number, higherIsWorse: boolean): string 
   return '#fb7185'; // rose-400
 }
 
-export function scoreLayerFootnote(lang: IqLocale): string {
-  return lang === 'zh'
-    ? '条形长度与右侧分数一致（0–100）。竞争压力、成本压力：分数越高表示压力越大，颜色反映压力强弱（高分偏红、低分偏绿）。'
-    : 'Bar length matches the score (0–100). For competition/cost pressure, higher scores mean more pressure; color shows intensity (high = red, low = green).';
+export function scoreLayerFootnote(lang: Locale): string {
+  return pick(lang, {
+    en: 'Bar length matches the score (0–100). For competition and cost pressure, a higher score means more pressure; color shows intensity (high = red, low = green).',
+    zh: '条形长度与右侧分数一致（0–100）。竞争压力、成本压力：分数越高表示压力越大，颜色反映压力强弱（高分偏红、低分偏绿）。',
+    es: 'La longitud de la barra coincide con el puntaje (0–100). En presión competitiva y presión de costos, un puntaje más alto significa más presión; el color indica la intensidad (alto = rojo, bajo = verde).',
+  });
 }
 
 /** Build preview object from flat layer scores when LLM returns legacy shape. */
@@ -237,8 +246,10 @@ export function normalizeRiskAuditFromFull(full: Record<string, unknown>): RiskA
   };
 }
 
-export function productPositioningLine(lang: IqLocale): string {
-  return lang === 'zh'
-    ? '餐饮选址风险审计 · 签 lease 前用数据算清能不能活'
-    : 'Location Risk Audit · Know if this site can work before you sign the lease';
+export function productPositioningLine(lang: Locale): string {
+  return pick(lang, {
+    en: 'Location Risk Audit · Know whether this site can work before you sign the lease',
+    zh: '餐饮选址风险审计 · 签 lease 前用数据算清能不能活',
+    es: 'Auditoría de riesgo de ubicación · Sepa si este local puede funcionar antes de firmar el contrato',
+  });
 }

@@ -6,7 +6,10 @@
  *   - no empty <td>
  *   - PDF between 50 KB and 5 MB
  *
- * Usage: npx tsx scripts/smoke-print.ts [--base http://localhost:3111] [--fixture millbrae]
+ *   - the page is monolingual: no CJK on English / Spanish pages, no untranslated
+ *     English sentences on Chinese pages (beyond the allowed subtitles / brand)
+ *
+ * Usage: npx tsx scripts/smoke-print.ts [--base http://localhost:3111] [--fixture millbrae] [--lang en|zh|es]
  * Requires a running dev server (npx next dev -p 3111).
  */
 import { execSync } from 'node:child_process';
@@ -21,12 +24,20 @@ const argOf = (k: string, d: string) => {
 };
 const BASE = argOf('--base', process.env.SMOKE_BASE_URL ?? 'http://localhost:3111');
 const FIXTURE = argOf('--fixture', 'millbrae');
+/** Report language rendered via `?lang=` (labels + narratives); default English. */
+const LANG = (['en', 'zh', 'es'] as const).find((l) => l === argOf('--lang', 'en')) ?? 'en';
 const OUT = path.join(process.cwd(), 'qa', 'out');
+/** Localized kicker of page 15 (总结与建议 / Summary / Conclusiones y recomendaciones). */
+const SUMMARY_KICKER: Record<typeof LANG, RegExp> = { zh: /总结与建议/, en: /\bSummary\b/, es: /Conclusiones y recomendaciones/ };
 /** 14 analysis pages + 总结与建议 (page 15). */
 const EXPECTED_PAGES = 15; // numbered analysis pages (h1.action-title)
 const EXPECTED_PDF_PAGES = EXPECTED_PAGES + 1; // + unnumbered cover page
-/** Customer-facing text must not leak engine ids (研发提示词 wording rule). */
-const JARGON_RE = /\b(walk10|drive5|drive10|drive15|coverage_ratio|cluster_score|Huff|HHI|P25|P75|CapEx)\b|\bL[1-4]\b|β|置信度/;
+/** Customer-facing text must not leak engine ids (研发提示词 wording rule) in any language. */
+const JARGON_RE = /\b(walk10|drive5|drive10|drive15|coverage_ratio|occupancy_cost_ratio|cluster_score|Huff|HHI|P25|P75|CapEx|CONDITIONAL_GO|NO_GO|text_zh|text_en|label_zh)\b|\bL[1-4]\b|\bD1[0-2]\b(?= (ok|partial|failed))|β|α|置信度/;
+/** CJK ideographs + CJK punctuation / fullwidth forms. */
+const CJK_RE = /[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uff00-\uffef]/g;
+/** Five or more consecutive Latin words = an untranslated English sentence on a Chinese page. */
+const LATIN_SENTENCE_RE = /\b[A-Za-z][a-z]+(?: [A-Za-z][a-z]+){4,}\b/g;
 
 function findChrome(): string {
   const env = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH;
@@ -151,9 +162,9 @@ const PAGE_FILL_JS = `Array.from(document.querySelectorAll('section.page')).map(
 
 async function main() {
   await fs.mkdir(OUT, { recursive: true });
-  const url = `${BASE}/print/${FIXTURE}?fixture=${FIXTURE}`;
+  const url = `${BASE}/print/${FIXTURE}?fixture=${FIXTURE}&lang=${LANG}`;
   const exe = findChrome();
-  console.log(`[smoke-print] chromium=${exe}`);
+  console.log(`[smoke-print] chromium=${exe} lang=${LANG}`);
   console.log(`[smoke-print] url=${url}`);
   const launchArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'];
   // Sandboxes that only reach the internet through an egress proxy: let Chromium
@@ -217,7 +228,23 @@ async function main() {
     assert('no_cost_line', !/报告成本|成本 \$0\.\d{3}/.test(bodyText), '成本 column / per-report cost line absent');
     assert('no_source_count_title', !/个数据源中 \d+ 个完整/.test(bodyText), '"N 个数据源中 M 个完整" absent');
     const titleP15 = titles[14] ?? '';
-    assert('page_15_is_summary', /总结与建议/.test(bodyText) && titleP15.length > 0, `page 15 title: "${titleP15}"`);
+    const kickerP15 = (await page.evaluate(`(document.querySelector('section.page-15 .kicker')?.textContent || '').trim()`)) as string;
+    assert('page_15_is_summary', SUMMARY_KICKER[LANG].test(kickerP15) && titleP15.length > 0, `page 15 kicker: "${kickerP15}" · title: "${titleP15}"`);
+    assert('document_lang', ((await page.evaluate(`document.querySelector('main.report')?.getAttribute('data-lang') || ''`)) as string) === LANG, `main.report[data-lang] = ${LANG}`);
+
+    // 3c) monolingual page: en / es carry no CJK; zh carries no untranslated English sentences.
+    // Competitor names and the schematic map carry place names from the data (any script), so they are excluded.
+    const scriptText = (await page.evaluate(`(() => { const b = document.body.cloneNode(true); b.querySelectorAll('script, style, noscript, template, .trade-map, .comp-name, .page-foot, .cover-page-address, .cover-value, figcaption').forEach((e) => e.remove()); return b.textContent || ''; })()`)) as string;
+    if (LANG === 'zh') {
+      // allowed English: the per-page subtitle, "· English" secondary labels, brand lines, addresses, the verdict badge word
+      const zhText = (await page.evaluate(`(() => { const b = document.body.cloneNode(true); b.querySelectorAll('script, style, noscript, template, .trade-map, .comp-name, .page-foot, .cover-page-address, .cover-value, figcaption, .subtitle-en, .th-en, .kicker, .verdict-en, .comp-name-en, .brand-sub, .brand-name, .cover-page-sub, .cover-label, .cover-page-kicker, .cover-page-meta-v, .meta-table, .muted, .h2, .panel-title, .key-label, .chip, .map-figure-legend').forEach((e) => e.remove()); return b.textContent || ''; })()`)) as string;
+      const sentences = [...new Set(zhText.match(LATIN_SENTENCE_RE) ?? [])];
+      assert('no_foreign_script', sentences.length === 0, sentences.length ? `English sentences on the Chinese page: ${sentences.slice(0, 5).join(' | ')}` : 'no untranslated English sentences');
+    } else {
+      const cjk = scriptText.match(CJK_RE) ?? [];
+      const samples = [...new Set((scriptText.match(/[^\n]{0,24}[\u3400-\u9fff][^\n]{0,24}/g) ?? []).map((x) => x.trim()))];
+      assert('no_foreign_script', cjk.length === 0, cjk.length ? `${cjk.length} CJK chars on the ${LANG} page: ${samples.slice(0, 6).join(' | ')}` : `no CJK on the ${LANG} page`);
+    }
 
     // 4) contrast (text nodes incl. SVG <text>; effective background resolved through transparent ancestors)
     const violations = (await page.evaluate(CONTRAST_JS)) as ContrastViolation[];
@@ -242,7 +269,7 @@ async function main() {
     // 6) PDF
     await page.emulateMediaType('print');
     const pdf = await page.pdf({ format: 'Letter', printBackground: true, preferCSSPageSize: true, timeout: 60_000 });
-    const pdfPath = path.join(OUT, `print-${FIXTURE}.pdf`);
+    const pdfPath = path.join(OUT, LANG === 'zh' ? `print-${FIXTURE}.pdf` : `print-${FIXTURE}-${LANG}.pdf`);
     await fs.writeFile(pdfPath, pdf);
     const kb = pdf.length / 1024;
     assert('pdf_size', pdf.length > 50 * 1024 && pdf.length < 5 * 1024 * 1024, `${kb.toFixed(1)} KB → ${pdfPath}`);

@@ -9,6 +9,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { iqGetReport } from '@/lib/funnel/iq-repository';
+import { isLocale, toLocale } from '@/lib/i18n/locale';
 import { reportModelSchema, type ReportModel } from '../model/schema';
 
 const FIXTURE_RE = /^[a-z0-9_-]{1,40}$/;
@@ -49,6 +50,12 @@ function coerceModel(raw: unknown, label: string): ReportModel | null {
   return m;
 }
 
+/**
+ * Merge the stored narrative_json into the model. `narrative_json.__lang`
+ * (written by generateReport360) records the language the narratives were
+ * generated in; it lands on `meta.narrative_language` so the renderer can fall
+ * back to the template when the requested report language differs.
+ */
 export function mergeNarrative(model: ReportModel, narrativeJson: Record<string, unknown> | null | undefined): ReportModel {
   if (!narrativeJson) return model;
   // Accept either { page_1: {...} } or { pages: { page_1: {...} } }.
@@ -59,7 +66,9 @@ export function mergeNarrative(model: ReportModel, narrativeJson: Record<string,
       merged[k] = { title: v.title, body: v.body, refs: Array.isArray(v.refs) ? v.refs.filter((r): r is string => typeof r === 'string') : [], provider: v.provider, guard: v.guard };
     }
   }
-  return { ...model, narrative: merged };
+  const stamped = narrativeJson.__lang ?? src.__lang;
+  const narrative_language = isLocale(stamped) ? stamped : toLocale(model.meta.language);
+  return { ...model, meta: { ...model.meta, narrative_language }, narrative: merged };
 }
 
 export interface LoadedPrintModel {

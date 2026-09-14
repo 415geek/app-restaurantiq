@@ -3,40 +3,75 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Report360Panel } from '@/components/iq/Report360Panel';
+import type { Locale } from '@/lib/i18n/locale';
+import { withLang } from '@/lib/i18n/resolve';
 
 type Props = {
   reportId: string;
   isLinkedToUser: boolean;
-  lang?: 'en' | 'zh';
+  lang?: Locale;
   isPaid?: boolean;
 };
 
-const translations = {
+type Copy = {
+  downloadTitle: string;
+  downloadDesc: string;
+  downloadBtn: string;
+  downloadingBtn: string;
+  downloadTip: string;
+  printFallbackTitle: string;
+  printFallbackDesc: string;
+  printFallbackBtn: string;
+  pdfError: string;
+  pdfNotReady: string;
+  pdfTimeout: string;
+  purchaseRequired: string;
+  reportNotFound: string;
+  regenTitle: string;
+  regenDesc: string;
+  regenBtn: string;
+  regenBusy: string;
+  regenFailed: string;
+  regenTimeout: string;
+  printDialogFailed: string;
+  savedTitle: string;
+  savedDesc: string;
+  goToDashboard: string;
+  saveTitle: string;
+  saveDesc: string;
+  createAccount: string;
+  signIn: string;
+};
+
+const translations: Record<Locale, Copy> = {
   en: {
-    downloadTitle: 'Download Formal Report',
-    downloadDesc:
-      'Server-generated PDF (A4) with tables and branding — best for sharing, printing, and archives.',
+    downloadTitle: 'Download the formal report',
+    downloadDesc: 'Server-generated PDF (A4) with tables and branding — best for sharing, printing, and your records.',
     downloadBtn: 'Download PDF',
     downloadingBtn: 'Generating PDF…',
-    downloadTip:
-      'If nothing downloads after ~60s or you see an error, use Print below and choose “Save as PDF”.',
+    downloadTip: 'If nothing downloads after ~60s or you see an error, use Print below and choose “Save as PDF”.',
     printFallbackTitle: 'Print / preview',
     printFallbackDesc: 'Opens the light print edition (cover + 15 pages); use your browser’s print dialog and choose “Save as PDF”.',
     printFallbackBtn: 'Print / Save as PDF',
-    pdfError: 'Could not generate PDF. Try Print / Save as PDF instead.',
-    regenTitle: 'Professional depth version',
-    regenDesc:
-      'Re-run with full market enrichment and McKinsey partner evidence rules (3–5 min). Use after a fast first pass.',
+    pdfError: 'Could not generate the PDF. Try Print / Save as PDF instead.',
+    pdfNotReady: 'The full report is not ready yet.',
+    pdfTimeout: 'PDF generation timed out. Retry, or use Print / Save as PDF.',
+    purchaseRequired: 'Purchase is required to download the PDF.',
+    reportNotFound: 'Report not found.',
+    regenTitle: 'Professional-depth edition',
+    regenDesc: 'Re-run with full market enrichment and McKinsey partner-level evidence rules (3–5 min). Use it after a fast first pass.',
     regenBtn: 'Regenerate professional report',
     regenBusy: 'Regenerating…',
-    regenFailed: 'Regeneration failed. Please retry in a moment.',
-    savedTitle: 'Report Saved',
-    savedDesc: 'This report has been saved to your account.',
-    goToDashboard: 'Go to Dashboard',
-    saveTitle: 'Save This Report',
-    saveDesc: 'Create an account to save reports and access them anytime.',
-    createAccount: 'Create Free Account',
-    signIn: 'Sign In',
+    regenFailed: 'Regeneration failed. Please try again in a moment.',
+    regenTimeout: 'Generation timed out. Please try again later.',
+    printDialogFailed: 'Could not open the print dialog. Please try again.',
+    savedTitle: 'Report saved',
+    savedDesc: 'This report is saved to your account.',
+    goToDashboard: 'Go to dashboard',
+    saveTitle: 'Save this report',
+    saveDesc: 'Create an account to save your reports and come back to them anytime.',
+    createAccount: 'Create a free account',
+    signIn: 'Sign in',
   },
   zh: {
     downloadTitle: '下载正式报告',
@@ -48,12 +83,17 @@ const translations = {
     printFallbackDesc: '打开浅色打印版（封面 + 15 页），再用浏览器打印并选择「另存为 PDF」。',
     printFallbackBtn: '打印 / 另存为 PDF',
     pdfError: '无法生成 PDF，请改用打印并另存为 PDF。',
+    pdfNotReady: '完整报告尚未就绪，请等待生成完成。',
+    pdfTimeout: 'PDF 生成超时，请重试或使用打印另存为 PDF。',
+    purchaseRequired: '需完成购买后才能下载正式 PDF。',
+    reportNotFound: '找不到该报告。',
     regenTitle: '升级为专业深度版',
-    regenDesc:
-      '将重新拉取完整市场数据并按麦肯锡合伙人证据标准生成（约 3–5 分钟）。适合在快速版生成后升级。',
+    regenDesc: '将重新拉取完整市场数据并按麦肯锡合伙人证据标准生成（约 3–5 分钟）。适合在快速版生成后升级。',
     regenBtn: '重新生成专业深度报告',
     regenBusy: '正在重新生成…',
     regenFailed: '重新生成失败，请稍后重试。',
+    regenTimeout: '生成超时，请稍后重试。',
+    printDialogFailed: '无法打开打印对话框，请重试。',
     savedTitle: '报告已保存',
     savedDesc: '此报告已保存到您的账户中。',
     goToDashboard: '前往控制台',
@@ -62,13 +102,38 @@ const translations = {
     createAccount: '免费注册',
     signIn: '登录',
   },
+  es: {
+    downloadTitle: 'Descargar el informe formal',
+    downloadDesc: 'PDF generado en el servidor (A4) con tablas y marca; ideal para compartir, imprimir y archivar.',
+    downloadBtn: 'Descargar PDF',
+    downloadingBtn: 'Generando PDF…',
+    downloadTip: 'Si no se descarga nada después de ~60 s o ves un error, usa Imprimir abajo y elige “Guardar como PDF”.',
+    printFallbackTitle: 'Imprimir / vista previa',
+    printFallbackDesc: 'Abre la edición clara para impresión (portada + 15 páginas); usa el diálogo de impresión del navegador y elige “Guardar como PDF”.',
+    printFallbackBtn: 'Imprimir / Guardar como PDF',
+    pdfError: 'No se pudo generar el PDF. Prueba con Imprimir / Guardar como PDF.',
+    pdfNotReady: 'El informe completo aún no está listo.',
+    pdfTimeout: 'La generación del PDF tardó demasiado. Reintenta o usa Imprimir / Guardar como PDF.',
+    purchaseRequired: 'Necesitas completar la compra para descargar el PDF.',
+    reportNotFound: 'No se encontró el informe.',
+    regenTitle: 'Edición profesional a fondo',
+    regenDesc: 'Vuelve a ejecutar con enriquecimiento completo de mercado y reglas de evidencia de nivel socio de McKinsey (3–5 min). Úsala después de una primera pasada rápida.',
+    regenBtn: 'Volver a generar el informe profesional',
+    regenBusy: 'Generando de nuevo…',
+    regenFailed: 'La regeneración falló. Inténtalo de nuevo en un momento.',
+    regenTimeout: 'La generación tardó demasiado. Inténtalo de nuevo más tarde.',
+    printDialogFailed: 'No se pudo abrir el diálogo de impresión. Inténtalo de nuevo.',
+    savedTitle: 'Informe guardado',
+    savedDesc: 'Este informe se guardó en tu cuenta.',
+    goToDashboard: 'Ir al panel',
+    saveTitle: 'Guarda este informe',
+    saveDesc: 'Crea una cuenta para guardar tus informes y consultarlos cuando quieras.',
+    createAccount: 'Crear cuenta gratis',
+    signIn: 'Iniciar sesión',
+  },
 };
 
-async function parsePdfErrorResponse(
-  res: Response,
-  lang: 'en' | 'zh',
-  fallback: string,
-): Promise<string> {
+async function parsePdfErrorResponse(res: Response, t: Copy): Promise<string> {
   if (res.status === 422) {
     try {
       const j = (await res.json()) as { error?: string };
@@ -76,15 +141,9 @@ async function parsePdfErrorResponse(
     } catch {
       /* ignore */
     }
-    return lang === 'zh'
-      ? '完整报告尚未就绪，请等待生成完成。'
-      : 'Full report is not ready yet.';
+    return t.pdfNotReady;
   }
-  if (res.status === 504) {
-    return lang === 'zh'
-      ? 'PDF 生成超时，请重试或使用打印另存为 PDF。'
-      : 'PDF generation timed out. Retry or use Print / Save as PDF.';
-  }
+  if (res.status === 504) return t.pdfTimeout;
   try {
     const j = (await res.json()) as { error?: string; detail?: string; message?: string };
     const msg = j.detail || j.message || j.error;
@@ -92,7 +151,7 @@ async function parsePdfErrorResponse(
   } catch {
     /* ignore */
   }
-  return fallback;
+  return t.pdfError;
 }
 
 export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = false }: Props) {
@@ -108,6 +167,7 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
   }, [isLinkedToUser]);
 
   const pdfUrl = `/api/iq/report/${encodeURIComponent(reportId)}/pdf?lang=${lang}`;
+  const printUrl = `/print/${encodeURIComponent(reportId)}?lang=${lang}`;
 
   /**
    * Mobile-safe download.
@@ -115,7 +175,7 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
    * The previous implementation fetched the PDF into a Blob and clicked a
    * synthetic <a download> — iOS Safari / WeChat / many Android WebViews
    * ignore programmatic blob downloads (nothing happens, or a blank tab), which
-   * is exactly the "PDF 无法下载" report from phone users. We now:
+   * is exactly the "PDF won't download" report from phone users. We now:
    *   1. Pre-flight the route with a HEAD-style probe (GET + Range) so we can
    *      show a readable error when the report is not paid / not ready / failed.
    *   2. Then hand the real download to the browser through a same-tab
@@ -133,15 +193,15 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
         headers: { 'x-iq-pdf-probe': '1' },
       });
       if (res.status === 403) {
-        setPdfError(lang === 'zh' ? '需完成购买后才能下载正式 PDF。' : 'Purchase is required to download the PDF.');
+        setPdfError(t.purchaseRequired);
         return;
       }
       if (res.status === 404) {
-        setPdfError(lang === 'zh' ? '找不到该报告。' : 'Report not found.');
+        setPdfError(t.reportNotFound);
         return;
       }
       if (!res.ok) {
-        setPdfError(await parsePdfErrorResponse(res, lang, t.pdfError));
+        setPdfError(await parsePdfErrorResponse(res, t));
         return;
       }
       // Probe OK (204 = report ready). Let the browser perform the download.
@@ -173,12 +233,7 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
         const j = JSON.parse(raw) as { error?: string };
         if (j.error) msg = j.error;
       } catch {
-        if (res.status === 504) {
-          msg =
-            lang === 'zh'
-              ? '生成超时，请稍后重试。'
-              : 'Generation timed out. Please try again later.';
-        }
+        if (res.status === 504) msg = t.regenTimeout;
       }
       setRegenError(msg);
     } catch (e) {
@@ -201,7 +256,7 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
       if (res.ok) {
         const j = (await res.json()) as { ready?: boolean };
         if (j.ready) {
-          window.open(`/print/${encodeURIComponent(reportId)}`, '_blank', 'noopener');
+          window.open(printUrl, '_blank', 'noopener');
           return;
         }
       }
@@ -212,7 +267,7 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
       window.print();
     } catch (err) {
       console.error('Print error:', err);
-      alert(lang === 'zh' ? '无法打开打印对话框，请重试。' : 'Failed to open print dialog. Please try again.');
+      alert(t.printDialogFailed);
     }
   };
 
@@ -298,7 +353,7 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
             <h3 className="mb-2 text-lg font-semibold text-zinc-100">{t.savedTitle}</h3>
             <p className="mb-4 text-sm text-zinc-400">{t.savedDesc}</p>
             <Link
-              href="/iq/dashboard"
+              href={withLang('/iq/dashboard', lang)}
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/80 px-5 py-2.5 font-medium text-zinc-200 transition hover:bg-zinc-800"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -316,13 +371,13 @@ export function ReportActions({ reportId, isLinkedToUser, lang = 'en', isPaid = 
             <p className="mb-4 text-sm text-zinc-400">{t.saveDesc}</p>
             <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <Link
-                href={`/sign-up?redirect_url=/iq/report/${reportId}`}
+                href={`/sign-up?redirect_url=${encodeURIComponent(withLang(`/iq/report/${reportId}`, lang))}`}
                 className="w-full rounded-xl bg-emerald-600 px-5 py-2.5 font-medium text-white transition hover:bg-emerald-500 sm:w-auto"
               >
                 {t.createAccount}
               </Link>
               <Link
-                href={`/sign-in?redirect_url=/iq/report/${reportId}`}
+                href={`/sign-in?redirect_url=${encodeURIComponent(withLang(`/iq/report/${reportId}`, lang))}`}
                 className="w-full rounded-xl border border-zinc-700 bg-zinc-800/60 px-5 py-2.5 font-medium text-zinc-200 transition hover:bg-zinc-800 sm:w-auto"
               >
                 {t.signIn}

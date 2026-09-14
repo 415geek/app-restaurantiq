@@ -10,6 +10,7 @@ import {
 import { startReportGeneration } from '@/lib/funnel/iq-report-job';
 import { kickReport360 } from '@/lib/iq/kick';
 import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
+import { isLocale, toLocale, type Locale } from '@/lib/i18n/locale';
 
 export const runtime = 'nodejs';
 /** Legacy synchronous path (language preview / un-migrated DB) can run minutes. */
@@ -29,15 +30,23 @@ export const maxDuration = 300;
  *
  * Body: `{ reportId, force?, language?, persist?, quality? }`.
  */
-function fullReportErrorMessage(lang: 'en' | 'zh', code: string): string {
-  if (code === 'FULL_REPORT_TIMEOUT') {
-    return lang === 'zh'
-      ? '生成时间较长已超时，请点击下方「重试生成」再试一次。'
-      : 'Generation timed out. Tap Retry below to try again.';
-  }
-  return lang === 'zh'
-    ? '完整报告生成失败，请点击「重试生成」或稍后刷新。'
-    : 'Full report generation failed. Tap Retry or refresh later.';
+const ERROR_COPY: Record<Locale, { timeout: string; failed: string }> = {
+  en: {
+    timeout: 'Generation timed out. Tap Retry below to try again.',
+    failed: 'Full report generation failed. Tap Retry or refresh later.',
+  },
+  zh: {
+    timeout: '生成时间较长已超时，请点击下方「重试生成」再试一次。',
+    failed: '完整报告生成失败，请点击「重试生成」或稍后刷新。',
+  },
+  es: {
+    timeout: 'La generación tardó demasiado. Toca Reintentar abajo para volver a intentarlo.',
+    failed: 'No se pudo generar el informe completo. Toca Reintentar o actualiza la página más tarde.',
+  },
+};
+
+function fullReportErrorMessage(lang: Locale, code: string): string {
+  return code === 'FULL_REPORT_TIMEOUT' ? ERROR_COPY[lang].timeout : ERROR_COPY[lang].failed;
 }
 
 /** Must match the route's maxDuration so stages can budget against it. */
@@ -46,7 +55,7 @@ const ROUTE_BUDGET_MS = 300_000;
 type Body = {
   reportId?: string;
   force?: boolean;
-  language?: 'en' | 'zh';
+  language?: Locale;
   persist?: boolean;
   /** Professional McKinsey-depth regen: fuller market context + no lean LLM shortcuts. */
   quality?: boolean;
@@ -54,7 +63,7 @@ type Body = {
 
 export async function POST(req: Request) {
   await ensureRuntimeConfig();
-  let targetLang: 'en' | 'zh' = 'en';
+  let targetLang: Locale = 'en';
   const deadline = createIqDeadline(ROUTE_BUDGET_MS);
   try {
     const { reportId, force, language, persist, quality } = (await req.json()) as Body;
@@ -77,8 +86,7 @@ export async function POST(req: Request) {
       return NextResponse.json(report.full_report_json);
     }
 
-    targetLang =
-      language === 'zh' || language === 'en' ? language : report.language === 'zh' ? 'zh' : 'en';
+    targetLang = isLocale(language) ? language : toLocale(report.language);
     const qualityMode = quality === true && !isPreview;
 
     // ── Background job (default for real generation) ─────────────────────────

@@ -12,7 +12,9 @@
  * anchors, and competitor tables come from the deterministic layer + specialists.
  */
 
+import { pick, toLocale } from '@/lib/i18n/locale';
 import { parseIqFullReport, logFullReportQuality } from '@/lib/funnel/iq-full-report-schema';
+import { LANGUAGE_INSTRUCTION } from '@/lib/funnel/iq-prompts-locationiq-v2';
 import { computeSiteMetrics, formatMetricsDigest } from './metrics';
 import { SPECIALISTS, runSpecialist, type SpecialistInput } from './specialists';
 import { completeJson } from './llm';
@@ -54,32 +56,31 @@ export function buildDecisionMatrix(
   findings: Map<string, SpecialistFinding>,
   lang: Lang,
 ): { rows: DecisionMatrixRow[]; composite: number; gaps: string[] } {
-  const zh = lang === 'zh';
   const gaps: string[] = [];
   const dims: Array<{ key: keyof typeof SCORE_WEIGHTS; label: string; score: number | null }> = [
     {
       key: 'foot_traffic',
-      label: zh ? '客流潜力' : 'Foot traffic potential',
+      label: pick(lang, { en: 'Foot traffic potential', zh: '客流潜力', es: 'Potencial de tráfico peatonal' }),
       score: pickScore(findings.get('site'), 'foot_traffic_score_100'),
     },
     {
       key: 'demographic_fit',
-      label: zh ? '人群匹配' : 'Demographic fit',
+      label: pick(lang, { en: 'Demographic fit', zh: '人群匹配', es: 'Encaje demográfico' }),
       score: pickScore(findings.get('market')),
     },
     {
       key: 'competition',
-      label: zh ? '竞争位势' : 'Competitive position',
+      label: pick(lang, { en: 'Competitive position', zh: '竞争位势', es: 'Posición competitiva' }),
       score: pickScore(findings.get('competition')),
     },
     {
       key: 'accessibility',
-      label: zh ? '可达性' : 'Accessibility',
+      label: pick(lang, { en: 'Accessibility', zh: '可达性', es: 'Accesibilidad' }),
       score: pickScore(findings.get('site'), 'accessibility_score_100'),
     },
     {
       key: 'rent_value',
-      label: zh ? '租金性价比' : 'Rent value',
+      label: pick(lang, { en: 'Rent value', zh: '租金性价比', es: 'Valor de la renta' }),
       score: pickScore(findings.get('financial')),
     },
   ];
@@ -89,9 +90,11 @@ export function buildDecisionMatrix(
     if (s == null) {
       s = 50;
       gaps.push(
-        zh
-          ? `${d.label}：对应分析师缺席，按中性 50 分计入`
-          : `${d.label}: specialist unavailable — neutral 50 applied`,
+        pick(lang, {
+          en: `${d.label}: specialist unavailable — neutral 50 applied`,
+          zh: `${d.label}：对应分析师缺席，按中性 50 分计入`,
+          es: `${d.label}: especialista no disponible; se aplicó un 50 neutral`,
+        }),
       );
     }
     const weightPct = SCORE_WEIGHTS[d.key] * 100;
@@ -108,11 +111,10 @@ export function buildDecisionMatrix(
 }
 
 export function tierFromComposite(score: number, lang: Lang): string {
-  const zh = lang === 'zh';
-  if (score >= 80) return zh ? '🟢 强烈推荐' : '🟢 Strong recommend';
-  if (score >= 60) return zh ? '🟡 值得考虑' : '🟡 Worth considering';
-  if (score >= 40) return zh ? '🟠 谨慎评估' : '🟠 High caution';
-  return zh ? '🔴 不建议' : '🔴 Avoid';
+  if (score >= 80) return pick(lang, { en: '🟢 Strong recommend', zh: '🟢 强烈推荐', es: '🟢 Muy recomendable' });
+  if (score >= 60) return pick(lang, { en: '🟡 Worth considering', zh: '🟡 值得考虑', es: '🟡 Vale la pena considerar' });
+  if (score >= 40) return pick(lang, { en: '🟠 High caution', zh: '🟠 谨慎评估', es: '🟠 Mucha cautela' });
+  return pick(lang, { en: '🔴 Avoid', zh: '🔴 不建议', es: '🔴 Evitar' });
 }
 
 function specialistBlock(f: SpecialistFinding): string {
@@ -128,25 +130,38 @@ function specialistBlock(f: SpecialistFinding): string {
 }
 
 function synthesisSystem(lang: Lang): string {
-  return lang === 'zh'
-    ? [
-        '你是选址咨询公司的合伙人，负责把专家团队的分析整合成客户可直接决策的正式报告。',
-        '铁律：',
-        '1. 决策矩阵（decision_matrix）与综合分已由系统计算，必须原样填入，禁止改动任何数值。',
-        '2. 专家的 key_findings 一条都不能丢；竞对表、风险矩阵、营收场景直接采用专家 payload（可润色文字，不可改数字）。',
-        '3. 所有章节保持「事实→影响→建议」结构；数据缺口须在 data_sources_and_disclaimer 与相应章节明示。',
-        '4. dashboard.overall_score 必须等于系统给出的综合分。',
-        '5. 输出严格 JSON，字段结构见用户消息末尾的 schema 说明；正文字段用 Markdown。',
-      ].join('\n')
-    : [
-        'You are the engagement partner at a site-selection consultancy, assembling specialist analyses into a client-ready decision report.',
-        'Hard rules:',
-        '1. The decision_matrix and composite score were computed by the system — copy them verbatim; never alter any number.',
-        '2. No specialist key_finding may be dropped; adopt competitor tables, risk matrix, and revenue scenarios directly from specialist payloads (you may polish prose, never numbers).',
-        '3. Every section keeps fact → impact → action structure; data gaps must be disclosed in data_sources_and_disclaimer and the affected sections.',
-        '4. dashboard.overall_score MUST equal the system-computed composite.',
-        '5. Output strict JSON per the schema notes at the end of the user message; section bodies are Markdown.',
-      ].join('\n');
+  return pick(lang, {
+    en: [
+      'You are the engagement partner at a site-selection consultancy, assembling specialist analyses into a client-ready decision report.',
+      'Hard rules:',
+      '1. The decision_matrix and composite score were computed by the system — copy them verbatim; never alter any number.',
+      '2. No specialist key_finding may be dropped; adopt competitor tables, risk matrix, and revenue scenarios directly from specialist payloads (you may polish prose, never numbers).',
+      '3. Every section keeps fact → impact → action structure; data gaps must be disclosed in data_sources_and_disclaimer and the affected sections.',
+      '4. dashboard.overall_score MUST equal the system-computed composite.',
+      '5. Output strict JSON per the schema notes at the end of the user message; section bodies are Markdown.',
+      `6. ${LANGUAGE_INSTRUCTION.en} Every JSON string value (titles, sections, scenario names, checklist items) must be in English; keys stay as specified.`,
+    ].join('\n'),
+    zh: [
+      '你是选址咨询公司的合伙人，负责把专家团队的分析整合成客户可直接决策的正式报告。',
+      '铁律：',
+      '1. 决策矩阵（decision_matrix）与综合分已由系统计算，必须原样填入，禁止改动任何数值。',
+      '2. 专家的 key_findings 一条都不能丢；竞对表、风险矩阵、营收场景直接采用专家 payload（可润色文字，不可改数字）。',
+      '3. 所有章节保持「事实→影响→建议」结构；数据缺口须在 data_sources_and_disclaimer 与相应章节明示。',
+      '4. dashboard.overall_score 必须等于系统给出的综合分。',
+      '5. 输出严格 JSON，字段结构见用户消息末尾的 schema 说明；正文字段用 Markdown。',
+      `6. ${LANGUAGE_INSTRUCTION.zh} 所有 JSON 字符串值使用简体中文；键名保持不变。`,
+    ].join('\n'),
+    es: [
+      'Eres el socio responsable de una consultora de selección de ubicaciones y reúnes los análisis de los especialistas en un informe de decisión listo para el cliente.',
+      'Reglas estrictas:',
+      '1. decision_matrix y el puntaje compuesto los calculó el sistema: cópialos textualmente; nunca alteres ninguna cifra.',
+      '2. No puede omitirse ningún key_finding de los especialistas; adopta las tablas de competidores, la matriz de riesgos y los escenarios de ingresos directamente de los payload de los especialistas (puedes pulir la prosa, nunca los números).',
+      '3. Cada sección mantiene la estructura hecho → impacto → acción; los vacíos de datos deben declararse en data_sources_and_disclaimer y en las secciones afectadas.',
+      '4. dashboard.overall_score DEBE ser igual al compuesto calculado por el sistema.',
+      '5. Devuelve JSON estricto según las notas de esquema al final del mensaje del usuario; los cuerpos de sección van en Markdown.',
+      `6. ${LANGUAGE_INSTRUCTION.es} Todos los valores de texto del JSON (títulos, secciones, nombres de escenarios, puntos de la lista de verificación) deben estar en español; las claves se conservan tal como se especifican.`,
+    ].join('\n'),
+  });
 }
 
 function synthesisUser(input: {
@@ -162,23 +177,41 @@ function synthesisUser(input: {
   matrixGaps: string[];
   critique?: CriticReview;
 }): string {
-  const zh = input.language === 'zh';
+  const lang = input.language;
   const parts = [
-    zh ? `地址：${input.location}` : `Address: ${input.location}`,
-    zh ? `业态：${input.businessType}` : `Concept: ${input.businessType}`,
-    zh
-      ? `免费版结论（保持连续性，不可矛盾）：${input.headline} — ${input.reason}`
-      : `Free-tier verdict (keep continuity, no contradiction): ${input.headline} — ${input.reason}`,
+    pick(lang, { en: `Address: ${input.location}`, zh: `地址：${input.location}`, es: `Dirección: ${input.location}` }),
+    pick(lang, { en: `Concept: ${input.businessType}`, zh: `业态：${input.businessType}`, es: `Concepto: ${input.businessType}` }),
+    pick(lang, {
+      en: `Free-tier verdict (keep continuity, no contradiction): ${input.headline} — ${input.reason}`,
+      zh: `免费版结论（保持连续性，不可矛盾）：${input.headline} — ${input.reason}`,
+      es: `Veredicto del nivel gratuito (mantén la continuidad, sin contradicciones): ${input.headline} — ${input.reason}`,
+    }),
     '',
     formatMetricsDigest(input.metrics, input.language),
     '',
-    zh ? '【系统计算的决策矩阵（原样填入 decision_matrix）】' : '[SYSTEM-COMPUTED DECISION MATRIX (copy into decision_matrix verbatim)]',
+    pick(lang, {
+      en: '[SYSTEM-COMPUTED DECISION MATRIX (copy into decision_matrix verbatim)]',
+      zh: '【系统计算的决策矩阵（原样填入 decision_matrix）】',
+      es: '[MATRIZ DE DECISIÓN CALCULADA POR EL SISTEMA (copiar textualmente en decision_matrix)]',
+    }),
     JSON.stringify({ rows: input.matrix, composite: input.composite, tier: tierFromComposite(input.composite, input.language), gaps: input.matrixGaps }, null, 1),
     '',
-    zh ? '【专家分析】' : '[SPECIALIST ANALYSES]',
+    pick(lang, { en: '[SPECIALIST ANALYSES]', zh: '【专家分析】', es: '[ANÁLISIS DE LOS ESPECIALISTAS]' }),
     ...input.findings.map(specialistBlock),
     '',
-    zh
+    lang === 'es'
+      ? [
+          'Campos JSON de salida (esquema del informe LocationIQ V2):',
+          'report_title, dashboard{overall_score(=compuesto), foot_traffic_index, competition_intensity, payback_months, recommendation},',
+          'executive_summary(≥250 palabras), final_verdict, trade_area_analysis(a partir del narrative del especialista de mercado),',
+          'demographic_profile, competition_landscape, site_and_access_assessment(a partir del narrative del especialista de sitio),',
+          'revenue_estimate, revenue_model{methodology(explica la triangulación), scenarios(=payload financiero; nombres Conservador/Base/Optimista), sensitivity, breakeven, monthly_costs_note},',
+          'competitors(=payload de competencia), risk_matrix(=payload de riesgo), risks, failure_scenarios(=payload de riesgo),',
+          'opportunities, differentiation_strategy, acquisition_channels, action_plan_structured(6-10 filas con owner/budget_band/success_metric/timeframe), action_plan,',
+          'comparables{success_cases, failure_cases}, decision_matrix(=matriz del sistema), key_evidence_points(≥6 con etiquetas de fuente),',
+          'confidence(Alta/Media/Baja), confidence_rationale, data_sources_and_disclaimer, alternative_corridors(cuando existan datos)',
+        ].join('\n')
+      : lang === 'zh'
       ? [
           '输出 JSON 字段（LocationIQ V2 报告 schema）：',
           'report_title, dashboard{overall_score(=综合分), foot_traffic_index, competition_intensity, payback_months, recommendation},',
@@ -204,11 +237,14 @@ function synthesisUser(input: {
   ];
 
   if (input.critique && !input.critique.passed) {
+    const issues = input.critique.critical_issues.map((s, i) => `${i + 1}. ${s}`).join('\n');
     parts.push(
       '',
-      zh
-        ? `【质检未通过——修订要求（必须逐条解决）】\n${input.critique.critical_issues.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
-        : `[CRITIC REVIEW FAILED — revision requirements (address every item)]\n${input.critique.critical_issues.map((s, i) => `${i + 1}. ${s}`).join('\n')}`,
+      pick(lang, {
+        en: `[CRITIC REVIEW FAILED — revision requirements (address every item)]\n${issues}`,
+        zh: `【质检未通过——修订要求（必须逐条解决）】\n${issues}`,
+        es: `[REVISIÓN DE CALIDAD NO APROBADA — requisitos de revisión (atiende cada punto)]\n${issues}`,
+      }),
     );
   }
   return parts.join('\n');
@@ -235,16 +271,17 @@ async function runCritic(
   composite: number,
   lang: Lang,
 ): Promise<CriticReview> {
-  const zh = lang === 'zh';
-  const system = zh
-    ? '你是报告质检官。只输出 JSON：{"passed": bool, "critical_issues": [...], "minor_issues": [...]}。critical=数字与计算指标矛盾、决策矩阵被改动、章节缺失、场景数≠3、竞对用了A/B/C占位名、风险矩阵<5行；minor=表述可改进。'
-    : 'You are the report QA reviewer. Output only JSON: {"passed": bool, "critical_issues": [...], "minor_issues": [...]}. critical = numbers contradict computed metrics, decision matrix altered, missing sections, scenario count ≠ 3, placeholder competitor names (A/B/C), risk matrix < 5 rows; minor = phrasing improvements.';
+  const system = pick(lang, {
+    en: `You are the report QA reviewer. Output only JSON: {"passed": bool, "critical_issues": [...], "minor_issues": [...]}. critical = numbers contradict computed metrics, decision matrix altered, missing sections, scenario count ≠ 3, placeholder competitor names (A/B/C), risk matrix < 5 rows, or report text not written in English; minor = phrasing improvements. ${LANGUAGE_INSTRUCTION.en}`,
+    zh: `你是报告质检官。只输出 JSON：{"passed": bool, "critical_issues": [...], "minor_issues": [...]}。critical=数字与计算指标矛盾、决策矩阵被改动、章节缺失、场景数≠3、竞对用了A/B/C占位名、风险矩阵<5行、正文未使用中文；minor=表述可改进。${LANGUAGE_INSTRUCTION.zh}`,
+    es: `Eres el revisor de calidad del informe. Devuelve solo JSON: {"passed": bool, "critical_issues": [...], "minor_issues": [...]}. critical = cifras que contradicen las métricas calculadas, matriz de decisión alterada, secciones faltantes, número de escenarios ≠ 3, nombres de competidores de relleno (A/B/C), matriz de riesgos < 5 filas, o texto del informe que no esté en español; minor = mejoras de redacción. ${LANGUAGE_INSTRUCTION.es}`,
+  });
   const user = [
-    zh ? '【计算指标（真值）】' : '[COMPUTED METRICS (ground truth)]',
+    pick(lang, { en: '[COMPUTED METRICS (ground truth)]', zh: '【计算指标（真值）】', es: '[MÉTRICAS CALCULADAS (verdad de referencia)]' }),
     formatMetricsDigest(metrics, lang),
-    zh ? '【系统决策矩阵（真值）】' : '[SYSTEM DECISION MATRIX (ground truth)]',
+    pick(lang, { en: '[SYSTEM DECISION MATRIX (ground truth)]', zh: '【系统决策矩阵（真值）】', es: '[MATRIZ DE DECISIÓN DEL SISTEMA (verdad de referencia)]' }),
     JSON.stringify({ rows: matrix, composite }),
-    zh ? '【待审报告】' : '[REPORT UNDER REVIEW]',
+    pick(lang, { en: '[REPORT UNDER REVIEW]', zh: '【待审报告】', es: '[INFORME EN REVISIÓN]' }),
     JSON.stringify(report).slice(0, 40_000),
   ].join('\n');
 
@@ -271,7 +308,7 @@ export type MultiAgentReportInput = {
   headline: string;
   reason: string;
   marketData?: Record<string, unknown>;
-  language?: Lang;
+  language?: Lang | string | null;
   reportId?: string;
 };
 
@@ -283,7 +320,7 @@ export async function runMultiAgentFullReport(
   input: MultiAgentReportInput,
 ): Promise<Record<string, unknown>> {
   const started = Date.now();
-  const language: Lang = input.language === 'zh' ? 'zh' : 'en';
+  const language: Lang = toLocale(input.language);
   const businessType = input.businessType || 'restaurant';
   const marketData = input.marketData ?? {};
 

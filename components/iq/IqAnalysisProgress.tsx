@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 
 import { useEffect, useMemo, useState } from 'react';
+import type { Locale } from '@/lib/i18n/locale';
 
 export type AnalysisProgressStage = {
   id: string;
@@ -81,40 +82,53 @@ const FREE_ANALYZE_PHASES: PhaseTarget[] = [
   { atSec: 28, pct: 85 },
 ];
 
-export function getFullReportStages(lang: 'en' | 'zh'): AnalysisProgressStage[] {
-  if (lang === 'zh') {
-    return [
-      { id: 'market', label: '采集周边竞争与客流数据' },
-      { id: 'research', label: '深化区域市场研究' },
-      { id: 'finance', label: '核算成本与营收情景' },
-      { id: 'llm', label: '撰写完整选址报告' },
-      { id: 'verify', label: '复核关键决策结论' },
-      { id: 'finalize', label: '汇总报告内容' },
-    ];
-  }
-  return [
-    { id: 'market', label: 'Gathering competition and foot-traffic signals' },
-    { id: 'research', label: 'Deepening market analysis' },
-    { id: 'finance', label: 'Modeling costs and revenue scenarios' },
-    { id: 'llm', label: 'Drafting your full site report' },
-    { id: 'verify', label: 'Reviewing key decision conclusions' },
-    { id: 'finalize', label: 'Assembling the final report' },
-  ];
+const FULL_STAGE_LABELS: Record<Locale, Record<string, string>> = {
+  en: {
+    market: 'Gathering competition and foot-traffic signals',
+    research: 'Deepening the market analysis',
+    finance: 'Modeling costs and revenue scenarios',
+    llm: 'Drafting your full site report',
+    verify: 'Reviewing the key conclusions',
+    finalize: 'Assembling the final report',
+  },
+  zh: {
+    market: '采集周边竞争与客流数据',
+    research: '深化区域市场研究',
+    finance: '核算成本与营收情景',
+    llm: '撰写完整选址报告',
+    verify: '复核关键决策结论',
+    finalize: '汇总报告内容',
+  },
+  es: {
+    market: 'Recopilando señales de competencia y tráfico peatonal',
+    research: 'Profundizando el análisis de mercado',
+    finance: 'Modelando costos y escenarios de ingresos',
+    llm: 'Redactando tu informe completo de ubicación',
+    verify: 'Revisando las conclusiones clave',
+    finalize: 'Armando el informe final',
+  },
+};
+
+const FREE_STAGE_LABELS: Record<Locale, Record<string, string>> = {
+  en: { scan: 'Scanning market data', compete: 'Analyzing the competition', risk: 'Detecting hidden risks' },
+  zh: { scan: '扫描市场与商圈数据', compete: '分析竞争格局', risk: '识别隐藏风险与评分' },
+  es: { scan: 'Escaneando datos de mercado', compete: 'Analizando la competencia', risk: 'Detectando riesgos ocultos' },
+};
+
+const BAR_COPY: Record<Locale, { progress: string; elapsed: (sec: number) => string }> = {
+  en: { progress: 'Analysis progress', elapsed: (s) => `${s}s elapsed` },
+  zh: { progress: '分析进度', elapsed: (s) => `已用时 ${s} 秒` },
+  es: { progress: 'Progreso del análisis', elapsed: (s) => `${s} s transcurridos` },
+};
+
+export function getFullReportStages(lang: Locale): AnalysisProgressStage[] {
+  const l = FULL_STAGE_LABELS[lang];
+  return ['market', 'research', 'finance', 'llm', 'verify', 'finalize'].map((id) => ({ id, label: l[id] }));
 }
 
-export function getFreeAnalyzeStages(lang: 'en' | 'zh'): AnalysisProgressStage[] {
-  if (lang === 'zh') {
-    return [
-      { id: 'scan', label: '扫描市场与商圈数据' },
-      { id: 'compete', label: '分析竞争格局' },
-      { id: 'risk', label: '识别隐藏风险与评分' },
-    ];
-  }
-  return [
-    { id: 'scan', label: 'Scanning market data' },
-    { id: 'compete', label: 'Analyzing competition' },
-    { id: 'risk', label: 'Detecting hidden risks' },
-  ];
+export function getFreeAnalyzeStages(lang: Locale): AnalysisProgressStage[] {
+  const l = FREE_STAGE_LABELS[lang];
+  return ['scan', 'compete', 'risk'].map((id) => ({ id, label: l[id] }));
 }
 
 function stageActiveIndex(percent: number, stageCount: number): number {
@@ -129,7 +143,7 @@ type BarProps = {
   stages: AnalysisProgressStage[];
   percent: number;
   elapsedSec?: number;
-  lang: 'en' | 'zh';
+  lang: Locale;
   title?: string;
   subtitle?: string;
   /** Server-reported checklist row; overrides the percent-derived guess. */
@@ -156,7 +170,7 @@ export function IqAnalysisProgressBar({
 
   const elapsedLabel = useMemo(() => {
     if (elapsedSec == null) return null;
-    return lang === 'zh' ? `已用时 ${elapsedSec} 秒` : `${elapsedSec}s elapsed`;
+    return BAR_COPY[lang].elapsed(elapsedSec);
   }, [elapsedSec, lang]);
 
   return (
@@ -168,7 +182,7 @@ export function IqAnalysisProgressBar({
 
       <div className="mt-8">
         <div className="mb-2 flex items-center justify-between text-xs text-zinc-500">
-          <span>{lang === 'zh' ? '分析进度' : 'Analysis progress'}</span>
+          <span>{BAR_COPY[lang].progress}</span>
           <span className="tabular-nums font-medium text-emerald-400/90">{pct}%</span>
         </div>
         <div

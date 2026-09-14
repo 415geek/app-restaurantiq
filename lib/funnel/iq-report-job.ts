@@ -20,6 +20,7 @@
  */
 
 import { kickReport360 } from '@/lib/iq/kick';
+import { type Locale, toLocale } from '@/lib/i18n/locale';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { getPublicBaseUrl } from '@/lib/funnel/base-url';
 import { createIqDeadline } from '@/lib/funnel/iq-deadline';
@@ -65,7 +66,7 @@ const MAX_STAGE_ATTEMPTS = 2;
 export type GenerationState = {
   v: 1;
   mode: GenerationMode;
-  language: 'en' | 'zh';
+  language: Locale;
   trigger?: string;
   attempts: Partial<Record<GenerationStage, number>>;
   timingsMs: Partial<Record<GenerationStage, number>>;
@@ -192,7 +193,7 @@ export type StartResult =
 export async function startReportGeneration(opts: {
   reportId: string;
   mode: GenerationMode;
-  language?: 'en' | 'zh';
+  language?: Locale;
   force?: boolean;
   trigger?: string;
 }): Promise<StartResult> {
@@ -201,7 +202,7 @@ export async function startReportGeneration(opts: {
   if (!row.paid) return { kind: 'unpaid' };
   if (hasStoredReport(row) && !opts.force) return { kind: 'already_done' };
 
-  const language: 'en' | 'zh' = opts.language ?? (row.language === 'zh' ? 'zh' : 'en');
+  const language: Locale = opts.language ?? toLocale(row.language);
   const prev = readState(row);
   const resumable =
     !opts.force &&
@@ -263,7 +264,7 @@ type StageCtx = {
   row: IqReportRow;
   state: GenerationState;
   deadline: ReturnType<typeof createIqDeadline>;
-  language: 'en' | 'zh';
+  language: Locale;
   professional: boolean;
 };
 
@@ -312,7 +313,7 @@ async function stageDraft(ctx: StageCtx): Promise<void> {
   if (process.env.IQ_ENGINE?.trim().toLowerCase() === 'multi_agent') {
     try {
       const parsed = await runMultiAgentFullReport({ ...base, reportId: row.id });
-      state.draft = applyCompetitorWhitelist(parseIqFullReport(parsed), whitelist);
+      state.draft = applyCompetitorWhitelist(parseIqFullReport(parsed), whitelist, language);
       state.draftSource = 'multi_agent';
       pushLog(state, 'draft via multi-agent engine');
       return;
@@ -334,7 +335,7 @@ async function stageDraft(ctx: StageCtx): Promise<void> {
         reason: row.reason,
         language,
       });
-      state.draft = applyCompetitorWhitelist(parseIqFullReport(raw), whitelist);
+      state.draft = applyCompetitorWhitelist(parseIqFullReport(raw), whitelist, language);
       state.draftSource = 'n8n';
       pushLog(state, 'draft via n8n');
       return;
@@ -391,7 +392,11 @@ async function stageFinalize(ctx: StageCtx): Promise<void> {
   const row = (await iqGetReport(ctx.row.id)) ?? ctx.row;
   const financeModel = ((row.market_data_json as Record<string, unknown> | null)?.finance_model ??
     null) as DeterministicFinanceModel | null;
-  const withFinance = applyFinanceModelOverride(state.draft as IqReportWithGrounding, financeModel);
+  const withFinance = applyFinanceModelOverride(
+    state.draft as IqReportWithGrounding,
+    financeModel,
+    ctx.language,
+  );
   logFullReportQuality(withFinance, `reportId=${row.id} job/${state.draftSource ?? 'llm'}`);
   const clean = stripInternalIqReportFields(withFinance) as Record<string, unknown>;
   clean.generation_tier = professional ? 'professional' : 'standard';
@@ -403,7 +408,7 @@ async function stageFinalize(ctx: StageCtx): Promise<void> {
   await kickReport360(row.id);
 }
 
-async function notifyIfRequested(row: IqReportRow, language: 'en' | 'zh'): Promise<void> {
+async function notifyIfRequested(row: IqReportRow, language: Locale): Promise<void> {
   const email = row.notify_email?.trim();
   if (!email || row.notified_at) return;
   if (!isReportEmailConfigured()) {
@@ -447,7 +452,8 @@ export async function runReportGenerationStage(reportId: string): Promise<void> 
     await iqUpdateReportGeneration(reportId, { status: 'failed', error: 'corrupt generation state' });
     return;
   }
-  const language = state.language;
+  // Older checkpoints may predate the Locale contract; coerce rather than trust.
+  const language = toLocale(state.language);
   const professional = state.mode === 'professional';
 
   if (stage === 'done') {
@@ -593,7 +599,7 @@ export async function requestReportEmail(
   }
   if (hasStoredReport(row)) {
     const fresh = await iqGetReport(reportId);
-    if (fresh) await notifyIfRequested(fresh, fresh.language === 'zh' ? 'zh' : 'en');
+    if (fresh) await notifyIfRequested(fresh, toLocale(fresh.language));
     return { ok: true, sentNow: true };
   }
   return { ok: true, sentNow: false };

@@ -7,6 +7,7 @@
  * 
  * @see https://caltrans-gis.dot.ca.gov/arcgis/rest/services/CHhighway/Traffic_AADT/FeatureServer/0
  */
+import { DEFAULT_LOCALE, type Locale, pick } from '@/lib/i18n/locale';
 
 const CALTRANS_AADT_BASE_URL =
   'https://caltrans-gis.dot.ca.gov/arcgis/rest/services/CHhighway/Traffic_AADT/FeatureServer/0/query';
@@ -162,15 +163,26 @@ export async function fetchCaltransTrafficByRoute(
  */
 export function formatCaltransForAnchors(
   results: CaltransAADTResult[],
-  lang: 'en' | 'zh' = 'en'
+  lang: Locale = DEFAULT_LOCALE,
 ): string {
   if (!results.length) return '';
 
-  const L = lang === 'zh';
   const lines: string[] = [];
-  
-  lines.push(L ? '### 交通流量数据 [Caltrans]' : '### Traffic Volume Data [Caltrans]');
-  lines.push(L ? '> 数据来源: 加州交通局年均日交通量(AADT)' : '> Source: California DOT Annual Average Daily Traffic');
+
+  lines.push(
+    pick(lang, {
+      en: '### Traffic Volume Data [Caltrans]',
+      zh: '### 交通流量数据 [Caltrans]',
+      es: '### Datos de volumen de tráfico [Caltrans]',
+    }),
+  );
+  lines.push(
+    pick(lang, {
+      en: '> Source: California DOT Annual Average Daily Traffic',
+      zh: '> 数据来源: 加州交通局年均日交通量(AADT)',
+      es: '> Fuente: Tráfico diario promedio anual del Departamento de Transporte de California',
+    }),
+  );
   lines.push('');
 
   const sorted = [...results].sort((a, b) => b.aadt - a.aadt);
@@ -178,10 +190,13 @@ export function formatCaltransForAnchors(
 
   top.forEach((r) => {
     const routeLabel = r.routeName || `CA-${r.routeNumber}`;
+    const aadt = r.aadt.toLocaleString('en-US');
     lines.push(
-      L
-        ? `- **${routeLabel}** (${r.county}县): 日均${r.aadt.toLocaleString()}辆 [${r.year}年数据]`
-        : `- **${routeLabel}** (${r.county} County): ${r.aadt.toLocaleString()} vehicles/day [${r.year} data]`
+      pick(lang, {
+        en: `- **${routeLabel}** (${r.county} County): ${aadt} vehicles/day [${r.year} data]`,
+        zh: `- **${routeLabel}** (${r.county}县): 日均${aadt}辆 [${r.year}年数据]`,
+        es: `- **${routeLabel}** (condado de ${r.county}): ${aadt} vehículos/día [datos de ${r.year}]`,
+      }),
     );
   });
 

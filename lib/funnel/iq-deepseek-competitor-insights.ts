@@ -24,8 +24,10 @@
  *     ],
  *     cluster_summary_zh: '...',
  *     cluster_summary_en: '...',
+ *     cluster_summary_es: '...',
  *     gaps_and_openings_zh: '...',
- *     gaps_and_openings_en: '...'
+ *     gaps_and_openings_en: '...',
+ *     gaps_and_openings_es: '...'
  *   }
  *
  * Hard rules baked into the prompt:
@@ -37,6 +39,7 @@
  *     complain about (e.g. "long wait", "expensive boba toppings", "no oat milk").
  */
 
+import { type Locale, pick } from '@/lib/i18n/locale';
 import {
   fetchGooglePlaceDetail,
   type GooglePlaceDetailPack,
@@ -73,6 +76,8 @@ export interface CompetitorInsightRow {
   threat_level: 'high' | 'medium' | 'low';
   ai_takeaway_zh: string;
   ai_takeaway_en: string;
+  /** Optional only for insights cached before Spanish support. */
+  ai_takeaway_es?: string;
 }
 
 export interface CompetitorInsights {
@@ -87,8 +92,25 @@ export interface CompetitorInsights {
   per_competitor: CompetitorInsightRow[];
   cluster_summary_zh: string;
   cluster_summary_en: string;
+  cluster_summary_es?: string;
   gaps_and_openings_zh: string;
   gaps_and_openings_en: string;
+  gaps_and_openings_es?: string;
+}
+
+/** Localized per-competitor takeaway (English fallback for cached rows without Spanish). */
+export function competitorTakeaway(row: Pick<CompetitorInsightRow, 'ai_takeaway_zh' | 'ai_takeaway_en' | 'ai_takeaway_es'>, lang: Locale): string {
+  return pick(lang, { en: row.ai_takeaway_en, zh: row.ai_takeaway_zh, es: row.ai_takeaway_es || row.ai_takeaway_en });
+}
+
+/** Localized cluster summary (English fallback for cached insights without Spanish). */
+export function competitorClusterSummary(ci: Pick<CompetitorInsights, 'cluster_summary_zh' | 'cluster_summary_en' | 'cluster_summary_es'>, lang: Locale): string {
+  return pick(lang, { en: ci.cluster_summary_en, zh: ci.cluster_summary_zh, es: ci.cluster_summary_es || ci.cluster_summary_en });
+}
+
+/** Localized gaps & openings (English fallback for cached insights without Spanish). */
+export function competitorGapsAndOpenings(ci: Pick<CompetitorInsights, 'gaps_and_openings_zh' | 'gaps_and_openings_en' | 'gaps_and_openings_es'>, lang: Locale): string {
+  return pick(lang, { en: ci.gaps_and_openings_en, zh: ci.gaps_and_openings_zh, es: ci.gaps_and_openings_es || ci.gaps_and_openings_en });
 }
 
 function getDeepSeekKey(): string {
@@ -319,11 +341,14 @@ interface DeepSeekResponseShape {
     threat_level: 'high' | 'medium' | 'low';
     ai_takeaway_zh: string;
     ai_takeaway_en: string;
+    ai_takeaway_es?: string;
   }>;
   cluster_summary_zh: string;
   cluster_summary_en: string;
+  cluster_summary_es?: string;
   gaps_and_openings_zh: string;
   gaps_and_openings_en: string;
+  gaps_and_openings_es?: string;
 }
 
 function buildSystemPrompt(): string {
@@ -343,12 +368,12 @@ function buildSystemPrompt(): string {
     '                  medium = adjacent cuisine OR 50-200 reviews;',
     '                  low = <50 reviews OR clearly different segment.',
     '5. pricing_perception: short phrase (e.g. "perceived as cheap and fast", "premium teahouse pricing").',
-    '6. cluster_summary_zh / cluster_summary_en (2-3 sentences each): describe the overall competitive cluster',
+    '6. cluster_summary_zh / cluster_summary_en / cluster_summary_es (2-3 sentences each): describe the overall competitive cluster',
     '   shape — how many high-threat players, the dominant positioning, the price band ceiling/floor.',
-    '7. gaps_and_openings_zh / gaps_and_openings_en (2-3 sentences each): name 2-3 concrete product / service /',
+    '7. gaps_and_openings_zh / gaps_and_openings_en / gaps_and_openings_es (2-3 sentences each): name 2-3 concrete product / service /',
     '   price gaps the user could exploit, grounded in actual review complaints.',
     '8. Return ONLY valid JSON matching the requested schema. No prose outside the JSON envelope.',
-    '9. zh fields: write in Simplified Chinese.  en fields: write in English.',
+    '9. zh fields: write in Simplified Chinese. en fields: write in standard U.S. English. es fields: escribe en español neutro (Estados Unidos / Latinoamérica), claro y profesional.',
     '10. Lists in JSON must be JSON arrays, not comma-separated strings.',
   ].join('\n');
 }
@@ -373,13 +398,16 @@ function buildUserPrompt(anchorBlob: string): string {
     '      "pricing_perception": "(short phrase)",',
     '      "threat_level": "high" | "medium" | "low",',
     '      "ai_takeaway_zh": "(1-2 Chinese sentences specific to this competitor)",',
-    '      "ai_takeaway_en": "(1-2 English sentences specific to this competitor)"',
+    '      "ai_takeaway_en": "(1-2 English sentences specific to this competitor)",',
+    '      "ai_takeaway_es": "(1-2 oraciones en español específicas de este competidor)"',
     '    }',
     '  ],',
     '  "cluster_summary_zh": "(2-3 Chinese sentences)",',
     '  "cluster_summary_en": "(2-3 English sentences)",',
+    '  "cluster_summary_es": "(2-3 oraciones en español)",',
     '  "gaps_and_openings_zh": "(2-3 Chinese sentences, name specific gaps)",',
-    '  "gaps_and_openings_en": "(2-3 English sentences, name specific gaps)"',
+    '  "gaps_and_openings_en": "(2-3 English sentences, name specific gaps)",',
+    '  "gaps_and_openings_es": "(2-3 oraciones en español, nombra brechas concretas)"',
     '}',
   ].join('\n');
 }
@@ -497,6 +525,7 @@ function buildFinalRows(
       threat_level: threat,
       ai_takeaway_zh: typeof ds?.ai_takeaway_zh === 'string' ? ds.ai_takeaway_zh.trim() : '',
       ai_takeaway_en: typeof ds?.ai_takeaway_en === 'string' ? ds.ai_takeaway_en.trim() : '',
+      ai_takeaway_es: typeof ds?.ai_takeaway_es === 'string' ? ds.ai_takeaway_es.trim() : '',
     };
   });
 }
@@ -546,7 +575,14 @@ export async function enrichMarketDataWithCompetitorInsights(
     source: 'deepseek_competitor_insights',
     key: cacheKey,
   });
-  if (cached && Array.isArray(cached.per_competitor) && cached.per_competitor.length) {
+  // A pre-Spanish cache entry is regenerated so Spanish readers get native prose.
+  if (
+    cached &&
+    Array.isArray(cached.per_competitor) &&
+    cached.per_competitor.length &&
+    typeof cached.cluster_summary_es === 'string' &&
+    cached.cluster_summary_es.length > 0
+  ) {
     return { ...marketData, competitor_insights: cached };
   }
 
@@ -606,8 +642,10 @@ export async function enrichMarketDataWithCompetitorInsights(
     per_competitor: buildFinalRows(packs, dsResp),
     cluster_summary_zh: String(dsResp.cluster_summary_zh ?? '').trim(),
     cluster_summary_en: String(dsResp.cluster_summary_en ?? '').trim(),
+    cluster_summary_es: String(dsResp.cluster_summary_es ?? '').trim(),
     gaps_and_openings_zh: String(dsResp.gaps_and_openings_zh ?? '').trim(),
     gaps_and_openings_en: String(dsResp.gaps_and_openings_en ?? '').trim(),
+    gaps_and_openings_es: String(dsResp.gaps_and_openings_es ?? '').trim(),
   };
 
   try {
