@@ -10,7 +10,7 @@
  * bilingual; the sample block uses the golden Millbrae fixture (synthetic
  * inputs, real public data) — never a customer's report.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -21,7 +21,7 @@ const PRICE_USD = process.env.NEXT_PUBLIC_STRIPE_PRICE_USD?.trim() || '19';
 
 type Copy = {
   nav: { features: string; sample: string; pricing: string; faq: string; signIn: string; cta: string };
-  hero: { eyebrow: string; title: string; subtitle: string; address: string; cuisine: string; rent: string; sqft: string; more: string; less: string; cta: string; trust: string[] };
+  hero: { eyebrow: string; title: string; lead: string; typed: string[]; subtitle: string; address: string; cuisine: string; rent: string; sqft: string; more: string; less: string; cta: string; trust: string[] };
   shots: { title: string; sub: string; items: Array<{ src: string; label: string; caption: string }> };
   how: { title: string; steps: Array<{ n: string; title: string; body: string }> };
   inside: { title: string; sub: string; items: Array<{ title: string; body: string }> };
@@ -39,6 +39,8 @@ const COPY: Record<Locale, Copy> = {
     hero: {
       eyebrow: '餐饮选址风险审计 · 面向美国中餐老板',
       title: '签 lease 前，先算清楚这个铺位能不能赚钱',
+      lead: '签 lease 前，先算清楚',
+      typed: ['这个铺位能不能赚钱', '附近有多少华人家庭', '同菜系竞品有几家', '每月做多少才保本', '租金占营收多少'],
       subtitle: '输入地址和菜系，60 秒看到：附近有多少华人家庭、同菜系竞品几家、每月要做到多少营收才保本。数据来自美国人口普查和公开地图，每个数字都能溯源。',
       address: '餐厅地址，例如 1711 El Camino Real, Millbrae, CA',
       cuisine: '菜系或业态，例如：湘菜、港式茶餐厅、火锅、奶茶',
@@ -133,6 +135,8 @@ const COPY: Record<Locale, Copy> = {
     hero: {
       eyebrow: 'Restaurant site-selection risk audit · U.S. Chinese restaurants',
       title: 'Before you sign the lease, know if this location can make money',
+      lead: 'Before you sign the lease, know',
+      typed: ['if this location can make money', 'how many Chinese households are nearby', 'how many rivals share your cuisine', 'what you need to break even', 'what rent does to your margin'],
       subtitle: 'Type an address and a cuisine. In 60 seconds: Chinese households nearby, same-cuisine competitors, and the monthly revenue you need just to break even. Built on U.S. Census and open map data — every number traceable.',
       address: 'Restaurant address, e.g. 1711 El Camino Real, Millbrae, CA',
       cuisine: 'Cuisine or concept, e.g. Hunan, HK café, hot pot, boba',
@@ -224,6 +228,65 @@ const COPY: Record<Locale, Copy> = {
   },
 };
 
+/**
+ * Typewriter for the hero headline: starts with the first phrase fully shown
+ * (SSR / no-JS safe), holds, deletes, types the next. Honours
+ * prefers-reduced-motion by never animating.
+ */
+function useTypewriter(phrases: string[], opts: { type?: number; erase?: number; hold?: number } = {}): { text: string; done: boolean } {
+  const { type = 70, erase = 32, hold = 1900 } = opts;
+  const [state, setState] = useState<{ i: number; n: number; dir: 'type' | 'hold' | 'erase' }>({ i: 0, n: phrases[0]?.length ?? 0, dir: 'hold' });
+  const key = phrases.join('\u0000');
+  useEffect(() => {
+    setState({ i: 0, n: phrases[0]?.length ?? 0, dir: 'hold' });
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || phrases.length < 2) return;
+    const cur = phrases[state.i] ?? '';
+    let delay = type;
+    let next = state;
+    if (state.dir === 'hold') {
+      delay = hold;
+      next = { ...state, dir: 'erase' };
+    } else if (state.dir === 'erase') {
+      if (state.n > 0) next = { ...state, n: state.n - 1 };
+      else next = { i: (state.i + 1) % phrases.length, n: 0, dir: 'type' };
+      delay = erase;
+    } else if (state.n < cur.length) {
+      next = { ...state, n: state.n + 1 };
+      delay = type + (Math.random() * 40 - 20);
+    } else {
+      next = { ...state, dir: 'hold' };
+      delay = 0;
+    }
+    const t = setTimeout(() => setState(next), Math.max(0, delay));
+    return () => clearTimeout(t);
+  }, [state, phrases, type, erase, hold]);
+  const cur = phrases[state.i] ?? '';
+  return { text: cur.slice(0, state.n), done: state.dir === 'hold' };
+}
+
+function HeroTitle({ lead, phrases, locale }: { lead: string; phrases: string[]; locale: Locale }) {
+  const { text, done } = useTypewriter(phrases);
+  // Reserve the width of the longest phrase so the line never jumps while typing.
+  const longest = phrases.reduce((a, b) => (b.length > a.length ? b : a), '');
+  return (
+    <h1 className="text-[clamp(1.6rem,5.2vw,3.3rem)] font-extrabold leading-[1.18] tracking-tight text-zinc-900 md:whitespace-nowrap" aria-label={`${lead} ${phrases[0]}`}>
+      <span className="whitespace-nowrap">{lead}</span>
+      {locale === 'en' ? ' ' : ''}
+      <span className="inline-grid whitespace-nowrap text-left align-baseline">
+        <span className="invisible col-start-1 row-start-1" aria-hidden>
+          {longest}
+        </span>
+        <span className="col-start-1 row-start-1 text-brand-orange" aria-live="off">
+          {text}
+          <span className={`ml-0.5 inline-block w-[0.06em] translate-y-[0.08em] bg-brand-orange align-baseline ${done ? 'animate-pulse' : ''}`} style={{ height: '0.95em' }} aria-hidden />
+        </span>
+      </span>
+    </h1>
+  );
+}
+
 function Logo() {
   return (
     <span className="inline-flex items-center gap-2">
@@ -297,9 +360,9 @@ export default function IqLandingPage() {
       <section id="top" className="relative overflow-hidden bg-[#FFF8F3]">
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand-orange/10 blur-3xl" aria-hidden />
         <div className="mx-auto max-w-6xl px-5 pb-16 pt-14 md:pb-24 md:pt-20">
-          <div className="mx-auto max-w-3xl text-center">
+          <div className="mx-auto max-w-5xl text-center">
             <p className="mb-4 inline-flex rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold tracking-wide text-brand-orange ring-1 ring-brand-orange/20">{t.hero.eyebrow}</p>
-            <h1 className="text-[2.1rem] font-extrabold leading-[1.15] tracking-tight text-zinc-900 sm:text-5xl md:text-[3.4rem]">{t.hero.title}</h1>
+            <HeroTitle lead={t.hero.lead} phrases={t.hero.typed} locale={locale} />
             <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-zinc-600 md:text-lg">{t.hero.subtitle}</p>
           </div>
 
