@@ -4,8 +4,8 @@
  * IQ funnel landing (app.restaurantiq.ai/).
  *
  * Light, product-led layout in the Owner.com / DoorDash idiom: a white canvas,
- * one bold headline, an address "search" card as the single hero action, real
- * report pages as the product shots, then how-it-works → what's inside →
+ * one bold headline, an address "search" card as the single hero action, then
+ * how-it-works → what's inside →
  * sample numbers → pricing → audiences → FAQ → account footer. All copy is
  * bilingual; the sample block uses the golden Millbrae fixture (synthetic
  * inputs, real public data) — never a customer's report.
@@ -22,7 +22,6 @@ const PRICE_USD = process.env.NEXT_PUBLIC_STRIPE_PRICE_USD?.trim() || '19';
 type Copy = {
   nav: { features: string; sample: string; pricing: string; faq: string; signIn: string; cta: string };
   hero: { eyebrow: string; title: string; headlines: string[]; subtitle: string; address: string; cuisine: string; rent: string; sqft: string; more: string; less: string; cta: string; trust: string[] };
-  shots: { title: string; sub: string; items: Array<{ src: string; label: string; caption: string }> };
   how: { title: string; steps: Array<{ n: string; title: string; body: string }> };
   inside: { title: string; sub: string; items: Array<{ title: string; body: string }> };
   sample: { eyebrow: string; title: string; body: string; verdict: string; rows: Array<{ label: string; value: string; note?: string }>; foot: string };
@@ -56,16 +55,6 @@ const COPY: Record<Locale, Copy> = {
       less: '收起',
       cta: '免费生成风险评分',
       trust: ['60 秒出结论', '美国人口普查 · Google 地图 · 公开数据', '免费版不需要注册'],
-    },
-    shots: {
-      title: '不是一段 AI 建议，是一份能拿去谈租约的报告',
-      sub: '封面 + 15 页，浅色打印版，可下载 PDF。下面是真实渲染的报告页。',
-      items: [
-        { src: '/marketing/iq/report-cover.png', label: '封面', caption: '地址、业态、真实地图' },
-        { src: '/marketing/iq/report-map.png', label: '商圈地图', caption: '步行 / 开车四个可达范围，竞品编号标记' },
-        { src: '/marketing/iq/report-competitors.png', label: '直接竞品', caption: '同菜系逐家对标：距离、评分、分流比例' },
-        { src: '/marketing/iq/report-summary.png', label: '总结与建议', caption: '结论、三个决定性数字、签约前必须做的事' },
-      ],
     },
     how: {
       title: '三步，从地址到结论',
@@ -159,16 +148,6 @@ const COPY: Record<Locale, Copy> = {
       cta: 'Get my free risk score',
       trust: ['Verdict in 60 seconds', 'U.S. Census · Google Maps · open data', 'Free tier needs no sign-up'],
     },
-    shots: {
-      title: 'Not an AI essay. A report you can take to the lease negotiation.',
-      sub: 'Cover + 15 light print-ready pages, downloadable as PDF. These are real rendered pages.',
-      items: [
-        { src: '/marketing/iq/report-cover.png', label: 'Cover', caption: 'Address, concept, real map' },
-        { src: '/marketing/iq/report-map.png', label: 'Trade area', caption: 'Four walk / drive reach rings, numbered competitors' },
-        { src: '/marketing/iq/report-competitors.png', label: 'Direct competitors', caption: 'Each rival: distance, rating, share of your traffic' },
-        { src: '/marketing/iq/report-summary.png', label: 'Summary', caption: 'Verdict, three deciding numbers, must-dos before signing' },
-      ],
-    },
     how: {
       title: 'Three steps from address to verdict',
       steps: [
@@ -247,17 +226,21 @@ const COPY: Record<Locale, Copy> = {
  */
 function useTypewriter(phrases: string[], opts: { type?: number; erase?: number; hold?: number } = {}): { text: string; done: boolean } {
   const { type = 70, erase = 32, hold = 1900 } = opts;
-  const [state, setState] = useState<{ i: number; n: number; dir: 'type' | 'hold' | 'erase' }>({ i: 0, n: phrases[0]?.length ?? 0, dir: 'hold' });
+  // Starts empty and types the first headline character by character on mount (the
+  // caret blinks while the sentence holds); SEO / no-JS readers get the full text
+  // from the sr-only copy rendered next to it.
+  const [state, setState] = useState<{ i: number; n: number; dir: 'type' | 'hold' | 'erase' }>({ i: 0, n: 0, dir: 'type' });
   const key = phrases.join('\u0000');
   useEffect(() => {
-    setState({ i: 0, n: phrases[0]?.length ?? 0, dir: 'hold' });
+    setState({ i: 0, n: 0, dir: 'type' });
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (typeof window === 'undefined' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || phrases.length < 2) return;
+    if (typeof window === 'undefined' || phrases.length === 0) return;
     const cur = phrases[state.i] ?? '';
     let delay = type;
     let next = state;
     if (state.dir === 'hold') {
+      if (phrases.length < 2) return; // a single headline stays put once typed
       delay = hold;
       next = { ...state, dir: 'erase' };
     } else if (state.dir === 'erase') {
@@ -296,12 +279,13 @@ function HeroTitle({ headlines }: { headlines: string[] }) {
   const { text, done } = useTypewriter(order, { type: 62, erase: 22, hold: 2600 });
   const longest = headlines.reduce((a, b) => (b.length > a.length ? b : a), '');
   return (
-    <h1 className="font-cjk-serif text-[clamp(1.6rem,4.6vw,3.15rem)] font-black leading-[1.25] text-white" aria-label={headlines[0]}>
-      <span className="grid text-left md:whitespace-nowrap">
+    <h1 className="font-cjk-serif text-[clamp(1.6rem,4.6vw,3.15rem)] font-black leading-[1.25] text-white">
+      <span className="sr-only">{headlines[0]}</span>
+      <span className="grid text-left md:whitespace-nowrap" aria-hidden>
         <span className="invisible col-start-1 row-start-1" aria-hidden>
           {longest}
         </span>
-        <span className="col-start-1 row-start-1" aria-live="off">
+        <span className="col-start-1 row-start-1">
           {text}
           <span className={`ml-0.5 inline-block w-[0.06em] translate-y-[0.1em] bg-brand-green align-baseline ${done ? 'animate-pulse' : ''}`} style={{ height: '0.95em' }} aria-hidden />
         </span>
@@ -356,7 +340,6 @@ export default function IqLandingPage() {
           </Link>
           <nav className="hidden items-center gap-7 text-sm font-medium text-zinc-300 md:flex" aria-label="Sections">
             <button type="button" onClick={() => scrollTo('inside')} className="hover:text-white">{t.nav.features}</button>
-            <button type="button" onClick={() => scrollTo('sample')} className="hover:text-white">{t.nav.sample}</button>
             <button type="button" onClick={() => scrollTo('pricing')} className="hover:text-white">{t.nav.pricing}</button>
             <button type="button" onClick={() => scrollTo('faq')} className="hover:text-white">{t.nav.faq}</button>
           </nav>
@@ -459,27 +442,6 @@ export default function IqLandingPage() {
           </ul>
         </div>
       </section>
-
-      {/* ── Product shots ──────────────────────────────────────────────── */}
-      <section id="report" className="bg-brand-canvas"><div className="mx-auto max-w-6xl px-5 py-16 md:py-24">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.shots.title}</h2>
-          <p className="mt-3 text-zinc-600">{t.shots.sub}</p>
-        </div>
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {t.shots.items.map((s) => (
-            <figure key={s.src} className="group rounded-2xl bg-white p-3 ring-1 ring-zinc-200 transition hover:-translate-y-0.5 hover:shadow-lg">
-              <div className="overflow-hidden rounded-xl bg-white ring-1 ring-zinc-200">
-                <Image src={s.src} alt={s.label} width={770} height={1010} className="h-auto w-full" sizes="(min-width: 1024px) 260px, (min-width: 640px) 45vw, 90vw" />
-              </div>
-              <figcaption className="px-1 pt-3">
-                <div className="text-sm font-bold text-brand-navy">{s.label}</div>
-                <div className="text-xs text-zinc-500">{s.caption}</div>
-              </figcaption>
-            </figure>
-          ))}
-        </div>
-      </div></section>
 
       {/* ── How it works ───────────────────────────────────────────────── */}
       <section className="bg-brand-navy text-white">
