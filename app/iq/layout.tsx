@@ -3,5 +3,5 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default function IqLayout({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-screen bg-zinc-950 text-zinc-50 antialiased">{children}</div>;
+  return <div className="min-h-screen bg-brand-navy text-zinc-50 antialiased">{children}</div>;
 }

@@ -143,8 +143,8 @@ test('buildStaticMapUrl: four ring paths drawn largest first as navy encoded pol
     expectedOrder,
   );
   paths.forEach((path, i) => {
-    assert.match(path, /^fillcolor:0x1B2A4F[0-9A-F]{2}\|color:0x1B2A4F[0-9A-F]{2}\|weight:\d\|enc:/);
-    const fillAlpha = parseInt(path.slice('fillcolor:0x1B2A4F'.length, 'fillcolor:0x1B2A4F'.length + 2), 16);
+    assert.match(path, /^fillcolor:0x0B1220[0-9A-F]{2}\|color:0x0B1220[0-9A-F]{2}\|weight:\d\|enc:/);
+    const fillAlpha = parseInt(path.slice('fillcolor:0x0B1220'.length, 'fillcolor:0x0B1220'.length + 2), 16);
     assert.ok(fillAlpha >= 0x14 && fillAlpha <= 0x1f, `fill alpha ${fillAlpha} not within 8–12 %`);
     const enc = path.slice(path.indexOf('enc:') + 4);
     const pts = decodePolyline(enc);
@@ -157,7 +157,7 @@ test('buildStaticMapUrl: four ring paths drawn largest first as navy encoded pol
   });
 });
 
-test('buildStaticMapUrl: markers — site S coral, L1 numbered in page-7 order, L2 small grey, L4 small green, no rail without coords', () => {
+test('buildStaticMapUrl: markers — site S green, L1 numbered in page-7 order, L2 small grey, L4 small blue, no rail without coords', () => {
   const m = loadModel();
   const url = buildStaticMapUrl(m, BASE);
   const markers = valuesOf(url, 'markers');

@@ -138,20 +138,21 @@ export function nameKey(name: string): string {
 }
 
 /** Light print-first palette (§5.1). Coral is reserved for the verdict badge + key numbers. */
+/** Brand system: Midnight Navy ink, Signal Green accent (kept under the legacy `coral` key), Warm White panels. */
 export const PALETTE = {
   bg: '#FFFFFF',
-  panel: '#F6F7F9',
-  navy: '#1B2A4F',
-  coral: '#FF6B35',
-  green: '#1F8A5B',
-  amber: '#C98A00',
-  red: '#C63D2F',
-  rule: '#E2E5EA',
+  panel: '#F7F8F4',
+  navy: '#0B1220',
+  coral: '#22C55E',
+  green: '#22C55E',
+  amber: '#F59E0B',
+  red: '#DC2626',
+  rule: '#E2E8F0',
   /** Secondary text; ≥ 4.5:1 on both bg and panel. */
-  muted: '#566175',
+  muted: '#475569',
   /** Text-safe darkened tones of the semantic colors (the raw green/amber fall below 4.5:1 on white). */
-  greenInk: '#17714B',
-  amberInk: '#7D5600',
+  greenInk: '#15803D',
+  amberInk: '#B45309',
 } as const;
 
 export function fmtUsd(v: number | null | undefined, opts: { compact?: boolean } = {}): string {

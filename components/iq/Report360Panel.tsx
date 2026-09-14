@@ -132,8 +132,8 @@ export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; la
   const printUrl = `/print/${encodeURIComponent(reportId)}`;
 
   const intakeForm = formOpen ? (
-    <div className="mt-4 rounded-xl border border-sky-800/50 bg-sky-950/40 p-4">
-      <p className="mb-3 text-xs text-sky-200/70">{t.addDetailsDesc}</p>
+    <div className="mt-4 rounded-xl border border-emerald-800/50 bg-emerald-950/30 p-4">
+      <p className="mb-3 text-xs text-zinc-300">{t.addDetailsDesc}</p>
       <PaidIntakeForm
         lang={lang}
         reportId={reportId}
@@ -148,17 +148,17 @@ export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; la
   ) : null;
 
   return (
-    <div className="rounded-2xl border border-sky-900/40 bg-sky-950/20 p-6">
-      <h3 className="mb-1 text-lg font-semibold text-sky-100">{t.title}</h3>
-      <p className="mb-4 text-sm text-sky-200/70">{t.desc}</p>
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <h3 className="mb-1 text-lg font-semibold text-white">{t.title}</h3>
+      <p className="mb-4 text-sm text-zinc-300">{t.desc}</p>
       {status?.migration_needed ? (
         <p className="text-xs text-amber-300/90" role="alert">
           {t.migration}
         </p>
       ) : status?.ready ? (
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3 text-sm text-sky-100">
-            <span className="rounded-full border border-sky-700/60 bg-sky-900/40 px-2 py-0.5 text-xs">{t.ready}</span>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-white">
+            <span className="rounded-full border border-emerald-700/60 bg-emerald-900/40 px-2 py-0.5 text-xs">{t.ready}</span>
             {status.total != null ? (
               <span>
                 {t.score} <strong>{status.total}</strong>
@@ -168,13 +168,13 @@ export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; la
             {status.tier === 'precheck' ? <span className="text-xs text-amber-300/90">{t.precheck}</span> : null}
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <a href={pdfUrl} className="rounded-xl bg-sky-500 px-5 py-2.5 text-sm font-semibold text-sky-950 transition hover:bg-sky-400">
+            <a href={pdfUrl} className="rounded-xl bg-brand-green px-5 py-2.5 text-sm font-semibold text-brand-navy transition hover:bg-emerald-400">
               {t.download}
             </a>
-            <a href={printUrl} target="_blank" rel="noopener" className="rounded-xl border border-sky-700/60 px-5 py-2.5 text-sm text-sky-100 transition hover:bg-sky-900/40">
+            <a href={printUrl} target="_blank" rel="noopener" className="rounded-xl border border-white/20 px-5 py-2.5 text-sm text-white transition hover:bg-white/10">
               {t.preview}
             </a>
-            <button type="button" onClick={() => void regenerate()} disabled={busy} className="rounded-xl border border-sky-800/60 px-4 py-2.5 text-xs text-sky-300 disabled:opacity-50">
+            <button type="button" onClick={() => void regenerate()} disabled={busy} className="rounded-xl border border-white/15 px-4 py-2.5 text-xs text-zinc-300 disabled:opacity-50">
               {t.regen}
             </button>
             <button
@@ -182,7 +182,7 @@ export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; la
               onClick={() => setFormOpen((o) => !o)}
               disabled={busy}
               aria-expanded={formOpen}
-              className="text-xs text-sky-300 underline decoration-sky-700/60 underline-offset-4 hover:text-sky-100 disabled:opacity-50"
+              className="text-xs text-emerald-300 underline decoration-emerald-700/60 underline-offset-4 hover:text-white disabled:opacity-50"
             >
               {t.addDetails}
             </button>
@@ -190,7 +190,7 @@ export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; la
           {intakeForm}
         </div>
       ) : (
-        <div className="flex items-center gap-3 text-sm text-sky-200/80">
+        <div className="flex items-center gap-3 text-sm text-zinc-300">
           <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />

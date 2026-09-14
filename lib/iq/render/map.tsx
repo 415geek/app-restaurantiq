@@ -18,10 +18,10 @@ export const MAP_W = 640;
 export const MAP_H = 420;
 
 const RING_STYLE: Record<RingId, { fill: string; stroke: string; label: string }> = {
-  walk10: { fill: 'rgba(27,42,79,0.16)', stroke: '#1B2A4F', label: '步行 10 分钟' },
-  drive5: { fill: 'rgba(27,42,79,0.11)', stroke: '#3D4E7A', label: '车程 5 分钟' },
-  drive10: { fill: 'rgba(27,42,79,0.07)', stroke: '#6B7AA1', label: '车程 10 分钟' },
-  drive15: { fill: 'rgba(27,42,79,0.04)', stroke: '#9AA6C4', label: '车程 15 分钟' },
+  walk10: { fill: 'rgba(11,18,32,0.16)', stroke: '#0B1220', label: '步行 10 分钟' },
+  drive5: { fill: 'rgba(11,18,32,0.11)', stroke: '#3D4E7A', label: '车程 5 分钟' },
+  drive10: { fill: 'rgba(11,18,32,0.07)', stroke: '#6B7AA1', label: '车程 10 分钟' },
+  drive15: { fill: 'rgba(11,18,32,0.04)', stroke: '#9AA6C4', label: '车程 15 分钟' },
 };
 
 /** CSS colours matching the Static Maps marker palette so one legend serves both renderers. */
@@ -174,8 +174,8 @@ function legendItems(model: ReportModel): LegendItem[] {
     { kind: 'dot', color: LAYER_COLOR.l1, size: 11, text: l1n > 0 ? `同菜系竞品 1–${l1n}（编号同第 7 页）` : '同菜系竞品', glyph: '1' },
     { kind: 'dot', color: LAYER_COLOR.l2, size: 8, text: `其他中餐（${model.competitors.l2_count}）` },
     { kind: 'dot', color: LAYER_COLOR.l4, size: 8, text: `华人锚点（${model.competitors.l4.length}）` },
-    { kind: 'swatch', color: '#1B2A4F', fill: 'rgba(27,42,79,0.26)', size: 12, text: '步行 10 分钟' },
-    { kind: 'swatch', color: '#4A5A85', fill: 'rgba(27,42,79,0.10)', size: 12, text: '车程 5·10·15 分钟' },
+    { kind: 'swatch', color: '#0B1220', fill: 'rgba(11,18,32,0.26)', size: 12, text: '步行 10 分钟' },
+    { kind: 'swatch', color: '#4A5A85', fill: 'rgba(11,18,32,0.10)', size: 12, text: '车程 5·10·15 分钟' },
   ];
   if (railStations(model).length) items.push({ kind: 'dot', color: LAYER_COLOR.rail, size: 6, text: '轨道站' });
   return items;
