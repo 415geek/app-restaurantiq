@@ -5,13 +5,16 @@
  * replacing the bare elapsed counter.
  *
  *  - The message follows the real progress (percent) and is phrased around the
- *    customer's own address / city, alternating between two wordings per phase
- *    every few seconds so the line keeps moving even when the bar does not.
+ *    customer's own address / city. Each phase has several wordings that rotate
+ *    every few seconds, and once a phase has been on screen for a while the
+ *    line borrows from the neighbouring phases so a long stage never loops the
+ *    same two sentences.
  *  - After a short grace period a countdown appears ("About 2:30 to go"),
- *    anchored on the typical 3-minute run; it stretches instead of hitting
- *    zero (5 min, then "finishing up") so it never promises what it cannot keep.
+ *    anchored on the typical 3-minute run. It only ever goes down: under a
+ *    minute it switches to a coarse "under a minute", and past the anchor it
+ *    says "taking a little longer" instead of jumping back up.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Locale } from '@/lib/i18n/locale';
 
 /** "1115 Clement St, San Francisco, CA 94118" → "San Francisco"; falls back to the address. */
@@ -27,63 +30,207 @@ function shortAddr(location: string): string {
   return s.length > 36 ? `${s.slice(0, 34)}…` : s;
 }
 
-/** Two wordings per phase; index = phase from percent, alternate = slow tick. */
+/** Wordings per phase (index = phase from percent); the component rotates through them. */
 export function tickerMessages(lang: Locale, location: string): string[][] {
   const city = cityOf(location);
   const addr = shortAddr(location);
   if (lang === 'zh') {
     return [
-      [`正在核对「${addr}」的地址与人口普查小区…`, `正在定位 ${city} 这个铺位所在的街区…`],
-      [`正在获取该地址过往商家的经营情况…`, `正在查看这个铺位之前开过什么店、评价如何…`],
-      [`正在分析 ${city} 周边的人口结构与华人家庭数量…`, `正在统计步行 10 分钟与开车 15 分钟范围内的居民和收入…`],
-      [`正在清点周边的餐饮门店和同菜系竞品…`, `正在逐家对标竞品：距离、评分、客流…`],
-      [`正在测算这个商圈每月能拿到的需求…`, `正在计算保本线与租金压力…`],
-      [`正在核算三档营收情景与回本周期…`, `正在检查外卖信号与午市 / 晚市客流…`],
-      [`正在整理风险清单与签约前必须谈的条件…`, `正在给这个铺位打六维评分…`],
-      [`正在复核每个数字的数据来源…`, `正在排版报告（封面 + 15 页）…`],
+      [
+        `正在核对「${addr}」的地址与人口普查小区…`,
+        `正在定位 ${city} 这个铺位所在的街区…`,
+        `正在确认这条街的车流方向与停车条件…`,
+        `正在拉取这个街区的地块与商业用途信息…`,
+        `正在标记步行 10 分钟与开车 5 / 10 / 15 分钟的范围…`,
+      ],
+      [
+        `正在获取该地址过往商家的经营情况…`,
+        `正在查看这个铺位之前开过什么店、评价如何…`,
+        `正在核对这个地址的换手记录与空置时间…`,
+        `正在检索 ${city} 本地新闻里提到过这个铺位的信息…`,
+        `正在比对同一条街上最近关门与新开的店…`,
+      ],
+      [
+        `正在分析 ${city} 周边的人口结构与华人家庭数量…`,
+        `正在统计步行 10 分钟与开车 15 分钟范围内的居民和收入…`,
+        `正在查看这个商圈的家庭收入分布与消费力…`,
+        `正在估算白天上班人口与夜间常住人口的差别…`,
+        `正在核对周边学校、写字楼、超市等客流锚点…`,
+      ],
+      [
+        `正在清点周边的餐饮门店和同菜系竞品…`,
+        `正在逐家对标竞品：距离、评分、客流…`,
+        `正在读取竞品的评价关键词：好评在哪、差评在哪…`,
+        `正在查看竞品的价位带与人均消费…`,
+        `正在把竞品分成四层：直接、同菜系、同价位、替代选择…`,
+      ],
+      [
+        `正在测算这个商圈每月能拿到的需求…`,
+        `正在计算保本线与租金压力…`,
+        `正在按午市 / 晚市 / 周末拆分客流…`,
+        `正在推算合理的客单价与翻台率区间…`,
+        `正在把租金占营收的比例与行业警戒线对比…`,
+      ],
+      [
+        `正在核算三档营收情景与回本周期…`,
+        `正在检查外卖信号与午市 / 晚市客流…`,
+        `正在测算保守 / 基准 / 乐观三种情况下的月利润…`,
+        `正在估算前期投入与回收周期…`,
+        `正在测试租金、客单价、客流变化对利润的敏感度…`,
+      ],
+      [
+        `正在整理风险清单与签约前必须谈的条件…`,
+        `正在给这个铺位打六维评分…`,
+        `正在列出签 lease 前必须问房东的问题…`,
+        `正在标记哪些风险可以谈、哪些是硬伤…`,
+        `正在把结论压缩成一句话判定…`,
+      ],
+      [
+        `正在复核每个数字的数据来源…`,
+        `正在排版报告（封面 + 15 页）…`,
+        `正在生成地图与图表…`,
+        `正在检查报告里的数字是否前后一致…`,
+        `正在做最后一遍通读与校对…`,
+      ],
     ];
   }
   if (lang === 'es') {
     return [
-      [`Ubicando "${addr}" y su grupo de bloques censales…`, `Localizando la cuadra en ${city}…`],
-      [`Consultando el historial de negocios en esta dirección…`, `Revisando qué operó aquí antes y cómo lo calificaban…`],
-      [`Analizando la población y los hogares chinos alrededor de ${city}…`, `Contando residentes e ingresos a 10 min a pie y 15 min en auto…`],
-      [`Contando restaurantes cercanos y competidores del mismo tipo de cocina…`, `Comparando cada competidor: distancia, calificación, tráfico…`],
-      [`Modelando la demanda mensual que este local puede captar…`, `Calculando el punto de equilibrio y la presión de la renta…`],
-      [`Corriendo tres escenarios de ingresos y el retorno de la inversión…`, `Revisando señales de delivery y tráfico de almuerzo / cena…`],
-      [`Armando el registro de riesgos y las condiciones previas al contrato…`, `Calificando el local en seis dimensiones…`],
-      [`Verificando la fuente de cada cifra…`, `Maquetando el informe (portada + 15 páginas)…`],
+      [
+        `Ubicando "${addr}" y su grupo de bloques censales…`,
+        `Localizando la cuadra en ${city}…`,
+        `Confirmando el sentido del tráfico y el estacionamiento en esta calle…`,
+        `Consultando el uso comercial y la parcela de este bloque…`,
+        `Trazando los radios de 10 min a pie y 5 / 10 / 15 min en auto…`,
+      ],
+      [
+        `Consultando el historial de negocios en esta dirección…`,
+        `Revisando qué operó aquí antes y cómo lo calificaban…`,
+        `Verificando cambios de operador y periodos vacíos en esta dirección…`,
+        `Buscando menciones de este local en noticias locales de ${city}…`,
+        `Comparando cierres y aperturas recientes en la misma calle…`,
+      ],
+      [
+        `Analizando la población y los hogares chinos alrededor de ${city}…`,
+        `Contando residentes e ingresos a 10 min a pie y 15 min en auto…`,
+        `Revisando la distribución de ingresos y el poder de compra de la zona…`,
+        `Estimando la diferencia entre población diurna y residente…`,
+        `Identificando anclas de tráfico: escuelas, oficinas, supermercados…`,
+      ],
+      [
+        `Contando restaurantes cercanos y competidores del mismo tipo de cocina…`,
+        `Comparando cada competidor: distancia, calificación, tráfico…`,
+        `Leyendo las reseñas de la competencia: qué elogian y qué critican…`,
+        `Revisando el rango de precios y el ticket promedio de los competidores…`,
+        `Clasificando la competencia en cuatro capas: directa, misma cocina, mismo precio, sustitutos…`,
+      ],
+      [
+        `Modelando la demanda mensual que este local puede captar…`,
+        `Calculando el punto de equilibrio y la presión de la renta…`,
+        `Separando el tráfico de almuerzo, cena y fin de semana…`,
+        `Estimando el ticket promedio y la rotación de mesas razonables…`,
+        `Comparando la renta como porcentaje de ventas con el umbral del sector…`,
+      ],
+      [
+        `Corriendo tres escenarios de ingresos y el retorno de la inversión…`,
+        `Revisando señales de delivery y tráfico de almuerzo / cena…`,
+        `Calculando la utilidad mensual en los casos conservador, base y optimista…`,
+        `Estimando la inversión inicial y el periodo de recuperación…`,
+        `Probando la sensibilidad de la utilidad a la renta, el ticket y el tráfico…`,
+      ],
+      [
+        `Armando el registro de riesgos y las condiciones previas al contrato…`,
+        `Calificando el local en seis dimensiones…`,
+        `Listando las preguntas que hay que hacerle al arrendador antes de firmar…`,
+        `Marcando qué riesgos se pueden negociar y cuáles son eliminatorios…`,
+        `Resumiendo la conclusión en un veredicto de una línea…`,
+      ],
+      [
+        `Verificando la fuente de cada cifra…`,
+        `Maquetando el informe (portada + 15 páginas)…`,
+        `Generando el mapa y las gráficas…`,
+        `Comprobando que las cifras del informe sean consistentes…`,
+        `Haciendo la última lectura y corrección…`,
+      ],
     ];
   }
   return [
-    [`Locating "${addr}" and its census block group…`, `Pinning down the block in ${city}…`],
-    [`Pulling the history of businesses at this address…`, `Checking what operated here before and how it was rated…`],
-    [`Analyzing population and Chinese households around ${city}…`, `Counting residents and income within a 10-min walk and 15-min drive…`],
-    [`Counting nearby restaurants and same-cuisine competitors…`, `Benchmarking each competitor: distance, rating, traffic…`],
-    [`Modeling the monthly demand this site can capture…`, `Computing the break-even line and rent pressure…`],
-    [`Running three revenue scenarios and payback…`, `Checking delivery signals and lunch / dinner traffic…`],
-    [`Assembling the risk register and pre-lease conditions…`, `Scoring the site on six dimensions…`],
-    [`Verifying the source of every number…`, `Laying out the report (cover + 15 pages)…`],
+    [
+      `Locating "${addr}" and its census block group…`,
+      `Pinning down the block in ${city}…`,
+      `Confirming traffic direction and parking on this street…`,
+      `Pulling the parcel and commercial-use record for this block…`,
+      `Drawing the 10-min walk and 5 / 10 / 15-min drive rings…`,
+    ],
+    [
+      `Pulling the history of businesses at this address…`,
+      `Checking what operated here before and how it was rated…`,
+      `Checking operator turnover and vacancy gaps at this address…`,
+      `Searching ${city} local news for mentions of this storefront…`,
+      `Comparing recent closures and openings on the same street…`,
+    ],
+    [
+      `Analyzing population and Chinese households around ${city}…`,
+      `Counting residents and income within a 10-min walk and 15-min drive…`,
+      `Reviewing household income distribution and spending power in the area…`,
+      `Estimating the gap between daytime workers and residents…`,
+      `Mapping traffic anchors: schools, offices, supermarkets…`,
+    ],
+    [
+      `Counting nearby restaurants and same-cuisine competitors…`,
+      `Benchmarking each competitor: distance, rating, traffic…`,
+      `Reading competitor reviews: what gets praised, what gets panned…`,
+      `Checking competitor price bands and average ticket…`,
+      `Sorting competitors into four layers: direct, same cuisine, same price, substitutes…`,
+    ],
+    [
+      `Modeling the monthly demand this site can capture…`,
+      `Computing the break-even line and rent pressure…`,
+      `Splitting traffic across lunch, dinner and weekends…`,
+      `Estimating a realistic ticket size and table-turn range…`,
+      `Comparing rent as a share of sales against the industry warning line…`,
+    ],
+    [
+      `Running three revenue scenarios and payback…`,
+      `Checking delivery signals and lunch / dinner traffic…`,
+      `Computing monthly profit under conservative, base and upside cases…`,
+      `Estimating upfront investment and the payback period…`,
+      `Stress-testing profit against rent, ticket size and traffic swings…`,
+    ],
+    [
+      `Assembling the risk register and pre-lease conditions…`,
+      `Scoring the site on six dimensions…`,
+      `Listing the questions to put to the landlord before signing…`,
+      `Flagging which risks are negotiable and which are deal-breakers…`,
+      `Condensing the findings into a one-line verdict…`,
+    ],
+    [
+      `Verifying the source of every number…`,
+      `Laying out the report (cover + 15 pages)…`,
+      `Rendering the map and charts…`,
+      `Checking that every figure in the report agrees with the others…`,
+      `Doing a final read-through and proof…`,
+    ],
   ];
 }
 
 const TYPICAL_SEC = 180;
-const STRETCH_SEC = 300;
 const COUNTDOWN_AFTER_SEC = 15;
-const ALTERNATE_EVERY_SEC = 5;
+const ROTATE_EVERY_SEC = 5;
 
 function fmtRemaining(lang: Locale, sec: number): string {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
-  if (lang === 'zh') {
-    if (sec < 60) return '不到 1 分钟';
-    return s === 0 ? `约 ${m} 分钟` : `约 ${m} 分 ${String(s).padStart(2, '0')} 秒`;
-  }
-  if (sec < 60) return lang === 'es' ? 'menos de un minuto' : 'under a minute';
+  if (lang === 'zh') return s === 0 ? `约 ${m} 分钟` : `约 ${m} 分 ${String(s).padStart(2, '0')} 秒`;
   return s === 0 ? `${m} min` : `${m}:${String(s).padStart(2, '0')}`;
 }
 
-/** Countdown copy for the current second, or null while still in the grace period. */
+/**
+ * Countdown copy for the current second, or null while still in the grace period.
+ * Monotonic by construction: the remaining time is `TYPICAL - elapsed`, so it can
+ * only fall; under a minute it becomes a coarse label, past the anchor it becomes
+ * "taking a little longer" instead of resetting to a bigger number.
+ */
 export function etaLabel(lang: Locale, elapsedSec: number, percent: number): string | null {
   if (elapsedSec < COUNTDOWN_AFTER_SEC) return null;
   if (percent >= 90) {
@@ -91,27 +238,59 @@ export function etaLabel(lang: Locale, elapsedSec: number, percent: number): str
     if (lang === 'es') return 'Terminando; ya casi está';
     return 'Finishing up — almost there';
   }
-  const target = elapsedSec < TYPICAL_SEC - 20 ? TYPICAL_SEC : STRETCH_SEC;
-  const remaining = target - elapsedSec;
+  const remaining = TYPICAL_SEC - elapsedSec;
   if (remaining <= 0) {
     if (lang === 'zh') return '比平时慢一些，正在收尾…';
     if (lang === 'es') return 'Está tardando un poco más de lo normal; terminando…';
     return 'Taking a little longer than usual — finishing…';
   }
+  if (remaining < 60) {
+    if (lang === 'zh') return '预计还需不到 1 分钟';
+    if (lang === 'es') return 'Falta menos de un minuto';
+    return 'Under a minute to go';
+  }
   if (lang === 'zh') return `预计还需${fmtRemaining(lang, remaining)}`;
-  if (lang === 'es') return remaining < 60 ? 'Falta menos de un minuto' : `Faltan unos ${fmtRemaining(lang, remaining)}`;
-  return remaining < 60 ? 'Under a minute to go' : `About ${fmtRemaining(lang, remaining)} to go`;
+  if (lang === 'es') return `Faltan unos ${fmtRemaining(lang, remaining)}`;
+  return `About ${fmtRemaining(lang, remaining)} to go`;
+}
+
+/** Phase index for a progress percentage. */
+export function phaseOf(percent: number, phases: number): number {
+  return Math.min(phases - 1, Math.floor((Math.max(0, Math.min(99, percent)) / 100) * phases));
+}
+
+/**
+ * Message to show at rotation tick `tick` while in `phase`. Runs through the
+ * phase's own wordings first, then borrows from the next phase (and the one
+ * after) so a stage that stays on screen for a minute or more keeps saying new
+ * things; never the same line twice in a row.
+ */
+export function pickMessage(groups: string[][], phase: number, tick: number): string {
+  const own = groups[phase] ?? [];
+  const pool = [...own];
+  for (let i = 1; i <= 2 && phase + i < groups.length; i++) pool.push(...groups[phase + i]);
+  if (pool.length === 0) return '';
+  return pool[tick % pool.length];
 }
 
 export function GenerationTicker({ lang, location, elapsedSec, percent }: { lang: Locale; location: string; elapsedSec: number; percent: number }) {
   const groups = useMemo(() => tickerMessages(lang, location), [lang, location]);
-  const [alt, setAlt] = useState(0);
+  const phase = phaseOf(percent, groups.length);
+  // Rotation tick counts from the moment the current phase started, so each
+  // phase begins with its own first wording before borrowing from the next ones.
+  const [tick, setTick] = useState(0);
+  const phaseRef = useRef(phase);
   useEffect(() => {
-    const t = window.setInterval(() => setAlt((a) => a + 1), ALTERNATE_EVERY_SEC * 1000);
+    if (phaseRef.current !== phase) {
+      phaseRef.current = phase;
+      setTick(0);
+    }
+  }, [phase]);
+  useEffect(() => {
+    const t = window.setInterval(() => setTick((a) => a + 1), ROTATE_EVERY_SEC * 1000);
     return () => window.clearInterval(t);
   }, []);
-  const phase = Math.min(groups.length - 1, Math.floor((Math.max(0, Math.min(99, percent)) / 100) * groups.length));
-  const message = groups[phase][alt % groups[phase].length];
+  const message = pickMessage(groups, phase, tick);
   const eta = etaLabel(lang, elapsedSec, percent);
   return (
     <div className="flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between" aria-live="polite">

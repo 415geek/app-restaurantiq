@@ -143,6 +143,24 @@ async function startGeneration(
   return { kind: 'error', message: msg };
 }
 
+/** Remembered start of the current generation run (ms epoch), per report; stale after 30 min. */
+const START_TTL_MS = 30 * 60 * 1000;
+function generationStart(reportId: string, reset: boolean): number {
+  const key = `iq:gen_start:${reportId}`;
+  const now = Date.now();
+  try {
+    if (!reset) {
+      const raw = window.localStorage.getItem(key);
+      const ts = raw ? Number(raw) : NaN;
+      if (Number.isFinite(ts) && ts <= now && now - ts < START_TTL_MS) return ts;
+    }
+    window.localStorage.setItem(key, String(now));
+  } catch {
+    /* storage unavailable — fall back to an in-memory clock */
+  }
+  return now;
+}
+
 export function IqFullReportGenerating({ reportId, location, headline, lang }: Props) {
   const t = COPY[lang];
   const [error, setError] = useState<string | null>(null);
@@ -225,10 +243,15 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
     await poll();
   }, [reportId, lang, finish, poll]);
 
+  // Elapsed time is measured from a start timestamp remembered per report, so a
+  // refresh, a language switch or a re-run of this effect continues the same
+  // countdown instead of restarting it at "about 2:45 to go". Only an explicit
+  // retry starts a new clock.
+  const startRef = useRef<number>(0);
   useEffect(() => {
     const tick = window.setInterval(() => {
-      if (!runningRef.current && (error || done)) return;
-      setElapsedSec((s) => s + 1);
+      if (!startRef.current || (!runningRef.current && (error || done))) return;
+      setElapsedSec(Math.max(0, Math.floor((Date.now() - startRef.current) / 1000)));
     }, 1000);
     return () => window.clearInterval(tick);
   }, [error, done]);
@@ -238,7 +261,8 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
   }, [reportId, location]);
 
   useEffect(() => {
-    setElapsedSec(0);
+    startRef.current = generationStart(reportId, retryKey > 0);
+    setElapsedSec(Math.max(0, Math.floor((Date.now() - startRef.current) / 1000)));
     void runGeneration();
     return () => {
       stoppedRef.current = true;
