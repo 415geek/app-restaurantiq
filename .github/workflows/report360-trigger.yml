@@ -67,6 +67,9 @@ jobs:
                 pages=$( (grep -a -o '/Type */Page[^s]' /tmp/probe.pdf || true) | wc -l)
                 counts=$( (grep -a -o '/Count [0-9]*' /tmp/probe.pdf || true) | sort -t' ' -k2 -n | tail -1)
                 echo "PDF page objects=$pages max /Count=${counts:-none}"
+                # Embedded font families (poppler-utils ships on ubuntu-latest); the report expects NotoSerifSC / NotoSansSC / Inter.
+                (command -v pdffonts >/dev/null || (sudo apt-get -qq update >/dev/null 2>&1 && sudo apt-get -qq install -y poppler-utils >/dev/null 2>&1) || true)
+                if command -v pdffonts >/dev/null; then echo "PDF fonts:"; pdffonts /tmp/probe.pdf 2>/dev/null | awk 'NR>2{print $1}' | sed 's/^[A-Z]\{6\}+//' | sort | uniq -c | sort -rn | head -12; fi
                 echo "PDF HTTP $pcode size=$psize pages=$pages type=$ptype"
                 if [ "$pcode" != "200" ] || ! head -c 5 /tmp/probe.pdf | grep -q '%PDF'; then echo "PDF probe failed: $(head -c 300 /tmp/probe.pdf)"; rc=1; else mkdir -p /tmp/pdfs && cp /tmp/probe.pdf "/tmp/pdfs/$id.pdf"; fi
                 break
