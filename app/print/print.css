@@ -1158,3 +1158,40 @@ strong {
 .report[data-lang='es'] .page-6 .page-body > svg {
   max-width: 130mm;
 }
+
+/* ---------- on-screen viewer (/iq/report/[id]) ----------
+   The same document, framed by the app's navy shell: the white .page boxes
+   float on the navy ground like a PDF viewer. Screen-only and scoped to
+   .report-viewer, so /print and the server PDF are untouched. */
+@media screen {
+  html:has(.report-viewer),
+  html:has(.report-viewer) body {
+    background: #0b1220 !important;
+    color: #fafafa !important;
+    color-scheme: dark;
+  }
+  .report-viewer .print-root {
+    background: transparent;
+  }
+  .report-viewer .report {
+    padding: 0;
+  }
+  .report-viewer .page {
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+}
+@media print {
+  .report-viewer-scale {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .report-viewer-inner {
+    transform: none !important;
+    width: auto !important;
+  }
+  .report-viewer-footer,
+  .report-viewer-chrome {
+    display: none !important;
+  }
+}

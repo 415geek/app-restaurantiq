@@ -57,6 +57,17 @@ test('report-inputs schema: coerces "$ , %" strings, splits lists, drops junk, c
   assert.equal(reportInputsSchema.parse({ known_competitors: ['Y'.repeat(300)] }).known_competitors![0].length, 80);
 });
 
+test('report-inputs schema: rent and size typed on the pre-payment intake ("$12,000" / "1,800") parse', () => {
+  // PaidIntakeForm sends its keys verbatim; the core group is monthly_rent_usd / sqft / seats.
+  const parsed = reportInputsSchema.parse({ monthly_rent_usd: '$12,000', sqft: '1,800', seats: '60' });
+  assert.equal(parsed.monthly_rent_usd, 12_000);
+  assert.equal(parsed.sqft, 1_800);
+  assert.equal(parsed.seats, 60);
+  const body = reportInputsBodySchema.safeParse({ reportId: 'rpt_1', inputs: { monthly_rent_usd: '$12,000', sqft: '1,800' } });
+  assert.ok(body.success);
+  assert.deepEqual(body.data.inputs, { monthly_rent_usd: 12_000, sqft: 1_800 });
+});
+
 test('report-inputs schema: rejects out-of-range numbers and bad bodies', () => {
   assert.equal(reportInputsSchema.safeParse({ seats: -5 }).success, false);
   assert.equal(reportInputsSchema.safeParse({ seats: 0 }).success, false);

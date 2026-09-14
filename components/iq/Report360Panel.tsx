@@ -1,185 +1,102 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { PaidIntakeForm } from '@/components/iq/PaidIntakeForm';
+/**
+ * Shown under the legacy report while the 360° model is still missing: polls
+ * the status, kicks generation once, and reloads the page as soon as the model
+ * lands so the reader gets the 360° document (app/iq/report/[id]) without a click.
+ *
+ * Loop guard: if the very first poll already says "ready" (the page rendered
+ * without a model, so the stored model is unrenderable, or generation finished
+ * in the SSR → poll window) we reload once per session and, on a second
+ * occurrence, fall back to the PDF / print links instead of reloading forever.
+ */
+import { useCallback } from 'react';
 import type { Locale } from '@/lib/i18n/locale';
-
-type Status = {
-  ready: boolean;
-  tier: string | null;
-  generated_at: string | null;
-  cost_usd: number | null;
-  total: number | null;
-  verdict: string | null;
-  migration_needed?: boolean;
-  precheck_reasons?: string[];
-};
+import { useReport360Generation } from '@/components/iq/useReport360Generation';
 
 type Copy = {
   title: string;
   desc: string;
   generating: string;
-  ready: string;
-  precheck: string;
   migration: string;
+  ready: string;
   download: string;
   preview: string;
-  regen: string;
-  addDetails: string;
-  addDetailsDesc: string;
-  score: string;
-  verdict: Record<string, string>;
   failed: string;
+  timeout: string;
 };
 
 const T: Record<Locale, Copy> = {
   zh: {
-    title: '360° 专业版报告（新引擎）',
+    title: '360° 专业版报告',
     desc: '步行与开车四个范围的商圈 · 需求分流测算 · 四层竞争关系 · 自洽财务模型 · 六维评分 · 真实地图 · 老板总结。浅色打印版 15 页，每个数字都可追溯到公开数据来源。',
-    generating: '正在生成（约 1–3 分钟，可离开页面稍后回来）…',
-    ready: '已生成',
-    precheck: '预检版：数据完整性未达付费交付标准，报告中已列出原因。',
+    generating: '正在生成（约 1–3 分钟，可离开页面稍后回来）…生成完成后本页会自动刷新。',
     migration: '数据库尚未升级（迁移 0009）。请在 Vercel 设置 DATABASE_URL 后重新生成，系统会自动完成迁移。',
+    ready: '已生成',
     download: '下载 360° PDF',
     preview: '在线预览',
-    regen: '重新生成',
-    addDetails: '补充信息并重新生成',
-    addDetailsDesc: '补充座位、客单价、你知道的竞品等，竞对与财务会更准。',
-    score: '综合分',
-    verdict: { GO: '可做', CONDITIONAL_GO: '有条件可做', NO_GO: '不建议' },
     failed: '生成失败，请稍后重试。',
+    timeout: '生成超时，请稍后刷新页面。',
   },
   en: {
-    title: '360° Professional Report (new engine)',
+    title: '360° Professional Report',
     desc: 'Four-ring trade area · demand capture · four competitive layers · reconciled finance model · six-dimension score · real map · owner summary. 15 print-ready pages; every number traces back to a public source.',
-    generating: 'Generating (1–3 min; you can leave and come back)…',
-    ready: 'Ready',
-    precheck: 'Pre-check edition: data completeness is below the paid standard; the reasons are listed in the report.',
+    generating: 'Generating (1–3 min; you can leave and come back)… this page refreshes automatically when it is ready.',
     migration: 'Database not upgraded yet (migration 0009). Set DATABASE_URL on Vercel and regenerate — the migration runs automatically.',
-    download: 'Download 360° PDF',
+    ready: 'Ready',
+    download: 'Download the 360° PDF',
     preview: 'Preview online',
-    regen: 'Regenerate',
-    addDetails: 'Add details & regenerate',
-    addDetailsDesc: 'Seats, ticket sizes, competitors you know of — sharper competitor and finance sections.',
-    score: 'Score',
-    verdict: { GO: 'GO', CONDITIONAL_GO: 'CONDITIONAL GO', NO_GO: 'NO GO' },
     failed: 'Generation failed. Please try again later.',
+    timeout: 'Generation timed out. Please refresh the page later.',
   },
   es: {
-    title: 'Informe profesional 360° (nuevo motor)',
+    title: 'Informe profesional 360°',
     desc: 'Área comercial de cuatro anillos · captura de demanda · cuatro capas competitivas · modelo financiero conciliado · puntuación en seis dimensiones · mapa real · resumen para el dueño. 15 páginas listas para imprimir; cada cifra se rastrea hasta una fuente pública.',
-    generating: 'Generando (1–3 min; puedes salir y volver después)…',
-    ready: 'Listo',
-    precheck: 'Edición preliminar: la integridad de los datos está por debajo del estándar de pago; los motivos se detallan en el informe.',
+    generating: 'Generando (1–3 min; puedes salir y volver después)… esta página se actualiza sola cuando esté listo.',
     migration: 'La base de datos aún no está actualizada (migración 0009). Configura DATABASE_URL en Vercel y vuelve a generar; la migración se ejecuta automáticamente.',
+    ready: 'Listo',
     download: 'Descargar PDF 360°',
     preview: 'Vista previa en línea',
-    regen: 'Volver a generar',
-    addDetails: 'Agregar datos y volver a generar',
-    addDetailsDesc: 'Asientos, ticket promedio, competidores que conozcas: secciones de competencia y finanzas más precisas.',
-    score: 'Puntuación',
-    verdict: { GO: 'VIABLE', CONDITIONAL_GO: 'VIABLE CON CONDICIONES', NO_GO: 'NO VIABLE' },
     failed: 'La generación falló. Inténtalo de nuevo más tarde.',
+    timeout: 'La generación tardó demasiado. Actualiza la página más tarde.',
   },
 };
 
-/** After a forced regen the old model stays `ready` until overwritten; poll until generated_at changes (≤ ~6 min). */
-const REGEN_MAX_TICKS = 60;
+function reloadOnceKey(reportId: string): string {
+  return `iq360-reloaded:${reportId}`;
+}
 
 export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; lang?: Locale }) {
   const t = T[lang];
-  const [status, setStatus] = useState<Status | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [pollKey, setPollKey] = useState(0);
-  const kicked = useRef(false);
-  /** generated_at of the model we asked to replace; null when not regenerating. */
-  const regenFrom = useRef<string | null>(null);
-  const regenTicks = useRef(0);
 
-  const load = async (): Promise<Status | null> => {
-    try {
-      const res = await fetch(`/api/iq/report360/${encodeURIComponent(reportId)}`, { cache: 'no-store' });
-      if (!res.ok) return null;
-      const j = (await res.json()) as Status;
-      const stale = regenFrom.current != null && j.ready && j.generated_at === regenFrom.current && regenTicks.current < REGEN_MAX_TICKS;
-      if (stale) regenTicks.current += 1;
-      else regenFrom.current = null;
-      const shown = stale ? { ...j, ready: false } : j;
-      setStatus(shown);
-      return shown;
-    } catch {
-      return null;
-    }
-  };
-
-  const kick = async (force = false) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/iq/report360/${encodeURIComponent(reportId)}${force ? '?force=1' : ''}`, { method: 'POST' });
-      if (!res.ok && res.status !== 202) {
-        setError(t.failed);
-        return false;
+  const onReady = useCallback(
+    () => {
+      if (typeof window === 'undefined') return;
+      let reloadedBefore = false;
+      try {
+        const key = reloadOnceKey(reportId);
+        const at = Number(sessionStorage.getItem(key) ?? 0);
+        reloadedBefore = Date.now() - at < 5 * 60_000;
+        if (!reloadedBefore) sessionStorage.setItem(key, String(Date.now()));
+      } catch {
+        /* storage unavailable: reload anyway */
       }
-      return true;
-    } catch {
-      setError(t.failed);
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  };
+      if (!reloadedBefore) window.location.reload();
+    },
+    [reportId],
+  );
 
-  /** Force a regeneration and resume polling until a newer model lands. */
-  const regenerate = async () => {
-    const ok = await kick(true);
-    if (!ok) return;
-    regenFrom.current = status?.generated_at ?? null;
-    regenTicks.current = 0;
-    setStatus((s) => (s ? { ...s, ready: false } : s));
-    setPollKey((k) => k + 1);
-  };
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let stopped = false;
-    const tick = async () => {
-      const s = await load();
-      if (stopped) return;
-      if (s && !s.ready && !s.migration_needed && !kicked.current) {
-        kicked.current = true;
-        await kick(false);
-      }
-      if (!s || !s.ready) timer = setTimeout(tick, s?.migration_needed ? 30_000 : 6_000);
-    };
-    void tick();
-    return () => {
-      stopped = true;
-      if (timer) clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportId, pollKey]);
+  const { status, error } = useReport360Generation({
+    reportId,
+    pollOnMount: true,
+    autoKick: true,
+    onReady,
+    failedMessage: t.failed,
+    timeoutMessage: t.timeout,
+  });
 
   const pdfUrl = `/api/iq/report/${encodeURIComponent(reportId)}/pdf?lang=${lang}`;
   const printUrl = `/print/${encodeURIComponent(reportId)}?lang=${lang}`;
-
-  const intakeForm = formOpen ? (
-    <div className="mt-4 rounded-xl border border-emerald-800/50 bg-emerald-950/30 p-4">
-      <p className="mb-3 text-xs text-zinc-300">{t.addDetailsDesc}</p>
-      <PaidIntakeForm
-        lang={lang}
-        reportId={reportId}
-        mode="standalone"
-        onCancel={() => setFormOpen(false)}
-        onSaved={async () => {
-          setFormOpen(false);
-          await regenerate();
-        }}
-      />
-    </div>
-  ) : null;
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -190,42 +107,19 @@ export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; la
           {t.migration}
         </p>
       ) : status?.ready ? (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3 text-sm text-white">
-            <span className="rounded-full border border-emerald-700/60 bg-emerald-900/40 px-2 py-0.5 text-xs">{t.ready}</span>
-            {status.total != null ? (
-              <span>
-                {t.score} <strong>{status.total}</strong>
-                {status.verdict ? ` · ${t.verdict[status.verdict] ?? status.verdict}` : ''}
-              </span>
-            ) : null}
-            {status.tier === 'precheck' ? <span className="text-xs text-amber-300/90">{t.precheck}</span> : null}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <a href={pdfUrl} className="rounded-xl bg-brand-green px-5 py-2.5 text-sm font-semibold text-brand-navy transition hover:bg-emerald-400">
-              {t.download}
-            </a>
-            <a href={printUrl} target="_blank" rel="noopener" className="rounded-xl border border-white/20 px-5 py-2.5 text-sm text-white transition hover:bg-white/10">
-              {t.preview}
-            </a>
-            <button type="button" onClick={() => void regenerate()} disabled={busy} className="rounded-xl border border-white/15 px-4 py-2.5 text-xs text-zinc-300 disabled:opacity-50">
-              {t.regen}
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormOpen((o) => !o)}
-              disabled={busy}
-              aria-expanded={formOpen}
-              className="text-xs text-emerald-300 underline decoration-emerald-700/60 underline-offset-4 hover:text-white disabled:opacity-50"
-            >
-              {t.addDetails}
-            </button>
-          </div>
-          {intakeForm}
+        /* Reached only when the reload guard tripped: the stored model exists but this page could not render it. */
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded-full border border-emerald-700/60 bg-emerald-900/40 px-2 py-0.5 text-xs text-white">{t.ready}</span>
+          <a href={pdfUrl} className="rounded-xl bg-brand-green px-5 py-2.5 text-sm font-semibold text-brand-navy transition hover:bg-emerald-400">
+            {t.download}
+          </a>
+          <a href={printUrl} target="_blank" rel="noopener" className="rounded-xl border border-white/20 px-5 py-2.5 text-sm text-white transition hover:bg-white/10">
+            {t.preview}
+          </a>
         </div>
       ) : (
         <div className="flex items-center gap-3 text-sm text-zinc-300">
-          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+          <svg className="h-4 w-4 shrink-0 animate-spin" viewBox="0 0 24 24" aria-hidden>
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>

@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { runQaGates } from './gates';
 import type { ReportModel } from '../model/schema';
 import { PAGES, templateNarrative } from '../narrative/templates';
+import { rederiveWithoutRent } from '../pipeline';
 
 function loadModel(): ReportModel {
   const m = JSON.parse(readFileSync(join(process.cwd(), 'qa/fixtures/report_model_millbrae.json'), 'utf8')) as ReportModel;
@@ -40,6 +41,32 @@ test('page count: the gates cover all 15 pages, including 总结与建议 (page_
   const m2 = loadModel();
   m2.narrative.page_15 = { title: '不建议', body: '需求覆盖率 88% [src:demand.coverage_ratio]', refs: ['demand.coverage_ratio'] };
   assert.ok(runQaGates(m2).failures.some((f) => f.includes('page_15') && f.includes('88%')));
+});
+
+test('rent not provided: the rent-excluded model passes every gate in all three languages', () => {
+  const base = rederiveWithoutRent(loadModel());
+  assert.equal(base.input.rent_usd, null);
+  assert.equal(base.finance.fixed_cost.rent, null);
+  assert.equal(base.finance.rent_excluded, true);
+  assert.equal(base.finance.occupancy_cost_ratio, null);
+  assert.equal(base.finance.max_rent_for_10pct_usd, Math.round(base.demand.captured_monthly_usd! * 0.1));
+  assert.notEqual(base.score.verdict, 'GO');
+  assert.ok(base.score.alternatives.every((a) => a.verdict !== 'GO'));
+  assert.equal(base.score.conditions[0].dimension, 'financial_viability');
+  assert.ok(base.score.conditions[0].text_zh.startsWith('补充实际月租后重新生成'), base.score.conditions[0].text_zh);
+  assert.ok(base.risks.some((r) => r.risk_zh.startsWith('未提供月租')));
+  assert.ok(!base.risks.some((r) => r.risk_zh.includes('警戒线')), 'no rent-vs-10% risk without a rent');
+  // the customer's old rent ($17,000) exists nowhere in the model
+  assert.ok(!JSON.stringify(base).includes('17000'));
+  for (const lang of ['zh', 'en', 'es'] as const) {
+    const m = clone(base);
+    m.meta.language = lang;
+    m.meta.narrative_language = lang;
+    for (const p of PAGES) m.narrative[p.id] = templateNarrative(m, p.id, lang);
+    const r = runQaGates(m);
+    assert.equal(r.passed, true, `${lang}: ${r.failures.join('\n')}`);
+    assert.equal(r.tier, 'paid');
+  }
 });
 
 test('R1: zero competitors from a broken pipeline → integrity gate fails, precheck', () => {

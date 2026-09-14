@@ -3,9 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { rememberPaidReport } from '@/components/iq/SupportBubble';
 import Link from 'next/link';
-import { useAuth } from '@clerk/nextjs';
-import { useRouter } from 'next/navigation';
-import { ReportActions } from './ReportActions';
+import { Report360Panel } from './Report360Panel';
+import { ReportAccountBlock } from './ReportAccountBlock';
 import { ReportMarkdown } from './ReportMarkdown';
 import { RiskAuditReportSections } from './RiskAuditReportSections';
 import { DataProvenance, ReportDataViz } from './ReportDataViz';
@@ -435,52 +434,6 @@ function SectionShell({
   );
 }
 
-/**
- * After Google OAuth, Clerk session exists but `iq_location_reports.user_id` is still null
- * (only `/iq/success` auto-linked on checkout). Link this paid report to the signed-in user.
- */
-function IqReportAutoLink({
-  reportId,
-  serverUserId,
-  onLinked,
-}: {
-  reportId: string;
-  serverUserId: string | null;
-  onLinked: () => void;
-}) {
-  const { isSignedIn, userId, isLoaded } = useAuth();
-  const router = useRouter();
-  const inFlight = useRef(false);
-
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn || !userId) return;
-    if (serverUserId === userId) return;
-    if (serverUserId && serverUserId !== userId) return;
-    if (inFlight.current) return;
-    inFlight.current = true;
-
-    void (async () => {
-      try {
-        const res = await fetch('/api/iq/link-report', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reportId }),
-        });
-        if (res.ok) {
-          onLinked();
-          router.refresh();
-        } else {
-          inFlight.current = false;
-        }
-      } catch {
-        inFlight.current = false;
-      }
-    })();
-  }, [isLoaded, isSignedIn, userId, serverUserId, reportId, onLinked, router]);
-
-  return null;
-}
-
 export function ReportContent({
   report,
   full,
@@ -492,8 +445,6 @@ export function ReportContent({
   useEffect(() => {
     rememberPaidReport(report.id, report.location);
   }, [report.id, report.location]);
-  const [linkedLocally, setLinkedLocally] = useState(false);
-  const handleReportLinked = useCallback(() => setLinkedLocally(true), []);
   const [fullByLang, setFullByLang] = useState<Record<Locale, FullReportView | null>>(() => ({
     en: initialLang === 'en' ? full : null,
     zh: initialLang === 'zh' ? full : null,
@@ -550,10 +501,6 @@ export function ReportContent({
       cancelled = true;
     };
   }, [generationTier, report.id]);
-
-  const clerkLinkEnabled =
-    process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'true' &&
-    Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 
   const t = translations[lang];
 
@@ -650,13 +597,6 @@ export function ReportContent({
 
   return (
     <>
-      {clerkLinkEnabled ? (
-        <IqReportAutoLink
-          reportId={report.id}
-          serverUserId={report.user_id}
-          onLinked={handleReportLinked}
-        />
-      ) : null}
       <style jsx global>{`
         @media print {
           body {
@@ -1315,13 +1255,10 @@ export function ReportContent({
         </SectionShell>
       )}
 
-      <div className="no-print">
-        <ReportActions
-          reportId={report.id}
-          isLinkedToUser={Boolean(report.user_id) || linkedLocally}
-          lang={lang}
-          isPaid
-        />
+      {/* The 360° model is still generating (the page shows this legacy view only then); reloads into the document when ready. */}
+      <div className="no-print space-y-6">
+        <Report360Panel reportId={report.id} lang={lang} />
+        <ReportAccountBlock reportId={report.id} serverUserId={report.user_id} lang={lang} />
       </div>
 
       <footer className="text-center">

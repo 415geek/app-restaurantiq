@@ -213,7 +213,12 @@ export const reportModelSchema = z.object({
       misc: nullableNum,
       total: nullableNum,
     }),
+    /** 'user_input' when the customer gave a monthly rent, 'not_provided' otherwise (rent is never estimated). */
     rent_source: z.string(),
+    /** True when no rent was provided: fixed_cost.total, break-even, safety line, vs_breakeven and coverage EXCLUDE rent. */
+    rent_excluded: z.boolean().default(false),
+    /** Monthly rent that keeps rent ÷ captured demand ≤ 10 % — the ceiling to negotiate to; null when captured demand is unknown. */
+    max_rent_for_10pct_usd: nullableNum.default(null),
     contribution_margin: nullableNum,
     variable_rate: nullableNum,
     breakeven_monthly: nullableNum,
@@ -237,8 +242,8 @@ export const reportModelSchema = z.object({
     sensitivity: z.array(
       z.object({ id: z.string(), label_zh: z.string(), label_en: z.string(), monthly_revenue_delta: z.number(), breaks_breakeven: z.boolean() }),
     ),
-    occupancy_cost_ratio: nullableNum, // rent / captured revenue
-    payback_months: nullableNum, // null unless capex provided
+    occupancy_cost_ratio: nullableNum, // rent / captured revenue; null when rent was not provided
+    payback_months: nullableNum, // null unless capex provided (and rent provided — profit without rent is not a payback)
     inputs_missing: z.array(z.string()),
   }),
   score: z.object({

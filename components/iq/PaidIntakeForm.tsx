@@ -8,12 +8,20 @@ import type { Locale } from '@/lib/i18n/locale';
  * the paid 360° report. Every field is optional; values are kept as raw strings
  * and coerced server-side (POST /api/funnel/report-inputs).
  *
+ * The three fields the 360° engine depends on most — monthly rent, size, seats —
+ * lead the form in a highlighted "core" group. When rent is missing the engine
+ * no longer assumes one (it reports a rent-excluded break-even and a rent
+ * ceiling instead), so the helper text under each core field spells out the
+ * consequence of leaving it blank.
+ *
  * Two modes:
  *   - embedded   (result page): parent owns `value` / `onChange` and saves on checkout.
  *   - standalone (Report360Panel): the form saves itself and calls `onSaved`.
  */
 
 export type PaidIntakeValues = {
+  monthly_rent_usd: string;
+  sqft: string;
   seats: string;
   ticket_in: string;
   ticket_delivery: string;
@@ -27,10 +35,21 @@ export type PaidIntakeValues = {
   notes: string;
 };
 
+/** The three inputs the finance engine depends on most; rendered first. */
+export type PaidIntakeCoreKey = 'monthly_rent_usd' | 'sqft' | 'seats';
+export const PAID_INTAKE_CORE_KEYS: readonly PaidIntakeCoreKey[] = ['monthly_rent_usd', 'sqft', 'seats'];
+
+/** DOM id of a field's <input>; lets a parent focus e.g. the rent input from a notice. */
+export function paidIntakeInputId(key: keyof Omit<PaidIntakeValues, 'dayparts'>): string {
+  return `intake-${key}`;
+}
+
 export const DAYPARTS = ['breakfast', 'lunch', 'dinner', 'late_night'] as const;
 
 export function emptyPaidIntakeValues(): PaidIntakeValues {
   return {
+    monthly_rent_usd: '',
+    sqft: '',
     seats: '',
     ticket_in: '',
     ticket_delivery: '',
@@ -84,7 +103,16 @@ const COPY: Record<
   Locale,
   {
     reassurance: string;
+    sectionCore: string;
+    rent: string;
+    rentHint: string;
+    sqft: string;
+    sqftHint: string;
     seats: string;
+    seatsHint: string;
+    alreadyProvided: string;
+    moreOptional: string;
+    moreOptionalHide: string;
     ticketIn: string;
     ticketDelivery: string;
     deliveryRatio: string;
@@ -111,7 +139,16 @@ const COPY: Record<
 > = {
   zh: {
     reassurance: '不填也能生成；填得越全，竞对与财务越准。',
+    sectionCore: '核心三项',
+    rent: '月租金 (USD)',
+    rentHint: '不填则报告不假设任何租金：只给不含租金的保本线和租金上限',
+    sqft: '面积 (sq ft)',
+    sqftHint: '不填面积就算不出每平方英尺租金，也无法与同区房源对比',
     seats: '座位数',
+    seatsHint: '座位数决定接待能力与每轮营收上限',
+    alreadyProvided: '已提供 ✓',
+    moreOptional: '更多可选信息（客单价、投入、竞品…）',
+    moreOptionalHide: '收起可选信息',
     ticketIn: '计划堂食客单价 ($)',
     ticketDelivery: '计划外卖客单价 ($)',
     deliveryRatio: '外卖占比 (%)',
@@ -137,7 +174,16 @@ const COPY: Record<
   },
   en: {
     reassurance: 'All optional — the report works without these; the more you add, the sharper the competitor and finance sections.',
+    sectionCore: 'The three numbers that matter',
+    rent: 'Monthly rent (USD)',
+    rentHint: 'Leave blank and the report assumes no rent: it shows a rent-excluded break-even and a rent ceiling instead',
+    sqft: 'Size (sq ft)',
+    sqftHint: 'Without size there is no rent per sq ft and no comparison with nearby listings',
     seats: 'Seats',
+    seatsHint: 'Seats set your capacity and the revenue ceiling per turn',
+    alreadyProvided: 'already provided ✓',
+    moreOptional: 'More optional details (ticket size, budget, competitors…)',
+    moreOptionalHide: 'Hide optional details',
     ticketIn: 'Planned dine-in ticket ($)',
     ticketDelivery: 'Planned delivery ticket ($)',
     deliveryRatio: 'Delivery share (%)',
@@ -163,7 +209,16 @@ const COPY: Record<
   },
   es: {
     reassurance: 'Todo es opcional: el informe funciona sin estos datos; cuanto más agregues, más precisas serán las secciones de competencia y finanzas.',
+    sectionCore: 'Los tres números que importan',
+    rent: 'Alquiler mensual (USD)',
+    rentHint: 'Si lo dejas en blanco, el informe no asume ningún alquiler: muestra el punto de equilibrio sin alquiler y un tope de alquiler',
+    sqft: 'Tamaño (pies cuadrados)',
+    sqftHint: 'Sin el tamaño no hay alquiler por pie cuadrado ni comparación con locales cercanos',
     seats: 'Asientos',
+    seatsHint: 'Los asientos fijan tu capacidad y el techo de ingresos por turno',
+    alreadyProvided: 'ya indicado ✓',
+    moreOptional: 'Más datos opcionales (ticket promedio, presupuesto, competidores…)',
+    moreOptionalHide: 'Ocultar datos opcionales',
     ticketIn: 'Ticket promedio en el local ($)',
     ticketDelivery: 'Ticket promedio de delivery ($)',
     deliveryRatio: 'Porcentaje de delivery (%)',
@@ -191,6 +246,8 @@ const COPY: Record<
 
 const inputCls =
   'w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none transition focus:border-emerald-400/60 focus:bg-white/10 disabled:opacity-60';
+const coreInputCls =
+  'w-full rounded-xl border border-brand-green/40 bg-brand-navy/60 px-3 py-3 text-base text-white placeholder-white/30 outline-none transition focus:border-brand-green focus:ring-2 focus:ring-brand-green/40 disabled:opacity-60';
 const labelCls = 'mb-1 block text-xs font-medium text-white/60';
 const hintCls = 'mt-1 text-[11px] text-white/35';
 
@@ -205,14 +262,35 @@ type Props = {
   onCancel?: () => void;
   disabled?: boolean;
   className?: string;
+  /**
+   * When true, only the core group (rent / size / seats) is always visible and
+   * the rest of the form sits behind a "more optional details" toggle.
+   * Default false: everything is visible (the standalone panel).
+   */
+  collapsibleExtras?: boolean;
+  /** Core fields already supplied earlier (e.g. by the free-analysis form); shown with an "already provided" mark. */
+  providedKeys?: readonly PaidIntakeCoreKey[];
 };
 
-export function PaidIntakeForm({ lang = 'en', reportId, mode = 'embedded', value, onChange, onSaved, onCancel, disabled, className }: Props) {
+export function PaidIntakeForm({
+  lang = 'en',
+  reportId,
+  mode = 'embedded',
+  value,
+  onChange,
+  onSaved,
+  onCancel,
+  disabled,
+  className,
+  collapsibleExtras = false,
+  providedKeys,
+}: Props) {
   const t = COPY[lang];
   const [inner, setInner] = useState<PaidIntakeValues>(() => value ?? emptyPaidIntakeValues());
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [extrasOpen, setExtrasOpen] = useState(false);
   const v = value ?? inner;
 
   const set = (patch: Partial<PaidIntakeValues>) => {
@@ -249,11 +327,11 @@ export function PaidIntakeForm({ lang = 'en', reportId, mode = 'embedded', value
   const busy = Boolean(disabled) || saving;
   const num = (k: keyof Omit<PaidIntakeValues, 'dayparts'>, label: string, placeholder: string) => (
     <div>
-      <label className={labelCls} htmlFor={`intake-${k}`}>
+      <label className={labelCls} htmlFor={paidIntakeInputId(k)}>
         {label}
       </label>
       <input
-        id={`intake-${k}`}
+        id={paidIntakeInputId(k)}
         type="text"
         inputMode="decimal"
         autoComplete="off"
@@ -267,18 +345,64 @@ export function PaidIntakeForm({ lang = 'en', reportId, mode = 'embedded', value
     </div>
   );
 
-  const body = (
-    <div className={`space-y-4 ${className ?? ''}`}>
+  // Core field: bigger input, consequence line underneath, "already provided" mark when prefilled upstream.
+  const core = (k: PaidIntakeCoreKey, label: string, placeholder: string, hint: string) => {
+    const provided = Boolean(providedKeys?.includes(k)) && v[k].trim().length > 0;
+    const id = paidIntakeInputId(k);
+    return (
+      <div className="min-w-0">
+        <label className="mb-1 flex flex-wrap items-baseline justify-between gap-x-2 text-sm font-semibold text-white" htmlFor={id}>
+          <span>{label}</span>
+          {provided ? <span className="text-[11px] font-medium text-brand-green">{t.alreadyProvided}</span> : null}
+        </label>
+        <input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          value={v[k]}
+          onChange={setField(k)}
+          placeholder={placeholder}
+          maxLength={20}
+          disabled={busy}
+          aria-describedby={`${id}-hint`}
+          className={coreInputCls}
+        />
+        <p id={`${id}-hint`} className="mt-1.5 text-xs leading-snug text-white/55">
+          {hint}
+        </p>
+      </div>
+    );
+  };
+
+  const coreGroup = (
+    <section
+      aria-label={t.sectionCore}
+      className="rounded-2xl border border-brand-green/40 bg-gradient-to-br from-brand-green/15 to-brand-green/5 p-4"
+    >
+      <div className="mb-3 flex items-center gap-2">
+        <span className="inline-block h-2 w-2 rounded-full bg-brand-green" aria-hidden />
+        <span className="text-xs font-semibold uppercase tracking-wide text-brand-green">{t.sectionCore}</span>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {core('monthly_rent_usd', t.rent, '$12,000', t.rentHint)}
+        {core('sqft', t.sqft, '1,800', t.sqftHint)}
+        {core('seats', t.seats, '60', t.seatsHint)}
+      </div>
+    </section>
+  );
+
+  const extras = (
+    <div className="space-y-4">
       <p className="text-xs text-emerald-300/80">{t.reassurance}</p>
 
       <div>
         <div className="mb-2 text-[11px] uppercase tracking-wide text-white/40">{t.sectionFinance}</div>
         <div className="grid grid-cols-2 gap-3">
-          {num('seats', t.seats, '60')}
-          {num('capex_usd', t.capex, '$250,000')}
           {num('ticket_in', t.ticketIn, '$24')}
           {num('ticket_delivery', t.ticketDelivery, '$28')}
           {num('delivery_ratio', t.deliveryRatio, '25')}
+          {num('capex_usd', t.capex, '$250,000')}
           {num('parking_spaces', t.parking, '12')}
         </div>
       </div>
@@ -371,6 +495,36 @@ export function PaidIntakeForm({ lang = 'en', reportId, mode = 'embedded', value
           </div>
         </div>
       </div>
+    </div>
+  );
+
+  const body = (
+    <div className={`space-y-4 ${className ?? ''}`}>
+      {coreGroup}
+
+      {collapsibleExtras ? (
+        <div>
+          <button
+            type="button"
+            onClick={() => setExtrasOpen((o) => !o)}
+            aria-expanded={extrasOpen}
+            aria-controls="paid-intake-extras"
+            className="inline-flex items-start gap-1.5 text-left text-sm text-white/60 underline-offset-4 transition hover:text-white hover:underline"
+          >
+            <span aria-hidden className="shrink-0 text-white/40">
+              {extrasOpen ? '▴' : '▾'}
+            </span>
+            <span>{extrasOpen ? t.moreOptionalHide : t.moreOptional}</span>
+          </button>
+          {extrasOpen ? (
+            <div id="paid-intake-extras" className="mt-3 border-t border-white/10 pt-4">
+              {extras}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        extras
+      )}
 
       {error ? (
         <p className="text-sm text-rose-300" role="alert">
