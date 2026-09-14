@@ -32,19 +32,19 @@ export const RAIL_MARKER_CAP = 6;
 
 /** Marker colours (24-bit, no alpha) — the legend in map.tsx mirrors these. */
 export const MARKER_COLOR = {
-  site: '0xFF6B35',
-  l1: '0x1B2A4F',
+  site: '0x22C55E',
+  l1: '0x0B1220',
   l2: '0x8A94A6',
-  l4: '0x1F8A5B',
-  rail: '0x1B2A4F',
+  l4: '0x2563EB', // anchors in blue so they never read as the green site marker
+  rail: '0x0B1220',
 } as const;
 
 /** Ring fill/stroke as 32-bit 0xRRGGBBAA (navy; fill 8–12 %, stroke ~50 %). Drawn largest first. */
 export const RING_PATH_STYLE: Record<RingId, { fill: string; stroke: string; weight: number }> = {
-  drive15: { fill: '0x1B2A4F14', stroke: '0x1B2A4F66', weight: 1 },
-  drive10: { fill: '0x1B2A4F14', stroke: '0x1B2A4F80', weight: 1 },
-  drive5: { fill: '0x1B2A4F1A', stroke: '0x1B2A4F80', weight: 2 },
-  walk10: { fill: '0x1B2A4F1F', stroke: '0x1B2A4F99', weight: 2 },
+  drive15: { fill: '0x0B122014', stroke: '0x0B122066', weight: 1 },
+  drive10: { fill: '0x0B122014', stroke: '0x0B122080', weight: 1 },
+  drive5: { fill: '0x0B12201A', stroke: '0x0B122080', weight: 2 },
+  walk10: { fill: '0x0B12201F', stroke: '0x0B122099', weight: 2 },
 };
 export const RING_DRAW_ORDER: RingId[] = ['drive15', 'drive10', 'drive5', 'walk10'];
 

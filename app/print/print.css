@@ -11,17 +11,19 @@
 
 .print-root {
   /* palette (§5.1) */
+  /* Brand system: Midnight Navy ink, Signal Green accent, Warm White panels;
+     🟢 opportunity / 🟡 caution / 🔴 risk. Text-safe inks stay ≥ 4.5:1 on white. */
   --bg: #ffffff;
-  --panel: #f6f7f9;
-  --navy: #1b2a4f;
-  --coral: #ff6b35;
-  --green: #1f8a5b;
-  --amber: #c98a00;
-  --red: #c63d2f;
-  --rule: #e2e5ea;
-  --muted: #566175;
-  --green-ink: #17714b;
-  --amber-ink: #7d5600;
+  --panel: #f7f8f4;
+  --navy: #0b1220;
+  --coral: #22c55e; /* legacy token name: the accent (Signal Green) */
+  --green: #22c55e;
+  --amber: #f59e0b;
+  --red: #dc2626;
+  --rule: #e2e8f0;
+  --muted: #475569;
+  --green-ink: #15803d;
+  --amber-ink: #b45309;
   --font-latin: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-cjk: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', 'WenQuanYi Zen Hei', sans-serif;
   color-scheme: light only;
@@ -40,7 +42,7 @@
 html:has(.print-root),
 html:has(.print-root) body {
   background: #ffffff !important;
-  color: #1b2a4f !important;
+  color: #0b1220 !important;
   color-scheme: light only;
   margin: 0;
 }
@@ -49,7 +51,7 @@ html:has(.print-root) body {
   html:has(.print-root) body,
   .print-root {
     background: #ffffff !important;
-    color: #1b2a4f !important;
+    color: #0b1220 !important;
   }
 }
 
@@ -305,7 +307,7 @@ strong {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
-  background: var(--coral);
+  background: var(--green);
   color: var(--navy);
   padding: 8pt 14pt;
   border-radius: 3pt;
@@ -321,6 +323,12 @@ strong {
   font-size: 10.5pt;
   font-weight: 600;
   margin-top: 3pt;
+}
+.verdict-badge[data-verdict='CONDITIONAL_GO'] {
+  background: var(--amber);
+}
+.verdict-badge[data-verdict='NO_GO'] {
+  background: #ef4444;
 }
 .verdict-badge.verdict-sm {
   flex-direction: row;

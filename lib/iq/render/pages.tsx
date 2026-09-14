@@ -80,6 +80,7 @@ import {
   sourceShortZh,
   stripCitations,
   verdictLabel,
+  PALETTE,
 } from './format';
 import { MapFigure } from './map';
 import type { StaticMaps } from './static-map';
@@ -679,7 +680,7 @@ function Page7({ model }: PageProps) {
     { label: '低位（较差的店）', value: b.p25 },
     { label: '中位（一般的店）', value: b.median },
     { label: '高位（较好的店）', value: b.p75 },
-    { label: '本址保本线', value: be, color: '#FF6B35' },
+    { label: '本址保本线', value: be, color: PALETTE.coral },
   ];
   const tierLabel = (t: number | null) => (t == null ? NA : `${t} / 5 级`);
   return (

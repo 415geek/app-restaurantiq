@@ -397,3 +397,8 @@
 ## 首页重设计（2026-09-14）
 - `app/iq/page.tsx` 按 Owner.com / DoorDash 的产品型落地页范式重做：白底、单一粗标题、地址「搜索卡」作为唯一主动作（地址 + 菜系并排，橙色主按钮，租金 / 面积折叠为选填），信任条（60 秒出结论 · 数据来源 · 免费不注册）；接着是四张真实渲染的报告页（封面 / 商圈地图 / 直接竞品 / 总结，来自 golden Millbrae 夹具，存于 `public/marketing/iq/`）、三步流程、「报告里有什么」六格、样例数字（夹具数据，标明假设输入）、免费 vs 专业版价格（读取 `NEXT_PUBLIC_STRIPE_PRICE_USD`，默认 $19）、适用人群、FAQ 折叠、账户入口与免责声明页脚。中英文一键切换，默认中文；导航锚点平滑滚动；手机端单列，无横向滚动。品牌色沿用 `--brand-orange`，Logo 改用透明 SVG。
 - 首页主标题改为「固定前半句 + 打字机动态后半句」：`签 lease 前，先算清楚` + 橙色逐字输入的轮换短语（这个铺位能不能赚钱 / 附近有多少华人家庭 / 同菜系竞品有几家 / 每月做多少才保本 / 租金占营收多少），桌面端保持单行（`clamp` 字号 + `md:whitespace-nowrap`），手机端前半句与动态短语各占一行；预留最长短语的宽度避免抖动；首屏 SSR 先完整显示第一句，`prefers-reduced-motion` 时不动画。
+
+## 品牌配色系统 · Midnight Navy + Signal Green + Warm White（2026-09-14）
+- 定色：Midnight Navy `#0B1220`（主品牌 / 深色背景）、Signal Green `#22C55E`（CTA / 机会 / 好位置）、Emerald `#16C784`、Warm White `#F7F8F4`（浅底）、Slate `#334155`（正文）、Amber `#F59E0B`（谨慎）、Red `#EF4444`（风险）、IQ Lime `#A3FF4F`（仅广告）。`app/globals.css` 暴露为 `--brand-navy / --brand-green / --brand-emerald / --brand-lime / --brand-canvas / --brand-slate / --brand-amber / --brand-red`（Tailwind `bg-brand-*` / `text-brand-*`），旧的 `--brand-orange` 仅供历史页面。
+- 首页：导航与首屏改为 Midnight 深底、白色标题、绿色光标与绿色 CTA，白色搜索卡，暖白分区；主标题改为整句打字机，`签 lease 前，先通过数据了解该商圈是否适合` 固定首句，其余 5 句每次访问随机顺序轮换（Fisher–Yates），桌面单行、手机两行。`/iq` 布局底色改为 Midnight；360° 面板改用绿色 CTA。
+- 报告（`/print` + PDF）：`print.css` 与 `render/format.ts` 调色板改为 Midnight 墨色、Signal Green 强调、暖白面板；判定徽章按结果着色（可做 绿 / 有条件 琥珀 / 不建议 红，深色字保证对比度）；地图站点标记改绿、可达范围改 Midnight、华人锚点改蓝以区分站点；对比度 4.5:1 与 16 页溢出检查通过（golden 夹具）。首页四张报告截图同步刷新。
