@@ -25,11 +25,13 @@
   --green-ink: #15803d;
   --amber-ink: #b45309;
   --font-latin: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* Professional-report typography: 思源宋体 (Noto Serif SC) for titles, 思源黑体 (Noto Sans SC) for body, Inter for numerals. */
   --font-cjk: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', 'WenQuanYi Zen Hei', sans-serif;
+  --font-cjk-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', 'Noto Serif CJK SC', 'WenQuanYi Zen Hei', serif;
   color-scheme: light only;
   background: var(--bg);
   color: var(--navy);
-  font-family: 'Inter', 'Noto Sans SC', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'WenQuanYi Zen Hei', Arial, sans-serif;
+  font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', 'WenQuanYi Zen Hei', system-ui, Arial, sans-serif;
   font-size: 10.5pt;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
@@ -124,12 +126,12 @@ html:has(.print-root) body {
 }
 .action-title {
   font-size: 20pt;
-  line-height: 1.25;
+  line-height: 1.3;
   font-weight: 700;
   color: var(--navy);
   margin: 0;
-  letter-spacing: -0.01em;
-  font-family: 'Noto Sans SC', 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Zen Hei', sans-serif;
+  letter-spacing: 0;
+  font-family: var(--font-cjk-serif);
 }
 .subtitle-en {
   font-family: var(--font-latin);
@@ -193,11 +195,12 @@ html:has(.print-root) body {
 
 /* ---------- typography ---------- */
 .h2 {
-  font-size: 16pt;
-  line-height: 1.25;
+  font-size: 15pt;
+  line-height: 1.3;
   font-weight: 700;
   color: var(--navy);
   margin: 8pt 0 5pt;
+  font-family: var(--font-cjk-serif);
 }
 .page-body > .h2:first-child,
 .two-col > div > .h2:first-child {
@@ -666,11 +669,11 @@ strong {
 }
 .cover-page-h {
   font-size: 34pt;
-  line-height: 1.2;
-  font-weight: 700;
+  line-height: 1.25;
+  font-weight: 900;
   margin: 0;
-  letter-spacing: -0.01em;
-  font-family: 'Noto Sans SC', 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Zen Hei', sans-serif;
+  letter-spacing: 0.02em;
+  font-family: var(--font-cjk-serif);
 }
 .cover-page-sub {
   font-family: var(--font-latin);

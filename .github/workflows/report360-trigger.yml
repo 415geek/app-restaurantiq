@@ -68,7 +68,7 @@ jobs:
                 counts=$( (grep -a -o '/Count [0-9]*' /tmp/probe.pdf || true) | sort -t' ' -k2 -n | tail -1)
                 echo "PDF page objects=$pages max /Count=${counts:-none}"
                 echo "PDF HTTP $pcode size=$psize pages=$pages type=$ptype"
-                if [ "$pcode" != "200" ] || ! head -c 5 /tmp/probe.pdf | grep -q '%PDF'; then echo "PDF probe failed: $(head -c 300 /tmp/probe.pdf)"; rc=1; fi
+                if [ "$pcode" != "200" ] || ! head -c 5 /tmp/probe.pdf | grep -q '%PDF'; then echo "PDF probe failed: $(head -c 300 /tmp/probe.pdf)"; rc=1; else mkdir -p /tmp/pdfs && cp /tmp/probe.pdf "/tmp/pdfs/$id.pdf"; fi
                 break
               fi
               if echo "$body" | grep -q '"migration_needed":true'; then echo "migration needed"; rc=1; break; fi
@@ -76,3 +76,11 @@ jobs:
             done
           done < /tmp/queue.txt
           exit $rc
+      - name: Upload probed PDFs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report360-pdfs
+          path: /tmp/pdfs/*.pdf
+          if-no-files-found: ignore
+          retention-days: 7

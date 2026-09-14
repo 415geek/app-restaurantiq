@@ -27,6 +27,8 @@
   --color-brand-slate: var(--brand-slate);
   --color-brand-amber: var(--brand-amber);
   --color-brand-red: var(--brand-red);
+  --font-cjk: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
+  --font-cjk-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', 'Noto Serif CJK SC', serif;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -35,4 +37,12 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Chinese typography for report-like surfaces: 思源宋体 headlines, 思源黑体 body. */
+.font-cjk-serif {
+  font-family: var(--font-cjk-serif);
+}
+.font-cjk-sans {
+  font-family: 'Inter', var(--font-cjk);
 }
