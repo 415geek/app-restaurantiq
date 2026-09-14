@@ -4,7 +4,8 @@
  * The app's root layout still wraps this (Next.js allows a single root
  * layout), so print.css forces the light tokens with `!important` and
  * `color-scheme: light only`; prefers-color-scheme has no effect. Fonts come
- * from Google Fonts (Noto Sans SC + Inter) with a real system fallback stack —
+ * from Google Fonts (Noto Serif SC for titles, Noto Sans SC for body, Inter for
+ * numerals) with a real system fallback stack —
  * if the stylesheet cannot load, the page still renders with system CJK fonts.
  *
  * A tiny inline script sets `window.__REPORT_READY__ = true` once the window
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap';
+const FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@600;700;900&display=swap';
 
 const READY_SCRIPT = `(function(){
   var done=false;

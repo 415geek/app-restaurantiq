@@ -296,7 +296,7 @@ function HeroTitle({ headlines }: { headlines: string[] }) {
   const { text, done } = useTypewriter(order, { type: 62, erase: 22, hold: 2600 });
   const longest = headlines.reduce((a, b) => (b.length > a.length ? b : a), '');
   return (
-    <h1 className="text-[clamp(1.6rem,4.6vw,3.15rem)] font-extrabold leading-[1.2] tracking-tight text-white" aria-label={headlines[0]}>
+    <h1 className="font-cjk-serif text-[clamp(1.6rem,4.6vw,3.15rem)] font-black leading-[1.25] text-white" aria-label={headlines[0]}>
       <span className="grid text-left md:whitespace-nowrap">
         <span className="invisible col-start-1 row-start-1" aria-hidden>
           {longest}
@@ -347,7 +347,7 @@ export default function IqLandingPage() {
   const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   return (
-    <main lang={locale === 'zh' ? 'zh-CN' : 'en'} className="min-h-screen bg-white text-brand-navy antialiased [font-family:Inter,ui-sans-serif,system-ui,-apple-system,'PingFang_SC','Hiragino_Sans_GB','Microsoft_YaHei',sans-serif]">
+    <main lang={locale === 'zh' ? 'zh-CN' : 'en'} className="font-cjk-sans min-h-screen bg-white text-brand-navy antialiased">
       {/* ── Nav ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-30 border-b border-white/10 bg-brand-navy/95 text-white backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
@@ -463,7 +463,7 @@ export default function IqLandingPage() {
       {/* ── Product shots ──────────────────────────────────────────────── */}
       <section id="report" className="bg-brand-canvas"><div className="mx-auto max-w-6xl px-5 py-16 md:py-24">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-2xl font-extrabold tracking-tight md:text-4xl">{t.shots.title}</h2>
+          <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.shots.title}</h2>
           <p className="mt-3 text-zinc-600">{t.shots.sub}</p>
         </div>
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -484,7 +484,7 @@ export default function IqLandingPage() {
       {/* ── How it works ───────────────────────────────────────────────── */}
       <section className="bg-brand-navy text-white">
         <div className="mx-auto max-w-6xl px-5 py-16 md:py-24">
-          <h2 className="text-2xl font-extrabold tracking-tight md:text-4xl">{t.how.title}</h2>
+          <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.how.title}</h2>
           <ol className="mt-10 grid gap-8 md:grid-cols-3">
             {t.how.steps.map((s) => (
               <li key={s.n} className="rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -500,7 +500,7 @@ export default function IqLandingPage() {
       {/* ── What's inside ──────────────────────────────────────────────── */}
       <section id="inside" className="mx-auto max-w-6xl px-5 py-16 md:py-24">
         <div className="max-w-2xl">
-          <h2 className="text-2xl font-extrabold tracking-tight md:text-4xl">{t.inside.title}</h2>
+          <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.inside.title}</h2>
           <p className="mt-3 text-zinc-600">{t.inside.sub}</p>
         </div>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -519,7 +519,7 @@ export default function IqLandingPage() {
         <div className="mx-auto grid max-w-6xl gap-10 px-5 py-16 md:grid-cols-2 md:items-center md:py-24">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">{t.sample.eyebrow}</p>
-            <h2 className="mt-3 text-2xl font-extrabold tracking-tight md:text-4xl">{t.sample.title}</h2>
+            <h2 className="font-cjk-serif mt-3 text-2xl font-black md:text-4xl">{t.sample.title}</h2>
             <p className="mt-4 text-zinc-600">{t.sample.body}</p>
             <div className="mt-6 inline-flex items-center gap-3 rounded-2xl bg-brand-navy px-5 py-3 text-white">
               <span className="h-2.5 w-2.5 rounded-full bg-brand-red" aria-hidden />
@@ -546,7 +546,7 @@ export default function IqLandingPage() {
       {/* ── Pricing ────────────────────────────────────────────────────── */}
       <section id="pricing" className="mx-auto max-w-6xl px-5 py-16 md:py-24">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-2xl font-extrabold tracking-tight md:text-4xl">{t.pricing.title}</h2>
+          <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.pricing.title}</h2>
           <p className="mt-3 text-zinc-600">{t.pricing.sub}</p>
         </div>
         <div className="mx-auto mt-10 grid max-w-4xl gap-5 md:grid-cols-2">
@@ -580,7 +580,7 @@ export default function IqLandingPage() {
       {/* ── Audiences ──────────────────────────────────────────────────── */}
       <section className="border-y border-zinc-100 bg-brand-canvas">
         <div className="mx-auto max-w-6xl px-5 py-16 md:py-20">
-          <h2 className="text-2xl font-extrabold tracking-tight md:text-3xl">{t.audiences.title}</h2>
+          <h2 className="font-cjk-serif text-2xl font-black md:text-3xl">{t.audiences.title}</h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {t.audiences.items.map((a) => (
               <div key={a.title} className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200">
@@ -594,7 +594,7 @@ export default function IqLandingPage() {
 
       {/* ── FAQ ────────────────────────────────────────────────────────── */}
       <section id="faq" className="mx-auto max-w-3xl px-5 py-16 md:py-24">
-        <h2 className="text-2xl font-extrabold tracking-tight md:text-4xl">{t.faq.title}</h2>
+        <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.faq.title}</h2>
         <div className="mt-8 divide-y divide-zinc-200 border-y border-zinc-200">
           {t.faq.items.map((f, i) => {
             const open = openFaq === i;
@@ -616,7 +616,7 @@ export default function IqLandingPage() {
         <div className="mx-auto max-w-6xl px-5 py-16 md:py-20">
           <div className="grid gap-10 md:grid-cols-2 md:items-center">
             <div>
-              <h2 className="text-2xl font-extrabold tracking-tight md:text-4xl">{t.hero.title}</h2>
+              <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.hero.title}</h2>
               <button type="button" onClick={() => scrollTo('top')} className="mt-6 rounded-2xl bg-brand-green px-6 py-3.5 text-sm font-bold text-brand-navy hover:bg-emerald-400">{t.hero.cta}</button>
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
