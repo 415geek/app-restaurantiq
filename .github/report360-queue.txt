@@ -2,3 +2,4 @@
 # to this file runs .github/workflows/report360-trigger.yml.
 # run: 2026-09-14T03:16:52Z (font list)
 5c361b95-0ccf-4550-bd3e-5a33ca3a6fe9
+# run: 2026-09-14T09:42:11Z (trilingual probe: landing locale + en/es/zh PDF)
