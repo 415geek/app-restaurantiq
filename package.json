@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "replay:golden": "tsx scripts/replay-golden.ts",
-    "test:iq": "node --import tsx --test \"qa/**/*.test.ts\" \"lib/iq/**/*.test.ts\" \"lib/funnel/iq-report-inputs.test.ts\" \"lib/funnel/iq-support-recover.test.ts\"",
+    "test:iq": "node --import tsx --test \"qa/**/*.test.ts\" \"lib/iq/**/*.test.ts\" \"lib/funnel/iq-report-inputs.test.ts\" \"lib/funnel/iq-support-recover.test.ts\" \"components/iq/GenerationTicker.test.ts\"",
     "qa:gates": "tsx scripts/run-qa-gates.ts"
   },
   "dependencies": {
