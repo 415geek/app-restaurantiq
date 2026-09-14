@@ -10,6 +10,7 @@
  */
 
 import { useMemo } from 'react';
+import type { Locale } from '@/lib/i18n/locale';
 
 type Md = Record<string, unknown> | null | undefined;
 
@@ -142,7 +143,44 @@ function HBars({
   );
 }
 
-const L = {
+type Copy = {
+  vizTitle: string;
+  statCompetitors: string;
+  statAvgRating: string;
+  statPopulation: string;
+  statIncome: string;
+  statEdu: string;
+  competitorChart: string;
+  competitorNote: (d: string) => string;
+  incomeChart: string;
+  incomeNote: (y: string) => string;
+  bucket100: string;
+  bucket125: string;
+  bucket150: string;
+  bucket200: string;
+  revenueChart: string;
+  breakEvenLabel: string;
+  safeLabel: string;
+  revenueNote: string;
+  noData: string;
+  provTitle: string;
+  provIntro: string;
+  provSource: string;
+  provStatus: string;
+  provCoverage: string;
+  provTime: string;
+  ok: string;
+  notConfigured: string;
+  failed: string;
+  financeModel: string;
+  financeDesc: (conf: string) => string;
+  acsRow: (y: string) => string;
+  competitorsUnit: string;
+  competitorsCount: (n: string) => string;
+  venuesCount: (n: string) => string;
+};
+
+const L: Record<Locale, Copy> = {
   zh: {
     vizTitle: '数据看板（原始数据直读）',
     statCompetitors: '周边同类竞对',
@@ -151,9 +189,9 @@ const L = {
     statIncome: '家庭收入中位数',
     statEdu: '本科及以上占比',
     competitorChart: '竞对热度（按评论数）',
-    competitorNote: (d: string) => `来源：Google Places · Yelp Fusion（获取于 ${d}）。评论数与评分为平台原始值，未经模型加工。`,
+    competitorNote: (d) => `来源：Google Places · Yelp Fusion（获取于 ${d}）。评论数与评分为平台原始值，未经模型加工。`,
     incomeChart: '高收入家庭结构（户数）',
-    incomeNote: (y: string) => `来源：U.S. Census ACS 5-year（${y}），按报告地址所在普查区（census tract）统计。`,
+    incomeNote: (y) => `来源：U.S. Census ACS 5-year（${y}），按报告地址所在普查区（census tract）统计。`,
     bucket100: '$100k–125k',
     bucket125: '$125k–150k',
     bucket150: '$150k–200k',
@@ -161,12 +199,10 @@ const L = {
     revenueChart: '营收情景 vs 盈亏平衡',
     breakEvenLabel: '盈亏平衡',
     safeLabel: '安全线',
-    revenueNote:
-      '情景柱为模型估算 [估算]；「盈亏平衡」与「安全线」来自确定性财务模型（D-4，公式推导，非 LLM 生成）。',
+    revenueNote: '情景柱为模型估算 [估算]；「盈亏平衡」与「安全线」来自确定性财务模型（D-4，公式推导，非 LLM 生成）。',
     noData: '该数据源未配置或本次未返回数据（不做估算填充）。',
     provTitle: '数据溯源',
-    provIntro:
-      '本报告图表与关键数字直接读取以下原始数据源；正文中标注 [估算] 的内容为模型推断，建议实地验证。本系统不编造数据：数据缺失时明确标注，不以虚构数值填充。',
+    provIntro: '本报告图表与关键数字直接读取以下原始数据源；正文中标注 [估算] 的内容为模型推断，建议实地验证。本系统不编造数据：数据缺失时明确标注，不以虚构数值填充。',
     provSource: '数据源',
     provStatus: '状态',
     provCoverage: '本次抓取',
@@ -175,34 +211,34 @@ const L = {
     notConfigured: '未配置',
     failed: '未返回',
     financeModel: '确定性财务模型（D-4）',
-    financeDesc: (conf: string) => `公式推导（置信度 ${conf}），盈亏平衡/安全营收非 LLM 估算`,
-    acsRow: (y: string) => `ACS 5-year ${y} · 普查区级`,
+    financeDesc: (conf) => `公式推导（置信度 ${conf}），盈亏平衡/安全营收非 LLM 估算`,
+    acsRow: (y) => `ACS 5-year ${y} · 普查区级`,
     competitorsUnit: '家',
+    competitorsCount: (n) => `${n} 家竞对`,
+    venuesCount: (n) => `${n} 个场所`,
   },
   en: {
-    vizTitle: 'Data Dashboard (read directly from sources)',
+    vizTitle: 'Data dashboard (read directly from sources)',
     statCompetitors: 'Nearby competitors',
-    statAvgRating: 'Avg Google rating',
+    statAvgRating: 'Avg. Google rating',
     statPopulation: 'Population (tract)',
     statIncome: 'Median household income',
     statEdu: "Bachelor's or higher",
     competitorChart: 'Competitor traction (by review count)',
-    competitorNote: (d: string) => `Source: Google Places · Yelp Fusion (fetched ${d}). Review counts and ratings are raw platform values, not model output.`,
+    competitorNote: (d) => `Source: Google Places · Yelp Fusion (fetched ${d}). Review counts and ratings are raw platform values, not model output.`,
     incomeChart: 'High-income households (count)',
-    incomeNote: (y: string) => `Source: U.S. Census ACS 5-year (${y}), census tract of the report address.`,
+    incomeNote: (y) => `Source: U.S. Census ACS 5-year (${y}), census tract of the report address.`,
     bucket100: '$100k–125k',
     bucket125: '$125k–150k',
     bucket150: '$150k–200k',
     bucket200: '$200k+',
-    revenueChart: 'Revenue scenarios vs break-even',
+    revenueChart: 'Revenue scenarios vs. break-even',
     breakEvenLabel: 'Break-even',
     safeLabel: 'Safe line',
-    revenueNote:
-      'Scenario bars are model estimates [estimate]; break-even and safe lines come from the deterministic D-4 finance model (formula-derived, not LLM-generated).',
-    noData: 'Source not configured or returned no data this run (no fabricated fill-in).',
-    provTitle: 'Data Provenance',
-    provIntro:
-      'Charts and key figures are read directly from the sources below; statements tagged [estimate] are model inference and should be field-verified. This system does not fabricate data — missing data is labeled as missing, never filled with invented numbers.',
+    revenueNote: 'Scenario bars are model estimates [estimate]; the break-even and safe lines come from the deterministic D-4 finance model (formula-derived, not LLM-generated).',
+    noData: 'Source not configured or returned no data this run (nothing is filled in).',
+    provTitle: 'Data provenance',
+    provIntro: 'Charts and key figures are read directly from the sources below; statements tagged [estimate] are model inference and should be verified on site. This system does not fabricate data — missing data is labeled as missing, never filled with invented numbers.',
     provSource: 'Source',
     provStatus: 'Status',
     provCoverage: 'This fetch',
@@ -211,9 +247,47 @@ const L = {
     notConfigured: 'Not configured',
     failed: 'No data',
     financeModel: 'Deterministic finance model (D-4)',
-    financeDesc: (conf: string) => `Formula-derived (confidence: ${conf}); break-even / safe revenue are not LLM estimates`,
-    acsRow: (y: string) => `ACS 5-year ${y} · tract level`,
+    financeDesc: (conf) => `Formula-derived (confidence: ${conf}); break-even / safe revenue are not LLM estimates`,
+    acsRow: (y) => `ACS 5-year ${y} · tract level`,
     competitorsUnit: '',
+    competitorsCount: (n) => `${n} competitors`,
+    venuesCount: (n) => `${n} venues`,
+  },
+  es: {
+    vizTitle: 'Panel de datos (leído directamente de las fuentes)',
+    statCompetitors: 'Competidores cercanos',
+    statAvgRating: 'Calificación promedio en Google',
+    statPopulation: 'Población (sección censal)',
+    statIncome: 'Ingreso medio por hogar',
+    statEdu: 'Licenciatura o superior',
+    competitorChart: 'Tracción de competidores (por número de reseñas)',
+    competitorNote: (d) => `Fuente: Google Places · Yelp Fusion (obtenido el ${d}). Las reseñas y calificaciones son valores originales de la plataforma, no salida del modelo.`,
+    incomeChart: 'Hogares de ingresos altos (cantidad)',
+    incomeNote: (y) => `Fuente: U.S. Census ACS 5-year (${y}), sección censal de la dirección del informe.`,
+    bucket100: '$100k–125k',
+    bucket125: '$125k–150k',
+    bucket150: '$150k–200k',
+    bucket200: '$200k+',
+    revenueChart: 'Escenarios de ingresos vs. punto de equilibrio',
+    breakEvenLabel: 'Punto de equilibrio',
+    safeLabel: 'Línea segura',
+    revenueNote: 'Las barras de escenario son estimaciones del modelo [estimación]; el punto de equilibrio y la línea segura provienen del modelo financiero determinista D-4 (derivado por fórmula, no generado por LLM).',
+    noData: 'Fuente no configurada o sin datos en esta ejecución (no se rellena nada).',
+    provTitle: 'Procedencia de los datos',
+    provIntro: 'Las gráficas y cifras clave se leen directamente de las fuentes siguientes; lo marcado como [estimación] es inferencia del modelo y debe verificarse en el sitio. Este sistema no inventa datos: lo que falta se marca como faltante, nunca se rellena con cifras inventadas.',
+    provSource: 'Fuente',
+    provStatus: 'Estado',
+    provCoverage: 'Esta consulta',
+    provTime: 'Obtenido',
+    ok: 'OK',
+    notConfigured: 'No configurado',
+    failed: 'Sin datos',
+    financeModel: 'Modelo financiero determinista (D-4)',
+    financeDesc: (conf) => `Derivado por fórmula (confianza: ${conf}); el punto de equilibrio y los ingresos seguros no son estimaciones de LLM`,
+    acsRow: (y) => `ACS 5-year ${y} · nivel de sección censal`,
+    competitorsUnit: '',
+    competitorsCount: (n) => `${n} competidores`,
+    venuesCount: (n) => `${n} lugares`,
   },
 };
 
@@ -224,7 +298,7 @@ export function ReportDataViz({
 }: {
   marketData: Md;
   full: Record<string, unknown>;
-  lang: 'en' | 'zh';
+  lang: Locale;
 }) {
   const t = L[lang];
   const summary = pick<Record<string, unknown>>(marketData, 'summary');
@@ -373,7 +447,7 @@ export function ReportDataViz({
   );
 }
 
-export function DataProvenance({ marketData, lang }: { marketData: Md; lang: 'en' | 'zh' }) {
+export function DataProvenance({ marketData, lang }: { marketData: Md; lang: Locale }) {
   const t = L[lang];
   const summary = pick<Record<string, unknown>>(marketData, 'summary');
   const acs = pick<Record<string, unknown>>(marketData, 'acs_context');
@@ -393,19 +467,19 @@ export function DataProvenance({ marketData, lang }: { marketData: Md; lang: 'en
     rows.push({
       source: 'Google Places',
       status: statusText(pick(summary, 'places_status')),
-      coverage: `${fmtInt(num(pick(summary, 'competitor_count_google')) ?? 0)} competitors`,
+      coverage: t.competitorsCount(fmtInt(num(pick(summary, 'competitor_count_google')) ?? 0)),
       time: fetchedDate,
     });
     rows.push({
       source: 'Yelp Fusion',
       status: statusText(pick(summary, 'yelp_status')),
-      coverage: `${fmtInt(num(pick(summary, 'competitor_count_yelp')) ?? 0)} competitors`,
+      coverage: t.competitorsCount(fmtInt(num(pick(summary, 'competitor_count_yelp')) ?? 0)),
       time: fetchedDate,
     });
     rows.push({
       source: 'Foursquare Places',
       status: statusText(pick(summary, 'foursquare_status')),
-      coverage: `${fmtInt(num(pick(summary, 'competitor_count_foursquare')) ?? 0)} venues`,
+      coverage: t.venuesCount(fmtInt(num(pick(summary, 'competitor_count_foursquare')) ?? 0)),
       time: fetchedDate,
     });
   }

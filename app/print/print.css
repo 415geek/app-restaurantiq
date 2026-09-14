@@ -327,6 +327,16 @@ strong {
   font-weight: 600;
   margin-top: 3pt;
 }
+/* long localized labels ("VIABLE CON CONDICIONES") keep the badge compact */
+.verdict-badge .verdict-en.verdict-long {
+  font-size: 14pt;
+  line-height: 1.15;
+  max-width: 62mm;
+}
+.verdict-badge.verdict-sm .verdict-en.verdict-long {
+  font-size: 9pt;
+  max-width: none;
+}
 .verdict-badge[data-verdict='CONDITIONAL_GO'] {
   background: var(--amber);
 }
@@ -1052,4 +1062,99 @@ strong {
   align-items: center;
   justify-content: center;
   margin-top: 1pt;
+}
+
+/* ---------- English / Spanish editions: Latin text runs longer than Chinese; keep every page inside its box ---------- */
+.report[data-lang='en'] .check-list,
+.report[data-lang='es'] .check-list {
+  font-size: 9pt;
+}
+.report[data-lang='en'] .check-list li,
+.report[data-lang='es'] .check-list li {
+  padding: 2.5pt 0;
+}
+.report[data-lang='en'] .map-facts .key-label,
+.report[data-lang='es'] .map-facts .key-label {
+  font-size: 8pt;
+}
+.report[data-lang='en'] .score-table td:last-child,
+.report[data-lang='es'] .score-table td:last-child {
+  font-size: 8pt;
+}
+.report[data-lang='en'] .sources-panels .tight-list.small,
+.report[data-lang='es'] .sources-panels .tight-list.small,
+.report[data-lang='en'] .params-line,
+.report[data-lang='es'] .params-line {
+  font-size: 7pt;
+}
+.report[data-lang='en'] .data-notes,
+.report[data-lang='es'] .data-notes {
+  font-size: 6.8pt;
+}
+.report[data-lang='en'] .disclaimer,
+.report[data-lang='es'] .disclaimer {
+  font-size: 7.5pt;
+}
+.report[data-lang='en'] .page-14 .chip,
+.report[data-lang='es'] .page-14 .chip {
+  font-size: 7pt;
+  padding: 2pt 4pt;
+}
+.report[data-lang='en'] .final-conclusion,
+.report[data-lang='es'] .final-conclusion {
+  font-size: 9.5pt;
+}
+.report[data-lang='en'] .next-steps,
+.report[data-lang='es'] .next-steps {
+  font-size: 8.5pt;
+}
+.report[data-lang='en'] .comp-facts,
+.report[data-lang='es'] .comp-facts {
+  font-size: 8pt;
+}
+
+.report[data-lang='en'] .page-6 .data-table,
+.report[data-lang='es'] .page-6 .data-table {
+  font-size: 8pt;
+}
+.report[data-lang='en'] .page-6 .data-table th,
+.report[data-lang='en'] .page-6 .data-table td,
+.report[data-lang='es'] .page-6 .data-table th,
+.report[data-lang='es'] .page-6 .data-table td {
+  padding: 2pt 4pt;
+}
+.report[data-lang='en'] .page-2 .tight-list,
+.report[data-lang='es'] .page-2 .tight-list {
+  font-size: 9pt;
+}
+.report[data-lang='en'] .page-2 .tight-list li,
+.report[data-lang='es'] .page-2 .tight-list li {
+  padding: 2pt 0;
+}
+.report[data-lang='en'] .waterfall-wrap,
+.report[data-lang='es'] .waterfall-wrap {
+  max-width: 130mm;
+}
+.report[data-lang='en'] .risk-matrix-wrap,
+.report[data-lang='es'] .risk-matrix-wrap {
+  max-width: 100mm;
+}
+.report[data-lang='en'] .risk-table td,
+.report[data-lang='es'] .risk-table td {
+  font-size: 8pt;
+  padding: 2.5pt 4pt;
+}
+.report[data-lang='en'] .risk-table thead th,
+.report[data-lang='es'] .risk-table thead th {
+  font-size: 8pt;
+  padding: 2.5pt 4pt;
+}
+.report[data-lang='en'] .page-6 .page-body > svg,
+.report[data-lang='es'] .page-6 .page-body > svg {
+  display: block;
+  max-width: 140mm;
+  margin: 0 auto;
+}
+.report[data-lang='es'] .page-6 .page-body > svg {
+  max-width: 130mm;
 }

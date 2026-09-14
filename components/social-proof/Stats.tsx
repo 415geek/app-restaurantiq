@@ -1,32 +1,39 @@
 'use client';
 
+import type { Locale } from '@/lib/i18n/locale';
+
 type StatsProps = {
-  locale?: 'en' | 'zh';
+  locale?: Locale;
   variant?: 'default' | 'compact';
 };
 
-const stats = {
+const stats: Record<Locale, { value: string; label: string }[]> = {
   en: [
-    { value: '12,847', label: 'Reports generated' },
-    { value: '$2.4M', label: 'Potential losses avoided' },
-    { value: '94%', label: 'Accuracy rate' },
+    { value: '12,847', label: 'reports generated' },
+    { value: '$2.4M', label: 'in potential losses avoided' },
+    { value: '94%', label: 'accuracy rate' },
   ],
   zh: [
-    { value: '12,847', label: '已生成报告' },
+    { value: '12,847', label: '份已生成报告' },
     { value: '$240万', label: '帮助规避的潜在损失' },
     { value: '94%', label: '预测准确率' },
   ],
+  es: [
+    { value: '12,847', label: 'informes generados' },
+    { value: '$2.4M', label: 'en pérdidas potenciales evitadas' },
+    { value: '94%', label: 'de precisión' },
+  ],
 };
 
-const testimonials = {
+const testimonials: Record<Locale, { quote: string; author: string }[]> = {
   en: [
     {
       quote: 'Saved me from signing a bad lease. The report showed competition density I completely missed.',
-      author: 'Restaurant Owner, San Francisco',
+      author: 'Restaurant owner, San Francisco',
     },
     {
       quote: 'Worth every penny. The risk analysis was spot-on.',
-      author: 'Cafe Owner, New York',
+      author: 'Café owner, New York',
     },
   ],
   zh: [
@@ -39,6 +46,22 @@ const testimonials = {
       author: '咖啡店老板，纽约',
     },
   ],
+  es: [
+    {
+      quote: 'Me salvó de firmar un mal contrato. El informe mostró una densidad de competencia que se me había pasado por completo.',
+      author: 'Dueño de restaurante, San Francisco',
+    },
+    {
+      quote: 'Vale cada centavo. El análisis de riesgo fue exacto.',
+      author: 'Dueña de cafetería, Nueva York',
+    },
+  ],
+};
+
+const badge: Record<Locale, string> = {
+  en: '12,847 owners have made smarter location decisions',
+  zh: '已帮助 12,847 位老板做出更明智的选址决策',
+  es: '12,847 dueños ya tomaron mejores decisiones de ubicación',
 };
 
 export function SocialProofStats({ locale = 'en', variant = 'default' }: StatsProps) {
@@ -71,29 +94,27 @@ export function SocialProofStats({ locale = 'en', variant = 'default' }: StatsPr
   );
 }
 
-export function SocialProofTestimonial({ locale = 'en' }: { locale?: 'en' | 'zh' }) {
+export function SocialProofTestimonial({ locale = 'en' }: { locale?: Locale }) {
   const t = testimonials[locale];
   const randomIndex = Math.floor(Math.random() * t.length);
   const testimonial = t[randomIndex];
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
-      <p className="text-sm italic text-gray-400">"{testimonial.quote}"</p>
+      <p className="text-sm italic text-gray-400">&ldquo;{testimonial.quote}&rdquo;</p>
       <p className="mt-2 text-xs text-gray-600">— {testimonial.author}</p>
     </div>
   );
 }
 
-export function SocialProofBadge({ locale = 'en' }: { locale?: 'en' | 'zh' }) {
-  const label = locale === 'zh' ? '已帮助 12,847 位老板做出更明智的选址决策' : '12,847 owners made smarter location decisions';
-
+export function SocialProofBadge({ locale = 'en' }: { locale?: Locale }) {
   return (
     <div className="inline-flex items-center gap-2 rounded-full bg-zinc-800/50 px-4 py-2 text-xs text-gray-400">
-      <span className="flex h-2 w-2">
+      <span className="relative flex h-2 w-2">
         <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75"></span>
         <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
       </span>
-      {label}
+      {badge[locale]}
     </div>
   );
 }

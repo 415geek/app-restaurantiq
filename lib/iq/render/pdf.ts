@@ -7,6 +7,7 @@
  * rendered in-page). Returns the PDF bytes.
  */
 import type { Browser } from 'puppeteer-core';
+import type { Locale } from '@/lib/i18n/locale';
 import { launchPdfBrowser } from './chromium';
 
 export interface RenderReportPdfOptions {
@@ -15,15 +16,18 @@ export interface RenderReportPdfOptions {
   baseUrl: string;
   /** Non-production only: render qa/fixtures/report_model_<fixture>.json instead of the DB row. */
   fixture?: string | null;
+  /** Report language (`?lang=`); omitted → the print page uses the report row's stored language. */
+  lang?: Locale | null;
   /** Wait budget for __REPORT_READY__ (default 20 s). */
   readyTimeoutMs?: number;
   /** Extra request headers (e.g. deployment-protection bypass). */
   headers?: Record<string, string>;
 }
 
-export function printPageUrl(opts: Pick<RenderReportPdfOptions, 'reportId' | 'baseUrl' | 'fixture'>): string {
+export function printPageUrl(opts: Pick<RenderReportPdfOptions, 'reportId' | 'baseUrl' | 'fixture' | 'lang'>): string {
   const url = new URL(`/print/${encodeURIComponent(opts.reportId)}`, opts.baseUrl.replace(/\/$/, '') + '/');
   if (opts.fixture && process.env.NODE_ENV !== 'production') url.searchParams.set('fixture', opts.fixture);
+  if (opts.lang) url.searchParams.set('lang', opts.lang);
   return url.toString();
 }
 

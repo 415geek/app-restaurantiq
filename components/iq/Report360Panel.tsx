@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { PaidIntakeForm } from '@/components/iq/PaidIntakeForm';
+import type { Locale } from '@/lib/i18n/locale';
 
 type Status = {
   ready: boolean;
@@ -14,7 +15,24 @@ type Status = {
   precheck_reasons?: string[];
 };
 
-const T = {
+type Copy = {
+  title: string;
+  desc: string;
+  generating: string;
+  ready: string;
+  precheck: string;
+  migration: string;
+  download: string;
+  preview: string;
+  regen: string;
+  addDetails: string;
+  addDetailsDesc: string;
+  score: string;
+  verdict: Record<string, string>;
+  failed: string;
+};
+
+const T: Record<Locale, Copy> = {
   zh: {
     title: '360° 专业版报告（新引擎）',
     desc: '步行与开车四个范围的商圈 · 需求分流测算 · 四层竞争关系 · 自洽财务模型 · 六维评分 · 真实地图 · 老板总结。浅色打印版 15 页，每个数字都可追溯到公开数据来源。',
@@ -28,15 +46,15 @@ const T = {
     addDetails: '补充信息并重新生成',
     addDetailsDesc: '补充座位、客单价、你知道的竞品等，竞对与财务会更准。',
     score: '综合分',
-    verdict: { GO: '可做', CONDITIONAL_GO: '有条件可做', NO_GO: '不建议' } as Record<string, string>,
+    verdict: { GO: '可做', CONDITIONAL_GO: '有条件可做', NO_GO: '不建议' },
     failed: '生成失败，请稍后重试。',
   },
   en: {
     title: '360° Professional Report (new engine)',
-    desc: 'Four-ring trade area · demand capture · four competitive layers · reconciled finance model · six-dimension score · real map · owner summary. 15 print-ready pages; every number traces to a public source.',
+    desc: 'Four-ring trade area · demand capture · four competitive layers · reconciled finance model · six-dimension score · real map · owner summary. 15 print-ready pages; every number traces back to a public source.',
     generating: 'Generating (1–3 min; you can leave and come back)…',
     ready: 'Ready',
-    precheck: 'Pre-check version: data completeness is below the paid standard; reasons are listed in the report.',
+    precheck: 'Pre-check edition: data completeness is below the paid standard; the reasons are listed in the report.',
     migration: 'Database not upgraded yet (migration 0009). Set DATABASE_URL on Vercel and regenerate — the migration runs automatically.',
     download: 'Download 360° PDF',
     preview: 'Preview online',
@@ -44,15 +62,31 @@ const T = {
     addDetails: 'Add details & regenerate',
     addDetailsDesc: 'Seats, ticket sizes, competitors you know of — sharper competitor and finance sections.',
     score: 'Score',
-    verdict: { GO: 'GO', CONDITIONAL_GO: 'CONDITIONAL GO', NO_GO: 'NO GO' } as Record<string, string>,
-    failed: 'Generation failed, please retry later.',
+    verdict: { GO: 'GO', CONDITIONAL_GO: 'CONDITIONAL GO', NO_GO: 'NO GO' },
+    failed: 'Generation failed. Please try again later.',
+  },
+  es: {
+    title: 'Informe profesional 360° (nuevo motor)',
+    desc: 'Área comercial de cuatro anillos · captura de demanda · cuatro capas competitivas · modelo financiero conciliado · puntuación en seis dimensiones · mapa real · resumen para el dueño. 15 páginas listas para imprimir; cada cifra se rastrea hasta una fuente pública.',
+    generating: 'Generando (1–3 min; puedes salir y volver después)…',
+    ready: 'Listo',
+    precheck: 'Edición preliminar: la integridad de los datos está por debajo del estándar de pago; los motivos se detallan en el informe.',
+    migration: 'La base de datos aún no está actualizada (migración 0009). Configura DATABASE_URL en Vercel y vuelve a generar; la migración se ejecuta automáticamente.',
+    download: 'Descargar PDF 360°',
+    preview: 'Vista previa en línea',
+    regen: 'Volver a generar',
+    addDetails: 'Agregar datos y volver a generar',
+    addDetailsDesc: 'Asientos, ticket promedio, competidores que conozcas: secciones de competencia y finanzas más precisas.',
+    score: 'Puntuación',
+    verdict: { GO: 'VIABLE', CONDITIONAL_GO: 'VIABLE CON CONDICIONES', NO_GO: 'NO VIABLE' },
+    failed: 'La generación falló. Inténtalo de nuevo más tarde.',
   },
 };
 
 /** After a forced regen the old model stays `ready` until overwritten; poll until generated_at changes (≤ ~6 min). */
 const REGEN_MAX_TICKS = 60;
 
-export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; lang?: 'en' | 'zh' }) {
+export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; lang?: Locale }) {
   const t = T[lang];
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
@@ -129,7 +163,7 @@ export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; la
   }, [reportId, pollKey]);
 
   const pdfUrl = `/api/iq/report/${encodeURIComponent(reportId)}/pdf?lang=${lang}`;
-  const printUrl = `/print/${encodeURIComponent(reportId)}`;
+  const printUrl = `/print/${encodeURIComponent(reportId)}?lang=${lang}`;
 
   const intakeForm = formOpen ? (
     <div className="mt-4 rounded-xl border border-emerald-800/50 bg-emerald-950/30 p-4">

@@ -10,6 +10,7 @@ import {
   NARRATIVE_COST_PAGE_USD,
   NARRATIVE_COST_SUMMARY_USD,
   checkNarrative,
+  conditionTexts,
   generateNarratives,
   narrativeForPage,
   type NarrativeLlm,
@@ -240,4 +241,60 @@ test('narrativeForPage falls back to the template when the model has no narrativ
   const withN: ReportModel = { ...m, narrative: { page_6: { title: 'T', body: 'B [src:competitors]', refs: ['competitors'], guard: 'ok' } } };
   assert.equal(narrativeForPage(withN, 'page_6').title, 'T');
   assert.deepEqual(narrativeForPage(withN, 'page_7'), templateNarrative(m, 'page_7'));
+});
+
+test('spanish mode: Spanish prompts, 14-word title cap, verbatim text_es conditions, Spanish guard feedback', async () => {
+  const m = load();
+  const seen: NarrativeLlmRequest[] = [];
+  const llm: NarrativeLlm = async (req) => {
+    seen.push(req);
+    return null;
+  };
+  const { narrative, stats } = await base(m, llm, { language: 'es' });
+  assert.equal(seen.length, 15);
+  assert.ok(seen[0].system.startsWith('Eres analista de RestaurantIQ') && seen[0].user.startsWith('página = '), seen[0].user.slice(0, 40));
+  assert.ok(seen.find((r) => r.pageId === 'page_2')!.system.includes('Condiciones previas al contrato:'));
+  assert.ok(seen.find((r) => r.pageId === 'page_15')!.system.includes('Imprescindible antes de firmar:'));
+  assert.ok(seen.find((r) => r.pageId === 'page_15')!.user.includes('"text_es":'), 'page 15 fragment carries text_es');
+  assert.ok(seen.find((r) => r.pageId === 'page_9')!.user.includes('notas de parámetros = Ids de anillo'));
+  // no LLM → Spanish templates
+  assert.equal(stats.template_pages, 15);
+  assert.equal(narrative.page_1.title, templateNarrative(m, 'page_1', 'es').title);
+  assert.ok(!/[一-鿿]/.test(narrative.page_15.body), narrative.page_15.body);
+
+  const frag = pageFragment(m, 'page_2');
+  const conds = conditionTexts(m, 'es');
+  assert.ok(conds.every((c) => !/[一-鿿]/.test(c)), conds.join(' | '));
+  const long = checkNarrative({ title: 'uno dos tres cuatro cinco seis siete ocho nueve diez once doce trece catorce quince', body: 'La demanda no alcanza [src:score.total].', refs: [] }, frag, { isVoid: false, language: 'es', tier: 'page' });
+  assert.deepEqual(long.reasons, ['el título supera 14 palabras']);
+  const bad = checkNarrative({ title: 'No viable', body: 'Cobertura 88% [src:demand.coverage_ratio]. Condiciones previas al contrato: ninguna.', refs: ['demand.coverage_ratio'] }, frag, { isVoid: false, language: 'es', tier: 'summary', conditions: conds });
+  assert.ok(bad.reasons.some((r) => r.startsWith('la cifra 88% no está en el JSON')), bad.reasons.join(' | '));
+  assert.ok(bad.reasons.some((r) => r.startsWith('las condiciones previas no se copiaron literalmente')), bad.reasons.join(' | '));
+  const good = checkNarrative({ title: 'No viable', body: `La demanda no alcanza [src:score.total]. Condiciones previas al contrato: ${conds.join('; ')}.`, refs: ['score.total'] }, frag, { isVoid: false, language: 'es', tier: 'summary', conditions: conds });
+  assert.deepEqual(good.reasons, []);
+  // banned wording is locale-aware
+  const banned = checkNarrative({ title: 'Cero competencia', body: 'Hay cero competencia aquí [src:competitors.void.is_void].', refs: [] }, pageFragment(m, 'page_8'), { isVoid: false, language: 'es', tier: 'page' });
+  assert.deepEqual(banned.banned, ['cero competencia']);
+  const bannedEn = checkNarrative({ title: 'Zero competition', body: 'Approximately zero competition here [src:competitors.void.is_void].', refs: [] }, pageFragment(m, 'page_8'), { isVoid: false, language: 'en', tier: 'page' });
+  assert.deepEqual(bannedEn.banned, ['approximately', 'zero competition']);
+});
+
+test('english mode falls back to English templates and copies text_en conditions; feedback is English', async () => {
+  const m = load();
+  let n = 0;
+  const llm: NarrativeLlm = async (req) => {
+    if (req.pageId !== 'page_9') return null;
+    n++;
+    if (n === 1) return { title: 'Rent premium 127%, too high', body: 'Rent premium 127% [src:demand.coverage_ratio].', refs: [] };
+    assert.ok(req.user.includes('Problems with the previous output: number 127% is not in the JSON'), req.user.slice(-160));
+    return { title: 'Demand falls short', body: `Captured demand $${Math.round(m.demand.captured_monthly_usd!).toLocaleString('en-US')} a month [src:demand.captured_monthly_usd].`, refs: ['demand.captured_monthly_usd'] };
+  };
+  const { narrative, stats } = await base(m, llm, { language: 'en' });
+  assert.equal(n, 2);
+  assert.equal(stats.llm_pages, 1);
+  assert.equal(narrative.page_9.guard, 'ok_after_regen');
+  assert.equal(narrative.page_1.title, templateNarrative(m, 'page_1', 'en').title);
+  assert.ok(!/[一-鿿]/.test(Object.values(narrative).map((x) => `${x.title} ${x.body}`).join(' ')));
+  assert.deepEqual(conditionTexts(m, 'en'), m.score.conditions.map((c) => c.text_en));
+  assert.equal(narrativeForPage(m, 'page_3', 'en').title, templateNarrative(m, 'page_3', 'en').title);
 });

@@ -9,6 +9,7 @@
  * requires a paid subscription. Without the API key, this module provides
  * instructions for manual verification on LoopNet, CommercialCafe, and Crexi.
  */
+import { DEFAULT_LOCALE, type Locale, pick } from '@/lib/i18n/locale';
 
 const LOOPNET_RAPIDAPI_BASE = 'https://loopnet-api.p.rapidapi.com';
 
@@ -184,29 +185,42 @@ When adding listings to the report, use format:
  */
 export function formatListingsForAnchors(
   result: CommercialListingsResult,
-  lang: 'en' | 'zh' = 'en'
+  lang: Locale = DEFAULT_LOCALE,
 ): string {
-  const L = lang === 'zh';
   const lines: string[] = [];
 
   if (result.status === 'no_api_key' || result.status === 'error') {
     if (result.searchInstructions) {
-      lines.push(L ? '### 商业房源（需手动搜索）' : '### Commercial Listings (Manual Search Required)');
+      lines.push(
+        pick(lang, {
+          en: '### Commercial Listings (Manual Search Required)',
+          zh: '### 商业房源（需手动搜索）',
+          es: '### Locales comerciales (requiere búsqueda manual)',
+        }),
+      );
       lines.push(result.searchInstructions);
     }
     return lines.join('\n');
   }
 
   if (!result.listings.length) {
-    return L
-      ? '### 商业房源\n> 未找到符合条件的房源 [LoopNet]'
-      : '### Commercial Listings\n> No matching listings found [LoopNet]';
+    return pick(lang, {
+      en: '### Commercial Listings\n> No matching listings found [LoopNet]',
+      zh: '### 商业房源\n> 未找到符合条件的房源 [LoopNet]',
+      es: '### Locales comerciales\n> No se encontraron locales que coincidan [LoopNet]',
+    });
   }
 
-  lines.push(L ? '### 商业房源 [LoopNet]' : '### Commercial Listings [LoopNet]');
-  lines.push(L ? '> 数据来源: LoopNet API' : '> Source: LoopNet API');
+  lines.push(pick(lang, { en: '### Commercial Listings [LoopNet]', zh: '### 商业房源 [LoopNet]', es: '### Locales comerciales [LoopNet]' }));
+  lines.push(pick(lang, { en: '> Source: LoopNet API', zh: '> 数据来源: LoopNet API', es: '> Fuente: API de LoopNet' }));
   lines.push('');
-  lines.push(L ? '| 地址 | 面积 | 月租 | 每平方英尺 |' : '| Address | Size | Monthly Rent | $/sqft |');
+  lines.push(
+    pick(lang, {
+      en: '| Address | Size | Monthly Rent | $/sqft |',
+      zh: '| 地址 | 面积 | 月租 | 每平方英尺 |',
+      es: '| Dirección | Superficie | Renta mensual | $/pie² |',
+    }),
+  );
   lines.push('|------|------|------|------------|');
 
   result.listings.slice(0, 8).forEach((l) => {

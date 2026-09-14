@@ -4,6 +4,7 @@
  * when webhooks are delayed or misconfigured on Vercel.
  */
 
+import { toLocale } from '@/lib/i18n/locale';
 import { iqGetReport, iqMarkPaidAndReport, iqUpdateMarketDataJson } from '@/lib/funnel/iq-repository';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { generateIqFullReportWithN8nFallback } from '@/lib/funnel/iq-generate-full-report';
@@ -54,7 +55,7 @@ export async function fulfillIqPaidPurchase(input: FulfillIqPurchaseInput): Prom
 
   if (needsGeneration) {
     try {
-      const payLang = existing.language === 'zh' ? 'zh' : 'en';
+      const payLang = toLocale(existing.language);
       const enrichedMd = await resolveMarketDataForIqReport({
         existing: existing.market_data_json as Record<string, unknown> | null | undefined,
         location: existing.location,

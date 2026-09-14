@@ -1,7 +1,14 @@
 /**
  * C-5: cross-provider verification of decision_tier / scores after paid report generation.
  */
-import type { IqReportWithGrounding } from '@/lib/funnel/iq-full-report-schema';
+import { type Locale, pick } from '@/lib/i18n/locale';
+import {
+  confidenceLabel,
+  isHighConfidenceText,
+  isMediumConfidenceText,
+  type IqReportWithGrounding,
+} from '@/lib/funnel/iq-full-report-schema';
+import { LANGUAGE_INSTRUCTION } from '@/lib/funnel/iq-prompts-locationiq-v2';
 import { normalizeRiskAuditFromFull } from '@/lib/funnel/iq-risk-audit-model';
 import {
   type IqLlmProvider,
@@ -73,30 +80,51 @@ function extractSnapshot(report: Record<string, unknown>): VerifySnapshot {
 
 function buildVerifyPrompts(
   snapshot: VerifySnapshot,
-  opts: { location: string; businessType: string | null; language: 'en' | 'zh' },
+  opts: { location: string; businessType: string | null; language: Locale },
 ): { system: string; user: string } {
   const lang = opts.language;
-  const system =
-    lang === 'zh'
-      ? '你是独立的选址决策审计员。仅根据给定摘要复核 decision_tier 与分数，输出严格 JSON，不要 Markdown。'
-      : 'You are an independent location-decision auditor. Re-score only from the summary; output strict JSON only, no markdown.';
+  const system = pick(lang, {
+    en: `You are an independent location-decision auditor. Re-score only from the summary; output strict JSON only, no markdown. ${LANGUAGE_INSTRUCTION.en}`,
+    zh: `你是独立的选址决策审计员。仅根据给定摘要复核 decision_tier 与分数，输出严格 JSON，不要 Markdown。${LANGUAGE_INSTRUCTION.zh}`,
+    es: `Eres un auditor independiente de decisiones de ubicación. Vuelve a puntuar solo a partir del resumen; devuelve únicamente JSON estricto, sin markdown. ${LANGUAGE_INSTRUCTION.es}`,
+  });
+
+  const snapshotJson = JSON.stringify(
+    {
+      decision_tier: snapshot.decision_tier,
+      overall_score: snapshot.overall_score,
+      verdict_one_line: snapshot.verdict_line,
+      decision_matrix: snapshot.matrix,
+    },
+    null,
+    2,
+  );
 
   const user =
-    lang === 'zh'
+    lang === 'es'
+      ? [
+          `Dirección: ${opts.location}`,
+          opts.businessType ? `Concepto: ${opts.businessType}` : '',
+          'Resumen del modelo principal (no inventes nombres de competidores):',
+          snapshotJson,
+          '',
+          'Devuelve JSON:',
+          '{',
+          '  "decision_tier": "strong_go|go_with_conditions|need_more_data|high_risk|no_go",',
+          '  "overall_score": 0-100,',
+          '  "verdict_one_line": "recomendación en una línea: firmar / con condiciones / no firmar",',
+          '  "decision_matrix": [{"dimension":"...","score_100":0-100}],',
+          '  "rationale": "nota de revisión de ≤120 caracteres"',
+          '}',
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : lang === 'zh'
       ? [
           `地址：${opts.location}`,
           opts.businessType ? `业态：${opts.businessType}` : '',
           '主模型结论摘要（勿编造竞品名）：',
-          JSON.stringify(
-            {
-              decision_tier: snapshot.decision_tier,
-              overall_score: snapshot.overall_score,
-              verdict_one_line: snapshot.verdict_line,
-              decision_matrix: snapshot.matrix,
-            },
-            null,
-            2,
-          ),
+          snapshotJson,
           '',
           '返回 JSON：',
           '{',
@@ -113,16 +141,7 @@ function buildVerifyPrompts(
           `Address: ${opts.location}`,
           opts.businessType ? `Concept: ${opts.businessType}` : '',
           'Primary model summary (do not invent competitor names):',
-          JSON.stringify(
-            {
-              decision_tier: snapshot.decision_tier,
-              overall_score: snapshot.overall_score,
-              verdict_one_line: snapshot.verdict_line,
-              decision_matrix: snapshot.matrix,
-            },
-            null,
-            2,
-          ),
+          snapshotJson,
           '',
           'Return JSON:',
           '{',
@@ -142,16 +161,18 @@ function buildVerifyPrompts(
 function compareSnapshots(
   primary: VerifySnapshot,
   verify: VerifySnapshot,
-  lang: 'en' | 'zh',
+  lang: Locale,
 ): { aligned: boolean; disagreements: string[] } {
   const disagreements: string[] = [];
 
   if (primary.decision_tier && verify.decision_tier) {
     if (primary.decision_tier !== verify.decision_tier) {
       disagreements.push(
-        lang === 'zh'
-          ? '签租建议档位与独立复核不一致，建议结合现场调研再定'
-          : 'Sign/lease recommendation tier differs from independent review—confirm on site',
+        pick(lang, {
+          en: 'The lease recommendation tier differs from the independent review — confirm on site.',
+          zh: '签租建议档位与独立复核不一致，建议结合现场调研再定',
+          es: 'El nivel de recomendación de arrendamiento difiere de la revisión independiente; confírmelo en sitio.',
+        }),
       );
     }
   }
@@ -159,10 +180,13 @@ function compareSnapshots(
   if (primary.overall_score !== undefined && verify.overall_score !== undefined) {
     const delta = Math.abs(primary.overall_score - verify.overall_score);
     if (delta > 8) {
+      const d = delta.toFixed(0);
       disagreements.push(
-        lang === 'zh'
-          ? `综合评分差距较大（约 ${delta.toFixed(0)} 分），建议人工核对`
-          : `Overall score differs by ~${delta.toFixed(0)} points—manual review recommended`,
+        pick(lang, {
+          en: `The overall score differs by about ${d} points — manual review recommended.`,
+          zh: `综合评分差距较大（约 ${d} 分），建议人工核对`,
+          es: `El puntaje general difiere en aproximadamente ${d} puntos; se recomienda una revisión manual.`,
+        }),
       );
     }
   }
@@ -173,9 +197,11 @@ function compareSnapshots(
     const p = primaryMap.get(key);
     if (p !== undefined && row.score_100 !== undefined && Math.abs(p - row.score_100) > 12) {
       disagreements.push(
-        lang === 'zh'
-          ? `「${row.dimension}」维度评分差异明显，建议重点核实`
-          : `"${row.dimension}" scores differ materially—verify this dimension`,
+        pick(lang, {
+          en: `"${row.dimension}" scores differ materially — verify this dimension.`,
+          zh: `「${row.dimension}」维度评分差异明显，建议重点核实`,
+          es: `Los puntajes de "${row.dimension}" difieren de forma significativa; verifique esta dimensión.`,
+        }),
       );
     }
   }
@@ -183,14 +209,14 @@ function compareSnapshots(
   return { aligned: disagreements.length === 0, disagreements };
 }
 
-function downgradeConfidence(report: Record<string, unknown>): void {
+function downgradeConfidence(report: Record<string, unknown>, lang: Locale): void {
   const raw = typeof report.confidence === 'string' ? report.confidence : '';
-  if (/high/i.test(raw)) {
-    report.confidence = 'Medium';
-  } else if (/medium/i.test(raw)) {
-    report.confidence = 'Low';
+  if (isHighConfidenceText(raw)) {
+    report.confidence = confidenceLabel('Medium', lang);
+  } else if (isMediumConfidenceText(raw)) {
+    report.confidence = confidenceLabel('Low', lang);
   } else if (!raw) {
-    report.confidence = 'Low';
+    report.confidence = confidenceLabel('Low', lang);
   }
 }
 
@@ -200,7 +226,7 @@ function downgradeConfidence(report: Record<string, unknown>): void {
 export async function applyDualModelVerification(
   report: IqReportWithGrounding,
   opts: {
-    language: 'en' | 'zh';
+    language: Locale;
     location: string;
     businessType: string | null;
     primaryProvider?: string;
@@ -270,12 +296,8 @@ export async function applyDualModelVerification(
 
     const lang = opts.language;
     const status = aligned
-      ? lang === 'zh'
-        ? '结论已复核 ✓'
-        : 'Conclusion reviewed ✓'
-      : lang === 'zh'
-        ? '存在待核对项'
-        : 'Needs your review';
+      ? pick(lang, { en: 'Conclusion reviewed ✓', zh: '结论已复核 ✓', es: 'Conclusión revisada ✓' })
+      : pick(lang, { en: 'Needs your review', zh: '存在待核对项', es: 'Requiere su revisión' });
 
     report.dual_model_verification = {
       status,
@@ -292,13 +314,15 @@ export async function applyDualModelVerification(
     report._verify_model = routed.model;
 
     if (!aligned) {
-      downgradeConfidence(report as Record<string, unknown>);
+      downgradeConfidence(report as Record<string, unknown>, lang);
       const w = Array.isArray(report._warnings) ? (report._warnings as string[]) : [];
       report._warnings = [
         ...w,
-        lang === 'zh'
-          ? '部分结论与独立复核不一致，已下调置信度；请结合报告中的待核对项人工确认。'
-          : 'Some conclusions differ from independent review; confidence lowered—confirm flagged items.',
+        pick(lang, {
+          en: 'Some conclusions differ from the independent review; confidence was lowered — confirm the flagged items.',
+          zh: '部分结论与独立复核不一致，已下调置信度；请结合报告中的待核对项人工确认。',
+          es: 'Algunas conclusiones difieren de la revisión independiente; se redujo la confianza. Confirme los puntos señalados.',
+        }),
       ];
     }
 

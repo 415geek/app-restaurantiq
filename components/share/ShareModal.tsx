@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { appendUtmToUrl, buildSocialShareUrl, type SharePlatform } from '@/lib/share/utm';
+import type { Locale } from '@/lib/i18n/locale';
 
 type ShareModalProps = {
   isOpen: boolean;
@@ -10,7 +11,7 @@ type ShareModalProps = {
   title: string;
   description?: string;
   reportId?: string;
-  locale?: 'en' | 'zh';
+  locale?: Locale;
   onShare?: (platform: SharePlatform) => void;
 };
 
@@ -47,20 +48,20 @@ declare global {
   }
 }
 
-const PLATFORMS: { id: SharePlatform; label: { en: string; zh: string }; icon: string; color: string }[] = [
-  { id: 'wechat', label: { en: 'WeChat', zh: '微信' }, icon: '💬', color: '#07c160' },
-  { id: 'weibo', label: { en: 'Weibo', zh: '微博' }, icon: '🔴', color: '#e6162d' },
-  { id: 'facebook', label: { en: 'Facebook', zh: 'Facebook' }, icon: '📘', color: '#1877f2' },
-  { id: 'twitter', label: { en: 'Twitter/X', zh: 'Twitter/X' }, icon: '🐦', color: '#1da1f2' },
-  { id: 'copy', label: { en: 'Copy Link', zh: '复制链接' }, icon: '🔗', color: '#6b7280' },
+const PLATFORMS: { id: SharePlatform; label: Record<Locale, string>; icon: string; color: string }[] = [
+  { id: 'wechat', label: { en: 'WeChat', zh: '微信', es: 'WeChat' }, icon: '💬', color: '#07c160' },
+  { id: 'weibo', label: { en: 'Weibo', zh: '微博', es: 'Weibo' }, icon: '🔴', color: '#e6162d' },
+  { id: 'facebook', label: { en: 'Facebook', zh: 'Facebook', es: 'Facebook' }, icon: '📘', color: '#1877f2' },
+  { id: 'twitter', label: { en: 'Twitter/X', zh: 'Twitter/X', es: 'Twitter/X' }, icon: '🐦', color: '#1da1f2' },
+  { id: 'copy', label: { en: 'Copy link', zh: '复制链接', es: 'Copiar enlace' }, icon: '🔗', color: '#6b7280' },
 ];
 
-const copy = {
+const copy: Record<Locale, { share: string; copied: string; wechatHint: string; shareSuccess: string; close: string }> = {
   en: {
     share: 'Share',
     copied: 'Link copied!',
-    wechatHint: 'Scan QR code or share within WeChat',
-    shareSuccess: 'Shared successfully!',
+    wechatHint: 'Scan the QR code or share within WeChat',
+    shareSuccess: 'Shared!',
     close: 'Close',
   },
   zh: {
@@ -69,6 +70,13 @@ const copy = {
     wechatHint: '扫描二维码或在微信内分享',
     shareSuccess: '分享成功！',
     close: '关闭',
+  },
+  es: {
+    share: 'Compartir',
+    copied: '¡Enlace copiado!',
+    wechatHint: 'Escanea el código QR o comparte dentro de WeChat',
+    shareSuccess: '¡Compartido!',
+    close: 'Cerrar',
   },
 };
 
@@ -169,7 +177,7 @@ export function ShareModal({
     if (platform === 'wechat') {
       if (wechatReady && window.wx) {
         const ogImageUrl = `${window.location.origin}/api/og/result?location=${encodeURIComponent(shareUrl)}&headline=${encodeURIComponent(title)}`;
-        
+
         window.wx.updateAppMessageShareData({
           title,
           desc: description || '',
@@ -203,6 +211,7 @@ export function ShareModal({
           <h3 className="text-xl font-semibold text-white">{t.share}</h3>
           <button
             onClick={onClose}
+            aria-label={t.close}
             className="rounded-lg p-2 text-gray-400 transition hover:bg-zinc-800 hover:text-white"
           >
             ✕

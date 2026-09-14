@@ -11,6 +11,7 @@
  * 
  * @see https://docs.brightdata.com/mcp-server/tools
  */
+import { DEFAULT_LOCALE, type Locale, pick } from '@/lib/i18n/locale';
 
 const BRIGHTDATA_MCP_BASE = 'https://mcp.brightdata.com';
 
@@ -409,13 +410,18 @@ export async function conductMarketResearch(input: {
  */
 export function formatBrightDataForAnchors(
   data: MarketResearchResult,
-  lang: 'en' | 'zh' = 'en'
+  lang: Locale = DEFAULT_LOCALE,
 ): string {
-  const L = lang === 'zh';
   const lines: string[] = [];
 
   if (data.search_results.length > 0) {
-    lines.push(L ? '### 网络搜索结果 [BrightData]' : '### Web Search Results [BrightData]');
+    lines.push(
+      pick(lang, {
+        en: '### Web Search Results [BrightData]',
+        zh: '### 网络搜索结果 [BrightData]',
+        es: '### Resultados de búsqueda web [BrightData]',
+      }),
+    );
     data.search_results.slice(0, 5).forEach((r, i) => {
       lines.push(`${i + 1}. **${r.title}**`);
       lines.push(`   ${r.description}`);
@@ -426,10 +432,18 @@ export function formatBrightDataForAnchors(
 
   if (data.competitor_reviews) {
     const cr = data.competitor_reviews;
-    lines.push(L ? '### 竞品评价分析 [BrightData/Google Maps]' : '### Competitor Reviews [BrightData/Google Maps]');
-    lines.push(`**${cr.place_name}**: ${cr.rating}⭐ (${cr.review_count} ${L ? '条评价' : 'reviews'})`);
+    lines.push(
+      pick(lang, {
+        en: '### Competitor Reviews [BrightData/Google Maps]',
+        zh: '### 竞品评价分析 [BrightData/Google Maps]',
+        es: '### Reseñas de competidores [BrightData/Google Maps]',
+      }),
+    );
+    lines.push(
+      `**${cr.place_name}**: ${cr.rating}⭐ (${cr.review_count} ${pick(lang, { en: 'reviews', zh: '条评价', es: 'reseñas' })})`,
+    );
     if (cr.reviews.length > 0) {
-      lines.push(L ? '近期评价摘要:' : 'Recent review highlights:');
+      lines.push(pick(lang, { en: 'Recent review highlights:', zh: '近期评价摘要:', es: 'Reseñas recientes destacadas:' }));
       cr.reviews.slice(0, 3).forEach((r) => {
         lines.push(`- "${r.text.slice(0, 100)}${r.text.length > 100 ? '...' : ''}" — ${r.author}, ${r.rating}⭐`);
       });
@@ -438,7 +452,13 @@ export function formatBrightDataForAnchors(
   }
 
   if (data.real_estate_data?.length) {
-    lines.push(L ? '### 房产数据 [BrightData/Zillow]' : '### Real Estate Data [BrightData/Zillow]');
+    lines.push(
+      pick(lang, {
+        en: '### Real Estate Data [BrightData/Zillow]',
+        zh: '### 房产数据 [BrightData/Zillow]',
+        es: '### Datos inmobiliarios [BrightData/Zillow]',
+      }),
+    );
     data.real_estate_data.forEach((l) => {
       const price = l.price ? `$${l.price.toLocaleString()}` : 'N/A';
       const sqft = l.sqft ? `${l.sqft.toLocaleString()} sqft` : 'N/A';

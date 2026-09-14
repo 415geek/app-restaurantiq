@@ -18,6 +18,7 @@
  * Returns a structured model containing every assumption used, so the LLM and UI
  * can cite the numbers verbatim (no hallucinated cost tables).
  */
+import { type Locale, pick } from '@/lib/i18n/locale';
 import type { CommercialListingsResult } from '@/lib/funnel/external-data/commercial-listings';
 
 export interface FinanceModelInputs {
@@ -40,6 +41,7 @@ export interface CuisineArchetype {
   id: CuisineArchetypeId;
   label_en: string;
   label_zh: string;
+  label_es: string;
   /** Average ticket size USD (mid of band). */
   avg_ticket_usd: number;
   /** Food cost as share of revenue (COGS). */
@@ -64,6 +66,8 @@ export interface DeterministicFinanceModel {
   cuisine_archetype: CuisineArchetypeId;
   cuisine_archetype_label_en: string;
   cuisine_archetype_label_zh: string;
+  /** Optional only so models persisted before Spanish support still parse; always set by computeFinanceModel. */
+  cuisine_archetype_label_es?: string;
   cuisine_match_reason: string;
 
   /** Resolved rent USD/month + provenance trail. */
@@ -125,6 +129,16 @@ export interface DeterministicFinanceModel {
   occupancy_cost_pct_at_breakeven: number;
   occupancy_nra_benchmark_note_en: string;
   occupancy_nra_benchmark_note_zh: string;
+  occupancy_nra_benchmark_note_es?: string;
+}
+
+/** Localized archetype label (English fallback for models stored before Spanish support). */
+export function financeArchetypeLabel(fm: Pick<DeterministicFinanceModel, 'cuisine_archetype_label_en' | 'cuisine_archetype_label_zh' | 'cuisine_archetype_label_es'>, lang: Locale): string {
+  return pick(lang, {
+    en: fm.cuisine_archetype_label_en,
+    zh: fm.cuisine_archetype_label_zh,
+    es: fm.cuisine_archetype_label_es || fm.cuisine_archetype_label_en,
+  });
 }
 
 /* ------------------------------------------------------------------------ */
@@ -136,6 +150,7 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     id: 'bubble_tea',
     label_en: 'Bubble tea / boba shop',
     label_zh: '奶茶 / 茶饮店',
+    label_es: 'Tienda de té de burbujas / boba',
     avg_ticket_usd: 8.5,
     food_cost_pct: 0.28,
     paper_pct: 0.04,
@@ -148,6 +163,7 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     id: 'coffee_bakery',
     label_en: 'Coffee shop / bakery / dessert',
     label_zh: '咖啡 / 烘焙 / 甜品店',
+    label_es: 'Cafetería / panadería / postres',
     avg_ticket_usd: 11,
     food_cost_pct: 0.30,
     paper_pct: 0.03,
@@ -160,6 +176,7 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     id: 'qsr',
     label_en: 'QSR / fast food',
     label_zh: '快餐 / QSR',
+    label_es: 'Comida rápida / QSR',
     avg_ticket_usd: 13,
     food_cost_pct: 0.30,
     paper_pct: 0.03,
@@ -172,6 +189,7 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     id: 'fast_casual',
     label_en: 'Fast casual',
     label_zh: '快休闲餐饮',
+    label_es: 'Fast casual',
     avg_ticket_usd: 16,
     food_cost_pct: 0.31,
     paper_pct: 0.025,
@@ -184,6 +202,7 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     id: 'pizza',
     label_en: 'Pizza / Italian QSR',
     label_zh: '披萨 / 意式快餐',
+    label_es: 'Pizza / comida rápida italiana',
     avg_ticket_usd: 22,
     food_cost_pct: 0.30,
     paper_pct: 0.025,
@@ -196,6 +215,7 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     id: 'asian_casual',
     label_en: 'Asian casual (Chinese / Japanese / Thai / Korean / Vietnamese)',
     label_zh: '亚洲休闲餐厅（中/日/泰/韩/越）',
+    label_es: 'Asiático casual (chino / japonés / tailandés / coreano / vietnamita)',
     avg_ticket_usd: 21,
     food_cost_pct: 0.32,
     paper_pct: 0.02,
@@ -208,6 +228,7 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     id: 'casual_dining',
     label_en: 'Casual dining (full service)',
     label_zh: '休闲正餐（堂食服务）',
+    label_es: 'Restaurante casual (servicio completo)',
     avg_ticket_usd: 26,
     food_cost_pct: 0.32,
     paper_pct: 0.015,
@@ -220,6 +241,7 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     id: 'fine_dining',
     label_en: 'Fine dining',
     label_zh: '高端正餐',
+    label_es: 'Alta cocina',
     avg_ticket_usd: 70,
     food_cost_pct: 0.35,
     paper_pct: 0.01,
@@ -617,6 +639,7 @@ export function computeFinanceModel(input: FinanceModelInputs): DeterministicFin
     cuisine_archetype: archetype.id,
     cuisine_archetype_label_en: archetype.label_en,
     cuisine_archetype_label_zh: archetype.label_zh,
+    cuisine_archetype_label_es: archetype.label_es,
     cuisine_match_reason: `${reason_en} / ${reason_zh}`,
 
     monthly_rent_usd: rent.monthly_rent_usd,
@@ -666,6 +689,8 @@ export function computeFinanceModel(input: FinanceModelInputs): DeterministicFin
       'NRA 2025 Restaurant Operations Data Abstract medians: full-service occupancy ~5.7% of revenue, limited-service ~5.2%, downtown ~6.0%; healthy band 5–8% (rent + CAM + tax + insurance + utilities as % of sales).',
     occupancy_nra_benchmark_note_zh:
       'NRA 2025 餐饮业数据摘要：全服务占比租金约 5.7% 营业额、有限服务约 5.2%、市中心约 6.0%；健康区间 5–8%（含租金+CAM+物业税+保险+水电）。',
+    occupancy_nra_benchmark_note_es:
+      'Medianas del NRA 2025 Restaurant Operations Data Abstract: ocupación en servicio completo ~5.7% de los ingresos, servicio limitado ~5.2%, centro urbano ~6.0%; banda saludable 5–8% (renta + CAM + impuestos + seguros + servicios como % de las ventas).',
   };
 }
 
@@ -675,8 +700,35 @@ export function computeFinanceModel(input: FinanceModelInputs): DeterministicFin
 
 export function formatFinanceModelForAnchors(
   fm: DeterministicFinanceModel,
-  lang: 'en' | 'zh',
+  lang: Locale,
 ): string {
+  const usd = (v: number) => v.toLocaleString('en-US');
+  if (lang === 'es') {
+    const lines = [
+      '\n\n[MODELO DETERMINISTA DE PUNTO DE EQUILIBRIO — ANCLAJES ESTRICTOS (D-4; el LLM DEBE usar estas cifras textualmente en risk_audit.break_even_revenue_monthly_usd / safe_revenue_monthly_usd / cost_breakdown — NO volver a estimar)]',
+      `- Arquetipo de cocina: ${financeArchetypeLabel(fm, 'es')} (${fm.cuisine_archetype})`,
+      `- Renta mensual (USD): $${usd(fm.monthly_rent_usd)} — base: ${fm.rent_evidence}`,
+      `- Mano de obra mensual (con carga 1.18× de impuestos de nómina/prestaciones): $${usd(fm.monthly_labor_usd)} — base: ${fm.labor_evidence}`,
+      `- Otros fijos (servicios + seguros + POS + marketing + varios) total: $${usd(fm.monthly_other_fixed_usd)}`,
+      `  · Servicios $${usd(fm.monthly_utilities_usd)}; Seguros $${usd(fm.monthly_insurance_usd)}; POS $${usd(fm.monthly_pos_software_usd)}; Marketing $${usd(fm.monthly_marketing_usd)}; Varios $${usd(fm.monthly_misc_usd)}`,
+      `- Total fijo: $${usd(fm.fixed_total_monthly_usd)}/mes`,
+      `- Tasa variable: alimentos ${(fm.food_cost_pct * 100).toFixed(0)}% + empaque ${(fm.paper_pct * 100).toFixed(1)}% + comisiones de tarjeta ${(fm.cc_fees_pct * 100).toFixed(1)}% + comisión de delivery ponderada ${(fm.delivery_blended_pct * 100).toFixed(1)}% = ${(fm.total_variable_rate * 100).toFixed(1)}%`,
+      `- Margen de contribución: ${(fm.contribution_margin_rate * 100).toFixed(1)}%`,
+      '',
+      `- [REGLA ESTRICTA 1] risk_audit.break_even_revenue_monthly_usd DEBE ser igual a ${fm.break_even_revenue_monthly_usd} (USD/mes)`,
+      `- [REGLA ESTRICTA 2] risk_audit.safe_revenue_monthly_usd DEBE ser igual a ${fm.safe_revenue_monthly_usd} (USD/mes; equilibrio × ${(fm.safe_revenue_monthly_usd / Math.max(1, fm.break_even_revenue_monthly_usd)).toFixed(2)})`,
+      `- [REGLA ESTRICTA 3] cost_breakdown DEBE contener al menos estas 8 filas (item / amount_usd / note deben coincidir): Renta / Mano de obra / Servicios / Seguros / POS / Marketing / Varios / Total fijo`,
+      `- [REGLA ESTRICTA 4] revenue_model.breakeven Y cada revenue_model.scenarios.key_assumptions DEBEN citar explícitamente el ticket promedio $${fm.avg_ticket_usd}, los cubiertos diarios de equilibrio ${fm.daily_covers_needed_breakeven} y los cubiertos diarios seguros ${fm.daily_covers_needed_safe}; NINGUNA cifra que contradiga esta tabla.`,
+      `- [REGLA ESTRICTA 5] dashboard.occupancy_cost_pct DEBE ser igual a ${fm.occupancy_cost_pct_at_safe}% (renta / ingreso seguro); en equilibrio ${fm.occupancy_cost_pct_at_breakeven}%. ${fm.occupancy_nra_benchmark_note_es ?? fm.occupancy_nra_benchmark_note_en}`,
+      `- Etiquetas de cita sugeridas: ${fm.citations.join(', ')}; confianza del modelo: ${fm.confidence} (razones: ${fm.confidence_reasons.join('; ')}).`,
+      '',
+      '[REGLAS NARRATIVAS — D-4]',
+      '- Cualquier prosa sobre "cuánto ingreso se necesita para sobrevivir / alcanzar el equilibrio / órdenes diarias" DEBE citar textualmente las 4 reglas estrictas anteriores. SIN redondeos independientes, SIN estimaciones aparte.',
+      '- Si consideras que un anclaje no es razonable (p. ej., la renta parece baja/alta), agrega una fila "rent_assumption_risk" a risk_matrix explicando la brecha, pero NO cambies las cifras de break_even / safe_revenue.',
+      '',
+    ];
+    return lines.join('\n');
+  }
   if (lang === 'zh') {
     const lines = [
       '\n\n【确定性盈亏平衡模型——硬锚点（D-4，必须在 risk_audit.break_even_revenue_monthly_usd / safe_revenue_monthly_usd / cost_breakdown 中**逐字使用**，禁止 LLM 自行重新估算）】',

@@ -10,15 +10,17 @@
  * page — so the paid report is always fully narrated.
  */
 import { runIqProviderJson } from '@/lib/funnel/iq-provider-router';
+import type { Locale } from '@/lib/i18n/locale';
 import type { CostLedger } from '../data/types';
 import type { ReportModel } from '../model/schema';
 import { getDefaults } from '../params';
 import { hasLlmKey } from './llm';
 import { numberGuard } from './number-guard';
-import { PAGES, pageFragment, templateNarrative, type PageId } from './templates';
+import { PAGES, localizedField, pageFragment, templateNarrative, type PageId } from './templates';
 
 export type NarrativeTier = 'page' | 'summary';
-export type NarrativeLanguage = 'en' | 'zh';
+/** Narrative language = the report language (en / zh / es). */
+export type NarrativeLanguage = Locale;
 
 export type NarrativeLlmRequest = { pageId: PageId; system: string; user: string; tier: NarrativeTier };
 /** `provider` ("anthropic/claude-sonnet-5") is a side channel for the report's provenance column. */
@@ -70,6 +72,7 @@ const isSummaryPage = (id: PageId) => SUMMARY_PAGES.includes(id);
 export const NARRATIVE_LIMITS = {
   zh: { title: 28, body: { page: 200, summary: 560 } },
   en: { title: 12, body: { page: 160, summary: 360 } }, // words
+  es: { title: 14, body: { page: 180, summary: 400 } }, // words (Spanish runs ~15 % longer than English)
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -99,7 +102,10 @@ const SYSTEM_EN =
   'never introduce any number, place name, brand or judgement that is not in the JSON. Every number must be immediately followed by [src:field.path]. ' +
   'Output JSON: {"title": "≤ 12 words and it must state a verdict (e.g. covers / falls short / too high / viable)", "body": "≤ 120 words, two to three sentences", "refs": [array of field paths]}. ' +
   'Banned wording: "zero competition", "white space" / "gap" as a category void (unless competitors.void.is_void is true), "conservative estimate", "approximately", "significant" (when describing official statistics). ' +
-  'Tone: direct, give a verdict, no hype, no reassurance.';
+  'Tone: direct, give a verdict, no hype, no reassurance. ' +
+  'Reader: the restaurant owner — plain words, concrete numbers, explain a term at most once (in parentheses), no engine abbreviations, no field names or ring codes. ' +
+  'Write ratios as percentages (coverage_ratio 0.347 → "35%", occupancy_cost_ratio 0.352 → "35.2%", chinese_hh_share 0.09 → "9%"), never as decimals. ' +
+  'When competitors.l1 is empty and guard_passed is true there really is no same-cuisine restaurant in the search radius (a finding, not missing data): write "no same-cuisine restaurant within N miles", never "not available".';
 
 const SYSTEM_EN_SUMMARY =
   'This page is the executive summary: besides the two-to-three-sentence conclusion, the body must list three supporting reasons and three risks (each ≤ 30 words, each with a [src:field.path] citation), ' +
@@ -111,12 +117,34 @@ const SYSTEM_EN_FINAL =
   'then a line starting with "Must do before signing:" followed by score.conditions[].text_en copied verbatim (separated by "; "; never rewrite a number or wording; write "none" when empty); ' +
   'finally the top three alternative cuisines (from score.alternatives, excluding the input cuisine, with scores) and three next steps (no numbers outside the JSON). Body ≤ 300 words.';
 
+const SYSTEM_ES =
+  'Eres analista de RestaurantIQ y escribes un informe de selección de local para el dueño de un restaurante chino. Usa SOLO las cifras y hechos del JSON siguiente; ' +
+  'nunca introduzcas una cifra, un lugar, una marca o un juicio que no esté en el JSON. Cada cifra debe ir seguida inmediatamente de [src:ruta.del.campo] (ruta con puntos, p. ej. trade_area.rings.2.pop, sin corchetes). ' +
+  'Devuelve JSON: {"title": "≤ 14 palabras y debe contener un veredicto (p. ej. cubre / no alcanza / demasiado alto / viable)", "body": "≤ 130 palabras, dos o tres frases", "refs": [lista de rutas de campo]}. ' +
+  'Palabras prohibidas: "cero competencia", "sin competencia", "espacio en blanco" como hueco de categoría (salvo que competitors.void.is_void sea true), "estimación conservadora", "aproximadamente", "significativo" (al describir estadísticas oficiales). ' +
+  'Tono: directo, con veredicto, sin exageraciones ni consuelos. ' +
+  'Lector: el dueño del restaurante — lenguaje llano, cifras concretas, cada término técnico se explica una sola vez (entre paréntesis), sin abreviaturas en inglés, sin nombres de campos ni códigos de anillo. ' +
+  'Las proporciones se escriben como porcentaje (coverage_ratio 0.347 → «35%», occupancy_cost_ratio 0.352 → «35,2%» se escribe 35.2%), nunca como decimal. ' +
+  'Si competitors.l1 está vacío y guard_passed es true, no hay restaurantes de la misma cocina en el radio de búsqueda (es un hallazgo, no un dato faltante): escribe «sin locales de la misma cocina en N millas», nunca «no disponible».';
+
+const SYSTEM_ES_SUMMARY =
+  'Esta página es el resumen ejecutivo: además de la conclusión de dos o tres frases, el body debe enumerar tres razones a favor y tres riesgos (cada uno ≤ 30 palabras y con su cita [src:ruta.del.campo]), ' +
+  'y debe incluir una línea que empiece por «Condiciones previas al contrato:» seguida de score.conditions[].text_es copiado literalmente (separado por «; »; nunca cambies una cifra ni una palabra; escribe «ninguna» si no hay). Body ≤ 330 palabras.';
+
+const SYSTEM_ES_FINAL =
+  'Esta página es el cierre para el dueño: la primera frase da el veredicto (viable / viable con condiciones / no viable); ' +
+  'luego las tres cifras decisivas — cobertura de demanda (demand.coverage_ratio), ratio de costo de ocupación (finance.occupancy_cost_ratio) y puntuación global (score.total), cada una con su cita [src:ruta.del.campo]; ' +
+  'después una línea que empiece por «Imprescindible antes de firmar:» seguida de score.conditions[].text_es copiado literalmente (separado por «; »; nunca cambies una cifra ni una palabra; escribe «ninguna» si no hay); ' +
+  'por último las tres mejores cocinas alternativas (de score.alternatives, excluyendo la cocina elegida, con puntuación) y tres próximos pasos (sin cifras fuera del JSON). Body ≤ 330 palabras.';
+
 const bandsText = (lang: NarrativeLanguage): string => {
   const d = getDefaults();
   const bands = d.cluster_score.bands;
-  const names = lang === 'zh' ? ['冷启动', '低集聚', '集聚红利', '偏饱和', '饱和'] : ['cold start', 'low cluster', 'cluster dividend', 'near saturated', 'saturated'];
+  const names = lang === 'zh' ? ['冷启动', '低集聚', '集聚红利', '偏饱和', '饱和'] : lang === 'es' ? ['arranque en frío', 'baja aglomeración', 'dividendo de aglomeración', 'casi saturado', 'saturado'] : ['cold start', 'low cluster', 'cluster dividend', 'near saturated', 'saturated'];
   const b = bands.map(([lo, hi, s], i) => `${hi >= 999 ? `≥ ${lo}` : lo === hi ? `${lo}` : `${lo}–${hi}`} → ${names[i] ?? ''} ${s}`).join(', ');
-  return lang === 'zh' ? `cluster_score 按 walk10 内 L1+L2 家数分档（${b}），再按 coverage_ratio ±${d.cluster_score.coverage_adjust}。` : `cluster_score is banded by the L1+L2 count inside walk10 (${b}), then adjusted ±${d.cluster_score.coverage_adjust} by coverage_ratio.`;
+  if (lang === 'zh') return `cluster_score 按 walk10 内 L1+L2 家数分档（${b}），再按 coverage_ratio ±${d.cluster_score.coverage_adjust}。`;
+  if (lang === 'es') return `cluster_score se escalona por el número L1+L2 dentro de walk10 (${b}) y luego se ajusta ±${d.cluster_score.coverage_adjust} según coverage_ratio.`;
+  return `cluster_score is banded by the L1+L2 count inside walk10 (${b}), then adjusted ±${d.cluster_score.coverage_adjust} by coverage_ratio.`;
 };
 
 /** Brief explanation of the ids and thresholds the LLM will see in the fragment. */
@@ -135,25 +163,66 @@ export function paramNotes(lang: NarrativeLanguage): string {
       'cluster_score 写「集聚分」，huff 写「需求分流模型」，benchmark_revenue_band 的 p25 / median / p75 写「低位 / 中位 / 高位」，hhi 写「集中度」，confidence 写「数据完整度」，capex 写「开办投入（装修与设备）」；GO / CONDITIONAL_GO / NO_GO 写「可做 / 有条件可做 / 不建议」。'
     );
   }
+  if (lang === 'es') {
+    return (
+      'Ids de anillo: walk10 = isócrona de 10 minutos a pie; drive5 / drive10 / drive15 = isócronas de 5 / 10 / 15 minutos en coche; trade_area.primary_ring es la zona principal. ' +
+      'L1 = competidores directos (misma subcocina), L2 = otros restaurantes chinos, L3 = otros asiáticos, L4 = anclas de tráfico. ' +
+      'coverage_ratio = demanda mensual captada ÷ punto de equilibrio; ≥ 1 cubre el equilibrio, < 1 no alcanza. ' +
+      bandsText('es') +
+      ` verdict: total ≥ ${v.go} es GO (viable), ≥ ${v.conditional} es CONDITIONAL_GO (viable con condiciones), si no NO_GO (no viable). ` +
+      'null = no disponible: escribe «no disponible», nunca estimes. ' +
+      'Al redactar no copies nombres de campo, códigos de anillo ni abreviaturas en inglés: walk10 se escribe «área a 10 minutos a pie», drive5 / drive10 / drive15 «área a 5 / 10 / 15 minutos en coche», ' +
+      'L1 «competidores de la misma cocina», L2 «otros restaurantes chinos», L3 «otros restaurantes asiáticos», L4 «anclas de la comunidad china», coverage_ratio «cobertura de demanda», occupancy_cost_ratio «ratio de costo de ocupación», ' +
+      'cluster_score «puntuación de aglomeración», huff «modelo de reparto de demanda», p25 / median / p75 de benchmark_revenue_band «bajo / mediano / alto», hhi «concentración», confidence «integridad de datos», capex «inversión inicial (obra y equipo)»; GO / CONDITIONAL_GO / NO_GO se escriben «viable / viable con condiciones / no viable».'
+    );
+  }
   return (
     'Ring ids: walk10 = 10-minute walk isochrone; drive5 / drive10 / drive15 = 5 / 10 / 15-minute drive isochrones; trade_area.primary_ring is the primary trade area. ' +
     'L1 = direct competitors (same sub-cuisine), L2 = other Chinese restaurants, L3 = other Asian, L4 = traffic anchors. ' +
     'coverage_ratio = captured monthly demand ÷ break-even; ≥ 1 covers break-even, < 1 falls short. ' +
     bandsText('en') +
     ` verdict: total ≥ ${v.go} is GO, ≥ ${v.conditional} is CONDITIONAL_GO, otherwise NO_GO. ` +
-    'null = not available: write "not available", never estimate.'
+    'null = not available: write "not available", never estimate. ' +
+    'Never copy field names, ring ids or engine abbreviations into the prose: walk10 is "the 10-minute walk area", drive5 / drive10 / drive15 are "the 5 / 10 / 15-minute drive area", ' +
+    'L1 is "same-cuisine competitors", L2 "other Chinese restaurants", L3 "other Asian restaurants", L4 "Chinese-community anchors", coverage_ratio "demand coverage", occupancy_cost_ratio "occupancy cost ratio", ' +
+    'cluster_score "cluster score", huff "the demand-split model", p25 / median / p75 of benchmark_revenue_band "low / median / high", hhi "concentration", confidence "data completeness", capex "start-up investment (build-out and equipment)"; GO / CONDITIONAL_GO / NO_GO are "GO / CONDITIONAL GO / NO GO".'
   );
+}
+
+/**
+ * Spanish narratives copy conditions verbatim from `text_es`, which the engine
+ * does not emit; add it to every condition object in the fragment (page 2, 11,
+ * 13 and 15 carry `score` or `score.conditions`).
+ */
+export function withSpanishConditions(fragment: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...fragment };
+  const localize = (list: unknown) =>
+    Array.isArray(list) ? list.map((c) => (c && typeof c === 'object' ? { ...(c as Record<string, unknown>), text_es: localizedField((c as { text_zh?: string }).text_zh, (c as { text_en?: string }).text_en, 'es') } : c)) : list;
+  if (out.score && typeof out.score === 'object' && Array.isArray((out.score as { conditions?: unknown }).conditions)) {
+    out.score = { ...(out.score as Record<string, unknown>), conditions: localize((out.score as { conditions: unknown }).conditions) };
+  }
+  if (Array.isArray(out['score.conditions'])) out['score.conditions'] = localize(out['score.conditions']);
+  return out;
+}
+
+/** The verbatim condition strings a summary page must copy, in the narrative language. */
+export function conditionTexts(model: Pick<ReportModel, 'score'>, lang: NarrativeLanguage): string[] {
+  return (model.score?.conditions ?? []).map((c) => (lang === 'zh' ? c.text_zh : lang === 'en' ? c.text_en : localizedField(c.text_zh, c.text_en, 'es')));
 }
 
 export function buildNarrativePrompts(pageId: PageId, fragment: Record<string, unknown>, lang: NarrativeLanguage): { system: string; user: string; tier: NarrativeTier } {
   const spec = PAGES.find((p) => p.id === pageId)!;
   const tier: NarrativeTier = isSummaryPage(pageId) ? 'summary' : 'page';
-  const suffix = tier !== 'summary' ? '' : pageId === 'page_15' ? (lang === 'zh' ? SYSTEM_ZH_FINAL : SYSTEM_EN_FINAL) : lang === 'zh' ? SYSTEM_ZH_SUMMARY : SYSTEM_EN_SUMMARY;
-  const system = `${lang === 'zh' ? SYSTEM_ZH : SYSTEM_EN}${suffix ? ` ${suffix}` : ''}`;
+  const P = lang === 'zh' ? { base: SYSTEM_ZH, summary: SYSTEM_ZH_SUMMARY, final: SYSTEM_ZH_FINAL } : lang === 'es' ? { base: SYSTEM_ES, summary: SYSTEM_ES_SUMMARY, final: SYSTEM_ES_FINAL } : { base: SYSTEM_EN, summary: SYSTEM_EN_SUMMARY, final: SYSTEM_EN_FINAL };
+  const suffix = tier !== 'summary' ? '' : pageId === 'page_15' ? P.final : P.summary;
+  const system = `${P.base}${suffix ? ` ${suffix}` : ''}`;
+  const frag = lang === 'es' ? withSpanishConditions(fragment) : fragment;
   const user =
     lang === 'zh'
-      ? `页面 = ${pageId}（${spec.zh}/${spec.en}）；页面 JSON 片段 = ${JSON.stringify(fragment)}；参数说明 = ${paramNotes('zh')}`
-      : `page = ${pageId} (${spec.zh}/${spec.en}); page JSON fragment = ${JSON.stringify(fragment)}; parameter notes = ${paramNotes('en')}`;
+      ? `页面 = ${pageId}（${spec.zh}/${spec.en}）；页面 JSON 片段 = ${JSON.stringify(frag)}；参数说明 = ${paramNotes('zh')}`
+      : lang === 'es'
+        ? `página = ${pageId} (${spec.es}/${spec.en}); fragmento JSON de la página = ${JSON.stringify(frag)}; notas de parámetros = ${paramNotes('es')}`
+        : `page = ${pageId} (${spec.en}); page JSON fragment = ${JSON.stringify(frag)}; parameter notes = ${paramNotes('en')}`;
   return { system, user, tier };
 }
 
@@ -171,6 +240,43 @@ export interface NarrativeCheck {
 
 const cjkLen = (s: string) => [...s.trim()].length;
 const wordLen = (s: string) => (s.trim() ? s.trim().split(/\s+/).length : 0);
+
+/** Guard feedback in the report language (fed back to the LLM on regeneration). */
+const REASONS: Record<NarrativeLanguage, { emptyTitle: string; longTitle: (n: number) => string; emptyBody: string; longBody: (n: number) => string; number: (n: string) => string; banned: (b: string) => string; missingRefs: string; badRef: (r: string) => string; conditions: (m: string[]) => string }> = {
+  zh: {
+    emptyTitle: '标题为空',
+    longTitle: (n) => `标题超过 ${n} 字`,
+    emptyBody: '正文为空',
+    longBody: (n) => `正文超过 ${n} 字`,
+    number: (n) => `数字 ${n} 不在 JSON 中`,
+    banned: (b) => `含禁用词 ${b}`,
+    missingRefs: '缺少 [src:]',
+    badRef: (r) => `引用路径 ${r} 不在 JSON 中`,
+    conditions: (m) => `签约前条件未逐字复制：${m.join('；')}`,
+  },
+  en: {
+    emptyTitle: 'title is empty',
+    longTitle: (n) => `title exceeds ${n} words`,
+    emptyBody: 'body is empty',
+    longBody: (n) => `body exceeds ${n} words`,
+    number: (n) => `number ${n} is not in the JSON`,
+    banned: (b) => `contains banned word ${b}`,
+    missingRefs: 'missing [src:] citations',
+    badRef: (r) => `cited path ${r} is not in the JSON`,
+    conditions: (m) => `pre-lease conditions not copied verbatim: ${m.join('; ')}`,
+  },
+  es: {
+    emptyTitle: 'el título está vacío',
+    longTitle: (n) => `el título supera ${n} palabras`,
+    emptyBody: 'el body está vacío',
+    longBody: (n) => `el body supera ${n} palabras`,
+    number: (n) => `la cifra ${n} no está en el JSON`,
+    banned: (b) => `contiene la palabra prohibida ${b}`,
+    missingRefs: 'faltan citas [src:]',
+    badRef: (r) => `la ruta citada ${r} no está en el JSON`,
+    conditions: (m) => `las condiciones previas no se copiaron literalmente: ${m.join('; ')}`,
+  },
+};
 
 /** "[src:trade_area.rings[2].pop]" → "trade_area.rings.2.pop" */
 export function normalizeRef(ref: string): string {
@@ -211,33 +317,35 @@ export function checkNarrative(
   opts: { isVoid: boolean; language: NarrativeLanguage; tier: NarrativeTier; conditions?: string[] },
 ): NarrativeCheck {
   const zh = opts.language === 'zh';
+  const R = REASONS[opts.language];
   const reasons: string[] = [];
   const title = (out.title ?? '').trim();
   const body = (out.body ?? '').trim();
   const lim = NARRATIVE_LIMITS[opts.language];
 
-  if (!title) reasons.push(zh ? '标题为空' : 'title is empty');
-  else if (zh ? cjkLen(title) > lim.title : wordLen(title) > lim.title) reasons.push(zh ? `标题超过 ${lim.title} 字` : `title exceeds ${lim.title} words`);
-  if (!body) reasons.push(zh ? '正文为空' : 'body is empty');
+  if (!title) reasons.push(R.emptyTitle);
+  else if (zh ? cjkLen(title) > lim.title : wordLen(title) > lim.title) reasons.push(R.longTitle(lim.title));
+  if (!body) reasons.push(R.emptyBody);
   else {
     const max = lim.body[opts.tier];
-    if (zh ? cjkLen(body) > max : wordLen(body) > max) reasons.push(zh ? `正文超过 ${max} 字` : `body exceeds ${max} words`);
+    if (zh ? cjkLen(body) > max : wordLen(body) > max) reasons.push(R.longBody(max));
   }
 
-  const g = numberGuard(`${title} ${body}`, fragment, { isVoid: opts.isVoid });
-  for (const n of g.unmatched) reasons.push(zh ? `数字 ${n} 不在 JSON 中` : `number ${n} is not in the JSON`);
-  for (const b of g.banned) reasons.push(zh ? `含禁用词 ${b}` : `contains banned word ${b}`);
-  if (g.missing_refs) reasons.push(zh ? '缺少 [src:]' : 'missing [src:] citations');
+  const frag = opts.language === 'es' ? withSpanishConditions(fragment) : fragment;
+  const g = numberGuard(`${title} ${body}`, frag, { isVoid: opts.isVoid, lang: opts.language });
+  for (const n of g.unmatched) reasons.push(R.number(n));
+  for (const b of g.banned) reasons.push(R.banned(b));
+  if (g.missing_refs) reasons.push(R.missingRefs);
 
   const badRefs = new Set<string>();
   for (const r of [...(Array.isArray(out.refs) ? out.refs : []).map((x) => normalizeRef(String(x))), ...citationsIn(`${title} ${body}`)]) {
-    if (!refExists(r, fragment)) badRefs.add(r);
+    if (!refExists(r, frag)) badRefs.add(r);
   }
-  for (const r of badRefs) reasons.push(zh ? `引用路径 ${r} 不在 JSON 中` : `cited path ${r} is not in the JSON`);
+  for (const r of badRefs) reasons.push(R.badRef(r));
 
   if (opts.tier === 'summary' && opts.conditions?.length) {
     const missing = opts.conditions.filter((c) => c.trim() && !body.includes(c.trim()));
-    if (missing.length) reasons.push(zh ? `签约前条件未逐字复制：${missing.join('；')}` : `pre-lease conditions not copied verbatim: ${missing.join('; ')}`);
+    if (missing.length) reasons.push(R.conditions(missing));
   }
 
   return { ok: reasons.length === 0, reasons, unmatched: [...g.unmatched, ...[...badRefs].map((r) => `ref:${r}`)], banned: g.banned };
@@ -309,9 +417,9 @@ async function runPool<T>(items: T[], size: number, fn: (item: T) => Promise<voi
   await Promise.all(workers);
 }
 
-/** The narrative stored on the model, or the deterministic template when absent. */
-export function narrativeForPage(model: ReportModel, pageId: PageId): NarrativeEntry {
-  return model.narrative?.[pageId] ?? templateNarrative(model, pageId);
+/** The narrative stored on the model, or the deterministic template (in `lang`, default the model's language) when absent. */
+export function narrativeForPage(model: ReportModel, pageId: PageId, lang?: NarrativeLanguage): NarrativeEntry {
+  return model.narrative?.[pageId] ?? templateNarrative(model, pageId, lang);
 }
 
 export async function generateNarratives(model: ReportModel, opts: GenerateNarrativesOptions): Promise<GenerateNarrativesResult> {
@@ -320,13 +428,13 @@ export async function generateNarratives(model: ReportModel, opts: GenerateNarra
   const lang = opts.language;
   const zh = lang === 'zh';
   const isVoid = Boolean(model.competitors?.void?.is_void);
-  const conditions = (model.score?.conditions ?? []).map((c) => (zh ? c.text_zh : c.text_en));
+  const conditions = conditionTexts(model, lang);
 
   const narrative: ReportModel['narrative'] = {};
   const stats: GenerateNarrativesResult['stats'] = { llm_pages: 0, template_pages: 0, regenerated: 0, guard_failures: [] };
 
   const fallback = (pageId: PageId, reason: string) => {
-    narrative[pageId] = { ...templateNarrative(model, pageId), guard: `template_fallback:${reason.slice(0, 200)}` };
+    narrative[pageId] = { ...templateNarrative(model, pageId, lang), guard: `template_fallback:${reason.slice(0, 200)}` };
     stats.template_pages += 1;
   };
 
@@ -346,7 +454,7 @@ export async function generateNarratives(model: ReportModel, opts: GenerateNarra
     let lastReason = 'unknown';
 
     for (let attempt = 0; attempt < 2; attempt++) {
-      const userPrompt = feedback ? `${user}\n${zh ? '上一次输出的问题：' : 'Problems with the previous output: '}${feedback}` : user;
+      const userPrompt = feedback ? `${user}\n${zh ? '上一次输出的问题：' : lang === 'es' ? 'Problemas de la salida anterior: ' : 'Problems with the previous output: '}${feedback}` : user;
       let res: NarrativeLlmResult | null;
       try {
         opts.cost.add('llm', tier === 'summary' ? NARRATIVE_COST_SUMMARY_USD : NARRATIVE_COST_PAGE_USD, `narrative page_${pageN}${attempt ? ' regen' : ''}`);

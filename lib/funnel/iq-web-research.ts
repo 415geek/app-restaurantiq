@@ -6,6 +6,7 @@
  * - fetchTavilyMarketResearch: quick search (existing)
  * - fetchTavilyDeepResearch: full research report via /research endpoint (new)
  */
+import { DEFAULT_LOCALE, type Locale, pick } from '@/lib/i18n/locale';
 
 export type TavilySnippet = { title: string; url: string; snippet: string };
 
@@ -76,8 +77,60 @@ const DEEP_RESEARCH_TIMEOUT_MS =
   Number(process.env.DEEP_RESEARCH_TIMEOUT_MS?.trim() || '') || 75_000;
 const POLL_INTERVAL_MS = 5_000;
 
-function buildDeepResearchPrompt(location: string, businessType: string, lang: 'en' | 'zh'): string {
-  const biz = businessType || (lang === 'zh' ? '餐厅' : 'restaurant');
+function buildDeepResearchPrompt(location: string, businessType: string, lang: Locale): string {
+  const biz = businessType || pick(lang, { en: 'restaurant', zh: '餐厅', es: 'restaurante' });
+  if (lang === 'es') {
+    return `Eres un experto en bienes raíces comerciales de nivel McKinsey con 15 años de experiencia en selección de ubicaciones para restaurantes. Tus informes han ayudado a cientos de restaurantes a tomar decisiones de ubicación acertadas.
+
+Dirección: ${location}
+Tipo de negocio: ${biz}
+
+【TAREA CENTRAL】
+Redacta un análisis profundo de selección de ubicación como un informe de consultoría premium: no un formulario, sino un **informe de consultoría narrativo** donde cada juicio se apoya en datos con citas de fuente.
+
+【PREGUNTAS QUE DEBES INVESTIGAR Y RESPONDER】
+
+**1. Por qué esta dirección funciona o no (análisis estructural)**
+- ¿Cuál es el estado actual del inmueble? ¿Está en renta? ¿Quién es el inquilino actual?
+- Características de la vía (número de carriles, límite de velocidad, volumen diario de tráfico, si es una arteria principal)
+- Casos históricos de éxito/fracaso de restaurantes en esta dirección o en ubicaciones similares
+- Obras municipales en curso o planeadas en la zona (construcción vial, expansión de transporte)
+
+**2. Demografía y poder adquisitivo (DEBE incluir cifras concretas + fuentes)**
+- Población total del código postal, porcentaje asiático/chino e hispano
+- Ingreso familiar mediano (USD exacto), ingreso mediano del grupo de 25-44 años
+- Porcentaje de hogares con ingresos >$200k
+- Porcentaje que habla un idioma distinto del inglés en casa
+
+**3. Análisis de brechas competitivas**
+- ¿Cuántos establecimientos de ${biz} hay en 1-3 millas? Lista los nombres
+- ¿Cuántos hay en toda la ciudad/área metropolitana? ¿Existe un vacío de "cero competencia"?
+- Competidores cerrados del mismo tipo: ¿por qué cerraron? (p. ej., problemas de calidad, ubicación equivocada)
+- Densidad de competidores de comida rápida en el mismo rango de precio ($10-20)
+
+**4. Economía de los insumos (específica para ${biz})**
+- Costo mayorista de los ingredientes principales ($/lb)
+- Costo de alimentos típico como % de los ingresos
+- Ventajas/desventajas de la estructura de costos frente a conceptos similares
+
+**5. Ubicaciones alternativas (DEBE incluir locales concretos)**
+Si esta dirección no es adecuada, recomienda 3 corredores comerciales cercanos, cada uno con:
+- Nombre del corredor y características (Walk Score, transporte, densidad de población china/hispana)
+- **Locales disponibles concretos**: dirección, pies cuadrados, renta mensual ($), fuente (LoopNet/Craigslist/corredor)
+- Si no encuentras locales, marca [requiere visita en sitio] y explica los siguientes pasos
+
+**6. Estimación del punto de equilibrio**
+- Suponiendo una renta de $X/mes, ¿qué ingreso mensual se necesita para alcanzar el equilibrio?
+- Con un ticket promedio de $Y, ¿cuántas órdenes diarias se necesitan?
+- Meses estimados para alcanzar el equilibrio
+
+【REQUISITOS DE SALIDA】
+- Escribe en español neutro (Estados Unidos / Latinoamérica), claro y profesional; conserva nombres propios, direcciones y marcas.
+- Cada dato debe citar su fuente: [Census], [Yelp], [Wikipedia], [Caltrans], [LoopNet], [Google Maps], [búsqueda], [estimación]
+- Los competidores deben tener nombres reales, nunca "Competidor A/B/C"
+- Los precios/cifras deben ser exactos, p. ej. "$152,587" y no "unos 150 mil"
+- Los casos de fracaso deben explicar la lección concreta`;
+  }
   if (lang === 'zh') {
     return `你是麦肯锡的顶级商业分析专家，拥有15年餐饮选址与商业地产经验。你的分析报告曾帮助数百家餐厅做出正确的选址决策。
 
@@ -175,6 +228,7 @@ If this address is unsuitable, recommend 3 nearby commercial corridors, each wit
 - Estimated months to break-even
 
 【OUTPUT REQUIREMENTS】
+- Write in standard U.S. English.
 - Every data point must cite source: [Census], [Yelp], [Wikipedia], [Caltrans], [LoopNet], [Google Maps], [search], [estimate]
 - Competitors must use real business names, never "Competitor A/B/C"
 - Numbers must be precise, e.g., "$152,587" not "about $150k"
@@ -460,7 +514,7 @@ async function sleep(ms: number): Promise<void> {
 export async function fetchTavilyDeepResearch(input: {
   location: string;
   businessType: string;
-  lang?: 'en' | 'zh';
+  lang?: Locale;
   model?: 'mini' | 'pro';
 }): Promise<DeepResearchPack | null> {
   const apiKey = process.env.TAVILY_API_KEY?.trim();
@@ -469,7 +523,7 @@ export async function fetchTavilyDeepResearch(input: {
   const loc = input.location.trim();
   if (!loc) return null;
 
-  const lang = input.lang ?? 'en';
+  const lang = input.lang ?? DEFAULT_LOCALE;
   const model = input.model ?? 'pro';
   const prompt = buildDeepResearchPrompt(loc, input.businessType, lang);
   const schema = buildDeepResearchSchema();
@@ -698,31 +752,92 @@ export function summarizeWebResearchForAnchors(pack: WebResearchPack | null | un
   return lines.join('\n');
 }
 
+/** Section headings / labels for the deep-research digest, per locale. */
+const DR = {
+  title: { en: '## [DeepRes] Tavily Deep Research Report', zh: '## [DeepRes] Tavily 深度研究报告', es: '## [DeepRes] Informe de investigación profunda de Tavily' },
+  meta: { en: 'Model: {m} | Time: {t}s', zh: '模型: {m} | 耗时: {t}秒', es: 'Modelo: {m} | Tiempo: {t}s' },
+  verified: {
+    en: '> Data below has been verified via Tavily Deep Research. Cite as [DeepRes]',
+    zh: '> 以下数据已经过 Tavily 深度研究验证，引用时使用 [DeepRes] 标签',
+    es: '> Los datos siguientes fueron verificados mediante Tavily Deep Research. Cítalos como [DeepRes]',
+  },
+  execSummary: { en: '### Executive Summary [DeepRes]', zh: '### 执行摘要 [DeepRes]', es: '### Resumen ejecutivo [DeepRes]' },
+  verdict: { en: '### Site Suitability Verdict [DeepRes]', zh: '### 选址判定 [DeepRes]', es: '### Veredicto de idoneidad del sitio [DeepRes]' },
+  structural: { en: '### Site Structural Analysis [DeepRes]', zh: '### 物业与道路结构分析 [DeepRes]', es: '### Análisis estructural del sitio [DeepRes]' },
+  demoNarrative: { en: '### Demographics & Spending Power [DeepRes]', zh: '### 人口与消费力分析 [DeepRes]', es: '### Demografía y poder adquisitivo [DeepRes]' },
+  demoAnalysis: { en: '### Demographic Analysis [DeepRes]', zh: '### 人口统计分析 [DeepRes]', es: '### Análisis demográfico [DeepRes]' },
+  population: { en: '- Population: ', zh: '- 人口估计: ', es: '- Población: ' },
+  medianIncome: { en: '- Median Income: ', zh: '- 收入中位数: ', es: '- Ingreso mediano: ' },
+  ageDist: { en: '- Age Distribution: ', zh: '- 年龄分布: ', es: '- Distribución por edad: ' },
+  spending: { en: '- Spending Power: ', zh: '- 消费力评估: ', es: '- Poder adquisitivo: ' },
+  gap: { en: '### Competition Gap Analysis [DeepRes]', zh: '### 竞争空白分析 [DeepRes]', es: '### Análisis de brechas competitivas [DeepRes]' },
+  foodEcon: { en: '### Food Economics Analysis [DeepRes]', zh: '### 食材经济学分析 [DeepRes]', es: '### Análisis de economía de insumos [DeepRes]' },
+  cases: { en: '### Historical Case Studies [DeepRes]', zh: '### 历史案例研究 [DeepRes]', es: '### Casos históricos [DeepRes]' },
+  success: { en: 'Success', zh: '成功', es: 'Éxito' },
+  failure: { en: 'Failure', zh: '失败', es: 'Fracaso' },
+  years: { en: 'Years', zh: '经营时间', es: 'Años' },
+  lesson: { en: 'Lesson', zh: '教训', es: 'Lección' },
+  competitors: { en: '### Direct Competitors [DeepRes]', zh: '### 直接竞争者 [DeepRes]', es: '### Competidores directos [DeepRes]' },
+  reviews: { en: 'reviews', zh: '条评论', es: 'reseñas' },
+  threat: { en: 'Threat', zh: '威胁', es: 'Amenaza' },
+  corridors: { en: '### Alternative Corridors [DeepRes]', zh: '### 替代商业走廊 [DeepRes]', es: '### Corredores alternativos [DeepRes]' },
+  characteristics: { en: 'Characteristics', zh: '特征', es: 'Características' },
+  rationale: { en: 'Rationale', zh: '推荐理由', es: 'Justificación' },
+  listings: { en: '**Available Listings:**', zh: '**放租铺位:**', es: '**Locales disponibles:**' },
+  altLocations: { en: '### Alternative Locations [DeepRes]', zh: '### 替代位置建议 [DeepRes]', es: '### Ubicaciones alternativas [DeepRes]' },
+  why: { en: 'Why', zh: '优势', es: 'Por qué' },
+  rent: { en: 'Rent', zh: '租金', es: 'Renta' },
+  listingsShort: { en: 'Listings', zh: '放租', es: 'Locales' },
+  breakeven: { en: '### Break-even Analysis [DeepRes]', zh: '### 盈亏平衡分析 [DeepRes]', es: '### Análisis de punto de equilibrio [DeepRes]' },
+  assumedRent: { en: '- Assumed Monthly Rent: $', zh: '- 假设月租: $', es: '- Renta mensual supuesta: $' },
+  revenueToBreakeven: { en: '- Monthly Revenue to Break-even: $', zh: '- 盈亏平衡月营收: $', es: '- Ingreso mensual de equilibrio: $' },
+  avgTicket: { en: '- Average Ticket: $', zh: '- 平均客单价: $', es: '- Ticket promedio: $' },
+  dailyOrders: { en: '- Daily Orders Needed: ', zh: '- 日均订单需求: ', es: '- Órdenes diarias necesarias: ' },
+  monthsToBreakeven: { en: '- Months to Break-even: ', zh: '- 预计回本周期: ', es: '- Meses para el equilibrio: ' },
+  notes: { en: 'Notes', zh: '计算说明', es: 'Notas' },
+  evidence: { en: '### Key Evidence Points [DeepRes]', zh: '### 关键证据点 [DeepRes]', es: '### Puntos clave de evidencia [DeepRes]' },
+  risks: { en: '### Risks [DeepRes]', zh: '### 风险 [DeepRes]', es: '### Riesgos [DeepRes]' },
+  mitigation: { en: 'Mitigation', zh: '缓解', es: 'Mitigación' },
+  opportunities: { en: '### Opportunities [DeepRes]', zh: '### 机会 [DeepRes]', es: '### Oportunidades [DeepRes]' },
+  nextSteps: { en: '### Next Steps for Verification [DeepRes]', zh: '### 下一步验证建议 [DeepRes]', es: '### Próximos pasos de verificación [DeepRes]' },
+  raw: { en: '### Research Report (Raw) [DeepRes]', zh: '### 研究报告（原文）[DeepRes]', es: '### Informe de investigación (texto original) [DeepRes]' },
+  sources: { en: '### Sources [DeepRes]', zh: '### 数据来源 [DeepRes]', es: '### Fuentes [DeepRes]' },
+} as const;
+
+const DR_VERDICT: Record<Locale, Record<string, string>> = {
+  en: { highly_suitable: 'Highly Suitable', suitable: 'Suitable', marginal: 'Marginal', not_suitable: 'Not Suitable' },
+  zh: { highly_suitable: '非常适合', suitable: '适合', marginal: '边缘', not_suitable: '不适合' },
+  es: { highly_suitable: 'Muy adecuado', suitable: 'Adecuado', marginal: 'Marginal', not_suitable: 'No adecuado' },
+};
+
 /**
  * Convert DeepResearchPack into a comprehensive context block for LLM prompts.
  * This provides rich, structured data from Tavily's deep research.
  */
 export function summarizeDeepResearchForAnchors(
   pack: DeepResearchPack | null | undefined,
-  lang: 'en' | 'zh' = 'en'
+  lang: Locale = DEFAULT_LOCALE,
 ): string {
   if (!pack) return '';
-  
-  if (pack.status === 'timeout' || pack.status === 'failed') {
-    return lang === 'zh'
-      ? `\n\n【深度研究状态】Tavily Deep Research ${pack.status === 'timeout' ? '超时' : '失败'}（${pack.response_time_sec}秒）。请依赖下方的 web_research 摘要和 ACS 数据进行分析。\n`
-      : `\n\n[DEEP RESEARCH STATUS] Tavily Deep Research ${pack.status} after ${pack.response_time_sec}s. Rely on web_research digest and ACS data below for analysis.\n`;
-  }
-  
-  if (pack.status !== 'completed') return '';
-  
-  const lines: string[] = [];
-  const L = lang === 'zh';
 
-  lines.push(L ? '## [DeepRes] Tavily 深度研究报告' : '## [DeepRes] Tavily Deep Research Report');
-  lines.push(L ? `模型: ${pack.model} | 耗时: ${pack.response_time_sec}秒` : `Model: ${pack.model} | Time: ${pack.response_time_sec}s`);
+  if (pack.status === 'timeout' || pack.status === 'failed') {
+    const t = pack.response_time_sec;
+    return pick(lang, {
+      en: `\n\n[DEEP RESEARCH STATUS] Tavily Deep Research ${pack.status} after ${t}s. Rely on web_research digest and ACS data below for analysis.\n`,
+      zh: `\n\n【深度研究状态】Tavily Deep Research ${pack.status === 'timeout' ? '超时' : '失败'}（${t}秒）。请依赖下方的 web_research 摘要和 ACS 数据进行分析。\n`,
+      es: `\n\n[ESTADO DE LA INVESTIGACIÓN PROFUNDA] Tavily Deep Research ${pack.status === 'timeout' ? 'agotó el tiempo' : 'falló'} tras ${t}s. Apóyate en el resumen de web_research y en los datos ACS de abajo para el análisis.\n`,
+    });
+  }
+
+  if (pack.status !== 'completed') return '';
+
+  const t = (key: keyof typeof DR): string => pick(lang, DR[key]);
+  const lines: string[] = [];
+
+  lines.push(t('title'));
+  lines.push(t('meta').replace('{m}', String(pack.model)).replace('{t}', String(pack.response_time_sec)));
   lines.push('');
-  lines.push(L ? '> 以下数据已经过 Tavily 深度研究验证，引用时使用 [DeepRes] 标签' : '> Data below has been verified via Tavily Deep Research. Cite as [DeepRes]');
+  lines.push(t('verified'));
   lines.push('');
 
   if (pack.report) {
@@ -731,28 +846,26 @@ export function summarizeDeepResearchForAnchors(
 
     // New schema: narrative fields
     if (r.executive_summary) {
-      lines.push(L ? '### 执行摘要 [DeepRes]' : '### Executive Summary [DeepRes]');
+      lines.push(t('execSummary'));
       lines.push(r.executive_summary);
       lines.push('');
     }
 
-    lines.push(L ? '### 选址判定 [DeepRes]' : '### Site Suitability Verdict [DeepRes]');
-    const verdictMap: Record<string, string> = L
-      ? { highly_suitable: '非常适合', suitable: '适合', marginal: '边缘', not_suitable: '不适合' }
-      : { highly_suitable: 'Highly Suitable', suitable: 'Suitable', marginal: 'Marginal', not_suitable: 'Not Suitable' };
+    lines.push(t('verdict'));
+    const verdictMap = pick(lang, DR_VERDICT);
     lines.push(`**${verdictMap[r.site_suitability_verdict] || r.site_suitability_verdict}**`);
     lines.push('');
 
     // New schema: site structural analysis (narrative)
     if (r.site_structural_analysis) {
-      lines.push(L ? '### 物业与道路结构分析 [DeepRes]' : '### Site Structural Analysis [DeepRes]');
+      lines.push(t('structural'));
       lines.push(r.site_structural_analysis);
       lines.push('');
     }
 
     // New schema: demographic narrative
     if (r.demographic_narrative) {
-      lines.push(L ? '### 人口与消费力分析 [DeepRes]' : '### Demographics & Spending Power [DeepRes]');
+      lines.push(t('demoNarrative'));
       lines.push(r.demographic_narrative);
       lines.push('');
     }
@@ -760,35 +873,35 @@ export function summarizeDeepResearchForAnchors(
     // Legacy schema: demographic_analysis (fallback)
     if (!r.demographic_narrative && r.demographic_analysis) {
       const d = r.demographic_analysis;
-      lines.push(L ? '### 人口统计分析 [DeepRes]' : '### Demographic Analysis [DeepRes]');
-      lines.push(L ? `- 人口估计: ${d.population_estimate}` : `- Population: ${d.population_estimate}`);
-      lines.push(L ? `- 收入中位数: ${d.median_income_estimate}` : `- Median Income: ${d.median_income_estimate}`);
-      lines.push(L ? `- 年龄分布: ${d.age_distribution_notes}` : `- Age Distribution: ${d.age_distribution_notes}`);
-      lines.push(L ? `- 消费力评估: ${d.spending_power_assessment}` : `- Spending Power: ${d.spending_power_assessment}`);
+      lines.push(t('demoAnalysis'));
+      lines.push(`${t('population')}${d.population_estimate}`);
+      lines.push(`${t('medianIncome')}${d.median_income_estimate}`);
+      lines.push(`${t('ageDist')}${d.age_distribution_notes}`);
+      lines.push(`${t('spending')}${d.spending_power_assessment}`);
       lines.push('');
     }
 
     // New schema: competition gap analysis (narrative)
     if (r.competition_gap_analysis) {
-      lines.push(L ? '### 竞争空白分析 [DeepRes]' : '### Competition Gap Analysis [DeepRes]');
+      lines.push(t('gap'));
       lines.push(r.competition_gap_analysis);
       lines.push('');
     }
 
     // New schema: food economics analysis
     if (r.food_economics_analysis) {
-      lines.push(L ? '### 食材经济学分析 [DeepRes]' : '### Food Economics Analysis [DeepRes]');
+      lines.push(t('foodEcon'));
       lines.push(r.food_economics_analysis);
       lines.push('');
     }
 
     // New schema: historical case studies
     if (r.historical_case_studies?.length) {
-      lines.push(L ? '### 历史案例研究 [DeepRes]' : '### Historical Case Studies [DeepRes]');
+      lines.push(t('cases'));
       r.historical_case_studies.forEach((cs: { business_name: string; location: string; outcome: string; years_operated: string; key_lesson: string; source: string }) => {
-        const outcome = cs.outcome === 'success' ? (L ? '成功' : 'Success') : (L ? '失败' : 'Failure');
+        const outcome = cs.outcome === 'success' ? t('success') : t('failure');
         lines.push(`- **${cs.business_name}** (${cs.location}) — ${outcome}`);
-        lines.push(`  ${L ? '经营时间' : 'Years'}: ${cs.years_operated} | ${L ? '教训' : 'Lesson'}: ${cs.key_lesson} ${cs.source}`);
+        lines.push(`  ${t('years')}: ${cs.years_operated} | ${t('lesson')}: ${cs.key_lesson} ${cs.source}`);
       });
       lines.push('');
     }
@@ -796,14 +909,14 @@ export function summarizeDeepResearchForAnchors(
     // Direct competitors (both schemas)
     const directComps = r.direct_competitors || r.competition_analysis?.direct_competitors;
     if (directComps?.length) {
-      lines.push(L ? '### 直接竞争者 [DeepRes]' : '### Direct Competitors [DeepRes]');
+      lines.push(t('competitors'));
       directComps.slice(0, 8).forEach((comp: { name: string; address?: string; distance_mi?: number; distance?: string; rating?: number; review_count?: number; price_range?: string; price_tier?: string; threat_level: string; analysis?: string; notes?: string }) => {
         const dist = comp.distance_mi ? `${comp.distance_mi} mi` : comp.distance;
         const rating = comp.rating ? ` ⭐${comp.rating}` : '';
-        const reviews = comp.review_count ? ` (${comp.review_count} reviews)` : '';
+        const reviews = comp.review_count ? ` (${comp.review_count} ${t('reviews')})` : '';
         const price = comp.price_range || comp.price_tier || '';
         const threat = comp.threat_level;
-        lines.push(`- **${comp.name}** — ${dist}${rating}${reviews} ${price} — ${L ? '威胁' : 'Threat'}: ${threat}`);
+        lines.push(`- **${comp.name}** — ${dist}${rating}${reviews} ${price} — ${t('threat')}: ${threat}`);
         if (comp.analysis || comp.notes) {
           lines.push(`  ${comp.analysis || comp.notes}`);
         }
@@ -813,13 +926,13 @@ export function summarizeDeepResearchForAnchors(
 
     // New schema: alternative corridors with specific listings
     if (r.alternative_corridors?.length) {
-      lines.push(L ? '### 替代商业走廊 [DeepRes]' : '### Alternative Corridors [DeepRes]');
+      lines.push(t('corridors'));
       r.alternative_corridors.forEach((corr: { corridor_name: string; characteristics: string; rationale: string; listings?: { address: string; sqft: number; monthly_rent_usd: number; highlights: string; source_tag: string }[] }, i: number) => {
         lines.push(`**${i + 1}. ${corr.corridor_name}**`);
-        lines.push(`${L ? '特征' : 'Characteristics'}: ${corr.characteristics}`);
-        lines.push(`${L ? '推荐理由' : 'Rationale'}: ${corr.rationale}`);
+        lines.push(`${t('characteristics')}: ${corr.characteristics}`);
+        lines.push(`${t('rationale')}: ${corr.rationale}`);
         if (corr.listings?.length) {
-          lines.push(L ? '**放租铺位:**' : '**Available Listings:**');
+          lines.push(t('listings'));
           corr.listings.forEach((lst) => {
             lines.push(`  - ${lst.address}: ${lst.sqft} sqft, $${lst.monthly_rent_usd}/mo — ${lst.highlights} ${lst.source_tag}`);
           });
@@ -830,12 +943,12 @@ export function summarizeDeepResearchForAnchors(
 
     // Legacy schema: alternative_locations (fallback)
     if (!r.alternative_corridors?.length && r.alternative_locations?.length) {
-      lines.push(L ? '### 替代位置建议 [DeepRes]' : '### Alternative Locations [DeepRes]');
+      lines.push(t('altLocations'));
       r.alternative_locations.slice(0, 4).forEach((alt: { address_or_corridor: string; why_better: string; estimated_rent_usd: string; current_listings?: string }, i: number) => {
         lines.push(`${i + 1}. **${alt.address_or_corridor}**`);
-        lines.push(`   ${L ? '优势' : 'Why'}: ${alt.why_better}`);
-        lines.push(`   ${L ? '租金' : 'Rent'}: ${alt.estimated_rent_usd}`);
-        if (alt.current_listings) lines.push(`   ${L ? '放租' : 'Listings'}: ${alt.current_listings}`);
+        lines.push(`   ${t('why')}: ${alt.why_better}`);
+        lines.push(`   ${t('rent')}: ${alt.estimated_rent_usd}`);
+        if (alt.current_listings) lines.push(`   ${t('listingsShort')}: ${alt.current_listings}`);
       });
       lines.push('');
     }
@@ -843,21 +956,21 @@ export function summarizeDeepResearchForAnchors(
     // New schema: breakeven analysis
     if (r.breakeven_analysis) {
       const be = r.breakeven_analysis;
-      lines.push(L ? '### 盈亏平衡分析 [DeepRes]' : '### Break-even Analysis [DeepRes]');
-      lines.push(L ? `- 假设月租: $${be.assumed_monthly_rent}` : `- Assumed Monthly Rent: $${be.assumed_monthly_rent}`);
-      lines.push(L ? `- 盈亏平衡月营收: $${be.monthly_revenue_to_breakeven}` : `- Monthly Revenue to Break-even: $${be.monthly_revenue_to_breakeven}`);
-      lines.push(L ? `- 平均客单价: $${be.avg_ticket_price}` : `- Average Ticket: $${be.avg_ticket_price}`);
-      lines.push(L ? `- 日均订单需求: ${be.daily_orders_needed}` : `- Daily Orders Needed: ${be.daily_orders_needed}`);
-      lines.push(L ? `- 预计回本周期: ${be.months_to_breakeven}` : `- Months to Break-even: ${be.months_to_breakeven}`);
+      lines.push(t('breakeven'));
+      lines.push(`${t('assumedRent')}${be.assumed_monthly_rent}`);
+      lines.push(`${t('revenueToBreakeven')}${be.monthly_revenue_to_breakeven}`);
+      lines.push(`${t('avgTicket')}${be.avg_ticket_price}`);
+      lines.push(`${t('dailyOrders')}${be.daily_orders_needed}`);
+      lines.push(`${t('monthsToBreakeven')}${be.months_to_breakeven}`);
       if (be.calculation_notes) {
-        lines.push(`${L ? '计算说明' : 'Notes'}: ${be.calculation_notes}`);
+        lines.push(`${t('notes')}: ${be.calculation_notes}`);
       }
       lines.push('');
     }
 
     // New schema: key evidence points
     if (r.key_evidence_points?.length) {
-      lines.push(L ? '### 关键证据点 [DeepRes]' : '### Key Evidence Points [DeepRes]');
+      lines.push(t('evidence'));
       r.key_evidence_points.forEach((pt: string) => {
         lines.push(`- ${pt}`);
       });
@@ -866,15 +979,15 @@ export function summarizeDeepResearchForAnchors(
 
     // Legacy schema: risks & opportunities
     if (r.risks?.length) {
-      lines.push(L ? '### 风险 [DeepRes]' : '### Risks [DeepRes]');
+      lines.push(t('risks'));
       r.risks.slice(0, 5).forEach((risk: { risk: string; severity: string; mitigation: string }) => {
-        lines.push(`- **${risk.risk}** (${risk.severity}) — ${L ? '缓解' : 'Mitigation'}: ${risk.mitigation}`);
+        lines.push(`- **${risk.risk}** (${risk.severity}) — ${t('mitigation')}: ${risk.mitigation}`);
       });
       lines.push('');
     }
 
     if (r.opportunities?.length) {
-      lines.push(L ? '### 机会 [DeepRes]' : '### Opportunities [DeepRes]');
+      lines.push(t('opportunities'));
       r.opportunities.slice(0, 5).forEach((opp: string) => {
         lines.push(`- ${opp}`);
       });
@@ -883,21 +996,21 @@ export function summarizeDeepResearchForAnchors(
 
     // New schema: next steps
     if (r.next_steps_verification?.length) {
-      lines.push(L ? '### 下一步验证建议 [DeepRes]' : '### Next Steps for Verification [DeepRes]');
+      lines.push(t('nextSteps'));
       r.next_steps_verification.forEach((step: string) => {
         lines.push(`- ${step}`);
       });
       lines.push('');
     }
   } else if (pack.report_raw) {
-    lines.push(L ? '### 研究报告（原文）[DeepRes]' : '### Research Report (Raw) [DeepRes]');
+    lines.push(t('raw'));
     lines.push(pack.report_raw.slice(0, 4000));
     if (pack.report_raw.length > 4000) lines.push('...(truncated)');
     lines.push('');
   }
 
   if (pack.sources?.length) {
-    lines.push(L ? '### 数据来源 [DeepRes]' : '### Sources [DeepRes]');
+    lines.push(t('sources'));
     pack.sources.slice(0, 15).forEach((s, i) => {
       lines.push(`[${i + 1}] ${s.title} — ${s.url}`);
     });

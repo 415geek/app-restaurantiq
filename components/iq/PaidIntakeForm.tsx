@@ -1,14 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import type { Locale } from '@/lib/i18n/locale';
 
 /**
- * PaidIntakeForm — the optional "补充信息" step between the free report and the
- * paid 360° report. Every field is optional; values are kept as raw strings
+ * PaidIntakeForm — the optional "add details" step between the free report and
+ * the paid 360° report. Every field is optional; values are kept as raw strings
  * and coerced server-side (POST /api/funnel/report-inputs).
  *
  * Two modes:
- *   - embedded   (result page): parent owns `value` / `onChange` and saves on 「立即购买」.
+ *   - embedded   (result page): parent owns `value` / `onChange` and saves on checkout.
  *   - standalone (Report360Panel): the form saves itself and calls `onSaved`.
  */
 
@@ -79,10 +80,8 @@ export async function submitPaidIntake(
   return { ok: true, inputs: json.inputs };
 }
 
-type Lang = 'en' | 'zh';
-
 const COPY: Record<
-  Lang,
+  Locale,
   {
     reassurance: string;
     seats: string;
@@ -147,9 +146,9 @@ const COPY: Record<
     existingStores: 'Existing store addresses',
     existingStoresHint: 'One per line — used for the cannibalization check',
     knownCompetitors: 'Direct competitors you know of',
-    knownCompetitorsHint: 'Names, comma or newline separated, up to 10',
+    knownCompetitorsHint: 'Names, comma- or newline-separated, up to 10',
     listingUrls: 'Listing links',
-    listingUrlsHint: 'LoopNet / Crexi etc., one per line',
+    listingUrlsHint: 'LoopNet / Crexi, etc., one per line',
     dayparts: 'Planned service hours',
     daypart: { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', late_night: 'Late night' },
     notes: 'Notes',
@@ -162,6 +161,32 @@ const COPY: Record<
     sectionFinance: 'Finance',
     sectionCompetition: 'Competition & site',
   },
+  es: {
+    reassurance: 'Todo es opcional: el informe funciona sin estos datos; cuanto más agregues, más precisas serán las secciones de competencia y finanzas.',
+    seats: 'Asientos',
+    ticketIn: 'Ticket promedio en el local ($)',
+    ticketDelivery: 'Ticket promedio de delivery ($)',
+    deliveryRatio: 'Porcentaje de delivery (%)',
+    capex: 'Presupuesto de obra + equipo ($)',
+    parking: 'Lugares de estacionamiento',
+    existingStores: 'Direcciones de tus locales actuales',
+    existingStoresHint: 'Una por línea; se usa para medir la canibalización',
+    knownCompetitors: 'Competidores directos que conozcas',
+    knownCompetitorsHint: 'Nombres separados por coma o salto de línea, hasta 10',
+    listingUrls: 'Enlaces del anuncio',
+    listingUrlsHint: 'LoopNet / Crexi, etc., uno por línea',
+    dayparts: 'Horarios de servicio planeados',
+    daypart: { breakfast: 'Desayuno', lunch: 'Almuerzo', dinner: 'Cena', late_night: 'Noche' },
+    notes: 'Notas',
+    notesHint: 'Cualquier cosa que el analista deba saber',
+    save: 'Guardar y volver a generar',
+    saving: 'Guardando…',
+    saved: 'Guardado; generando de nuevo…',
+    failed: 'No se pudo guardar. Inténtalo de nuevo.',
+    cancel: 'Cancelar',
+    sectionFinance: 'Finanzas',
+    sectionCompetition: 'Competencia y ubicación',
+  },
 };
 
 const inputCls =
@@ -170,7 +195,7 @@ const labelCls = 'mb-1 block text-xs font-medium text-white/60';
 const hintCls = 'mt-1 text-[11px] text-white/35';
 
 type Props = {
-  lang?: Lang;
+  lang?: Locale;
   reportId: string;
   /** embedded: controlled by the parent (no submit button). standalone: self-saving with a submit button. */
   mode?: 'embedded' | 'standalone';

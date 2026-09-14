@@ -24,6 +24,7 @@
  * - Average US household size: ≈ 2.5 persons (ACS).
  */
 
+import { type Locale, pick } from '@/lib/i18n/locale';
 import type {
   CuisineBenchmarks,
   CuisineCategory,
@@ -52,6 +53,7 @@ const CUISINE_TABLE: Record<CuisineCategory, CuisineBenchmarks> = {
     typicalSeats: [60, 120],
     notes_en: 'Destination social dining: parking > foot traffic; evening-weighted; summer softness (-30–40%); ventilation/fire compliance.',
     notes_zh: '目的地型聚餐业态：停车 > 人流；晚市为主；夏季淡季（营收可降30-40%）；排烟消防合规是硬门槛。',
+    notes_es: 'Comida social de destino: estacionamiento > tráfico peatonal; enfoque nocturno; baja de verano (−30–40%); cumplimiento de ventilación y normativa contra incendios.',
   },
   boba_coffee: {
     category: 'boba_coffee',
@@ -61,6 +63,7 @@ const CUISINE_TABLE: Record<CuisineCategory, CuisineBenchmarks> = {
     typicalSeats: [8, 25],
     notes_en: 'Impulse/high-frequency: foot traffic density decides; 500m same-category count is the key competitive metric; healthy volume 200–500 cups/day.',
     notes_zh: '冲动型高频消费：人流密度定生死；500米内同类门店数是核心竞争指标；健康日销200-500杯。',
+    notes_es: 'Impulso y alta frecuencia: la densidad de tráfico peatonal decide; el conteo de la misma categoría en 500 m es la métrica competitiva clave; volumen saludable 200–500 vasos/día.',
   },
   full_service: {
     category: 'full_service',
@@ -70,6 +73,7 @@ const CUISINE_TABLE: Record<CuisineCategory, CuisineBenchmarks> = {
     typicalSeats: [50, 100],
     notes_en: 'Community stores live on residential density × income; mall stores on spending power × parking; labor 28–33% of sales.',
     notes_zh: '社区店看居民密度与收入结构；商圈店看消费力与停车；人工成本占营收28-33%。',
+    notes_es: 'Los locales de barrio viven de la densidad residencial × ingreso; los de centro comercial del poder adquisitivo × estacionamiento; mano de obra 28–33% de las ventas.',
   },
   qsr_fast: {
     category: 'qsr_fast',
@@ -79,6 +83,7 @@ const CUISINE_TABLE: Record<CuisineCategory, CuisineBenchmarks> = {
     typicalSeats: [20, 50],
     notes_en: 'Lunch-rush driven: office/industrial density; delivery mix often 40–60%; platform commission 15–30% compresses margin.',
     notes_zh: '午市高峰驱动：写字楼/工业区密度；外卖占比常达40-60%；平台抽成15-30%挤压利润。',
+    notes_es: 'Impulsado por la hora pico de almuerzo: densidad de oficinas/industria; el delivery suele ser 40–60% del mix; las comisiones de plataformas del 15–30% comprimen el margen.',
   },
   general: {
     category: 'general',
@@ -88,6 +93,7 @@ const CUISINE_TABLE: Record<CuisineCategory, CuisineBenchmarks> = {
     typicalSeats: [40, 90],
     notes_en: 'No specific cuisine matched — general restaurant framework applied.',
     notes_zh: '未匹配特定菜系，采用通用餐饮分析框架。',
+    notes_es: 'Sin coincidencia de cocina específica: se aplica el marco general de restaurantes.',
   },
 };
 
@@ -382,64 +388,92 @@ export function computeSiteMetrics(input: {
  * Compact bilingual digest of computed metrics for prompt injection.
  * Free tier appends this to the market brief; specialists receive the full object.
  */
-export function formatMetricsDigest(m: SiteMetrics, lang: 'en' | 'zh'): string {
+export function formatMetricsDigest(m: SiteMetrics, lang: Locale): string {
   const L: string[] = [];
-  const zh = lang === 'zh';
-  L.push(zh ? '【量化指标（公式计算，非估算）】' : '[COMPUTED METRICS (formula-derived, not estimated)]');
+  const n = (v: number | null | undefined) => v?.toLocaleString('en-US') ?? '?';
+  L.push(
+    pick(lang, {
+      en: '[COMPUTED METRICS (formula-derived, not estimated)]',
+      zh: '【量化指标（公式计算，非估算）】',
+      es: '[MÉTRICAS CALCULADAS (derivadas de fórmulas, no estimadas)]',
+    }),
+  );
 
   if (m.demand.data_available) {
+    const d = m.demand;
     L.push(
-      zh
-        ? `- 需求池：贸易区约 ${m.demand.trade_area_households?.toLocaleString() ?? '?'} 户 × 年外出就餐支出 ~$${m.demand.fafh_per_household_usd?.toLocaleString() ?? '?'}/户 = 年需求池 ~$${m.demand.trade_area_fafh_pool_usd?.toLocaleString() ?? '?'}（BLS CEX 基准按收入弹性0.8调整）`
-        : `- Demand pool: ~${m.demand.trade_area_households?.toLocaleString() ?? '?'} households × ~$${m.demand.fafh_per_household_usd?.toLocaleString() ?? '?'}/yr food-away-from-home = ~$${m.demand.trade_area_fafh_pool_usd?.toLocaleString() ?? '?'}/yr trade-area pool (BLS CEX base, income elasticity 0.8)`,
+      pick(lang, {
+        en: `- Demand pool: ~${n(d.trade_area_households)} households × ~$${n(d.fafh_per_household_usd)}/yr food-away-from-home = ~$${n(d.trade_area_fafh_pool_usd)}/yr trade-area pool (BLS CEX base, income elasticity 0.8)`,
+        zh: `- 需求池：贸易区约 ${n(d.trade_area_households)} 户 × 年外出就餐支出 ~$${n(d.fafh_per_household_usd)}/户 = 年需求池 ~$${n(d.trade_area_fafh_pool_usd)}（BLS CEX 基准按收入弹性0.8调整）`,
+        es: `- Pool de demanda: ~${n(d.trade_area_households)} hogares × ~$${n(d.fafh_per_household_usd)}/año en comida fuera del hogar = pool anual del área de ~$${n(d.trade_area_fafh_pool_usd)} (base BLS CEX, elasticidad de ingreso 0.8)`,
+      }),
     );
   }
   if (m.competition.data_available) {
+    const c = m.competition;
     const sat =
-      m.competition.saturation_index != null
-        ? zh
-          ? `饱和指数 ${m.competition.saturation_index}（>1 表示高于美国均值 2.2 家/千人）`
-          : `saturation index ${m.competition.saturation_index} (>1 = above the 2.2/1k-resident US norm)`
-        : zh
-          ? '饱和度不可计算'
-          : 'saturation not computable';
+      c.saturation_index != null
+        ? pick(lang, {
+            en: `saturation index ${c.saturation_index} (>1 = above the 2.2/1k-resident US norm)`,
+            zh: `饱和指数 ${c.saturation_index}（>1 表示高于美国均值 2.2 家/千人）`,
+            es: `índice de saturación ${c.saturation_index} (>1 = por encima de la norma de EE. UU. de 2.2 por cada 1,000 residentes)`,
+          })
+        : pick(lang, { en: 'saturation not computable', zh: '饱和度不可计算', es: 'saturación no calculable' });
     L.push(
-      zh
-        ? `- 竞争：样本 ${m.competition.competitor_count} 家，均分 ${m.competition.avg_rating ?? '?'}★，${sat}`
-        : `- Competition: sample n=${m.competition.competitor_count}, avg ${m.competition.avg_rating ?? '?'}★, ${sat}`,
+      pick(lang, {
+        en: `- Competition: sample n=${c.competitor_count}, avg ${c.avg_rating ?? '?'}★, ${sat}`,
+        zh: `- 竞争：样本 ${c.competitor_count} 家，均分 ${c.avg_rating ?? '?'}★，${sat}`,
+        es: `- Competencia: muestra n=${c.competitor_count}, promedio ${c.avg_rating ?? '?'}★, ${sat}`,
+      }),
     );
   }
   if (m.market_share.data_available) {
+    const s = m.market_share;
     L.push(
-      zh
-        ? `- 公平份额模型：贸易区估计约 ${m.market_share.estimated_restaurants_in_trade_area?.toLocaleString()} 家餐厅分食需求池 → 平均每家年营收 ~$${m.market_share.fair_share_annual_revenue_usd?.toLocaleString()}；新店（4.2★中位，吸引力乘数 ${m.market_share.entrant_multiplier_median}x）隐含年营收 ~$${m.market_share.implied_annual_revenue_median_usd?.toLocaleString()}；强执行（4.6★，${m.market_share.entrant_multiplier_strong}x）→ ~$${m.market_share.implied_annual_revenue_strong_usd?.toLocaleString()}`
-        : `- Fair-share model: ~${m.market_share.estimated_restaurants_in_trade_area?.toLocaleString()} restaurants split the trade-area pool → avg unit ~$${m.market_share.fair_share_annual_revenue_usd?.toLocaleString()}/yr; median entrant (4.2★, ${m.market_share.entrant_multiplier_median}x attractiveness) implies ~$${m.market_share.implied_annual_revenue_median_usd?.toLocaleString()}/yr; strong operator (4.6★, ${m.market_share.entrant_multiplier_strong}x) → ~$${m.market_share.implied_annual_revenue_strong_usd?.toLocaleString()}/yr`,
+      pick(lang, {
+        en: `- Fair-share model: ~${n(s.estimated_restaurants_in_trade_area)} restaurants split the trade-area pool → avg unit ~$${n(s.fair_share_annual_revenue_usd)}/yr; median entrant (4.2★, ${s.entrant_multiplier_median}x attractiveness) implies ~$${n(s.implied_annual_revenue_median_usd)}/yr; strong operator (4.6★, ${s.entrant_multiplier_strong}x) → ~$${n(s.implied_annual_revenue_strong_usd)}/yr`,
+        zh: `- 公平份额模型：贸易区估计约 ${n(s.estimated_restaurants_in_trade_area)} 家餐厅分食需求池 → 平均每家年营收 ~$${n(s.fair_share_annual_revenue_usd)}；新店（4.2★中位，吸引力乘数 ${s.entrant_multiplier_median}x）隐含年营收 ~$${n(s.implied_annual_revenue_median_usd)}；强执行（4.6★，${s.entrant_multiplier_strong}x）→ ~$${n(s.implied_annual_revenue_strong_usd)}`,
+        es: `- Modelo de participación justa: ~${n(s.estimated_restaurants_in_trade_area)} restaurantes se reparten el pool del área → unidad promedio ~$${n(s.fair_share_annual_revenue_usd)}/año; un entrante mediano (4.2★, atractivo ${s.entrant_multiplier_median}x) implica ~$${n(s.implied_annual_revenue_median_usd)}/año; un operador fuerte (4.6★, ${s.entrant_multiplier_strong}x) → ~$${n(s.implied_annual_revenue_strong_usd)}/año`,
+      }),
     );
   }
   if (m.economics.data_available) {
+    const e = m.economics;
     L.push(
-      zh
-        ? `- 租金经济：市场中位月租 ~$${m.economics.median_monthly_rent_usd?.toLocaleString()}，按8%租售比需月营收 ≥$${m.economics.required_monthly_revenue_at_8pct_usd?.toLocaleString()}（即日均 ${m.economics.breakeven_covers_per_day ?? '?'} 单）`
-        : `- Rent economics: median asking ~$${m.economics.median_monthly_rent_usd?.toLocaleString()}/mo → needs ≥$${m.economics.required_monthly_revenue_at_8pct_usd?.toLocaleString()}/mo revenue at the 8% occupancy line (~${m.economics.breakeven_covers_per_day ?? '?'} covers/day)`,
+      pick(lang, {
+        en: `- Rent economics: median asking ~$${n(e.median_monthly_rent_usd)}/mo → needs ≥$${n(e.required_monthly_revenue_at_8pct_usd)}/mo revenue at the 8% occupancy line (~${e.breakeven_covers_per_day ?? '?'} covers/day)`,
+        zh: `- 租金经济：市场中位月租 ~$${n(e.median_monthly_rent_usd)}，按8%租售比需月营收 ≥$${n(e.required_monthly_revenue_at_8pct_usd)}（即日均 ${e.breakeven_covers_per_day ?? '?'} 单）`,
+        es: `- Economía de la renta: renta mediana solicitada ~$${n(e.median_monthly_rent_usd)}/mes → requiere ≥$${n(e.required_monthly_revenue_at_8pct_usd)}/mes de ingresos en la línea de ocupación del 8% (~${e.breakeven_covers_per_day ?? '?'} cubiertos/día)`,
+      }),
     );
   }
   if (m.economics.bottom_up_monthly_revenue_range_usd) {
     const [lo, hi] = m.economics.bottom_up_monthly_revenue_range_usd;
     L.push(
-      zh
-        ? `- 产能上限（自下而上）：该业态典型月营收区间 $${lo.toLocaleString()}–$${hi.toLocaleString()}`
-        : `- Capacity check (bottom-up): typical monthly revenue band for this format $${lo.toLocaleString()}–$${hi.toLocaleString()}`,
+      pick(lang, {
+        en: `- Capacity check (bottom-up): typical monthly revenue band for this format $${n(lo)}–$${n(hi)}`,
+        zh: `- 产能上限（自下而上）：该业态典型月营收区间 $${n(lo)}–$${n(hi)}`,
+        es: `- Verificación de capacidad (de abajo hacia arriba): banda típica de ingreso mensual para este formato $${n(lo)}–$${n(hi)}`,
+      }),
     );
   }
   if (m.traffic.data_available) {
     L.push(
-      zh
-        ? `- 车流：最高 AADT ${m.traffic.max_aadt?.toLocaleString()}（Caltrans 州级公路）`
-        : `- Traffic: max AADT ${m.traffic.max_aadt?.toLocaleString()} (Caltrans state highways)`,
+      pick(lang, {
+        en: `- Traffic: max AADT ${n(m.traffic.max_aadt)} (Caltrans state highways)`,
+        zh: `- 车流：最高 AADT ${n(m.traffic.max_aadt)}（Caltrans 州级公路）`,
+        es: `- Tráfico: AADT máximo ${n(m.traffic.max_aadt)} (carreteras estatales Caltrans)`,
+      }),
     );
   }
   if (m.gaps.length) {
-    L.push(zh ? `- 数据缺口：${m.gaps.join('；')}` : `- Data gaps: ${m.gaps.join(' | ')}`);
+    L.push(
+      pick(lang, {
+        en: `- Data gaps: ${m.gaps.join(' | ')}`,
+        zh: `- 数据缺口：${m.gaps.join('；')}`,
+        es: `- Vacíos de datos: ${m.gaps.join(' | ')}`,
+      }),
+    );
   }
   return L.join('\n');
 }

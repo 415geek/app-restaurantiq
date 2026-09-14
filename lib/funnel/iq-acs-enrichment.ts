@@ -265,6 +265,8 @@ export type AcsContextShape = {
   county: AcsRow;
   citation_en: string;
   citation_zh: string;
+  /** Optional only for packs cached before Spanish support. */
+  citation_es?: string;
 };
 
 const emptyAcsRow: AcsRow = {
@@ -330,6 +332,7 @@ export async function buildAcsContextForLatLng(lat: number, lng: number): Promis
       county: countyRow,
       citation_en: `U.S. Census Bureau ACS ${year} 5-year (tract & county); variables B01003 population, B19013 median HH income, B19301 per-capita income, B01002 median age, B25077 median home value, B25064 median gross rent, B03002 race+Hispanic, B19001 HH income brackets, B15003 educational attainment.`,
       citation_zh: `美国人口普查局 ACS ${year} 年 5 年估计（普查片区 Tract 与县 County）；指标 B01003 人口、B19013 家庭收入中位数、B19301 人均收入、B01002 年龄中位数、B25077 自有住房价值中位数、B25064 租金中位数、B03002 种族与西班牙裔、B19001 家庭收入分布、B15003 学历分布。`,
+      citation_es: `Oficina del Censo de EE. UU., ACS ${year} estimaciones de 5 años (tramo censal y condado); variables B01003 población, B19013 ingreso familiar mediano, B19301 ingreso per cápita, B01002 edad mediana, B25077 valor mediano de vivienda, B25064 renta bruta mediana, B03002 raza e hispanos, B19001 rangos de ingreso familiar, B15003 nivel educativo.`,
     };
   }
   return null;

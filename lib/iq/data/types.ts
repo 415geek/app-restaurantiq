@@ -6,6 +6,7 @@
  * (研发提示词 §1.4 第 3 条). `sources[]` in report_model.json is built directly
  * from these results.
  */
+import type { Locale } from '@/lib/i18n/locale';
 
 export type DataSourceId =
   | 'D1' // geocode + census geography
@@ -75,7 +76,7 @@ export interface SiteInput {
   report_id: string;
   address: string;
   cuisine: string; // taxonomy id
-  language: 'en' | 'zh';
+  language: Locale;
   rent_usd: number | null;
   sqft: number | null;
   seats: number | null;

@@ -8,6 +8,7 @@
  * - Bright Data enhanced web scraping (requires BRIGHTDATA_API_TOKEN)
  */
 
+import { DEFAULT_LOCALE, type Locale } from '@/lib/i18n/locale';
 import { enrichMarketDataWithAcs } from '@/lib/funnel/iq-acs-enrichment';
 import { enrichMarketDataWithSiteHistory } from '@/lib/funnel/external-data/site-history';
 import { enrichMarketDataWithDemographicNarrative } from '@/lib/funnel/iq-demographic-narrative';
@@ -85,14 +86,14 @@ function mergeGoogleOntoExisting(
  * Persists are done by callers via iqUpdateMarketDataJson when desired.
  *
  * @param isPremium - If true, triggers Tavily Deep Research for comprehensive analysis
- * @param lang - Language preference for deep research prompts ('en' or 'zh')
+ * @param lang - Visitor locale ('en' | 'zh' | 'es') for deep research prompts and site-history summaries
  */
 export async function resolveMarketDataForIqReport(input: {
   existing: Record<string, unknown> | null | undefined;
   location: string;
   businessType: string;
   isPremium?: boolean;
-  lang?: 'en' | 'zh';
+  lang?: Locale;
   /** When true, reuse cached deep_research only — do not start a new Tavily deep-research job. */
   skipDeepResearchFetch?: boolean;
   /**
@@ -105,7 +106,7 @@ export async function resolveMarketDataForIqReport(input: {
     location,
     businessType,
     isPremium = false,
-    lang = 'en',
+    lang = DEFAULT_LOCALE,
     skipDeepResearchFetch = false,
     leanResolve = false,
   } = input;

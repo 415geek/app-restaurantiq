@@ -7,12 +7,13 @@
  *                      high-population ring with zero competitors is an anomaly
  *  4 reconciliation    finance scenarios re-derive; weights = 100; total = Σ w×s/100
  *  5 NumberGuard       every number in every narrative exists in its page fragment
- *  6 banned wording    零竞争 / 空白 only when void; 保守估计 / 大约 never
+ *  6 banned wording    零竞争 / 空白 (zero competition / white space …) only when void; 保守估计 / 大约 (approximately …) never — per report language
  *  7 visual regression lives in lib/iq/qa/visual-regression.ts (needs a browser)
  *  8 golden backtest   scripts/backtest-golden.ts (needs network)
  */
+import { toLocale } from '@/lib/i18n/locale';
 import { reportModelSchema, type ReportModel } from '../model/schema';
-import { numberGuard } from '../narrative/number-guard';
+import { BANNED_WORDS, numberGuard } from '../narrative/number-guard';
 import { PAGES, pageFragment } from '../narrative/templates';
 import { scenarioRevenue } from '../engines/finance';
 
@@ -103,23 +104,35 @@ export function gateNumberGuard(m: ReportModel): GateResult {
       d.push(`${p.id} 无叙事`);
       continue;
     }
-    const r = numberGuard(`${n.title} ${n.body}`, pageFragment(m, p.id), { isVoid: m.competitors.void.is_void });
+    const r = numberGuard(`${n.title} ${n.body}`, pageFragment(m, p.id), { isVoid: m.competitors.void.is_void, lang: toLocale(m.meta.narrative_language ?? m.meta.language) });
     if (r.unmatched.length) d.push(`${p.id} 数字不在 JSON 中：${r.unmatched.join(', ')}`);
     if (r.missing_refs) d.push(`${p.id} 缺少 [src:] 引用`);
   }
   return { id: 'number_guard', passed: d.length === 0, details: d };
 }
 
+/** "significant" (显著 / significativo) modifying an official statistic, per language. */
+const OFFICIAL_STAT_QUALIFIER = {
+  zh: { word: /显著/, stat: /ACS|普查|人口/ },
+  en: { word: /\bsignificant(ly)?\b/i, stat: /\bACS\b|census|population/i },
+  es: { word: /significativ/i, stat: /\bACS\b|censo|población/i },
+} as const;
+
+/** Wording gate in the narrative's language (`meta.narrative_language`, else the report language). */
 export function gateWording(m: ReportModel): GateResult {
   const d: string[] = [];
   const isVoid = m.competitors.void.is_void;
+  const lang = toLocale(m.meta.narrative_language ?? m.meta.language);
+  const words = BANNED_WORDS[lang];
+  const q = OFFICIAL_STAT_QUALIFIER[lang];
+  const has = (text: string, b: string) => (/[a-z]/i.test(b) ? text.toLowerCase().includes(b.toLowerCase()) : text.includes(b));
   for (const p of PAGES) {
     const n = m.narrative[p.id];
     if (!n) continue;
     const text = `${n.title} ${n.body}`;
-    for (const b of ['保守估计', '大约']) if (text.includes(b)) d.push(`${p.id} 禁用措辞「${b}」`);
-    if (!isVoid) for (const b of ['零竞争', '空白']) if (text.includes(b)) d.push(`${p.id} 禁用措辞「${b}」（void=false）`);
-    if (/显著/.test(text) && /ACS|普查|人口/.test(text)) d.push(`${p.id} 「显著」修饰官方统计`);
+    for (const b of words.always) if (has(text, b)) d.push(`${p.id} 禁用措辞「${b}」`);
+    if (!isVoid) for (const b of words.unlessVoid) if (has(text, b)) d.push(`${p.id} 禁用措辞「${b}」（void=false）`);
+    if (q.word.test(text) && q.stat.test(text)) d.push(`${p.id} 「显著」修饰官方统计`);
   }
   return { id: 'wording', passed: d.length === 0, details: d };
 }

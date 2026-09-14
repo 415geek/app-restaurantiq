@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_LOCALE, type Locale, pick } from '@/lib/i18n/locale';
 import { decisionTierSchema, riskAuditFullSchema } from '@/lib/funnel/iq-risk-audit-model';
 import {
   type CompetitorWhitelist,
@@ -221,15 +222,35 @@ export function logFullReportQuality(full: Record<string, unknown>, context = ''
   }
 }
 
-/** Map 高/中/低 and English variants to badge keys. */
+/** Map 高/中/低, English (High/Medium/Low) and Spanish (Alta/Media/Baja) variants to badge keys. */
 export function normalizeConfidenceLevel(raw?: string): 'High' | 'Medium' | 'Low' | undefined {
   if (!raw || typeof raw !== 'string') return undefined;
   const t = raw.trim();
   const lower = t.toLowerCase();
-  if (t.startsWith('高') || /\bhigh\b/i.test(lower)) return 'High';
-  if (t.startsWith('中') || /\bmedium\b/i.test(lower) || /\bmed\b/i.test(lower)) return 'Medium';
-  if (t.startsWith('低') || /\blow\b/i.test(lower)) return 'Low';
+  if (t.startsWith('高') || /\b(high|alta|alto)\b/i.test(lower)) return 'High';
+  if (t.startsWith('中') || /\b(medium|med|media|medio|moderada|moderado)\b/i.test(lower)) return 'Medium';
+  if (t.startsWith('低') || /\b(low|baja|bajo)\b/i.test(lower)) return 'Low';
   return undefined;
+}
+
+/** True when a free-text confidence value reads as "high" in any supported language. */
+export function isHighConfidenceText(raw: unknown): boolean {
+  return typeof raw === 'string' && normalizeConfidenceLevel(raw) === 'High';
+}
+
+/** True when a free-text confidence value reads as "medium" in any supported language. */
+export function isMediumConfidenceText(raw: unknown): boolean {
+  return typeof raw === 'string' && normalizeConfidenceLevel(raw) === 'Medium';
+}
+
+/** Localized confidence label for a badge key (what the LLM is asked to emit per language). */
+export function confidenceLabel(level: 'High' | 'Medium' | 'Low', lang: Locale): string {
+  const table: Record<'High' | 'Medium' | 'Low', Record<Locale, string>> = {
+    High: { en: 'High', zh: '高', es: 'Alta' },
+    Medium: { en: 'Medium', zh: '中', es: 'Media' },
+    Low: { en: 'Low', zh: '低', es: 'Baja' },
+  };
+  return pick(lang, table[level]);
 }
 
 /**
@@ -265,6 +286,7 @@ export type IqReportWithGrounding = Record<string, unknown> & IqReportGroundingF
 export function applyCompetitorWhitelist(
   report: Record<string, unknown>,
   whitelist: CompetitorWhitelist,
+  lang: Locale = DEFAULT_LOCALE,
 ): IqReportWithGrounding {
   const competitors = Array.isArray(report.competitors) ? (report.competitors as unknown[]) : [];
   const kept: unknown[] = [];
@@ -283,13 +305,22 @@ export function applyCompetitorWhitelist(
 
   const warnings: string[] = [];
   if (dropped.length > 0) {
+    const names = dropped.join(', ');
     warnings.push(
-      `Dropped ${dropped.length} unverified competitor name(s) not present in Google/Yelp/BrightData retrieval: ${dropped.join(', ')}.`,
+      pick(lang, {
+        en: `Dropped ${dropped.length} unverified competitor name(s) that were not found in Google/Yelp/BrightData retrieval: ${names}.`,
+        zh: `已剔除 ${dropped.length} 个未经 Google/Yelp/BrightData 检索核实的竞品店名：${names}。`,
+        es: `Se eliminaron ${dropped.length} nombre(s) de competidores sin verificar que no aparecieron en la búsqueda de Google/Yelp/BrightData: ${names}.`,
+      }),
     );
   }
   if (whitelist.total < MIN_WHITELIST_FOR_GROUNDED_REPORT) {
     warnings.push(
-      `Only ${whitelist.total} named competitor(s) were retrieved (minimum for grounded competitor analysis is ${MIN_WHITELIST_FOR_GROUNDED_REPORT}). Treat competitor commentary as low-confidence.`,
+      pick(lang, {
+        en: `Only ${whitelist.total} named competitor(s) were retrieved (the minimum for a grounded competitor analysis is ${MIN_WHITELIST_FOR_GROUNDED_REPORT}). Treat competitor commentary as low-confidence.`,
+        zh: `仅检索到 ${whitelist.total} 家具名竞品（有据可依的竞品分析至少需要 ${MIN_WHITELIST_FOR_GROUNDED_REPORT} 家）。竞品相关结论请按低置信度看待。`,
+        es: `Solo se recuperaron ${whitelist.total} competidor(es) con nombre (el mínimo para un análisis competitivo fundamentado es ${MIN_WHITELIST_FOR_GROUNDED_REPORT}). Considere los comentarios sobre competidores como de baja confianza.`,
+      }),
     );
   }
 
@@ -329,6 +360,32 @@ export function shouldRetryForCompetitorGrounding(
 }
 
 /**
+ * The deterministic finance model is computed once per address (language-agnostic)
+ * and cached, so its user-facing labels are canonical English strings. Translate
+ * the ones the report renders at override time; unknown strings pass through.
+ */
+const FINANCE_TEXT: Record<string, Record<Locale, string>> = {
+  'Rent (NNN)': { en: 'Rent (NNN)', zh: '租金（NNN）', es: 'Renta (NNN)' },
+  'Labor (loaded)': { en: 'Labor (loaded)', zh: '人工（含税费负担）', es: 'Mano de obra (con cargas)' },
+  Utilities: { en: 'Utilities', zh: '水电', es: 'Servicios' },
+  Insurance: { en: 'Insurance', zh: '保险', es: 'Seguros' },
+  'POS / software': { en: 'POS / software', zh: 'POS / 软件', es: 'POS / software' },
+  'Marketing / loyalty': { en: 'Marketing / loyalty', zh: '营销 / 会员', es: 'Marketing / lealtad' },
+  'Misc / admin': { en: 'Misc / admin', zh: '杂项 / 行政', es: 'Varios / administración' },
+  'Fixed total / mo': { en: 'Fixed total / mo', zh: '固定成本合计 / 月', es: 'Total fijo / mes' },
+  'user-provided monthly rent': { en: 'user-provided monthly rent', zh: '用户提供的月租金', es: 'renta mensual proporcionada por el usuario' },
+  'user-provided sqft': { en: 'user-provided sqft', zh: '用户提供的面积', es: 'pies cuadrados proporcionados por el usuario' },
+  'ACS county/tract anchors': { en: 'ACS county/tract anchors', zh: 'ACS 县级/片区锚点', es: 'anclajes ACS de condado/tramo' },
+  'commercial-listings rent sample': { en: 'commercial-listings rent sample', zh: '商业租盘租金样本', es: 'muestra de rentas de locales comerciales' },
+  'address + cuisine + tier defaults only': { en: 'address + cuisine + tier defaults only', zh: '仅地址 + 业态 + 城市档位默认值', es: 'solo valores predeterminados de dirección + cocina + nivel de ciudad' },
+};
+
+export function localizeFinanceText(text: string, lang: Locale): string {
+  const entry = FINANCE_TEXT[text];
+  return entry ? pick(lang, entry) : text;
+}
+
+/**
  * D-4: Force-override the LLM's break-even / safe-revenue / cost_breakdown with
  * the deterministic finance model. The LLM is instructed via the anchor block
  * to mirror these numbers, but we still override post-hoc as a hard guarantee.
@@ -342,6 +399,7 @@ export function applyFinanceModelOverride(
     | import('./iq-finance-model').DeterministicFinanceModel
     | null
     | undefined,
+  lang: Locale = DEFAULT_LOCALE,
 ): IqReportWithGrounding {
   if (!financeModel || typeof financeModel !== 'object') return report;
   if (typeof financeModel.break_even_revenue_monthly_usd !== 'number') return report;
@@ -356,14 +414,33 @@ export function applyFinanceModelOverride(
     ...existingRiskAudit,
     break_even_revenue_monthly_usd: financeModel.break_even_revenue_monthly_usd,
     safe_revenue_monthly_usd: financeModel.safe_revenue_monthly_usd,
-    cost_breakdown: financeModel.cost_breakdown,
+    cost_breakdown: financeModel.cost_breakdown.map((row) => ({
+      ...row,
+      item: localizeFinanceText(row.item, lang),
+    })),
   };
 
   const existingWarnings = Array.isArray(report._warnings) ? report._warnings.slice() : [];
+  const reasons = financeModel.confidence_reasons
+    .map((r) => localizeFinanceText(r, lang))
+    .join('; ');
+  const confidenceWord = pick(lang, {
+    en: financeModel.confidence,
+    zh: financeModel.confidence === 'high' ? '高' : financeModel.confidence === 'medium' ? '中' : '低',
+    es: financeModel.confidence === 'high' ? 'alta' : financeModel.confidence === 'medium' ? 'media' : 'baja',
+  });
   const note =
     financeModel.confidence === 'low'
-      ? `Break-even and safe revenue are computed from the deterministic D-4 finance model with LOW confidence (only ${financeModel.confidence_reasons.join(', ')}). Numbers are bounded by archetype + city tier estimates; add real rent / sqft / lease terms to upgrade confidence.`
-      : `Break-even and safe revenue are computed from the deterministic D-4 finance model (${financeModel.confidence} confidence): ${financeModel.confidence_reasons.join('; ')}.`;
+      ? pick(lang, {
+          en: `Break-even and safe revenue come from the deterministic D-4 finance model at LOW confidence (based only on: ${reasons}). The numbers are bounded by archetype and city-tier estimates; add real rent, square footage, or lease terms to raise confidence.`,
+          zh: `保本营收与安全营收来自确定性 D-4 财务模型，置信度为低（仅依据：${reasons}）。数字受业态原型与城市档位估算约束；补充真实租金、面积或租约条款可提升置信度。`,
+          es: `El punto de equilibrio y los ingresos seguros provienen del modelo financiero determinista D-4 con confianza BAJA (basado solo en: ${reasons}). Las cifras están acotadas por estimaciones de arquetipo y nivel de ciudad; agregue renta real, pies cuadrados o términos del contrato para elevar la confianza.`,
+        })
+      : pick(lang, {
+          en: `Break-even and safe revenue come from the deterministic D-4 finance model (${confidenceWord} confidence): ${reasons}.`,
+          zh: `保本营收与安全营收来自确定性 D-4 财务模型（置信度：${confidenceWord}）：${reasons}。`,
+          es: `El punto de equilibrio y los ingresos seguros provienen del modelo financiero determinista D-4 (confianza ${confidenceWord}): ${reasons}.`,
+        });
 
   const existingDashboard =
     report.dashboard && typeof report.dashboard === 'object'

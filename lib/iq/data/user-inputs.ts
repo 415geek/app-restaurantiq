@@ -4,6 +4,7 @@
  * value becomes `null`, and the coverage_note lists what was and wasn't given
  * so the report can hide dependent sections (e.g. "缺 CapEx → 回收期隐藏").
  */
+import { toLocale } from '@/lib/i18n/locale';
 import { classifyCuisineText, getTaxonomy } from '@/lib/iq/params';
 import type { DataResult, SiteInput } from './types';
 import { DATA_SOURCE_NAMES } from './types';
@@ -142,7 +143,7 @@ const FIELD_LABELS: Array<[keyof SiteInput, string]> = [
 ];
 
 export function normalizeUserInputs(raw: RawSiteInput): { input: SiteInput; result: DataResult<SiteInput> } {
-  const language: SiteInput['language'] = String(raw.language ?? '').trim().toLowerCase().startsWith('zh') ? 'zh' : 'en';
+  const language: SiteInput['language'] = toLocale(raw.language);
   const cuisine = resolveCuisine(raw);
   const input: SiteInput = {
     report_id: String(raw.report_id ?? '').trim(),

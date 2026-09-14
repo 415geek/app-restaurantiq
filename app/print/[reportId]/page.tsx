@@ -6,12 +6,17 @@
  * qa/fixtures/report_model_millbrae.json so the page works without a DB.
  * 404 when no model exists.
  *
+ * Language: the report row's stored `language` (en by default, zh, es);
+ * `?lang=` overrides it. Narratives stored in another language fall back to
+ * the deterministic template for the requested one.
+ *
  * Access: the PDF route gates on `paid`; this page mirrors that in production
  * unless the request carries the internal render token
  * (`IQ_PRINT_TOKEN`, sent by lib/iq/render/pdf.ts as `x-iq-print-token`).
  */
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
+import { toLocale } from '@/lib/i18n/locale';
 import { ReportDocument } from '@/lib/iq/render/pages';
 import { fixtureAllowed, loadPrintModel } from '@/lib/iq/render/load';
 import { resolveStaticMaps } from '@/lib/iq/render/static-map';
@@ -52,7 +57,11 @@ export default async function PrintReportPage({ params, searchParams }: { params
   // Google Static Maps basemaps (page-3 hero + cover thumbnail), fetched here
   // with the server-side key (populated by ensureRuntimeConfig above) and
   // inlined as data URLs. Either may be null → MapFigure shows the SVG fallback.
-  const staticMaps = await resolveStaticMaps(loaded.model);
+  // `?lang=` overrides the stored report language (unknown values fall back to it, never to a hard-coded language).
+  const stored = toLocale(loaded.model.meta.language);
+  const langParam = first(sp.lang)?.trim().toLowerCase();
+  const lang = langParam && /^(en|zh|es)/.test(langParam) ? toLocale(langParam, stored) : stored;
+  const staticMaps = await resolveStaticMaps(loaded.model, { lang });
 
-  return <ReportDocument model={loaded.model} staticMaps={staticMaps} />;
+  return <ReportDocument model={loaded.model} staticMaps={staticMaps} lang={lang} />;
 }

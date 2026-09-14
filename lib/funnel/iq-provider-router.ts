@@ -3,6 +3,7 @@
  * Ops tasks use lib/server/llm/provider-json.ts — do not merge blindly.
  */
 import OpenAI from 'openai';
+import type { Locale } from '@/lib/i18n/locale';
 import { runMimoJson, getMimoClient } from '@/lib/funnel/llm/mimo-client';
 import { anthropicAvailable, runAnthropicJson } from '@/lib/funnel/llm/anthropic-client';
 import type { AnthropicDiagnostic } from '@/lib/funnel/llm/anthropic-client';
@@ -544,7 +545,7 @@ export async function runIqProviderJsonOnRoute<T extends Record<string, unknown>
 export function appendLlmProviderToDisclaimer(
   report: Record<string, unknown>,
   meta: { provider: string; model: string; task: IqLlmTask },
-  _lang: 'en' | 'zh',
+  _lang: Locale,
 ): void {
   report._generation_provider = meta.provider;
   report._generation_model = meta.model;

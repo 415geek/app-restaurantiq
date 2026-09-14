@@ -17,6 +17,7 @@
  *     generated_at: ISO timestamp,
  *     paragraph_zh: string,   // ~250-400 字
  *     paragraph_en: string,   // ~250-400 words
+ *     paragraph_es: string,   // ~250-400 palabras
  *     used_anchors: { ... }   // which ACS fields were actually quoted
  *   }
  *
@@ -28,6 +29,7 @@
  *     to a number in the provided anchor block.
  */
 
+import { type Locale, pick } from '@/lib/i18n/locale';
 import { readMarketCache, writeMarketCache, roundCoord } from '@/lib/funnel/iq-market-cache';
 
 const CLAUDE_MODEL = process.env.CLAUDE_DEMO_NARRATIVE_MODEL || 'claude-sonnet-4-5-20250929';
@@ -41,7 +43,18 @@ export interface DemographicNarrative {
   generated_at: string;
   paragraph_zh: string;
   paragraph_en: string;
-  word_count: { zh: number; en: number };
+  /** Optional only for narratives cached before Spanish support. */
+  paragraph_es?: string;
+  word_count: { zh: number; en: number; es?: number };
+}
+
+/** Localized narrative paragraph (English fallback for cached narratives without Spanish). */
+export function demographicNarrativeParagraph(
+  n: Pick<DemographicNarrative, 'paragraph_zh' | 'paragraph_en' | 'paragraph_es'> | null | undefined,
+  lang: Locale,
+): string {
+  if (!n) return '';
+  return pick(lang, { en: n.paragraph_en, zh: n.paragraph_zh, es: n.paragraph_es || n.paragraph_en });
 }
 
 function getClaudeKey(): string {
@@ -154,6 +167,7 @@ function buildAnchorBlob(marketData: Record<string, unknown>): string {
 interface ClaudeBilingualResponse {
   paragraph_zh: string;
   paragraph_en: string;
+  paragraph_es?: string;
 }
 
 async function callClaude(opts: {
@@ -171,9 +185,10 @@ async function callClaude(opts: {
     '  1. ONLY cite numbers that appear in the ACS_ANCHORS block. If a field shows SUPPRESSED,',
     '     either name the variable (e.g. "ACS B03002_006 was suppressed at the tract level")',
     '     and switch to the county-level figure, OR omit the claim — NEVER fabricate.',
-    '  2. Output MUST be valid JSON with exactly two keys: paragraph_zh and paragraph_en.',
-    '     - paragraph_zh: 280-380 中文字符',
-    '     - paragraph_en: 220-320 English words',
+    '  2. Output MUST be valid JSON with exactly three keys: paragraph_zh, paragraph_en and paragraph_es.',
+    '     - paragraph_zh: 280-380 中文字符 (Simplified Chinese)',
+    '     - paragraph_en: 220-320 words in standard U.S. English',
+    '     - paragraph_es: 220-320 palabras en español neutro (Estados Unidos / Latinoamérica), claro y profesional',
     '  3. Each paragraph MUST cover, in order:',
     '       a) Population + density + age structure (tract preferred, else county)',
     '       b) Race / ethnicity breakdown with whole-number percentages (B03002 family)',
@@ -199,7 +214,7 @@ async function callClaude(opts: {
     opts.anchorBlob,
     '',
     'Return JSON:',
-    '{ "paragraph_zh": "...", "paragraph_en": "..." }',
+    '{ "paragraph_zh": "...", "paragraph_en": "...", "paragraph_es": "..." }',
   ].join('\n');
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -304,7 +319,8 @@ export async function enrichMarketDataWithDemographicNarrative(
     source: 'claude_demographics',
     key: cacheKey,
   });
-  if (cached && cached.paragraph_zh && cached.paragraph_en) {
+  // A pre-Spanish cache entry is regenerated so Spanish readers get native prose.
+  if (cached && cached.paragraph_zh && cached.paragraph_en && cached.paragraph_es) {
     return { ...marketData, demographic_narrative: cached };
   }
 
@@ -351,9 +367,11 @@ export async function enrichMarketDataWithDemographicNarrative(
     generated_at: new Date().toISOString(),
     paragraph_zh: response.paragraph_zh.trim(),
     paragraph_en: response.paragraph_en.trim(),
+    paragraph_es: (response.paragraph_es ?? '').trim(),
     word_count: {
       zh: countChars(response.paragraph_zh.trim()),
       en: countWords(response.paragraph_en.trim()),
+      es: countWords((response.paragraph_es ?? '').trim()),
     },
   };
 

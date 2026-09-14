@@ -101,3 +101,31 @@ test('sanity: chinese share out of range / rent psf out of band', () => {
   assert.ok(r.failures.some((f) => f.includes('/sf/月')));
   assert.equal(clone(m).input.sqft, 100);
 });
+
+test('wording gate is locale-aware: English and Spanish banned phrases, "significant" on official statistics', () => {
+  const en = loadModel();
+  en.meta.language = 'en';
+  en.meta.narrative_language = 'en';
+  for (const p of PAGES) en.narrative[p.id] = templateNarrative(en, p.id, 'en');
+  const ok = runQaGates(en);
+  assert.equal(ok.passed, true, ok.failures.join('\n'));
+  en.narrative.page_6 = { title: 'Zero competition: an opportunity', body: 'Approximately zero competition nearby [src:competitors.l1]', refs: [] };
+  const r = runQaGates(en);
+  assert.ok(r.failures.some((f) => f.includes('[wording]') && f.includes('approximately')), r.failures.join('\n'));
+  assert.ok(r.failures.some((f) => f.includes('[wording]') && f.includes('zero competition')), r.failures.join('\n'));
+  en.narrative.page_4 = { title: 'Significant population', body: 'The Census population is significantly higher [src:trade_area]', refs: [] };
+  assert.ok(runQaGates(en).failures.some((f) => f.includes('page_4') && f.includes('显著')), 'significant + census caught');
+
+  const es = loadModel();
+  es.meta.language = 'es';
+  es.meta.narrative_language = 'es';
+  for (const p of PAGES) es.narrative[p.id] = templateNarrative(es, p.id, 'es');
+  const okEs = runQaGates(es);
+  assert.equal(okEs.passed, true, okEs.failures.join('\n'));
+  es.narrative.page_6 = { title: 'Sin competencia', body: 'Aproximadamente sin competencia [src:competitors.l1]', refs: [] };
+  const rEs = runQaGates(es);
+  assert.ok(rEs.failures.some((f) => f.includes('aproximadamente')) && rEs.failures.some((f) => f.includes('sin competencia')), rEs.failures.join('\n'));
+  // a Chinese-only banned word is not reported for a Spanish narrative
+  es.narrative.page_6 = { title: 'Escasa oferta', body: '空白 en el mercado [src:competitors.l1]', refs: [] };
+  assert.ok(!runQaGates(es).failures.some((f) => f.includes('空白')));
+});

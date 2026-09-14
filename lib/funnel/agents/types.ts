@@ -8,7 +8,10 @@
  * analyst, risk officer, then a partner who writes the final memo).
  */
 
-export type Lang = 'en' | 'zh';
+import type { Locale } from '@/lib/i18n/locale';
+
+/** Visitor locale — alias of the site-wide `Locale` ('en' | 'zh' | 'es'). */
+export type Lang = Locale;
 
 export type CuisineCategory = 'hotpot_bbq' | 'boba_coffee' | 'full_service' | 'qsr_fast' | 'general';
 
@@ -25,6 +28,7 @@ export type CuisineBenchmarks = {
   /** Notes injected into specialist prompts. */
   notes_en: string;
   notes_zh: string;
+  notes_es: string;
 };
 
 /** One competitor scored for gravity/attractiveness modeling. */
