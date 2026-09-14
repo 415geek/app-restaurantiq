@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { rememberPaidReport } from '@/components/iq/SupportBubble';
+import { GenerationTicker } from '@/components/iq/GenerationTicker';
 import Link from 'next/link';
 import {
   FULL_REPORT_PHASES,
@@ -234,6 +235,7 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
           percent={percent}
           elapsedSec={elapsedSec}
           activeIndex={serverStatus && !serverStatus.legacy ? serverStatus.activeIndex : undefined}
+          statusLine={!error && !done ? <GenerationTicker lang={lang} location={location} elapsedSec={elapsedSec} percent={percent} /> : undefined}
         />
 
         {emailEnabled && !error ? (

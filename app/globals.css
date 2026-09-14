@@ -46,3 +46,8 @@ body {
 .font-cjk-sans {
   font-family: 'Inter', var(--font-cjk);
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
+}

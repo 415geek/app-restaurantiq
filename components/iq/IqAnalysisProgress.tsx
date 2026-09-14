@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
 import { useEffect, useMemo, useState } from 'react';
 
 export type AnalysisProgressStage = {
@@ -132,6 +134,8 @@ type BarProps = {
   subtitle?: string;
   /** Server-reported checklist row; overrides the percent-derived guess. */
   activeIndex?: number;
+  /** Replaces the plain elapsed label under the bar (e.g. live "what we are doing" ticker + ETA). */
+  statusLine?: ReactNode;
 };
 
 export function IqAnalysisProgressBar({
@@ -142,6 +146,7 @@ export function IqAnalysisProgressBar({
   title,
   subtitle,
   activeIndex,
+  statusLine,
 }: BarProps) {
   const pct = Math.round(Math.min(100, Math.max(0, percent)));
   const activeIdx =
@@ -178,7 +183,7 @@ export function IqAnalysisProgressBar({
             style={{ width: `${pct}%` }}
           />
         </div>
-        {elapsedLabel ? <p className="mt-2 text-xs text-zinc-600">{elapsedLabel}</p> : null}
+        {statusLine ? <div className="mt-2.5">{statusLine}</div> : elapsedLabel ? <p className="mt-2 text-xs text-zinc-600">{elapsedLabel}</p> : null}
       </div>
 
       <ul className="mt-6 space-y-2.5">
