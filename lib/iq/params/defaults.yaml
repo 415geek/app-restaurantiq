@@ -40,8 +40,10 @@ verdict: { go: 75, conditional: 60 }
 rent_comps:
   min_comps_for_premium: 3
 data_budget:
-  google_places_max_calls: 6
+  google_places_max_calls: 8      # §4.2 三层检索：直接竞品 0.5/1 英里 + 替代 + 品牌锚点 + L3/L4 锚点
   google_places_cost_usd_per_call: 0.032
+  distance_matrix_max_calls: 4    # 步行距离（Distance Matrix，每次 ≤ 25 个目的地）
+  distance_matrix_cost_usd_per_element: 0.005
   report_cost_cap_usd: 0.50
   data_cost_cap_usd: 0.10
 rings:

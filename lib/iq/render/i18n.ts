@@ -8,8 +8,10 @@
  * formats and USD everywhere).
  */
 import type { Locale } from '@/lib/i18n/locale';
+import { CONCEPT_CATEGORY_LABELS } from '../concept/labels';
 import type { RingId } from '../model/schema';
 import type { PageId } from '../narrative/templates';
+import type { ConceptCategory } from '../params';
 
 export type Verdict = 'GO' | 'CONDITIONAL_GO' | 'NO_GO';
 type Level = 'low' | 'medium' | 'high';
@@ -246,10 +248,21 @@ const EN = {
     voidBody: 'There is no {cuisine} restaurant within {radius} miles',
     voidNearest: '; the nearest, "{name}", is {dist} away',
     voidTail: '. This is an opening: nobody splits the traffic, but nobody has grown the market for this cuisine either — demand has to be built.',
+    voidSearched: ' (keyword search completed at both 0.5 and 1 mile)',
     noData: 'Same-cuisine competitors: {na} (competitor sources not available)',
     chain: 'chain',
+    anchorTag: 'brand anchor',
     distance: 'Distance',
+    walk: 'Walk',
+    walkValue: '{n} min',
     drive: 'Drive',
+    anchors: 'Brand anchors (city-wide benchmarks)',
+    anchorName: 'Place',
+    anchorRating: 'Rating',
+    anchorReviews: 'Reviews',
+    anchorDistance: 'Distance (straight line)',
+    anchorInArea: 'Also a direct competitor',
+    anchorsNote: 'Brand anchors are the best-known places of this kind across the city (500+ Google reviews). They set the quality bar customers compare you to; they are not counted as nearby competition.',
     rating: 'Google rating',
     reviews: 'Google reviews',
     price: 'Price',
@@ -750,10 +763,21 @@ const ZH: ReportStrings = {
     voidBody: '周边 {radius} 英里内没有一家{cuisine}餐厅',
     voidNearest: '，最近的一家「{name}」在 {dist} 外',
     voidTail: '。这是一个空档：没有同行分走客流，但也没有同行替你把这个菜系的市场培育起来，需求要靠自己做。',
+    voidSearched: '（关键词检索已完成 0.5 / 1 英里两级）',
     noData: '同菜系竞品：{na}（竞品数据源未获取）',
     chain: '连锁',
+    anchorTag: '品牌锚点',
     distance: '距离',
+    walk: '步行',
+    walkValue: '{n} 分钟',
     drive: '车程',
+    anchors: '品牌锚点（全城对标）· Brand anchors',
+    anchorName: '门店',
+    anchorRating: '评分',
+    anchorReviews: '评论数',
+    anchorDistance: '直线距离',
+    anchorInArea: '同时是直接竞品',
+    anchorsNote: '品牌锚点是全城同品类里最出名的店（Google 评论 500 条以上），是顾客拿来跟你比较的品质标杆；不计入周边竞争数量。',
     rating: 'Google 评分',
     reviews: 'Google 评论数',
     price: '价位',
@@ -1251,10 +1275,21 @@ const ES: ReportStrings = {
     voidBody: 'No hay ningún restaurante de {cuisine} en {radius} millas',
     voidNearest: '; el más cercano, "{name}", está a {dist}',
     voidTail: '. Es una oportunidad: nadie reparte el tráfico, pero nadie ha desarrollado el mercado de esta cocina; la demanda hay que construirla.',
+    voidSearched: ' (búsqueda por palabra clave completada a 0.5 y 1 milla)',
     noData: 'Competidores de la misma cocina: {na} (fuentes de competidores no disponibles)',
     chain: 'cadena',
+    anchorTag: 'marca de referencia',
     distance: 'Distancia',
+    walk: 'A pie',
+    walkValue: '{n} min',
     drive: 'En coche',
+    anchors: 'Marcas de referencia (comparativa de toda la ciudad)',
+    anchorName: 'Local',
+    anchorRating: 'Calificación',
+    anchorReviews: 'Reseñas',
+    anchorDistance: 'Distancia (línea recta)',
+    anchorInArea: 'También competidor directo',
+    anchorsNote: 'Las marcas de referencia son los locales más conocidos de este tipo en toda la ciudad (más de 500 reseñas en Google). Marcan el nivel de calidad con el que los clientes te compararán; no se cuentan como competencia cercana.',
     rating: 'Calificación Google',
     reviews: 'Reseñas Google',
     price: 'Precio',
@@ -1536,3 +1571,122 @@ export function strings(lang: Locale): ReportStrings {
 
 /** Google Static Maps `language` parameter for the report language. */
 export const MAP_LANGUAGE: Record<Locale, string> = { en: 'en', zh: 'zh-CN', es: 'es' };
+
+/* ------------------------------------------------------------------ */
+/* Concept-aware layer wording (评审 Spec §4.1 step 5)                    */
+/* ------------------------------------------------------------------ */
+
+export interface ConceptWording {
+  /** Chinese concept (chinese_regional / chinese_format) → the dictionary above as is. */
+  chinese: boolean;
+  category: ConceptCategory;
+}
+
+/**
+ * Overrides applied for a non-Chinese concept: every caption that reads
+ * "同菜系竞品 / 其他中餐" becomes "同品类直接竞品 / 同类目其他业态" (zh),
+ * "direct competitors / other <category>" (en) and the Spanish equivalent.
+ * `{category}` is the category label in the report language.
+ */
+const CONCEPT_OVERRIDES: Record<Locale, Record<string, Record<string, string>>> = {
+  en: {
+    p1: { caption: 'Primary trade area: {ring} · rings show the 10-minute walk and 5 · 10 · 15-minute drive areas · {l1} direct competitors · {l4} traffic anchors · see page 3' },
+    p2: { xref: 'Primary trade area {ring} (pages 3–4) · {l1} direct competitors, {l2} other {category} places (pages 6–7) · break-even{exRent} {be} (page 10) · summary on page 15' },
+    p3: { placesSub: '{l1} direct · {l2} other {category} · {l3} other substitutes · {l4} anchors' },
+    p6: {
+      l1: 'Direct competitors',
+      l1Note: 'Places also selling {cuisine}',
+      l2: 'Other {category}',
+      l2Note: 'Other {category} places (same category, other type)',
+      walk10: '{category} places within a 10-minute walk',
+      walk10Note: 'Direct + other {category}; drives the cluster score',
+      perResidents: '{category} places per 10k residents',
+      perResidentsNote: '{category} places ÷ primary-area population',
+      rating: 'Direct competitors · Google rating',
+      clusterSub: 'out of 100: too few or too many nearby {category} places both cost points',
+    },
+    p7: {
+      voidTitle: 'Direct competitors',
+      noData: 'Direct competitors: {na} (competitor sources not available)',
+      bandNote: 'Where the band comes from: {method}{onlyBreakeven}. Demand share = the share of nearby {category} spend the demand-split model assigns to that place.',
+    },
+    p8: { condL2: 'Enough other {category} places', densityNote: 'Direct competitors per 10k Chinese residents here ÷ hub median = {ratio}; {n} same-type places in the whole metro.' },
+    p9: { xref: 'Demand-split model = nearby residents’ {category} spend shared out by each place’s attractiveness and distance. Break-even and safety line: page 10; category share method: page 14.' },
+    map: { alt: 'Trade-area map: travel-time areas, direct competitors, other {category} places, traffic anchors', l1: 'Direct competitors', l1Numbered: 'Direct competitors 1–{n} (numbered as on page 7)', l2: 'Other {category} ({n})' },
+  },
+  zh: {
+    p1: { caption: '主商圈 {ring} · 图中为步行 10 分钟与开车 5·10·15 分钟可达范围 · 同品类直接竞品 {l1} 家 · 客流聚集点 {l4} 处 · 详见第 3 页' },
+    p2: { xref: '主商圈 {ring}（第 3–4 页）· 同品类直接竞品 {l1} 家、同类目其他业态 {l2} 家（第 6–7 页）· 保本线{exRent} {be}（第 10 页）· 总结与建议见第 15 页' },
+    p3: { placesSub: '同品类直接竞品 {l1} · 同类目其他业态 {l2} · 其他替代 {l3} · 聚集点 {l4}' },
+    p6: {
+      l1: '同品类直接竞品',
+      l1Note: '同样做{cuisine}的店',
+      l2: '同类目其他业态',
+      l2Note: '同属「{category}」类目的其他业态',
+      walk10: '步行 10 分钟内的同类目门店',
+      walk10Note: '直接竞品 + 同类目其他业态，用于算集聚分',
+      perResidents: '每万居民的同类目门店数',
+      perResidentsNote: '同类目门店 ÷ 主商圈人口',
+      rating: '同品类直接竞品 Google 评分',
+      clusterSub: '满分 100：周边同类目门店太少或太多都扣分',
+    },
+    p7: {
+      voidTitle: '同品类直接竞品 · Direct competitors',
+      noData: '同品类直接竞品：{na}（竞品数据源未获取）',
+      bandNote: '营收区间怎么来的：{method}{onlyBreakeven}。分流比例 = 需求分流模型算出的该店在周边「{category}」消费中占的份额。',
+    },
+    p8: { condL2: '同类目其他业态数量足够', densityNote: '本址每万华裔的直接竞品数 ÷ 华人聚居区中位 = {ratio}；整个都会区同业态门店 {n} 家。' },
+    p9: { xref: '需求分流模型 = 把周边居民的「{category}」消费按各店的吸引力和距离远近分摊。保本线与安全线见第 10 页；品类份额怎么算见第 14 页。' },
+    map: { alt: '商圈地图：等时圈、同品类直接竞品、同类目其他业态、客流锚点', l1: '同品类直接竞品', l1Numbered: '同品类直接竞品 1–{n}（编号同第 7 页）', l2: '同类目其他业态（{n}）' },
+  },
+  es: {
+    p1: { caption: 'Zona principal: {ring} · los anillos muestran las áreas a 10 minutos a pie y 5 · 10 · 15 minutos en coche · {l1} competidores directos · {l4} anclas de tráfico · vea la página 3' },
+    p2: { xref: 'Zona principal {ring} (pág. 3–4) · {l1} competidores directos, {l2} otros locales de {category} (pág. 6–7) · equilibrio{exRent} {be} (pág. 10) · conclusiones en la pág. 15' },
+    p3: { placesSub: '{l1} directos · {l2} otros de {category} · {l3} otros sustitutos · {l4} anclas' },
+    p6: {
+      l1: 'Competidores directos',
+      l1Note: 'Locales que también venden {cuisine}',
+      l2: 'Otros de {category}',
+      l2Note: 'Otros locales de {category} (misma categoría, otro tipo)',
+      walk10: 'Locales de {category} a 10 minutos a pie',
+      walk10Note: 'Directos + otros de {category}; base de la aglomeración',
+      perResidents: 'Locales de {category} por 10 000 residentes',
+      perResidentsNote: 'Locales de {category} ÷ población de la zona principal',
+      rating: 'Calificación de Google, competidores directos',
+      clusterSub: 'sobre 100: muy pocos o demasiados locales de {category} cerca restan puntos',
+    },
+    p7: {
+      voidTitle: 'Competidores directos',
+      noData: 'Competidores directos: {na} (fuentes de competidores no disponibles)',
+      bandNote: 'De dónde sale el rango: {method}{onlyBreakeven}. Cuota de demanda = parte del gasto cercano en {category} que el modelo de reparto asigna a ese local.',
+    },
+    p8: { condL2: 'Suficientes otros locales de {category}', densityNote: 'Competidores directos por 10 000 residentes chinos aquí ÷ mediana de núcleos = {ratio}; {n} locales del mismo tipo en toda el área metropolitana.' },
+    p9: { xref: 'Modelo de reparto de demanda = el gasto en {category} de los residentes cercanos repartido según el atractivo y la distancia de cada local. Punto de equilibrio y línea de seguridad: página 10; método de la cuota de categoría: página 14.' },
+    map: { alt: 'Mapa del área comercial: áreas por tiempo de viaje, competidores directos, otros locales de {category}, anclas de tráfico', l1: 'Competidores directos', l1Numbered: 'Competidores directos 1–{n} (numerados como en la página 7)', l2: 'Otros de {category} ({n})' },
+  },
+};
+
+/** Category label for the wording overrides, lower-cased in en / es so it reads inside a sentence. */
+function categoryWord(category: ConceptCategory, lang: Locale): string {
+  const label = CONCEPT_CATEGORY_LABELS[category][lang];
+  return lang === 'zh' ? label : label.toLowerCase();
+}
+
+/**
+ * The report dictionary for a concept: unchanged for Chinese concepts; for
+ * bakery / beverage / western / other-Asian concepts the layer captions never
+ * say "同菜系 / 其他中餐". `{category}` is filled here; the page-level
+ * placeholders ({l1}, {ring} …) are left for `fill()`.
+ */
+export function conceptStrings(lang: Locale, concept: ConceptWording | null | undefined): ReportStrings {
+  const base = strings(lang);
+  if (!concept || concept.chinese) return base;
+  const cat = categoryWord(concept.category, lang);
+  const out = { ...base } as Record<string, unknown>;
+  for (const [section, keys] of Object.entries(CONCEPT_OVERRIDES[lang])) {
+    const patched = { ...(base as unknown as Record<string, Record<string, unknown>>)[section] };
+    for (const [k, v] of Object.entries(keys)) patched[k] = v.replace(/\{category\}/g, cat);
+    out[section] = patched;
+  }
+  return out as unknown as ReportStrings;
+}

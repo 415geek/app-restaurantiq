@@ -917,6 +917,25 @@ strong {
 .page-6 .data-table td {
   padding: 2.5pt 5pt;
 }
+/* page 7 (§4.8): benchmark band / review-count block + its footnote live in a fixed-height area
+   so they can never overflow into the page-tail summary paragraph. */
+.p7-band {
+  height: 118pt;
+  max-height: 118pt;
+  overflow: hidden;
+}
+.p7-band .h2 {
+  margin-top: 0;
+}
+.p7-band .table-note {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.page-7 .page-body {
+  overflow: hidden;
+}
 .cards-grid .void-panel {
   grid-column: 1 / -1;
   font-size: 10pt;

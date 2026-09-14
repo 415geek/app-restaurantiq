@@ -7,7 +7,8 @@
  *
  *   restaurant_spend_i = hh_i × CEX(income_i).fafh × region_multiplier
  *   chinese_spend_i    = restaurant_spend_i × [p_cn_i × s_cn + (1 − p_cn_i) × s_other]
- *   cuisine_demand_i   = chinese_spend_i × cuisine_share
+ *   cuisine_demand_i   = chinese_spend_i × cuisine_share            (audience 'chinese', default)
+ *                      = restaurant_spend_i × cuisine_share         (audience 'general', §4.1: 烘焙 / 饮品 / 西餐 …)
  *
  * Pure function: no I/O, every input is explicit so tests are deterministic.
  */
@@ -47,7 +48,10 @@ export interface RingInput {
 }
 
 export interface TradeAreaParams {
-  cuisine_share: number; // share of Chinese-restaurant spend going to the input sub-cuisine
+  /** Share of the demand basis going to the concept (sub-cuisine share of Chinese spend, or category × subtype share of all restaurant spend). */
+  cuisine_share: number;
+  /** Which spend the share multiplies; defaults to Chinese-restaurant spend (the 中餐 path). */
+  demand_basis?: 'chinese_spend' | 'restaurant_spend';
   range_class: RangeClass;
   /** CEX food-away-from-home USD/yr for a household at a given median income. */
   fafhForIncome: (medianIncome: number) => number;
@@ -110,7 +114,8 @@ export function computeBlockGroupDemand(bg: BlockGroupInput, p: TradeAreaParams)
         : null;
   const pcn = p_cn ?? (p.county.chinese_hh_share ?? 0);
   const chinese = restaurant * (pcn * d.s_cn + (1 - pcn) * d.s_other);
-  return { restaurant, chinese, cuisine: chinese * p.cuisine_share, p_cn };
+  const basis = p.demand_basis === 'restaurant_spend' ? restaurant : chinese;
+  return { restaurant, chinese, cuisine: basis * p.cuisine_share, p_cn };
 }
 
 export function computeTradeArea(input: {

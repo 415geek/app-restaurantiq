@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Lead capture as a dismissible bottom sheet (评审 Spec §4.7): the free result
+ * stays readable and scrollable behind it, "Not now" closes it, and it never
+ * covers the whole screen. Leaving an email saves the result to the lead.
+ */
 import { useEffect, useRef, useState } from 'react';
 import type { Locale } from '@/lib/i18n/locale';
 
@@ -17,6 +22,8 @@ type Props = {
   defaultCuisine?: string;
   reportId?: string | null;
   onSubmit: (data: LeadCaptureSubmit & { leadId: string | null }) => void;
+  /** "Not now" — closes the sheet without capturing anything. */
+  onDismiss?: () => void;
 };
 
 const copy: Record<
@@ -36,17 +43,18 @@ const copy: Record<
     submitting: string;
     privacy: string;
     locationLabel: string;
+    notNow: string;
+    moreFields: string;
     errEmail: string;
     errName: string;
     errCuisine: string;
     errNetwork: string;
-    bullets: string[];
   }
 > = {
   en: {
-    headline: 'Almost there — unlock your free risk audit',
+    headline: 'Save this result — leave an email',
     subhead:
-      'Tell us where to send the report. We use this only to deliver your PDF and follow-up site insights. We never sell your data.',
+      'The free result is already on screen. Leave an email to save a link to it and get the PDF and follow-up site insights. We never sell your data.',
     emailLabel: 'Work or personal email',
     emailPlaceholder: 'you@company.com',
     nameLabel: 'Your name',
@@ -55,24 +63,21 @@ const copy: Record<
     phonePlaceholder: '+1 (415) 555-1234',
     cuisineLabel: 'Cuisine / concept',
     cuisinePlaceholder: 'e.g. boba tea, Hong Kong café, hot pot',
-    cta: 'Unlock my free risk audit →',
-    submitting: 'Unlocking…',
+    cta: 'Save my result →',
+    submitting: 'Saving…',
     privacy: 'We’ll email you the PDF once the report is ready. Unsubscribe anytime.',
-    locationLabel: 'Auditing',
+    locationLabel: 'Result for',
+    notNow: 'Not now',
+    moreFields: 'Add name and phone',
     errEmail: 'Please enter a valid email.',
     errName: 'Please enter your name.',
     errCuisine: 'Please tell us your cuisine or concept.',
     errNetwork: 'Could not save your details. Please try again.',
-    bullets: [
-      'Decision-grade scorecard for this exact address',
-      '3 fact-based insights citing real nearby competitors',
-      '1 hidden risk most operators miss',
-    ],
   },
   zh: {
-    headline: '差最后一步 — 解锁免费风险审计',
+    headline: '留个邮箱，保存这份结果',
     subhead:
-      '告诉我们把报告发到哪里。我们仅用您留下的信息发送 PDF 和后续选址优化建议，绝不会出售给第三方。',
+      '免费结果已经在页面上了。留下邮箱可以保存结果链接，并收到 PDF 和后续选址建议。我们绝不会把您的信息出售给第三方。',
     emailLabel: '联系邮箱',
     emailPlaceholder: 'you@company.com',
     nameLabel: '您的姓名',
@@ -81,24 +86,21 @@ const copy: Record<
     phonePlaceholder: '+1 (415) 555-1234 或微信号',
     cuisineLabel: '想做的菜系 / 业态',
     cuisinePlaceholder: '例：港式茶餐厅、火锅、奶茶、川菜',
-    cta: '解锁免费风险审计 →',
-    submitting: '正在解锁…',
+    cta: '保存结果 →',
+    submitting: '正在保存…',
     privacy: '报告生成后我们会通过邮箱发送 PDF。任何时候都可以一键退订。',
-    locationLabel: '正在审计',
+    locationLabel: '本次分析',
+    notNow: '稍后再说',
+    moreFields: '补充姓名和电话',
     errEmail: '请输入有效的邮箱地址。',
     errName: '请填写您的姓名。',
     errCuisine: '请告诉我们您想做的菜系或业态。',
     errNetwork: '保存失败，请稍后重试。',
-    bullets: [
-      '本地址专属决策级评分卡',
-      '3 条引用真实周边竞品的事实型洞察',
-      '1 条多数老板会忽略的隐藏风险',
-    ],
   },
   es: {
-    headline: 'Ya casi: desbloquea tu auditoría de riesgo gratuita',
+    headline: 'Guarda este resultado: deja tu correo',
     subhead:
-      'Dinos adónde enviar el informe. Usamos estos datos solo para entregarte el PDF y observaciones de seguimiento sobre la ubicación. Nunca vendemos tu información.',
+      'El resultado gratuito ya está en pantalla. Deja un correo para guardar el enlace y recibir el PDF y observaciones de seguimiento. Nunca vendemos tu información.',
     emailLabel: 'Correo de trabajo o personal',
     emailPlaceholder: 'tu@empresa.com',
     nameLabel: 'Tu nombre',
@@ -107,19 +109,16 @@ const copy: Record<
     phonePlaceholder: '+1 (415) 555-1234',
     cuisineLabel: 'Tipo de cocina / concepto',
     cuisinePlaceholder: 'p. ej., té de burbujas, cafetería hongkonesa, hot pot',
-    cta: 'Desbloquear mi auditoría gratuita →',
-    submitting: 'Desbloqueando…',
+    cta: 'Guardar mi resultado →',
+    submitting: 'Guardando…',
     privacy: 'Te enviaremos el PDF por correo cuando el informe esté listo. Cancela cuando quieras.',
-    locationLabel: 'Auditando',
+    locationLabel: 'Resultado para',
+    notNow: 'Ahora no',
+    moreFields: 'Agregar nombre y teléfono',
     errEmail: 'Ingresa un correo válido.',
     errName: 'Ingresa tu nombre.',
     errCuisine: 'Dinos tu tipo de cocina o concepto.',
     errNetwork: 'No se pudieron guardar tus datos. Inténtalo de nuevo.',
-    bullets: [
-      'Tarjeta de puntuación lista para decidir sobre esta dirección exacta',
-      '3 observaciones basadas en hechos que citan competidores reales cercanos',
-      '1 riesgo oculto que la mayoría de los operadores pasa por alto',
-    ],
   },
 };
 
@@ -132,34 +131,26 @@ export function LeadCaptureModal({
   defaultCuisine,
   reportId,
   onSubmit,
+  onDismiss,
 }: Props) {
   const t = copy[locale];
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [cuisine, setCuisine] = useState(defaultCuisine ?? '');
+  const [showMore, setShowMore] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const emailRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (open) {
-      setError(null);
-      // Focus email shortly after the modal mounts/animates in.
-      const id = window.setTimeout(() => emailRef.current?.focus(), 80);
-      return () => window.clearTimeout(id);
-    }
+    if (open) setError(null); // eslint-disable-line react-hooks/set-state-in-effect
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
-    // Lock body scroll while open.
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
+    if (!defaultCuisine) return;
+    setCuisine((c) => c || defaultCuisine); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [defaultCuisine]);
 
   if (!open) return null;
 
@@ -176,12 +167,14 @@ export function LeadCaptureModal({
       emailRef.current?.focus();
       return;
     }
-    if (!trimmedName) {
-      setError(t.errName);
-      return;
-    }
     if (!trimmedCuisine) {
       setError(t.errCuisine);
+      setShowMore(true);
+      return;
+    }
+    if (!trimmedName) {
+      setError(t.errName);
+      setShowMore(true);
       return;
     }
 
@@ -205,11 +198,11 @@ export function LeadCaptureModal({
         const json = (await res.json().catch(() => ({}))) as { leadId?: string };
         leadId = json.leadId ?? null;
       } else {
-        // Non-fatal: still unlock the report so the user is not blocked by infra issues.
-        console.warn('[lead-modal] persistence failed with status', res.status);
+        // Non-fatal: still close the sheet so the user is not blocked by infra issues.
+        console.warn('[lead-sheet] persistence failed with status', res.status);
       }
     } catch (err) {
-      console.warn('[lead-modal] network error:', err);
+      console.warn('[lead-sheet] network error:', err);
     } finally {
       setSubmitting(false);
     }
@@ -223,109 +216,101 @@ export function LeadCaptureModal({
     });
   }
 
+  const inputCls =
+    'mt-1 w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-emerald-400/60 focus:bg-white/15';
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="lead-modal-headline"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-3 sm:px-6 sm:pb-6"
+      data-testid="lead-sheet"
     >
-      <div className="relative w-full max-w-lg rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-950 p-6 shadow-2xl">
-        <div className="mb-4">
-          <div className="text-[11px] uppercase tracking-wider text-emerald-300/80">
-            {t.locationLabel}
+      <section
+        role="dialog"
+        aria-labelledby="lead-sheet-headline"
+        className="pointer-events-auto w-full max-w-lg rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-950 p-5 shadow-2xl shadow-black/60"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] uppercase tracking-wider text-emerald-300/80">{t.locationLabel}</div>
+            <div className="truncate text-xs text-white/60" title={location}>
+              {location || '—'}
+            </div>
           </div>
-          <div className="mt-1 truncate text-sm text-white/70" title={location}>
-            {location || '—'}
-          </div>
+          {onDismiss ? (
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="shrink-0 rounded-lg px-2 py-1 text-xs text-white/60 underline underline-offset-4 transition hover:text-white"
+              data-testid="lead-sheet-dismiss"
+            >
+              {t.notNow}
+            </button>
+          ) : null}
         </div>
 
-        <h2 id="lead-modal-headline" className="text-xl font-semibold text-white sm:text-2xl">
+        <h2 id="lead-sheet-headline" className="mt-2 text-lg font-semibold text-white">
           {t.headline}
         </h2>
-        <p className="mt-2 text-sm text-white/65">{t.subhead}</p>
+        <p className="mt-1 text-xs text-white/60">{t.subhead}</p>
 
-        <ul className="mt-4 space-y-1.5 text-sm text-white/80">
-          {t.bullets.map((b) => (
-            <li key={b} className="flex items-start gap-2">
-              <span className="mt-1 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-400" />
-              <span>{b}</span>
-            </li>
-          ))}
-        </ul>
+        <form onSubmit={handleSubmit} className="mt-3 space-y-2.5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <label className="block min-w-0 flex-1">
+              <span className="block text-xs font-medium text-white/55">{t.emailLabel}</span>
+              <input
+                ref={emailRef}
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={t.emailPlaceholder}
+                className={inputCls}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitting ? t.submitting : t.cta}
+            </button>
+          </div>
 
-        <form onSubmit={handleSubmit} className="mt-5 space-y-3">
-          <label className="block">
-            <span className="block text-xs font-medium text-white/55">{t.emailLabel}</span>
-            <input
-              ref={emailRef}
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={t.emailPlaceholder}
-              className="mt-1 w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-emerald-400/60 focus:bg-white/15"
-            />
-          </label>
-
-          <label className="block">
-            <span className="block text-xs font-medium text-white/55">{t.nameLabel}</span>
-            <input
-              type="text"
-              required
-              autoComplete="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t.namePlaceholder}
-              className="mt-1 w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-emerald-400/60 focus:bg-white/15"
-            />
-          </label>
-
-          <label className="block">
-            <span className="block text-xs font-medium text-white/55">{t.cuisineLabel}</span>
-            <input
-              type="text"
-              required
-              value={cuisine}
-              onChange={(e) => setCuisine(e.target.value)}
-              placeholder={t.cuisinePlaceholder}
-              className="mt-1 w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-emerald-400/60 focus:bg-white/15"
-            />
-          </label>
-
-          <label className="block">
-            <span className="block text-xs font-medium text-white/55">{t.phoneLabel}</span>
-            <input
-              type="tel"
-              autoComplete="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder={t.phonePlaceholder}
-              className="mt-1 w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-emerald-400/60 focus:bg-white/15"
-            />
-          </label>
+          {showMore ? (
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              <label className="block">
+                <span className="block text-xs font-medium text-white/55">{t.nameLabel}</span>
+                <input type="text" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t.namePlaceholder} className={inputCls} />
+              </label>
+              <label className="block">
+                <span className="block text-xs font-medium text-white/55">{t.cuisineLabel}</span>
+                <input type="text" value={cuisine} onChange={(e) => setCuisine(e.target.value)} placeholder={t.cuisinePlaceholder} className={inputCls} />
+              </label>
+              <label className="block">
+                <span className="block text-xs font-medium text-white/55">{t.phoneLabel}</span>
+                <input type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.phonePlaceholder} className={inputCls} />
+              </label>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowMore(true)}
+              className="text-xs text-white/50 underline underline-offset-4 transition hover:text-white/80"
+            >
+              {t.moreFields}
+            </button>
+          )}
 
           {error ? (
-            <div
-              role="alert"
-              className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200"
-            >
+            <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
               {error}
             </div>
           ) : null}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded-xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {submitting ? t.submitting : t.cta}
-          </button>
-
-          <p className="text-center text-[11px] text-white/40">{t.privacy}</p>
+          <p className="text-[11px] text-white/40">{t.privacy}</p>
         </form>
-      </div>
+      </section>
     </div>
   );
 }

@@ -9,10 +9,12 @@
  *    every few seconds, and once a phase has been on screen for a while the
  *    line borrows from the neighbouring phases so a long stage never loops the
  *    same two sentences.
- *  - After a short grace period a countdown appears ("About 2:30 to go"),
- *    anchored on the typical 3-minute run. It only ever goes down: under a
- *    minute it switches to a coarse "under a minute", and past the anchor it
- *    says "taking a little longer" instead of jumping back up.
+ *  - After a short grace period a countdown appears ("About 3:30 to go"),
+ *    anchored on the middle of the typical 3–5 minute run. It only ever goes
+ *    down: under a minute it switches to a coarse "under a minute", and past
+ *    the anchor it says "taking a little longer" instead of jumping back up.
+ *  - When the server reports the real stage (评审 Spec §4.6) the wording
+ *    follows that stage instead of guessing a phase from the percentage.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Locale } from '@/lib/i18n/locale';
@@ -214,7 +216,8 @@ export function tickerMessages(lang: Locale, location: string): string[][] {
   ];
 }
 
-const TYPICAL_SEC = 180;
+/** Middle of the "usually 3–5 minutes" band shown on the wait screen. */
+const TYPICAL_SEC = 240;
 const COUNTDOWN_AFTER_SEC = 15;
 const ROTATE_EVERY_SEC = 5;
 
@@ -260,6 +263,17 @@ export function phaseOf(percent: number, phases: number): number {
 }
 
 /**
+ * Message group for a real server stage (index into the five-row checklist:
+ * competitors → demographics → finance → write → layout). Each stage starts on
+ * the wording group that describes it and borrows from the following ones.
+ */
+export function tickerPhaseForStage(stageIndex: number, phases: number): number {
+  const map = [0, 2, 4, 5, 7];
+  const idx = Math.max(0, Math.min(map.length - 1, Math.floor(stageIndex)));
+  return Math.min(phases - 1, map[idx]);
+}
+
+/**
  * Message to show at rotation tick `tick` while in `phase`. Runs through the
  * phase's own wordings first, then borrows from the next phase (and the one
  * after) so a stage that stays on screen for a minute or more keeps saying new
@@ -273,9 +287,23 @@ export function pickMessage(groups: string[][], phase: number, tick: number): st
   return pool[tick % pool.length];
 }
 
-export function GenerationTicker({ lang, location, elapsedSec, percent }: { lang: Locale; location: string; elapsedSec: number; percent: number }) {
+export function GenerationTicker({
+  lang,
+  location,
+  elapsedSec,
+  percent,
+  stageIndex,
+}: {
+  lang: Locale;
+  location: string;
+  elapsedSec: number;
+  percent: number;
+  /** Real active stage from the status endpoint; when absent the phase is guessed from `percent`. */
+  stageIndex?: number | null;
+}) {
   const groups = useMemo(() => tickerMessages(lang, location), [lang, location]);
-  const phase = phaseOf(percent, groups.length);
+  const phase =
+    typeof stageIndex === 'number' && stageIndex >= 0 ? tickerPhaseForStage(stageIndex, groups.length) : phaseOf(percent, groups.length);
   // Rotation tick counts from the moment the current phase started, so each
   // phase begins with its own first wording before borrowing from the next ones.
   const [tick, setTick] = useState(0);

@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { circlePolygon, destination } from '../geo';
-import { applyLlmClassifications, classifyCandidate, clusterScoreFor, computeCompetitors, dedupeCandidates, type CandidatePoi } from './competitor';
+import { circlePolygon, destination, haversineM } from '../geo';
+import { applyLlmClassifications, classifyCandidate, clusterScoreFor, computeCompetitors, dedupeCandidates, isLayer1, promoteDirectLayerHits, selectBrandAnchors, type CandidatePoi } from './competitor';
+import { conceptSearchProfile } from '../data/search-profile';
+import { applyWalkingLegs } from '../pipeline';
 import type { Ring } from '../model/schema';
 
 const site = { lat: 37.5985, lng: -122.3872 };
@@ -102,4 +104,91 @@ test('dedupe: Overture 湘园 + Google "Xiang Yuan Hunan Cuisine" at the same sp
   const a = poi('a', '川味观', 0, 200);
   const b = poi('b', 'Sichuan House', 0, 500, { source: 'google' });
   assert.equal(dedupeCandidates(site, [a, b]).length, 2);
+});
+
+/* ------------------------------------------------------------------ */
+/* §4.2 three-layer semantics for a non-Chinese concept (egg tart)      */
+/* ------------------------------------------------------------------ */
+
+const clement = { lat: 37.7827, lng: -122.472 };
+const cWalk10 = circlePolygon(clement, 800, 48);
+const cDrive10 = circlePolygon(clement, 4_828, 48);
+const cRings: Ring[] = [{ ...rings[0], geometry: cDrive10 }];
+function gpoi(id: string, name: string, lat: number, lng: number, types: string[], count: number, layers: CandidatePoi['layers'], over: Partial<CandidatePoi> = {}): CandidatePoi {
+  return { id, source: 'google', name, lat, lng, categories: types, primary_category: types[0], operating_status: 'OPERATIONAL', rating: 4.5, rating_count: count, price_level: 2, layers, ...over };
+}
+const BREADBELLY = gpoi('bb', 'Breadbelly', 37.7827, -122.4738, ['bakery', 'cafe', 'food'], 900, ['direct', 'substitute']);
+const SCHUBERTS = gpoi('sc', "Schubert's Bakery", 37.783, -122.4645, ['bakery', 'food'], 1500, ['direct']);
+const ARSICAULT = gpoi('ar', 'Arsicault Bakery', 37.7833, -122.459, ['bakery'], 2100, ['direct', 'brand_anchor']);
+const CINDERELLA = gpoi('ci', 'Cinderella Bakery & Cafe', 37.7766, -122.4636, ['bakery', 'cafe'], 1300, ['direct']);
+const TARTINE = gpoi('ta', 'Tartine Manufactory', 37.7614, -122.4116, ['bakery', 'cafe', 'restaurant'], 3000, ['brand_anchor']);
+const BOHO = gpoi('bo', 'Boho Bakery', 37.8005, -122.437, ['bakery'], 400, ['brand_anchor']);
+const TOYBOAT = gpoi('tb', 'Toy Boat Dessert Cafe', 37.7833, -122.468, ['dessert_shop', 'cafe'], 700, ['substitute']);
+const SAFEWAY = gpoi('sw', 'Safeway', 37.7808, -122.47, ['supermarket', 'grocery_store'], 2000, ['l4']);
+const DIMSUM = gpoi('ds', 'Good Luck Dim Sum', 37.7829, -122.4727, ['chinese_restaurant', 'restaurant'], 1800, ['direct']); // "egg tart" query hit, but a dim sum house
+// ≥ 15 food POIs inside drive10 keeps the §3.9 coverage guard quiet (ring pop 60k) so the tests exercise the §4.2 guard alone.
+const eateries = Array.from({ length: 16 }, (_, i) => {
+  const p = destination(clement, i * 25, 900 + i * 60);
+  return gpoi(`f${i}`, `Generic Eatery ${i}`, p.lat, p.lng, ['restaurant'], 100, ['l3']);
+});
+const L1_QUERY = { layers_tried: ['direct@800', 'direct@1600'], radius_m: 1600 };
+
+test('§4.2 egg tart: Layer-1 rule = query hit + name / type match; Tartine & Boho outside; substitutes and general anchors', () => {
+  const p = conceptSearchProfile('egg_tart');
+  assert.equal(p.origin, 'search');
+  assert.deepEqual(p.types, ['bakery', 'cafe']);
+  const cands = [BREADBELLY, SCHUBERTS, ARSICAULT, CINDERELLA, TARTINE, BOHO, TOYBOAT, SAFEWAY, DIMSUM, ...eateries];
+  const r = computeCompetitors({ site: clement, cuisine: 'egg_tart', candidates: cands, rings: cRings, walk10: cWalk10, drive10: cDrive10, metro_sub_cuisine_total: null, hub_median_density_per_10k_chinese: null, traffic: {}, ticket_in: 10, target_price_level: 1, l1_query: L1_QUERY });
+  assert.deepEqual(r.l1.map((c) => c.name).sort(), ['Arsicault Bakery', 'Breadbelly', 'Cinderella Bakery & Cafe', "Schubert's Bakery"], r.guard_notes.join('; '));
+  assert.ok(r.l1.every((c) => c.sub_cuisine === 'egg_tart' && c.layer === 'L1'));
+  assert.ok(!r.l2.some((c) => c.name.startsWith('Tartine')), 'Tartine (3.6 mi, brand-anchor query only) is not Layer 2');
+  assert.ok(![...r.l1, ...r.l2].some((c) => c.name.startsWith('Boho')), 'Boho (Marina) is not Layer 1 / 2');
+  assert.ok(![...r.l1, ...r.l2].some((c) => c.name === 'Good Luck Dim Sum'), 'a Layer-1 query hit that is a dim sum house is not Layer 1 / 2 for egg tart');
+  assert.deepEqual(r.l2.map((c) => c.name), ['Toy Boat Dessert Cafe']);
+  assert.deepEqual(r.l4.map((c) => c.name), ['Safeway'], 'general-audience anchors: supermarket, not 99 Ranch / East West Bank');
+  assert.equal(r.guard_passed, true, r.guard_notes.join('; '));
+  assert.equal(r.l1_search_radius_m, 1600);
+  assert.deepEqual(r.l1_layers_tried, ['direct@800', 'direct@1600']);
+  assert.equal(r.walk10_l1_l2_count, 3, 'Breadbelly, Schubert\'s, Toy Boat inside the 800 m walk ring');
+  // Brand anchors from the unfiltered pool: ≥ 500 reviews, top 5 by count; Arsicault is also a direct competitor.
+  const anchors = selectBrandAnchors(clement, cands, 'egg_tart', new Set(r.l1.map((c) => c.id)));
+  assert.deepEqual(anchors.map((a) => `${a.name}:${a.in_trade_area}`), ['Tartine Manufactory:false', 'Arsicault Bakery:true']);
+  assert.ok(anchors[0].distance_mi > 2.5);
+  // Without the query provenance (alternative cuisines) the query-hit path is off: only classified ids count.
+  assert.equal(isLayer1(dedupeCandidates(clement, [BREADBELLY])[0], p, false), false);
+  assert.equal(isLayer1(dedupeCandidates(clement, [gpoi('gg', 'Golden Gate Egg Tart', 37.7829, -122.4725, ['bakery'], 50, [])])[0], p, false), true, 'keyword classification stays');
+  // Promotion is idempotent and never overrides a specific other subtype.
+  const merged = dedupeCandidates(clement, [BREADBELLY, DIMSUM]);
+  assert.equal(promoteDirectLayerHits(merged, 'egg_tart'), 1);
+  assert.equal(promoteDirectLayerHits(merged, 'egg_tart'), 0);
+  assert.equal(merged.find((m) => m.id === 'ds')!.sub_cuisine, 'dim_sum');
+});
+
+test('§4.2 void guard: Layer 1 = 0 is a finding only after both radii (800 / 1600) were searched', () => {
+  const base = { site: clement, cuisine: 'egg_tart', candidates: [...eateries, SAFEWAY], rings: cRings, walk10: cWalk10, drive10: cDrive10, metro_sub_cuisine_total: null, hub_median_density_per_10k_chinese: null, traffic: {}, ticket_in: 10, target_price_level: 1 };
+  const both = computeCompetitors({ ...base, l1_query: L1_QUERY });
+  assert.equal(both.l1.length, 0);
+  assert.equal(both.guard_passed, true, both.guard_notes.join('; '));
+  assert.equal(both.l1_search_radius_m, 1600);
+  assert.deepEqual(both.l1_layers_tried, ['direct@800', 'direct@1600']);
+
+  const near = computeCompetitors({ ...base, l1_query: { layers_tried: ['direct@800'], radius_m: 800 } });
+  assert.equal(near.guard_passed, false);
+  assert.ok(near.guard_notes.some((n) => n.includes('不能判定为空档')), near.guard_notes.join('; '));
+
+  const none = computeCompetitors({ ...base, l1_query: { layers_tried: [], radius_m: null } });
+  assert.equal(none.guard_passed, false, 'Google did not run → no void claim');
+  assert.equal(none.l1_search_radius_m, null);
+});
+
+test('§4.2 walking legs replace the straight-line distance on the cards (Cinderella 1000 m → 0.62 mi)', () => {
+  const r = computeCompetitors({ site: clement, cuisine: 'egg_tart', candidates: [BREADBELLY, CINDERELLA, ...eateries], rings: cRings, walk10: cWalk10, drive10: cDrive10, metro_sub_cuisine_total: null, hub_median_density_per_10k_chinese: null, traffic: {}, ticket_in: 10, target_price_level: 1, l1_query: L1_QUERY });
+  const straight = r.l1.find((c) => c.name.startsWith('Cinderella'))!;
+  assert.equal(straight.distance_mi, Math.round((haversineM(clement, CINDERELLA) / 1609.344) * 100) / 100);
+  const walked = applyWalkingLegs(r.l1, { ci: { walk_m: 1000, walk_min: 13 } });
+  const c = walked.find((x) => x.name.startsWith('Cinderella'))!;
+  assert.equal(c.walk_m, 1000);
+  assert.equal(c.walk_min, 13);
+  assert.ok(c.distance_mi >= 0.55 && c.distance_mi <= 0.7, String(c.distance_mi));
+  assert.equal(walked.find((x) => x.name === 'Breadbelly')!.walk_min, null, 'no leg → straight-line kept');
 });

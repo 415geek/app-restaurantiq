@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server';
-import { iqInsertReport } from '@/lib/funnel/iq-repository';
+import { iqFindRecentReportByAnalyzeKey, iqInsertReport } from '@/lib/funnel/iq-repository';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { buildFreeTierMarketBrief } from '@/lib/funnel/iq-premium-anchors';
 import { computeSiteMetrics, formatMetricsDigest } from '@/lib/funnel/agents/metrics';
 import { runPartialAnalysis } from '@/lib/funnel/iq-llm';
+import {
+  analyzeCacheKey,
+  analyzeCacheSinceIso,
+  readStoredFreeResult,
+  type StoredFreeResult,
+} from '@/lib/funnel/iq-analyze-cache';
+import { resolveConcept, type ConceptResolution } from '@/lib/iq/concept/classify';
 import { analyzeWithN8n, getAnalyzeWebhookUrl } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
 import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
@@ -87,6 +94,25 @@ function reconcileRiskAuditPreviewWithUserInputs(
   return obj;
 }
 
+/** The concept fields every tier reads back from `market_data_json.concept`. */
+function conceptRecord(c: ConceptResolution): Record<string, unknown> {
+  return {
+    id: c.id,
+    category: c.category,
+    label_zh: c.label_zh,
+    label_en: c.label_en,
+    label_es: c.label_es,
+    method: c.method,
+    confidence: c.confidence,
+    matched: c.matched,
+  };
+}
+
+function conceptLabelFor(c: ConceptResolution | null, lang: Locale): string | undefined {
+  if (!c) return undefined;
+  return lang === 'zh' ? c.label_zh : lang === 'es' ? c.label_es : c.label_en;
+}
+
 export async function POST(req: Request) {
   await ensureRuntimeConfig();
   try {
@@ -96,19 +122,21 @@ export async function POST(req: Request) {
       language?: string;
       monthlyRentUsd?: number | string;
       sqft?: number | string;
+      /** Taxonomy id confirmed by the ConceptPicker (§4.1 step 3). */
+      conceptId?: string;
     };
     const location = String(body.location ?? '').trim();
     const businessType = String(body.businessType ?? '').trim();
+    const conceptIdInput = String(body.conceptId ?? '').trim() || null;
     const monthlyRentUsd = body.monthlyRentUsd != null ? Number(body.monthlyRentUsd) : undefined;
     const sqft = body.sqft != null ? Number(body.sqft) : undefined;
+    const rentOk = Number.isFinite(monthlyRentUsd) && monthlyRentUsd! > 0;
+    const sqftOk = Number.isFinite(sqft) && sqft! > 0;
     const userInputs =
-      (Number.isFinite(monthlyRentUsd) && monthlyRentUsd! > 0) ||
-      (Number.isFinite(sqft) && sqft! > 0)
+      rentOk || sqftOk
         ? {
-            ...(Number.isFinite(monthlyRentUsd) && monthlyRentUsd! > 0
-              ? { monthly_rent_usd: monthlyRentUsd }
-              : {}),
-            ...(Number.isFinite(sqft) && sqft! > 0 ? { sqft } : {}),
+            ...(rentOk ? { monthly_rent_usd: monthlyRentUsd } : {}),
+            ...(sqftOk ? { sqft } : {}),
           }
         : undefined;
     // Visitor locale ('en' | 'zh' | 'es'); every provider call and the stored report row use it.
@@ -135,6 +163,7 @@ export async function POST(req: Request) {
         const mock = MOCK_COPY[language];
         return NextResponse.json({
           reportId: '',
+          cached: false,
           verdict: 'mock',
           headline: mock.headline,
           subheadline: mock.subheadline,
@@ -152,13 +181,71 @@ export async function POST(req: Request) {
       );
     }
 
+    // ── §4.1 concept: every typed business type lands on one taxonomy entry ──
+    // A blank business type is analysed as a generic restaurant (nothing to
+    // classify); otherwise an unconfident classification asks the user first
+    // and runs nothing.
+    let concept: ConceptResolution | null = null;
+    if (businessType) {
+      try {
+        concept = await resolveConcept({ text: businessType, conceptId: conceptIdInput });
+      } catch (conceptErr) {
+        console.warn('[funnel/analyze] concept resolution failed, continuing with raw text:', conceptErr);
+      }
+      if (concept?.needs_confirmation) {
+        return NextResponse.json({
+          needs_concept_confirmation: true,
+          concept: {
+            ...conceptRecord(concept),
+            needs_confirmation: true,
+            options: concept.options,
+          },
+        });
+      }
+    }
+    const conceptLabel = conceptLabelFor(concept, language);
+
+    // ── §4.5 idempotency: same normalised inputs within 24 h → stored row ──
+    const analyzeKey = analyzeCacheKey({
+      location,
+      businessType,
+      monthlyRentUsd: rentOk ? monthlyRentUsd : null,
+      sqft: sqftOk ? sqft : null,
+      language,
+      conceptId: concept?.id ?? null,
+    });
+    try {
+      const cachedRow = await iqFindRecentReportByAnalyzeKey({
+        key: analyzeKey,
+        language,
+        sinceIso: analyzeCacheSinceIso(),
+      });
+      const stored = cachedRow ? readStoredFreeResult(cachedRow.market_data_json) : null;
+      if (cachedRow && stored) {
+        const storedConcept = (cachedRow.market_data_json as Record<string, unknown> | null)?.concept;
+        return NextResponse.json({
+          reportId: cachedRow.id,
+          cached: true,
+          ...stored,
+          ...(storedConcept && typeof storedConcept === 'object' ? { concept: storedConcept } : {}),
+        });
+      }
+    } catch (cacheErr) {
+      const message = cacheErr instanceof Error ? cacheErr.message : String(cacheErr);
+      if (!message.includes('Supabase admin env is not configured')) {
+        console.warn('[funnel/analyze] cache lookup failed, running analysis:', message);
+      }
+    }
+
+    // One market prefetch per request (it used to run twice: before the LLM
+    // and again as a "merge" afterwards).
     let prefetchedMarket: Record<string, unknown> | null = null;
     try {
       prefetchedMarket =
         (await resolveMarketDataForIqReport({
           existing: null,
           location,
-          businessType: businessType || 'restaurant',
+          businessType: conceptLabel || businessType || 'restaurant',
           isPremium: false,
           lang: language,
         })) ?? null;
@@ -169,12 +256,22 @@ export async function POST(req: Request) {
     // economics) are appended so the free verdict is grounded in computed numbers.
     const siteMetrics = computeSiteMetrics({
       marketData: prefetchedMarket,
-      businessType: businessType || 'restaurant',
+      businessType: conceptLabel || businessType || 'restaurant',
     });
     const metricsDigest = formatMetricsDigest(siteMetrics, language);
     const freeBrief = [buildFreeTierMarketBrief(prefetchedMarket, language), metricsDigest]
       .filter(Boolean)
       .join('\n\n');
+
+    const llmInput = {
+      location,
+      businessType,
+      conceptLabel,
+      language,
+      marketDataBrief: freeBrief,
+      monthlyRentUsd: rentOk ? monthlyRentUsd : undefined,
+      sqft: sqftOk ? sqft : undefined,
+    };
 
     let parsed: Awaited<ReturnType<typeof analyzeWithN8n>>;
     try {
@@ -182,7 +279,7 @@ export async function POST(req: Request) {
         parsed = await analyzeWithN8n({
           address: location,
           industry: 'restaurant',
-          cuisine_type: businessType || undefined,
+          cuisine_type: conceptLabel || businessType || undefined,
           language,
           ...(prefetchedMarket && Object.keys(prefetchedMarket).length > 0
             ? {
@@ -197,29 +294,12 @@ export async function POST(req: Request) {
               : {}),
         });
       } else {
-        parsed = await runPartialAnalysis({
-          location,
-          businessType,
-          language,
-          marketDataBrief: freeBrief,
-          monthlyRentUsd:
-            Number.isFinite(monthlyRentUsd) && monthlyRentUsd! > 0 ? monthlyRentUsd : undefined,
-          sqft: Number.isFinite(sqft) && sqft! > 0 ? sqft : undefined,
-        });
+        parsed = await runPartialAnalysis(llmInput);
       }
     } catch (n8nErr) {
       if (hasN8nWebhook && hasOpenAiKey) {
         console.warn('[funnel/analyze] n8n analyze failed, falling back to OpenAI:', n8nErr);
-        parsed = await runPartialAnalysis({
-          location,
-          businessType,
-          language,
-          marketDataBrief: freeBrief,
-          monthlyRentUsd:
-            Number.isFinite(monthlyRentUsd) && monthlyRentUsd! > 0 ? monthlyRentUsd : undefined,
-          sqft: Number.isFinite(sqft) && sqft! > 0 ? sqft : undefined,
-          openAiOnly: true,
-        });
+        parsed = await runPartialAnalysis({ ...llmInput, openAiOnly: true });
       } else {
         throw n8nErr;
       }
@@ -228,7 +308,7 @@ export async function POST(req: Request) {
     const verdict = String(parsed.verdict ?? '').trim();
     const headline = String(parsed.headline ?? '').trim();
     const subheadline = String(parsed.subheadline ?? '').trim();
-    const marketSnapshot = Array.isArray(parsed.market_snapshot) 
+    const marketSnapshot = Array.isArray(parsed.market_snapshot)
       ? parsed.market_snapshot.map(s => String(s ?? '').trim()).filter(Boolean)
       : [];
     const hiddenRisk = String(parsed.hidden_risk ?? '').trim();
@@ -238,6 +318,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid analysis response from provider' }, { status: 502 });
     }
 
+    const decisionTier = String((parsed as { decision_tier?: string }).decision_tier ?? '').trim();
+    const rawRiskAuditPreview = (parsed as { risk_audit_preview?: unknown }).risk_audit_preview;
+    const riskAuditPreview = reconcileRiskAuditPreviewWithUserInputs(rawRiskAuditPreview, userInputs);
+
+    const freeResult: StoredFreeResult = {
+      verdict,
+      headline,
+      subheadline,
+      market_snapshot: marketSnapshot,
+      hidden_risk: hiddenRisk,
+      paywall_teaser: paywallTeaser,
+      ...(decisionTier ? { decision_tier: decisionTier } : {}),
+      ...(riskAuditPreview && typeof riskAuditPreview === 'object' ? { risk_audit_preview: riskAuditPreview } : {}),
+    };
+
+    // Market seed: the prefetch (already enriched + finance model) merged with
+    // whatever n8n returned; no second resolve pass.
     let marketSeed: Record<string, unknown> | null = null;
     const fromN8n = parsed.market_data;
     if (fromN8n && typeof fromN8n === 'object' && !Array.isArray(fromN8n)) {
@@ -245,25 +342,22 @@ export async function POST(req: Request) {
     } else if (prefetchedMarket && Object.keys(prefetchedMarket).length > 0) {
       marketSeed = { ...prefetchedMarket };
     }
+    const marketDataJson: Record<string, unknown> = {
+      ...(marketSeed ?? {}),
+      ...(userInputs || concept
+        ? {
+            user_inputs: {
+              ...((marketSeed?.user_inputs as Record<string, unknown> | undefined) ?? {}),
+              ...(userInputs ?? {}),
+              ...(concept ? { concept_id: concept.id } : {}),
+            },
+          }
+        : {}),
+      ...(concept ? { concept: conceptRecord(concept) } : {}),
+      analyze_key: analyzeKey,
+      free_result: freeResult,
+    };
 
-    let marketDataJson: Record<string, unknown> | null = null;
-    try {
-      marketDataJson = await resolveMarketDataForIqReport({
-        existing:
-          userInputs && marketSeed
-            ? { ...marketSeed, user_inputs: userInputs }
-            : userInputs
-              ? { user_inputs: userInputs }
-              : marketSeed,
-        location,
-        businessType: businessType || 'restaurant',
-        isPremium: false,
-        lang: language,
-      });
-    } catch (mergeErr) {
-      console.warn('[funnel/analyze] post-analyze market merge failed:', mergeErr);
-      marketDataJson = marketSeed;
-    }
     let reportId = '';
     try {
       reportId = await iqInsertReport({
@@ -273,7 +367,7 @@ export async function POST(req: Request) {
         headline,
         reason: subheadline || hiddenRisk,
         language,
-        marketDataJson: marketDataJson ?? undefined,
+        marketDataJson,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -288,22 +382,12 @@ export async function POST(req: Request) {
         throw err;
       }
     }
-    const decisionTier = String((parsed as { decision_tier?: string }).decision_tier ?? '').trim();
-    const rawRiskAuditPreview = (parsed as { risk_audit_preview?: unknown }).risk_audit_preview;
-    const riskAuditPreview = reconcileRiskAuditPreviewWithUserInputs(rawRiskAuditPreview, userInputs);
 
     return NextResponse.json({
       reportId,
-      verdict,
-      headline,
-      subheadline,
-      market_snapshot: marketSnapshot,
-      hidden_risk: hiddenRisk,
-      paywall_teaser: paywallTeaser,
-      ...(decisionTier ? { decision_tier: decisionTier } : {}),
-      ...(riskAuditPreview && typeof riskAuditPreview === 'object'
-        ? { risk_audit_preview: riskAuditPreview }
-        : {}),
+      cached: false,
+      ...freeResult,
+      ...(concept ? { concept: conceptRecord(concept) } : {}),
     });
   } catch (e) {
     const cause =

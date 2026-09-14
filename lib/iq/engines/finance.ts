@@ -13,7 +13,12 @@
  * with an assertion |Δ| < $1, so the table can never contradict itself.
  *
  * Cost structure keeps the D-4 archetype benchmarks (docs/audit.md §3) but is
- * driven by explicit inputs instead of a market_data blob.
+ * driven by explicit inputs instead of a market_data blob. Per 评审 Spec §4.1
+ * the concept — never the floor area — decides the people and the ticket:
+ * headcount, the default ticket, the default delivery share and the daypart
+ * profile come from the taxonomy entry (`fte_default`, `ticket_in`,
+ * `takeout_share`, `daypart_profile`); the cost percentages and the seating
+ * density come from the category archetype.
  *
  * Rent is NEVER estimated. When the customer did not enter a monthly rent
  * (`rent_usd == null`) the report must not fill one in (owner rule: 「当用户没
@@ -23,7 +28,7 @@
  * of a guess the report exposes `max_rent_for_10pct_usd` (captured demand ×
  * 10 %) and a "each +$1,000 of rent" sensitivity row.
  */
-import { getDefaults, cuisineById } from '../params';
+import { getDefaults, cuisineById, type CuisineDef, type DaypartProfile } from '../params';
 import type { ReportModel } from '../model/schema';
 
 export type FinanceScenario = ReportModel['finance']['scenarios'][number];
@@ -50,24 +55,42 @@ export type RentSource = 'user_input' | 'not_provided';
 /** Target occupancy cost (rent ÷ captured revenue) behind `max_rent_for_10pct_usd` and the rent conditions. */
 export const OCCUPANCY_TARGET = 0.1;
 
-interface Archetype {
+export interface Archetype {
   id: string;
   food_cost_pct: number;
   paper_pct: number;
+  /** Full-time-equivalent headcount — from the taxonomy `fte_default` when set. */
   headcount: number;
   other_fixed: number;
   seats_per_100sqft: number;
   default_sqft: number;
   base_turns: number;
+  /** Default dine-in ticket (taxonomy `ticket_in`). */
+  ticket_in: number;
+  /** Default delivery / takeout share of orders (taxonomy `takeout_share`; legacy 25 %). */
+  delivery_ratio: number;
+  daypart_profile: DaypartProfile;
 }
 
-const ARCHETYPES: Record<string, Archetype> = {
+type ArchetypeBase = Omit<Archetype, 'ticket_in' | 'delivery_ratio' | 'daypart_profile'>;
+
+/** Cost-structure benchmarks by legacy sub-cuisine id (kept verbatim) and by concept category. */
+const ARCHETYPES: Record<string, ArchetypeBase> = {
   boba: { id: 'bubble_tea', food_cost_pct: 0.28, paper_pct: 0.04, headcount: 5, other_fixed: 4_500, seats_per_100sqft: 2.0, default_sqft: 900, base_turns: 6 },
   chinese_fast: { id: 'qsr', food_cost_pct: 0.3, paper_pct: 0.03, headcount: 8, other_fixed: 6_000, seats_per_100sqft: 2.5, default_sqft: 1_400, base_turns: 4 },
   noodles: { id: 'fast_casual', food_cost_pct: 0.31, paper_pct: 0.025, headcount: 9, other_fixed: 6_800, seats_per_100sqft: 2.5, default_sqft: 1_500, base_turns: 3.5 },
   hk_cafe: { id: 'fast_casual', food_cost_pct: 0.31, paper_pct: 0.025, headcount: 10, other_fixed: 7_200, seats_per_100sqft: 2.5, default_sqft: 1_800, base_turns: 3 },
   hot_pot: { id: 'casual_dining', food_cost_pct: 0.34, paper_pct: 0.015, headcount: 16, other_fixed: 9_500, seats_per_100sqft: 2.0, default_sqft: 3_000, base_turns: 1.6 },
   default: { id: 'asian_casual', food_cost_pct: 0.32, paper_pct: 0.02, headcount: 12, other_fixed: 7_800, seats_per_100sqft: 2.3, default_sqft: 2_200, base_turns: 2.0 },
+  // ---- §4.1 concept categories (used for every id without a legacy row above)
+  mala_tang: { id: 'fast_casual', food_cost_pct: 0.31, paper_pct: 0.03, headcount: 6, other_fixed: 5_200, seats_per_100sqft: 2.5, default_sqft: 1_200, base_turns: 4 },
+  roast: { id: 'qsr', food_cost_pct: 0.33, paper_pct: 0.03, headcount: 8, other_fixed: 5_600, seats_per_100sqft: 2.5, default_sqft: 1_200, base_turns: 4 },
+  bakery_dessert: { id: 'coffee_bakery', food_cost_pct: 0.3, paper_pct: 0.03, headcount: 4, other_fixed: 4_200, seats_per_100sqft: 1.5, default_sqft: 1_000, base_turns: 6 },
+  beverage: { id: 'bubble_tea', food_cost_pct: 0.28, paper_pct: 0.04, headcount: 3, other_fixed: 4_000, seats_per_100sqft: 1.5, default_sqft: 800, base_turns: 6 },
+  asian_other: { id: 'asian_casual', food_cost_pct: 0.32, paper_pct: 0.02, headcount: 10, other_fixed: 7_400, seats_per_100sqft: 2.3, default_sqft: 2_000, base_turns: 2.2 },
+  western_other: { id: 'casual_dining', food_cost_pct: 0.32, paper_pct: 0.02, headcount: 10, other_fixed: 7_600, seats_per_100sqft: 2.2, default_sqft: 2_200, base_turns: 2.2 },
+  mexican: { id: 'fast_casual', food_cost_pct: 0.3, paper_pct: 0.03, headcount: 8, other_fixed: 6_000, seats_per_100sqft: 2.5, default_sqft: 1_500, base_turns: 3.5 },
+  italian: { id: 'pizza', food_cost_pct: 0.3, paper_pct: 0.025, headcount: 10, other_fixed: 7_000, seats_per_100sqft: 2.2, default_sqft: 2_000, base_turns: 2.2 },
 };
 
 /** Wage tiers only — there is deliberately no rent $/sf here (rent is never estimated). */
@@ -78,8 +101,25 @@ const TIERS = {
 } as const;
 const HCOL_STATES = new Set(['CA', 'NY', 'WA', 'MA', 'HI', 'DC', 'NJ']);
 
-export function archetypeFor(cuisine: string): Archetype {
-  return ARCHETYPES[cuisine] ?? ARCHETYPES.default;
+/** Legacy default delivery share, used only for entries without `takeout_share`. */
+const LEGACY_DELIVERY_RATIO = 0.25;
+
+/**
+ * The archetype of a concept: cost structure by legacy id → category
+ * benchmarks, with headcount / ticket / delivery share / dayparts read from the
+ * taxonomy entry so an egg-tart shop runs on 4 FTE and a ~$10 ticket while hot
+ * pot runs on 10 FTE and $35 (评审 Spec §4.1).
+ */
+export function archetypeFor(cuisine: string | CuisineDef): Archetype {
+  const cu = typeof cuisine === 'string' ? cuisineById(cuisine) : cuisine;
+  const base = ARCHETYPES[cu.id] ?? ARCHETYPES[cu.category] ?? ARCHETYPES.default;
+  return {
+    ...base,
+    headcount: cu.fte_default ?? base.headcount,
+    ticket_in: cu.ticket_in,
+    delivery_ratio: cu.takeout_share ?? LEGACY_DELIVERY_RATIO,
+    daypart_profile: cu.daypart_profile ?? 'lunch_dinner',
+  };
 }
 
 function tierFor(income: number | null, state: string | null): keyof typeof TIERS {
@@ -120,7 +160,6 @@ export function scenarioRevenue(p: {
 
 export function computeFinance(input: FinanceInput): ReportModel['finance'] {
   const d = getDefaults().finance;
-  const cu = cuisineById(input.cuisine);
   const arch = archetypeFor(input.cuisine);
   const tier = tierFor(input.median_income, input.state);
   const inputs_missing: string[] = [];
@@ -131,12 +170,12 @@ export function computeFinance(input: FinanceInput): ReportModel['finance'] {
     seats = Math.round(((sqft ?? arch.default_sqft) / 100) * arch.seats_per_100sqft);
     inputs_missing.push(sqft ? 'seats(按面积估算)' : 'seats(按原型默认)');
   }
-  const ticket_in = input.ticket_in ?? cu.ticket_in;
+  const ticket_in = input.ticket_in ?? arch.ticket_in;
   if (input.ticket_in == null) inputs_missing.push('ticket_in(取菜系默认)');
   const ticket_delivery = input.ticket_delivery ?? Math.round(ticket_in * 1.15 * 100) / 100;
   if (input.ticket_delivery == null) inputs_missing.push('ticket_delivery(=堂食×1.15)');
-  const delivery_ratio = input.delivery_ratio ?? 0.25;
-  if (input.delivery_ratio == null) inputs_missing.push('delivery_ratio(默认 25%)');
+  const delivery_ratio = input.delivery_ratio ?? arch.delivery_ratio;
+  if (input.delivery_ratio == null) inputs_missing.push(arch.delivery_ratio === LEGACY_DELIVERY_RATIO ? 'delivery_ratio(默认 25%)' : `delivery_ratio(取业态默认 ${Math.round(arch.delivery_ratio * 100)}%)`);
 
   // Rent: the customer's figure or nothing. No comp / tier / sqft fallback — a rent the
   // customer never gave must not drive break-even, occupancy cost or the verdict.
@@ -168,7 +207,7 @@ export function computeFinance(input: FinanceInput): ReportModel['finance'] {
   const scenarios = [
     mk('pessimistic', Math.round(bt * 0.75 * 10) / 10, Math.max(0.05, delivery_ratio - 0.05), Math.round(ticket_in * 0.9 * 100) / 100, Math.round(ticket_delivery * 0.9 * 100) / 100),
     mk('base', bt, delivery_ratio, ticket_in, ticket_delivery),
-    mk('optimistic', Math.round(bt * 1.25 * 10) / 10, Math.min(0.6, delivery_ratio + 0.05), Math.round(ticket_in * 1.05 * 100) / 100, Math.round(ticket_delivery * 1.05 * 100) / 100),
+    mk('optimistic', Math.round(bt * 1.25 * 10) / 10, Math.min(0.9, delivery_ratio + 0.05), Math.round(ticket_in * 1.05 * 100) / 100, Math.round(ticket_delivery * 1.05 * 100) / 100),
   ];
   const base = scenarios[1];
 
@@ -191,7 +230,7 @@ export function computeFinance(input: FinanceInput): ReportModel['finance'] {
     rentRow,
     sens('turns_minus_05', '翻台 −0.5', 'Turns −0.5', scenarioRevenue({ ...base, turns_per_day: Math.max(0.5, bt - 0.5) }).monthly_revenue),
     sens('ticket_minus_125', '客单价 −12.5%', 'Ticket −12.5%', scenarioRevenue({ ...base, ticket_in: ticket_in * 0.875, ticket_delivery: ticket_delivery * 0.875 }).monthly_revenue),
-    sens('delivery_plus_15pt', '外卖占比 +15pt', 'Delivery +15 pt', scenarioRevenue({ ...base, delivery_ratio: Math.min(0.7, delivery_ratio + 0.15) }).monthly_revenue),
+    sens('delivery_plus_15pt', '外卖占比 +15pt', 'Delivery +15 pt', scenarioRevenue({ ...base, delivery_ratio: Math.min(0.9, delivery_ratio + 0.15) }).monthly_revenue),
   ];
 
   const occupancy_cost_ratio =

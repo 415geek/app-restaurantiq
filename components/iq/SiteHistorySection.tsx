@@ -53,7 +53,7 @@ const COPY: Record<
     closure: 'Closure signals',
     lessons: 'Lessons for the new operator',
     sources: (g, y, n, r) => `Sources: Google Places (${g}), Yelp Fusion (${y}) · ${n} reviews sampled · match radius ${r} m`,
-    themeExtraction: 'theme extraction',
+    themeExtraction: 'AI-extracted review themes',
   },
   zh: {
     none: (r) => `在该地址 ${r} 米范围内未检索到 Google / Yelp 商家记录（可能为新建物业、非餐饮用途或数据源未开通）。`,
@@ -63,7 +63,7 @@ const COPY: Record<
     closure: '关店 / 失败信号',
     lessons: '对新经营者的启示',
     sources: (g, y, n, r) => `数据来源：Google Places（${g}）、Yelp Fusion（${y}）· 采样评论 ${n} 条 · 匹配半径 ${r} m`,
-    themeExtraction: '主题提炼',
+    themeExtraction: 'AI 提炼评论主题',
   },
   es: {
     none: (r) => `No se encontró ningún registro de negocio en Google / Yelp a ${r} m de esta dirección (construcción nueva, uso no gastronómico o fuente de datos no activada).`,
@@ -73,7 +73,7 @@ const COPY: Record<
     closure: 'Señales de cierre',
     lessons: 'Lecciones para el nuevo operador',
     sources: (g, y, n, r) => `Fuentes: Google Places (${g}), Yelp Fusion (${y}) · ${n} reseñas muestreadas · radio de coincidencia ${r} m`,
-    themeExtraction: 'extracción de temas',
+    themeExtraction: 'Temas extraídos por IA',
   },
 };
 
@@ -163,7 +163,7 @@ export function SiteHistorySection({ pack, llm, lang }: Props) {
 
       <div className="text-[10px] text-zinc-500">
         {t.sources(pack.api_status.google, pack.api_status.yelp, pack.total_reviews_sampled, pack.match_radius_m)}
-        {a?.provider ? ` · ${t.themeExtraction}: ${a.provider}/${a.model ?? ''}` : ''}
+        {a ? ` · ${t.themeExtraction}` : ''}
       </div>
     </div>
   );

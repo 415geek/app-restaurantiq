@@ -72,6 +72,10 @@ export const defaultsSchema = z.object({
   data_budget: z.object({
     google_places_max_calls: z.number(),
     google_places_cost_usd_per_call: z.number(),
+    /** §4.2 walking distance: Distance Matrix calls per report (≤ 25 destinations each). */
+    distance_matrix_max_calls: z.number().default(4),
+    /** Booked per origin×destination element once GOOGLE_PLACES_BILLED=1 (Google list price $5 / 1000). */
+    distance_matrix_cost_usd_per_element: z.number().default(0.005),
     report_cost_cap_usd: z.number(),
     data_cost_cap_usd: z.number(),
   }),
@@ -85,15 +89,50 @@ export type Defaults = z.infer<typeof defaultsSchema>;
 export const rangeClassSchema = z.enum(['everyday', 'regular', 'destination']);
 export type RangeClass = z.infer<typeof rangeClassSchema>;
 
+/**
+ * Top-level concept categories (评审 Spec §4.1). Every taxonomy entry belongs to
+ * exactly one; the classifier never falls silently into a default bucket.
+ */
+export const conceptCategorySchema = z.enum(['chinese_regional', 'chinese_format', 'asian_other', 'bakery_dessert', 'beverage', 'western_other']);
+export type ConceptCategory = z.infer<typeof conceptCategorySchema>;
+export const CONCEPT_CATEGORIES = conceptCategorySchema.options;
+
+/** Which households the demand model draws from: Chinese-speaking households (中餐) or everyone (烘焙 / 饮品 / 西餐). */
+export const audienceSchema = z.enum(['chinese', 'general']);
+export type Audience = z.infer<typeof audienceSchema>;
+
+export const daypartProfileSchema = z.enum(['lunch_dinner', 'dinner', 'all_day', 'morning_afternoon']);
+export type DaypartProfile = z.infer<typeof daypartProfileSchema>;
+
 export const cuisineSchema = z.object({
   id: z.string(),
   label_zh: z.string(),
   label_en: z.string(),
+  label_es: z.string().optional(),
   range_class: rangeClassSchema,
   price_tier: z.enum(['$', '$$', '$$$', '$$$$']),
   ticket_in: z.number(),
   keywords: z.array(z.string()),
   mappings: z.array(z.string()),
+  // ---- §4.1 downstream parameters (by concept, never by sqft) ----
+  category: conceptCategorySchema.default('chinese_regional'),
+  audience: audienceSchema.default('chinese'),
+  /** Default full-time-equivalent headcount (e.g. 3–4 for an egg-tart bakery, 8–12 for hot pot). */
+  fte_default: z.number().optional(),
+  /** Share of orders that are takeout / delivery (0–1). */
+  takeout_share: z.number().min(0).max(1).optional(),
+  daypart_profile: daypartProfileSchema.optional(),
+  /** Google Places search profile for the three-layer competitor retrieval (§4.2). */
+  search: z
+    .object({
+      /** Layer-1 keywords (subtype words), e.g. ["egg tart", "pastel de nata", "蛋挞"]. */
+      keywords: z.array(z.string()),
+      /** Places `type` values, e.g. ["bakery", "cafe"]. */
+      types: z.array(z.string()),
+      /** Layer-2 substitute keywords (same category, other subtypes). */
+      substitutes: z.array(z.string()).default([]),
+    })
+    .optional(),
 });
 export type CuisineDef = z.infer<typeof cuisineSchema>;
 
@@ -106,6 +145,14 @@ export const taxonomySchema = z.object({
     other_types: z.array(z.string()),
     bank_types: z.array(z.string()),
     bank_names: z.array(z.string()),
+    /**
+     * §4.2 L4 anchors for `audience: general` concepts (bakery / beverage / western):
+     * everyday footfall generators instead of Chinese grocers and banks. Places (New)
+     * Table A types; default lives here so the YAML need not carry the key.
+     */
+    general_types: z
+      .array(z.string())
+      .default(['supermarket', 'grocery_store', 'school', 'university', 'transit_station', 'subway_station', 'train_station', 'corporate_office']),
   }),
 });
 export type Taxonomy = z.infer<typeof taxonomySchema>;
@@ -155,30 +202,67 @@ export function cuisineById(id: string): CuisineDef {
   return t.cuisines.find((c) => c.id === id) ?? t.cuisines.find((c) => c.id === 'other_chinese')!;
 }
 
+/** Exact lookup: `null` when the id is not a taxonomy entry (cuisineById falls back to other_chinese). */
+export function findCuisine(id: string | null | undefined): CuisineDef | null {
+  if (!id) return null;
+  return getTaxonomy().cuisines.find((c) => c.id === id) ?? null;
+}
+
+export const CHINESE_CATEGORIES: readonly ConceptCategory[] = ['chinese_regional', 'chinese_format'];
+
+export function isChineseCategory(category: ConceptCategory): boolean {
+  return (CHINESE_CATEGORIES as readonly string[]).includes(category);
+}
+
+export function cuisinesInCategory(category: ConceptCategory): CuisineDef[] {
+  return getTaxonomy().cuisines.filter((c) => c.category === category);
+}
+
+export type ClassifyScope = 'chinese' | 'all';
+
 /**
  * Map free text (user input like "湘菜 Hunan restaurant", or a POI name /
- * category) to a taxonomy id. Rule layer of the Phase 3 classifier; also used
- * to normalize the user's cuisine field. Returns `other_chinese` when nothing
- * matches so callers always get a valid id.
+ * category) to a taxonomy id.
+ *
+ *   scope 'chinese' (default) — the two Chinese categories only: the POI
+ *     sub-cuisine keyword layer of engines/competitor.ts (§3.3), where a name
+ *     hit assigns a Chinese sub-cuisine and non-Chinese places are typed by
+ *     their `mappings` / the §4.2 search profile instead (a "Bakery" in the
+ *     name must not pin a bakery to one bakery subtype).
+ *   scope 'all' — every category: the concept classifier (§4.1 step 1,
+ *     lib/iq/concept) and engines/cuisine-share.ts#conceptOfPoi.
+ *
+ * Returns `other_chinese` with `matched: null` when nothing matches so callers
+ * always get a valid id — the concept classifier treats that as "unresolved".
+ *
+ * Longest keyword first ("Hot Pot" beats "Pot", "麻辣烫" beats "麻辣"); among
+ * equal-length hits the one appearing earliest in the text wins, then the
+ * taxonomy order ("葡挞、甜点" → egg_tart, not dessert).
  */
-export function classifyCuisineText(text: string): { id: string; matched: string | null } {
+export function classifyCuisineText(text: string, opts: { scope?: ClassifyScope } = {}): { id: string; matched: string | null } {
   const t = getTaxonomy();
+  const scope = opts.scope ?? 'chinese';
   const hay = text.toLowerCase();
-  // Longest keyword first so "Hot Pot" beats "Pot", "麻辣烫" beats "麻辣".
-  const candidates: Array<{ id: string; kw: string }> = [];
+  const hasCjk = /[一-鿿]/.test(hay);
+  let best: { id: string; kw: string; len: number; at: number; order: number } | null = null;
+  let order = 0;
   for (const c of t.cuisines) {
-    for (const kw of [...c.keywords, ...c.mappings]) candidates.push({ id: c.id, kw });
-  }
-  candidates.sort((a, b) => b.kw.length - a.kw.length);
-  for (const { id, kw } of candidates) {
-    const k = kw.toLowerCase();
-    if (!k) continue;
-    // Single CJK char keywords (川/湘/粤/台) are too ambiguous inside Latin text; require CJK context.
-    if (k.length === 1) {
-      if (hay.includes(k) && /[一-鿿]/.test(hay)) return { id, matched: kw };
-      continue;
+    if (scope === 'chinese' && !isChineseCategory(c.category)) continue;
+    for (const kw of [...c.keywords, ...c.mappings]) {
+      order++;
+      const k = kw.toLowerCase();
+      if (!k) continue;
+      // Single CJK char keywords (川/湘/粤/台) are too ambiguous inside Latin text; require CJK context.
+      if (k.length === 1 && !hasCjk) continue;
+      const at = hay.indexOf(k);
+      if (at < 0) continue;
+      if (!best || k.length > best.len || (k.length === best.len && at < best.at)) best = { id: c.id, kw, len: k.length, at, order };
     }
-    if (hay.includes(k)) return { id, matched: kw };
   }
-  return { id: 'other_chinese', matched: null };
+  return best ? { id: best.id, matched: best.kw } : { id: 'other_chinese', matched: null };
+}
+
+/** Label in the report language (`label_es` falls back to English). */
+export function cuisineLabel(c: Pick<CuisineDef, 'label_zh' | 'label_en' | 'label_es'>, lang: 'en' | 'zh' | 'es'): string {
+  return lang === 'zh' ? c.label_zh : lang === 'es' ? (c.label_es ?? c.label_en) : c.label_en;
 }

@@ -159,7 +159,13 @@ export function computeSiteMetrics(input: {
   const sample = Array.isArray(summary.sample_competitors_google)
     ? (summary.sample_competitors_google as Array<Record<string, unknown>>)
     : [];
+  // §4.2: brand anchors (city-wide benchmarks) are never competition; Layer 1 (direct) ranks first,
+  // then substitutes, then untagged / supplementary rows — attractiveness orders within a layer.
+  const layerOf = (r: Record<string, unknown>): string | null => (typeof r.layer === 'string' ? r.layer : null);
+  const LAYER_RANK: Record<string, number> = { direct: 0, substitute: 1 };
+  const rank = (layer: string | null) => (layer && layer in LAYER_RANK ? LAYER_RANK[layer] : 2);
   const competitors: ScoredCompetitor[] = sample
+    .filter((r) => layerOf(r) !== 'brand_anchor')
     .map((r) => {
       const rating = num(r.rating);
       const reviews = num(r.reviews);
@@ -170,13 +176,15 @@ export function computeSiteMetrics(input: {
         price_level: num(r.price_level),
         address: typeof r.address === 'string' ? r.address : null,
         attractiveness: attractiveness(rating, reviews),
+        layer: layerOf(r),
+        walk_min: num(r.walk_min),
       };
     })
-    .sort((a, b) => (b.attractiveness ?? 0) - (a.attractiveness ?? 0));
+    .sort((a, b) => rank(a.layer ?? null) - rank(b.layer ?? null) || (b.attractiveness ?? 0) - (a.attractiveness ?? 0));
 
   const competitorCount = num(summary.competitor_count_google) ?? competitors.length;
   const hasCompetition = competitorCount > 0 || competitors.length > 0;
-  if (hasCompetition) sources.push('Google Places textsearch sample');
+  if (hasCompetition) sources.push(competitors.some((c) => c.layer) ? 'Google Places three-layer competitor search (§4.2)' : 'Google Places textsearch sample');
   else gaps.push('No competitor sample from Google Places — competition metrics unavailable.');
 
   const priceTiers: Record<string, number> = {};

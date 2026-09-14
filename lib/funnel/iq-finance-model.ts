@@ -20,6 +20,8 @@
  */
 import { type Locale, pick } from '@/lib/i18n/locale';
 import type { CommercialListingsResult } from '@/lib/funnel/external-data/commercial-listings';
+import { classifyConceptSync } from '@/lib/iq/concept/classify';
+import { cuisineById, type ConceptCategory } from '@/lib/iq/params';
 
 export interface FinanceModelInputs {
   marketData: Record<string, unknown> | null | undefined;
@@ -252,7 +254,34 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
   },
 };
 
-function detectArchetype(businessType: string | null | undefined): {
+/** §4.1 concept category → cost archetype (subtype exceptions handled in detectArchetype). */
+const CATEGORY_ARCHETYPE: Record<ConceptCategory, CuisineArchetypeId> = {
+  chinese_regional: 'asian_casual',
+  chinese_format: 'asian_casual',
+  asian_other: 'asian_casual',
+  bakery_dessert: 'coffee_bakery',
+  beverage: 'bubble_tea',
+  western_other: 'casual_dining',
+};
+const SUBTYPE_ARCHETYPE: Record<string, CuisineArchetypeId> = {
+  hot_pot: 'casual_dining',
+  skewers: 'casual_dining',
+  chinese_fast: 'qsr',
+  mala_tang: 'fast_casual',
+  roast: 'qsr',
+  noodles: 'fast_casual',
+  hk_cafe: 'fast_casual',
+  italian: 'pizza',
+  mexican: 'fast_casual',
+  middle_eastern: 'fast_casual',
+};
+
+/**
+ * Tier 1/2 archetype: the §4.1 concept classifier first (category → archetype,
+ * headcount and ticket from the taxonomy entry), the keyword regex list only
+ * when the dictionary cannot place the text, fast_casual last.
+ */
+export function detectArchetype(businessType: string | null | undefined): {
   archetype: CuisineArchetype;
   reason_en: string;
   reason_zh: string;
@@ -263,6 +292,22 @@ function detectArchetype(businessType: string | null | undefined): {
       archetype: ARCHETYPES.fast_casual,
       reason_en: 'No cuisine specified → defaulted to fast_casual benchmarks.',
       reason_zh: '未指定业态 → 默认采用快休闲餐饮基准。',
+    };
+  }
+  const concept = classifyConceptSync(businessType ?? '');
+  if (!concept.needs_confirmation) {
+    const entry = cuisineById(concept.id);
+    const id = SUBTYPE_ARCHETYPE[concept.id] ?? CATEGORY_ARCHETYPE[concept.category];
+    const base = ARCHETYPES[id];
+    const archetype: CuisineArchetype = {
+      ...base,
+      headcount: entry.fte_default ?? base.headcount,
+      avg_ticket_usd: entry.ticket_in,
+    };
+    return {
+      archetype,
+      reason_en: `Concept "${concept.label_en}" (${concept.category}, matched "${concept.matched}") → ${id} archetype; ${archetype.headcount} FTE and $${archetype.avg_ticket_usd} ticket from the concept taxonomy.`,
+      reason_zh: `业态「${concept.label_zh}」（${concept.category}，匹配「${concept.matched}」）→ ${id} 模型；人手 ${archetype.headcount} 人、客单价 $${archetype.avg_ticket_usd} 取自业态分类表。`,
     };
   }
   const matchers: Array<{ test: RegExp; id: CuisineArchetypeId; reason_en: string; reason_zh: string }> = [

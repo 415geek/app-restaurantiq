@@ -25,6 +25,9 @@ import { fetchCaltransTrafficByLocation, type CaltransAADTResult } from '@/lib/f
 import { fetchCommercialListings, type CommercialListingsResult } from '@/lib/funnel/external-data/commercial-listings';
 import { conductMarketResearch, type MarketResearchResult } from '@/lib/funnel/external-data/brightdata';
 
+/** Sub-steps reported through `onStep` (map onto the §4.6 checklist). */
+export type MarketResolveStep = 'places' | 'acs' | 'finance';
+
 function num(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -101,6 +104,12 @@ export async function resolveMarketDataForIqReport(input: {
    * (DeepSeek insights, BrightData, new Tavily jobs) to stay under serverless time limits.
    */
   leanResolve?: boolean;
+  /**
+   * Progress hook for the background job's stage checklist (评审 Spec §4.6):
+   * called when the competitor pull (Places/Yelp), the Census ACS pull and the
+   * finance model start and finish. Errors thrown by the hook are ignored.
+   */
+  onStep?: (step: MarketResolveStep, phase: 'start' | 'done') => void | Promise<void>;
 }): Promise<Record<string, unknown> | null> {
   const {
     location,
@@ -110,11 +119,20 @@ export async function resolveMarketDataForIqReport(input: {
     skipDeepResearchFetch = false,
     leanResolve = false,
   } = input;
+  const step = async (s: MarketResolveStep, phase: 'start' | 'done') => {
+    if (!input.onStep) return;
+    try {
+      await input.onStep(s, phase);
+    } catch {
+      /* progress reporting must never break enrichment */
+    }
+  };
   let base: Record<string, unknown> =
     input.existing && typeof input.existing === 'object' && !Array.isArray(input.existing)
       ? { ...input.existing }
       : {};
 
+  await step('places', 'start');
   if (needsGooglePlacesEnrichment(base)) {
     const google = await gatherIqMarketDataFromGoogle({
       location,
@@ -124,8 +142,11 @@ export async function resolveMarketDataForIqReport(input: {
       base = Object.keys(base).length === 0 ? { ...google } : mergeGoogleOntoExisting(base, google);
     }
   }
+  await step('places', 'done');
 
+  await step('acs', 'start');
   base = await enrichMarketDataWithAcs(base);
+  await step('acs', 'done');
 
   // Businesses at the exact address + their reviews (Google/Yelp). Cheap (a
   // handful of cached calls) and highly predictive, so it runs for every paid
@@ -262,6 +283,7 @@ export async function resolveMarketDataForIqReport(input: {
   // D-4: deterministic break-even / safe-revenue model. Cheap (no API), runs for
   // every report so /api/funnel/full-report can use it without recomputing. Free
   // tier ignores it; paid prompt + applyFinanceModelOverride pick it up later.
+  await step('finance', 'start');
   try {
     const finance_model = computeFinanceModel({
       marketData: base,
@@ -272,6 +294,7 @@ export async function resolveMarketDataForIqReport(input: {
   } catch (err) {
     console.warn('[resolve-market-data] finance_model compute failed (non-fatal)', err);
   }
+  await step('finance', 'done');
 
   if (!base || Object.keys(base).length === 0) return null;
   return base;

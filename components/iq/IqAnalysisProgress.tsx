@@ -4,10 +4,13 @@ import type { ReactNode } from 'react';
 
 import { useEffect, useMemo, useState } from 'react';
 import type { Locale } from '@/lib/i18n/locale';
+import { UI_STAGE_IDS, type UiStage, type UiStageId } from '@/lib/funnel/iq-generation-stages';
 
 export type AnalysisProgressStage = {
   id: string;
   label: string;
+  /** Live state from the server (评审 Spec §4.6); when present it wins over the percent-derived guess. */
+  state?: 'done' | 'active' | 'pending';
 };
 
 type PhaseTarget = { atSec: number; pct: number };
@@ -16,7 +19,7 @@ function easeOutCubic(t: number): number {
   return 1 - (1 - t) ** 3;
 }
 
-/** Map elapsed seconds to a smooth 0–maxPct curve using phase keyframes. */
+/** Map elapsed seconds to a smooth 0–maxPct curve using phase keyframes (legacy synchronous path only). */
 export function progressFromElapsed(
   elapsedSec: number,
   phases: PhaseTarget[],
@@ -82,30 +85,28 @@ const FREE_ANALYZE_PHASES: PhaseTarget[] = [
   { atSec: 28, pct: 85 },
 ];
 
-const FULL_STAGE_LABELS: Record<Locale, Record<string, string>> = {
+/** The five real stages of the paid job (order = execution order: competitors are pulled before Census). */
+const FULL_STAGE_LABELS: Record<Locale, Record<UiStageId, string>> = {
   en: {
-    market: 'Gathering competition and foot-traffic signals',
-    research: 'Deepening the market analysis',
-    finance: 'Modeling costs and revenue scenarios',
-    llm: 'Drafting your full site report',
-    verify: 'Reviewing the key conclusions',
-    finalize: 'Assembling the final report',
+    competitors: 'Pulling nearby competitors (Google Places · Yelp)',
+    demographics: 'Pulling population and income (U.S. Census ACS)',
+    finance: 'Computing the break-even model',
+    write: 'Writing and reviewing the report',
+    layout: 'Laying out the pages',
   },
   zh: {
-    market: '采集周边竞争与客流数据',
-    research: '深化区域市场研究',
-    finance: '核算成本与营收情景',
-    llm: '撰写完整选址报告',
-    verify: '复核关键决策结论',
-    finalize: '汇总报告内容',
+    competitors: '竞品检索（Google Places · Yelp）',
+    demographics: '拉取人口与收入（美国人口普查 ACS）',
+    finance: '财务模型（保本线）',
+    write: '撰写并复核报告',
+    layout: '排版',
   },
   es: {
-    market: 'Recopilando señales de competencia y tráfico peatonal',
-    research: 'Profundizando el análisis de mercado',
-    finance: 'Modelando costos y escenarios de ingresos',
-    llm: 'Redactando tu informe completo de ubicación',
-    verify: 'Revisando las conclusiones clave',
-    finalize: 'Armando el informe final',
+    competitors: 'Buscando competidores cercanos (Google Places · Yelp)',
+    demographics: 'Obteniendo población e ingresos (Censo de EE. UU., ACS)',
+    finance: 'Calculando el modelo de punto de equilibrio',
+    write: 'Redactando y revisando el informe',
+    layout: 'Maquetando las páginas',
   },
 };
 
@@ -121,9 +122,21 @@ const BAR_COPY: Record<Locale, { progress: string; elapsed: (sec: number) => str
   es: { progress: 'Progreso del análisis', elapsed: (s) => `${s} s transcurridos` },
 };
 
-export function getFullReportStages(lang: Locale): AnalysisProgressStage[] {
+/**
+ * Five-row checklist for the paid report. With the server's live `stages`
+ * the rows carry their real state; without it (legacy synchronous path) they
+ * are the static list and the bar derives the active row from the percent.
+ */
+export function getFullReportStages(lang: Locale, serverStages?: UiStage[] | null): AnalysisProgressStage[] {
   const l = FULL_STAGE_LABELS[lang];
-  return ['market', 'research', 'finance', 'llm', 'verify', 'finalize'].map((id) => ({ id, label: l[id] }));
+  if (serverStages && serverStages.length > 0) {
+    return serverStages.map((s) => ({
+      id: s.id,
+      label: l[(s.label_key as UiStageId) in l ? (s.label_key as UiStageId) : s.id] ?? s.id,
+      state: s.state,
+    }));
+  }
+  return UI_STAGE_IDS.map((id) => ({ id, label: l[id] }));
 }
 
 export function getFreeAnalyzeStages(lang: Locale): AnalysisProgressStage[] {
@@ -146,7 +159,7 @@ type BarProps = {
   lang: Locale;
   title?: string;
   subtitle?: string;
-  /** Server-reported checklist row; overrides the percent-derived guess. */
+  /** Server-reported checklist row; overrides the percent-derived guess (ignored when rows carry `state`). */
   activeIndex?: number;
   /** Replaces the plain elapsed label under the bar (e.g. live "what we are doing" ticker + ETA). */
   statusLine?: ReactNode;
@@ -163,6 +176,7 @@ export function IqAnalysisProgressBar({
   statusLine,
 }: BarProps) {
   const pct = Math.round(Math.min(100, Math.max(0, percent)));
+  const hasLiveStates = stages.some((s) => s.state);
   const activeIdx =
     typeof activeIndex === 'number' && pct < 100
       ? Math.min(stages.length - 1, Math.max(0, activeIndex))
@@ -200,13 +214,17 @@ export function IqAnalysisProgressBar({
         {statusLine ? <div className="mt-2.5">{statusLine}</div> : elapsedLabel ? <p className="mt-2 text-xs text-zinc-600">{elapsedLabel}</p> : null}
       </div>
 
-      <ul className="mt-6 space-y-2.5">
+      <ul className="mt-6 space-y-2.5" data-testid="stage-list">
         {stages.map((stage, i) => {
-          const done = i < activeIdx || (i === activeIdx && pct >= 100);
-          const current = i === activeIdx && pct < 100;
+          const done = hasLiveStates
+            ? stage.state === 'done' || pct >= 100
+            : i < activeIdx || (i === activeIdx && pct >= 100);
+          const current = hasLiveStates ? stage.state === 'active' && pct < 100 : i === activeIdx && pct < 100;
           return (
             <li
               key={stage.id}
+              data-stage={stage.id}
+              data-state={done ? 'done' : current ? 'active' : 'pending'}
               className={`flex items-start gap-2.5 text-sm transition-opacity duration-500 ${
                 done || current ? 'opacity-100' : 'opacity-35'
               }`}

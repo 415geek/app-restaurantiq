@@ -46,7 +46,7 @@ function stubFetchers(seen: GooglePlacesInput[]): Partial<Fetchers> {
     overture: down('D5') as Fetchers['overture'],
     google: async (i, c) => {
       seen.push(i);
-      return ok('D6', { places: [], calls_made: 0, api_status: 'ok' as const, calls: [] }, c);
+      return ok('D6', { places: [], calls_made: 0, api_status: 'ok' as const, calls: [], l1_search_radius_m: null, l1_layers_tried: [] }, c);
     },
     traffic: down('D7') as Fetchers['traffic'],
     rent: down('D8') as Fetchers['rent'],
@@ -66,8 +66,8 @@ test('D6 request: known competitors append ≤ 3 Text Searches and raise the cap
   assert.equal(two.maxCalls, CAP + 2);
   assert.equal(two.plan!.length, CAP + 2);
   assert.deepEqual(two.plan!.slice(0, CAP), buildCallPlan('sichuan'));
-  assert.deepEqual(two.plan![CAP], { includedTypes: ['restaurant'], radiusM: 8047, label: 'text:user:Hunan Home Kitchen', textQuery: 'Hunan Home Kitchen' });
-  assert.deepEqual(two.plan![CAP + 1], { includedTypes: ['restaurant'], radiusM: 8047, label: 'text:user:湘水缘', textQuery: '湘水缘' });
+  assert.deepEqual(two.plan![CAP], { includedTypes: ['restaurant'], radiusM: 8047, label: 'text:user:Hunan Home Kitchen', textQuery: 'Hunan Home Kitchen', layer: 'user' });
+  assert.deepEqual(two.plan![CAP + 1], { includedTypes: ['restaurant'], radiusM: 8047, label: 'text:user:湘水缘', textQuery: '湘水缘', layer: 'user' });
 
   const five = buildGooglePlacesRequest({ cuisine: 'hunan', known_competitors: ['a', 'b', 'c', 'd', 'e'] }, 1, 2);
   assert.equal(KNOWN_COMPETITOR_MAX_CALLS, 3);

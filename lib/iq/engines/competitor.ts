@@ -1,19 +1,29 @@
 /**
- * CompetitorEngine (研发提示词 Phase 3).
+ * CompetitorEngine (研发提示词 Phase 3 · 评审 Spec §4.2).
  *
  * 3.1 candidate pool = Overture (open) ∪ Google, range max(3 mi, drive15)
  * 3.2 dedupe: normalized name + ≤100 m + same broad type → merge (keep both ids)
  * 3.3 classifier: rule (category mappings) → keyword (name) → LLM (injected, only for leftovers)
- * 3.4 layers L1 direct / L2 adjacent Chinese / L3 occasion substitutes / L4 traffic anchors
+ * 3.4 layers (§4.2, concept-agnostic):
+ *     L1 直接竞品   same taxonomy id, or a Layer-1 query hit whose name / types match the concept profile
+ *     L2 替代竞品   same category, other subtype (for Chinese regional this is still "other Chinese")
+ *     L3            occasion substitutes (walk10, price ±1)
+ *     L4            traffic anchors — Chinese grocers / banks for `audience: chinese`, general anchors otherwise
+ *     品牌锚点      city-wide brands (≥ 500 reviews, top 5) — reported, never counted
  * 3.5 metrics, 3.6 U-shaped cluster score, 3.7 void analysis, 3.9 data-integrity guard
+ *     (a Layer-1 void may only be claimed after both keyword radii, 800 m and 1600 m, were searched)
  *
  * Pure: no I/O. The LLM classifier is an injected async function so the engine
  * stays deterministic in tests.
  */
 import { haversineM, METERS_PER_MILE, pointInGeometry } from '../geo';
 import type { Geometry, LatLng } from '../data/types';
-import type { Competitor, Ring } from '../model/schema';
+import { conceptSearchProfile, isChineseCategory, matchesLayer1, typesMatch, type ConceptSearchProfile } from '../data/search-profile';
+import type { BrandAnchor, Competitor, Ring } from '../model/schema';
 import { classifyCuisineText, cuisineById, getDefaults, getTaxonomy } from '../params';
+
+/** §4.2 layer of the Places query that returned a Google record. */
+export type CandidateLayer = 'direct' | 'substitute' | 'brand_anchor' | 'l3' | 'l4' | 'user';
 
 export interface CandidatePoi {
   id: string;
@@ -37,6 +47,8 @@ export interface CandidatePoi {
   sub_cuisine?: string | null;
   sub_cuisine_confidence?: number | null;
   sub_cuisine_method?: 'rule' | 'keyword' | 'llm' | null;
+  /** Google records: which §4.2 plan steps returned them. */
+  layers?: CandidateLayer[];
 }
 
 export interface MergedPoi extends CandidatePoi {
@@ -46,6 +58,7 @@ export interface MergedPoi extends CandidatePoi {
   is_food: boolean;
   classified_by: 'rule' | 'keyword' | 'llm' | 'unclassified';
   distance_m: number;
+  layers: CandidateLayer[];
 }
 
 export type LlmClassifier = (
@@ -67,6 +80,12 @@ export interface CompetitorEngineInput {
   ticket_in: number;
   /** Google price-level of the user's target ticket (1..4). */
   target_price_level: number;
+  /**
+   * §4.2 Layer-1 keyword search that produced the Google candidates (D6). Enables
+   * the query-hit path of the L1 rule and the void guard; omit for alternative
+   * cuisines, whose candidates were not searched for.
+   */
+  l1_query?: { layers_tried: string[]; radius_m: number | null } | null;
 }
 
 export interface CompetitorEngineResult {
@@ -99,16 +118,29 @@ export interface CompetitorEngineResult {
   /** Set by the pipeline: candidate pool radius and the nearest same-cuisine restaurant beyond it. */
   pool_radius_mi?: number;
   l1_nearest_outside_pool?: { name: string; distance_mi: number } | null;
+  /** §4.2: Layer-1 keyword radii searched (from D6); a void needs both 800 and 1600 m. */
+  l1_search_radius_m: number | null;
+  l1_layers_tried: string[];
+  /** §4.2 Layer 3 brand anchors — set by the pipeline from the unfiltered pool (they may sit beyond the 5-mi pool). */
+  brand_anchors?: BrandAnchor[];
   unclassified: Array<{ id: string; name: string; categories: string[] }>;
   chain_names: string[];
 }
 
-const CHINESE_IDS = new Set(getTaxonomy().cuisines.map((c) => c.id));
+/** Every taxonomy id (Chinese or not) — a classified sub-cuisine must be one of these. */
+const TAXONOMY_IDS = new Set(getTaxonomy().cuisines.map((c) => c.id));
 
-const FOOD_CATEGORY_RE = /restaurant|cafe|coffee|bakery|dessert|tea|boba|food|noodle|dim_sum|hot_pot|bbq|barbecue|takeout|meal|eatery|diner|bistro|pizza|sandwich|sushi|ramen/i;
+/** True when the taxonomy entry is a Chinese concept (category chinese_regional / chinese_format). */
+export function isChineseCuisineId(id: string | null | undefined): boolean {
+  if (!id) return false;
+  const c = getTaxonomy().cuisines.find((x) => x.id === id);
+  return c ? isChineseCategory(c.category) : false;
+}
+
+const FOOD_CATEGORY_RE = /restaurant|cafe|coffee|bakery|dessert|tea|boba|food|noodle|dim_sum|hot_pot|bbq|barbecue|takeout|meal|eatery|diner|bistro|pizza|sandwich|sushi|ramen|ice_cream|juice|donut|bagel|deli|pastry|patisserie/i;
 const CHINESE_CATEGORY_RE = /chinese|cantonese|szechuan|sichuan|hunan|shanghai|taiwan|dim_sum|hot_pot|hotpot|noodle_house|bubble_tea|boba/i;
 const NON_CHINESE_FOOD_RE = /japanese|korean|vietnamese|thai|indian|mexican|italian|american|french|mediterranean|pizza|burger|sandwich|sushi|ramen|pho|fast_food|hamburger|steak|seafood_restaurant|breakfast|brunch|bar_and_grill/i;
-const CHAIN_RE = /panda express|p\.?f\.? chang|pei wei|din tai fung|haidilao|hai di lao|boiling point|xiao long kan|little sheep|happy lamb|85°c|85c|sharetea|gong cha|kung fu tea|tpumps|boba guys|t4|yifang|tiger sugar|chatime|coco fresh|hey tea|meet fresh|mr\. ?wish|joy luck|ranch 99|99 ranch/i;
+const CHAIN_RE = /panda express|p\.?f\.? chang|pei wei|din tai fung|haidilao|hai di lao|boiling point|xiao long kan|little sheep|happy lamb|85°c|85c|sharetea|gong cha|kung fu tea|tpumps|boba guys|t4|yifang|tiger sugar|chatime|coco fresh|hey tea|meet fresh|mr\. ?wish|joy luck|ranch 99|99 ranch|starbucks|peet'?s|philz|blue bottle|dunkin|krispy kreme|paris baguette|tous les jours|85 degrees/i;
 
 export function normalizeName(name: string): string {
   return name
@@ -132,18 +164,18 @@ export function classifyCandidate(c: CandidatePoi): { sub_cuisine: string | null
   const cats = [c.primary_category ?? '', ...c.categories].filter(Boolean).map((x) => x.toLowerCase());
   const catStr = cats.join(' ');
   const is_food = FOOD_CATEGORY_RE.test(catStr) || /[餐饭菜馆茶饮面粥粉]/.test(c.name);
-  if (c.sub_cuisine && CHINESE_IDS.has(c.sub_cuisine)) {
-    return { sub_cuisine: c.sub_cuisine, method: c.sub_cuisine_method === 'keyword' ? 'keyword' : 'rule', is_chinese: true, is_food: true };
+  if (c.sub_cuisine && TAXONOMY_IDS.has(c.sub_cuisine)) {
+    return { sub_cuisine: c.sub_cuisine, method: c.sub_cuisine_method === 'keyword' ? 'keyword' : 'rule', is_chinese: isChineseCuisineId(c.sub_cuisine), is_food: true };
   }
   const t = getTaxonomy();
   // Rule: explicit category mapping.
   for (const cu of t.cuisines) {
     if (cu.id === 'other_chinese') continue;
-    if (cu.mappings.some((m) => cats.includes(m.toLowerCase()))) return { sub_cuisine: cu.id, method: 'rule', is_chinese: true, is_food: true };
+    if (cu.mappings.some((m) => cats.includes(m.toLowerCase()))) return { sub_cuisine: cu.id, method: 'rule', is_chinese: isChineseCategory(cu.category), is_food: true };
   }
   // Keyword: name (CJK + Latin).
   const kw = classifyCuisineText(`${c.name} ${c.name_zh ?? ''}`);
-  if (kw.matched) return { sub_cuisine: kw.id, method: 'keyword', is_chinese: true, is_food: true };
+  if (kw.matched) return { sub_cuisine: kw.id, method: 'keyword', is_chinese: isChineseCuisineId(kw.id), is_food: true };
   // Category says Chinese but no finer keyword → other_chinese via rule.
   if (CHINESE_CATEGORY_RE.test(catStr)) return { sub_cuisine: 'other_chinese', method: 'rule', is_chinese: true, is_food: true };
   if (NON_CHINESE_FOOD_RE.test(catStr)) return { sub_cuisine: null, method: 'rule', is_chinese: false, is_food: true };
@@ -184,6 +216,7 @@ export function dedupeCandidates(site: LatLng, candidates: CandidatePoi[]): Merg
       if (c.source === 'google') existing.ids.google = c.id;
       else existing.ids.overture = c.id;
       if (!existing.sources.includes(c.source)) existing.sources.push(c.source);
+      for (const l of c.layers ?? []) if (!existing.layers.includes(l)) existing.layers.push(l);
       // Google carries the fresher quality/status signal; Overture the taxonomy.
       if (c.source === 'google') {
         existing.rating = c.rating ?? existing.rating;
@@ -195,7 +228,7 @@ export function dedupeCandidates(site: LatLng, candidates: CandidatePoi[]): Merg
       if (!existing.sub_cuisine && cls.sub_cuisine) {
         existing.sub_cuisine = cls.sub_cuisine;
         existing.classified_by = cls.method ?? 'rule';
-        existing.is_chinese = true;
+        existing.is_chinese = isChineseCuisineId(cls.sub_cuisine);
       }
       // Keep both scripts: Latin name as `name`, Chinese as `name_zh` (renderers show 中文 first).
       if (isCjk(existing.name) && !isCjk(c.name)) {
@@ -216,6 +249,7 @@ export function dedupeCandidates(site: LatLng, candidates: CandidatePoi[]): Merg
       is_food: cls.is_food,
       classified_by: cls.method ?? 'unclassified',
       distance_m: haversineM(site, c),
+      layers: [...(c.layers ?? [])],
     });
   }
   return merged;
@@ -230,7 +264,7 @@ export function applyLlmClassifications(
   for (const m of merged) {
     const d = byId.get(m.id);
     if (!d || m.sub_cuisine) continue;
-    if (d.confidence < 0.6 || !CHINESE_IDS.has(d.sub_cuisine)) {
+    if (d.confidence < 0.6 || !TAXONOMY_IDS.has(d.sub_cuisine)) {
       if (m.is_chinese) {
         m.sub_cuisine = 'other_chinese';
         m.classified_by = 'llm';
@@ -240,11 +274,101 @@ export function applyLlmClassifications(
     m.sub_cuisine = d.sub_cuisine;
     m.sub_cuisine_confidence = d.confidence;
     m.classified_by = 'llm';
-    m.is_chinese = true;
+    m.is_chinese = isChineseCuisineId(d.sub_cuisine);
   }
 }
 
-function toCompetitor(m: MergedPoi, layer: Competitor['layer'], traffic: CompetitorEngineInput['traffic']): Competitor {
+/** A specific classification (not the generic other_chinese bucket) that the query-hit path must not override. */
+function specificSubCuisine(m: Pick<MergedPoi, 'sub_cuisine' | 'classified_by'>): string | null {
+  if (!m.sub_cuisine) return null;
+  if (m.sub_cuisine === 'other_chinese' && m.classified_by !== 'llm') return null;
+  return m.sub_cuisine;
+}
+
+/**
+ * §4.2 Layer-1 rule: same taxonomy id, or a Layer-1 query hit whose name carries a
+ * Layer-1 keyword / whose types carry a non-generic concept type — and no
+ * specific classification to a *different* subtype.
+ */
+export function isLayer1(m: Pick<MergedPoi, 'name' | 'name_zh' | 'categories' | 'primary_category' | 'sub_cuisine' | 'classified_by' | 'layers'>, profile: ConceptSearchProfile, queryHitsEnabled: boolean): boolean {
+  const specific = specificSubCuisine(m);
+  if (specific === profile.id) return true;
+  // A name (keyword) or LLM classification to another subtype is a veto ("Good Luck Dim Sum" is not an egg-tart shop).
+  // A category-mapping rule is not: a `bakery`-typed record maps to the sibling `bakery` id, which says nothing
+  // about whether the Layer-1 keyword query that returned it was right — the profile match below decides.
+  if (specific && specific !== profile.id && m.classified_by !== 'rule') return false;
+  if (!queryHitsEnabled || !m.layers.includes('direct')) return false;
+  return matchesLayer1(`${m.name} ${m.name_zh ?? ''}`, [m.primary_category, ...m.categories], profile);
+}
+
+/**
+ * Promote Layer-1 query hits that match the concept profile to the concept's own
+ * sub-cuisine (so cuisine share, Huff and the cards all see one classification).
+ * Idempotent; specific classifications to other subtypes are never overridden.
+ */
+export function promoteDirectLayerHits(merged: MergedPoi[], conceptId: string): number {
+  const profile = conceptSearchProfile(conceptId);
+  let n = 0;
+  for (const m of merged) {
+    if (!m.is_food || isClosed(m.operating_status)) continue;
+    if (specificSubCuisine(m) === conceptId) continue;
+    if (!isLayer1(m, profile, true)) continue;
+    m.sub_cuisine = conceptId;
+    m.classified_by = 'keyword';
+    m.is_chinese = isChineseCategory(profile.category);
+    n++;
+  }
+  return n;
+}
+
+/** §4.2 Layer-2 search radius (non-Chinese concepts; Chinese concepts keep the whole pool as "other Chinese"). */
+const L2_RADIUS_M = 1600;
+
+/** §4.2 Layer 2 rule for a record that is not Layer 1. */
+function isLayer2(m: MergedPoi, profile: ConceptSearchProfile): boolean {
+  if (!m.is_food) return false;
+  if (isChineseCategory(profile.category)) return m.is_chinese;
+  if (m.distance_m > L2_RADIUS_M) return false;
+  const specific = specificSubCuisine(m);
+  if (specific && profile.sibling_ids.includes(specific)) return true;
+  if (m.layers.includes('substitute')) return true;
+  return typesMatch([m.primary_category, ...m.categories], profile.substitute_types);
+}
+
+/**
+ * §4.2 Layer 3 品牌锚点 from the *unfiltered* pool (they may sit beyond the 5-mi
+ * candidate pool): brand-anchor query hits matching the concept, ≥ 500 reviews,
+ * top 5 by review count. Pure; reported, never counted.
+ */
+export function selectBrandAnchors(site: LatLng, candidates: CandidatePoi[], conceptId: string, tradeAreaIds: ReadonlySet<string> = new Set()): BrandAnchor[] {
+  const profile = conceptSearchProfile(conceptId);
+  const seen = new Set<string>();
+  const out: BrandAnchor[] = [];
+  for (const c of candidates) {
+    if (!c.layers?.includes('brand_anchor') || isClosed(c.operating_status)) continue;
+    if ((c.rating_count ?? 0) < 500) continue;
+    if (!matchesLayer1(`${c.name} ${c.name_zh ?? ''}`, [c.primary_category, ...c.categories], profile) && classifyCandidate(c).sub_cuisine !== conceptId) continue;
+    const key = normalizeName(c.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id: c.id,
+      name: c.name,
+      name_zh: c.name_zh ?? null,
+      lat: c.lat,
+      lng: c.lng,
+      distance_mi: Math.round((haversineM(site, c) / METERS_PER_MILE) * 100) / 100,
+      rating: c.rating ?? null,
+      rating_count: c.rating_count ?? null,
+      price_level: c.price_level ?? null,
+      primary_type: c.primary_category ?? null,
+      in_trade_area: tradeAreaIds.has(c.id),
+    });
+  }
+  return out.sort((a, b) => (b.rating_count ?? 0) - (a.rating_count ?? 0) || a.distance_mi - b.distance_mi).slice(0, 5);
+}
+
+function toCompetitor(m: MergedPoi, layer: Competitor['layer'], traffic: CompetitorEngineInput['traffic'], fallbackSubCuisine: string): Competitor {
   const tr = traffic[m.ids.google ?? ''] ?? traffic[m.id];
   return {
     id: m.id,
@@ -257,7 +381,7 @@ function toCompetitor(m: MergedPoi, layer: Competitor['layer'], traffic: Competi
     rating: m.rating ?? null,
     rating_count: m.rating_count ?? null,
     price_level: m.price_level ?? null,
-    sub_cuisine: m.sub_cuisine ?? (m.is_chinese ? 'other_chinese' : 'non_chinese'),
+    sub_cuisine: m.sub_cuisine ?? fallbackSubCuisine,
     layer,
     is_chain: Boolean(m.brand) || CHAIN_RE.test(m.name),
     traffic_tier: (tr?.tier as Competitor['traffic_tier']) ?? null,
@@ -267,6 +391,8 @@ function toCompetitor(m: MergedPoi, layer: Competitor['layer'], traffic: Competi
     source: m.sources.length === 2 ? 'both' : m.sources[0],
     hours_per_week: m.hours_per_week ?? null,
     offers_delivery: null,
+    walk_m: null,
+    walk_min: null,
   };
 }
 
@@ -299,11 +425,18 @@ export function clusterScoreFor(count: number, coverageRatio: number | null): nu
   return Math.max(0, Math.min(100, base + adj));
 }
 
+/** The two Layer-1 radii a void claim needs (labels as D6 reports them). */
+export const L1_VOID_RADII_LABELS = ['direct@800', 'direct@1600'] as const;
+
 export function computeCompetitors(input: CompetitorEngineInput): CompetitorEngineResult {
   const d = getDefaults();
   const t = getTaxonomy();
   const cu = cuisineById(input.cuisine);
+  const profile = conceptSearchProfile(cu);
+  const conceptChinese = isChineseCategory(profile.category);
+  const queryHits = Boolean(input.l1_query);
   const merged = dedupeCandidates(input.site, input.candidates);
+  if (queryHits) promoteDirectLayerHits(merged, cu.id);
   const l3Types = new Set(t.l3_types.map((x) => x.toLowerCase()));
   const anchors = t.l4_anchors;
 
@@ -314,10 +447,13 @@ export function computeCompetitors(input: CompetitorEngineInput): CompetitorEngi
   const openFood = merged.filter((m) => m.is_food && !isClosed(m.operating_status));
   const closedChinese = merged.filter((m) => m.is_chinese && isClosed(m.operating_status) && inDrive10(m));
 
-  const l1m = openFood.filter((m) => m.is_chinese && m.sub_cuisine === cu.id);
-  const l2m = openFood.filter((m) => m.is_chinese && m.sub_cuisine !== cu.id);
+  const l1m = openFood.filter((m) => isLayer1(m, profile, queryHits));
+  const l1Ids = new Set(l1m.map((m) => m.id));
+  const l2m = openFood.filter((m) => !l1Ids.has(m.id) && isLayer2(m, profile));
+  const l2Ids = new Set(l2m.map((m) => m.id));
   const l3m = openFood.filter((m) => {
-    if (m.is_chinese) return false;
+    if (l1Ids.has(m.id) || l2Ids.has(m.id)) return false;
+    if (conceptChinese && m.is_chinese) return false;
     if (!inWalk10(m)) return false;
     const cats = [m.primary_category ?? '', ...m.categories].map((x) => x.toLowerCase());
     const typeOk = cats.some((c) => l3Types.has(c));
@@ -328,15 +464,23 @@ export function computeCompetitors(input: CompetitorEngineInput): CompetitorEngi
     if (isClosed(m.operating_status)) return false;
     const cats = [m.primary_category ?? '', ...m.categories].map((x) => x.toLowerCase());
     const nameHit = (names: string[]) => names.some((n) => m.name.toLowerCase().includes(n.toLowerCase()));
+    if (profile.audience === 'general') {
+      // Everyday footfall generators for bakery / beverage / western concepts.
+      if (cats.some((c) => anchors.general_types.includes(c))) return true;
+      if (cats.some((c) => anchors.grocery_types.includes(c))) return true;
+      return false;
+    }
     if (cats.some((c) => anchors.grocery_types.includes(c)) && (nameHit(anchors.grocery_names) || /[华亚超市]/.test(m.name))) return true;
     if (cats.some((c) => anchors.other_types.includes(c))) return true;
     if (cats.some((c) => anchors.bank_types.includes(c)) && nameHit(anchors.bank_names)) return true;
     return false;
   });
 
-  const l1 = l1m.map((m) => toCompetitor(m, 'L1', input.traffic)).sort((a, b) => a.distance_mi - b.distance_mi);
-  const l2 = l2m.map((m) => toCompetitor(m, 'L2', input.traffic)).sort((a, b) => a.distance_mi - b.distance_mi);
-  const l4 = l4m.map((m) => toCompetitor(m, 'L4', input.traffic)).sort((a, b) => a.distance_mi - b.distance_mi);
+  const fallbackSub = conceptChinese ? 'other_chinese' : 'non_chinese';
+  const subOf = (m: MergedPoi) => (m.sub_cuisine ? m.sub_cuisine : m.is_chinese ? 'other_chinese' : fallbackSub);
+  const l1 = l1m.map((m) => toCompetitor(m, 'L1', input.traffic, cu.id)).sort((a, b) => a.distance_mi - b.distance_mi);
+  const l2 = l2m.map((m) => toCompetitor(m, 'L2', input.traffic, subOf(m))).sort((a, b) => a.distance_mi - b.distance_mi);
+  const l4 = l4m.map((m) => toCompetitor(m, 'L4', input.traffic, subOf(m))).sort((a, b) => a.distance_mi - b.distance_mi);
 
   // 3.5 metrics
   const l1d10 = l1m.filter(inDrive10);
@@ -399,6 +543,12 @@ export function computeCompetitors(input: CompetitorEngineInput): CompetitorEngi
     guard_notes.push(`POI 覆盖异常：drive10 内餐饮 POI ${foodD10} < ${g.min_food_pois_drive10}，而圈层人口 ${Math.round(pop10 ?? 0)}`);
   }
   if (input.candidates.length === 0) guard_notes.push('候选池为空：Overture 与 Google 均未返回记录');
+  // §4.2 void guard: "no direct competitor" may only be claimed after both keyword radii were searched.
+  const tried = input.l1_query?.layers_tried ?? [];
+  const bothRadii = L1_VOID_RADII_LABELS.every((l) => tried.includes(l));
+  if (queryHits && l1.length === 0 && !bothRadii) {
+    guard_notes.push(`直接竞品关键词检索未完成 0.5 / 1 英里两级（已完成：${tried.join('、') || '无'}），不能判定为空档`);
+  }
 
   const unclassified = merged
     .filter((m) => m.is_food && m.is_chinese && !m.sub_cuisine)
@@ -426,6 +576,8 @@ export function computeCompetitors(input: CompetitorEngineInput): CompetitorEngi
     benchmark_revenue_band,
     void: { is_void, reason, density_vs_hub_median, conditions: { chinese_pop_ok, density_ok, l2_ok } },
     metro_sub_cuisine_total: input.metro_sub_cuisine_total,
+    l1_search_radius_m: input.l1_query?.radius_m ?? null,
+    l1_layers_tried: [...tried],
     unclassified,
     chain_names: [...l1, ...l2].filter((c) => c.is_chain).map((c) => c.name),
   };

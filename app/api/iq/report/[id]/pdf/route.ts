@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { verifiedListings } from '@/lib/funnel/iq-corridor-listings';
 import { iqGetReport } from '@/lib/funnel/iq-repository';
 import { buildCompetitorMapPins, buildGoogleStaticMapUrl } from '@/lib/funnel/iq-competitor-map';
 import {
@@ -1037,8 +1038,18 @@ function pdfAlternativeCorridors(full: FullShape, lang: Locale): string {
       const c = cor as Record<string, unknown>;
       const name = escapeHtml(pickStr(c.corridor_name) ?? '—');
       const rationale = pickStr(c.rationale);
-      const listings = Array.isArray(c.listings) ? c.listings : [];
+      // §4.7 c: sqft / rent only from LoopNet/Crexi-sourced rows; otherwise the corridor is text only.
+      const listings = verifiedListings(c.listings);
       let tableHtml = '';
+      if (!listings.length) {
+        tableHtml = `<p style="margin:6px 0 0;font-size:8pt;color:#64748b;">${escapeHtml(
+          lang === 'zh'
+            ? '该走廊暂无经核实的在租房源（LoopNet / Crexi），不展示面积与租金；请踩盘或向经纪核实。'
+            : lang === 'es'
+              ? 'No hay un anuncio verificado (LoopNet / Crexi) para este corredor; no se muestran superficie ni renta.'
+              : 'No verified listing (LoopNet / Crexi) for this corridor — size and rent are not shown.',
+        )}</p>`;
+      }
       if (listings.length) {
         const head = `<tr style="background:#1a365d;color:#fff;">
         <th style="text-align:left;padding:6px;">${escapeHtml(L.listingAddr)}</th>

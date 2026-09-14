@@ -117,10 +117,14 @@ export function scoreDimensions(input: ScoreInput): ReportModel['score']['dimens
   const cov = scoreDemandCoverage(input.coverage_ratio);
   push('demand_coverage', cov.score, cov.drivers);
 
-  // 2 客群匹配
+  // 2 客群匹配 — a 中餐 concept is scored on the Chinese-speaking share of the primary ring; a
+  // general-audience concept (烘焙 / 饮品 / 西餐 / 其他亚洲餐, §4.1) draws on every household, so
+  // the first component is household density instead (500–3,000 hh / sq mi in the primary ring).
+  const general = cu.audience === 'general';
   const thr = d.audience_thresholds[input.range_class];
   const share = input.primary_ring.chinese_hh_share;
-  const sShare = share == null ? null : clamp((share / thr / 1.5) * 100);
+  const primaryDensity = input.primary_ring.hh != null && input.primary_ring.area_sq_mi ? input.primary_ring.hh / input.primary_ring.area_sq_mi : null;
+  const sShare = general ? (primaryDensity == null ? null : lin(primaryDensity, 500, 3_000)) : share == null ? null : clamp((share / thr / 1.5) * 100);
   const ideal = PRICE_TIER_INCOME[cu.price_tier] ?? 90_000;
   const inc = input.primary_ring.median_income;
   const sIncome = inc == null ? null : clamp((inc / ideal / 1.3) * 100);
@@ -133,14 +137,16 @@ export function scoreDimensions(input: ScoreInput): ReportModel['score']['dimens
         ? null
         : lin(input.primary_ring.family_share, 0.1, 0.35);
   push('audience_fit', avg([sShare, sIncome, sStructure]) ?? 50, [
-    `中文家庭占比 ${share == null ? '未获取' : (share * 100).toFixed(1) + '%'} vs 阈值 ${(thr * 100).toFixed(0)}%（${input.range_class}）`,
+    general
+      ? `大众客群业态：主商圈户密度 ${primaryDensity == null ? '未获取' : Math.round(primaryDensity) + ' 户/平方英里'}（不按中文家庭占比评分）`
+      : `中文家庭占比 ${share == null ? '未获取' : (share * 100).toFixed(1) + '%'} vs 阈值 ${(thr * 100).toFixed(0)}%（${input.range_class}）`,
     `收入中位 ${inc == null ? '未获取' : '$' + Math.round(inc).toLocaleString()} vs 价位 ${cu.price_tier} 理想 ≥ $${ideal.toLocaleString()}`,
     input.range_class === 'everyday' ? `walk10 岗位 ${input.jobs_walk10 ?? '未获取'}` : `有孩家庭占比 ${input.primary_ring.family_share == null ? '未获取' : (input.primary_ring.family_share * 100).toFixed(0) + '%'}`,
   ]);
 
   // 3 竞争态势
   let comp = input.competitors.cluster_score;
-  const drivers3 = [`集聚分 ${comp}（walk10 内 L1+L2 ${input.competitors.walk10_l1_l2_count} 家）`];
+  const drivers3 = [general ? `集聚分 ${comp}（walk10 内同类目门店 ${input.competitors.walk10_l1_l2_count} 家）` : `集聚分 ${comp}（walk10 内 L1+L2 ${input.competitors.walk10_l1_l2_count} 家）`];
   const r = input.competitors.avg_rating_l1;
   if (r != null && r < d.quality_gap.low_rating) {
     comp += d.quality_gap.bonus;
@@ -225,6 +231,7 @@ export function totalScore(dims: ReportModel['score']['dimensions']): number {
  * "weakest") and the weakest remaining dimension takes the second.
  */
 export function buildConditions(dims: ReportModel['score']['dimensions'], input: ScoreInput): ReportModel['score']['conditions'] {
+  const general = cuisineById(input.cuisine).audience === 'general';
   const rentMissing = input.finance.rent == null;
   const pool = rentMissing ? dims.filter((d) => d.id !== 'financial_viability') : dims;
   const weakest = [...pool].sort((a, b) => a.score - b.score).slice(0, rentMissing ? 1 : 2);
@@ -244,14 +251,31 @@ export function buildConditions(dims: ReportModel['score']['dimensions'], input:
         break;
       }
       case 'audience_fit': {
+        if (general) {
+          const density = input.primary_ring.hh != null && input.primary_ring.area_sq_mi ? Math.round(input.primary_ring.hh / input.primary_ring.area_sq_mi) : null;
+          out.push({ dimension: w.id, value: density, text_zh: `主商圈户密度 ${density == null ? '未获取' : density + ' 户/平方英里'}，大众客群业态需靠日间上班人群与外卖补足客群`, text_en: `Household density ${density == null ? 'n/a' : density.toLocaleString() + ' per sq mi'} in the primary trade area: a general-audience concept must lean on daytime workers and delivery` });
+          break;
+        }
         const thr = getDefaults().score.audience_thresholds[input.range_class];
         const share = input.primary_ring.chinese_hh_share;
         out.push({ dimension: w.id, value: thr, text_zh: `主商圈中文家庭占比 ${share == null ? '未获取' : (share * 100).toFixed(1) + '%'}，${input.range_class} 类菜系阈值 ${(thr * 100).toFixed(0)}%：需面向非华裔客群设计菜单或改选替代菜系`, text_en: `Chinese-speaking share ${share == null ? 'n/a' : (share * 100).toFixed(1) + '%'} vs ${(thr * 100).toFixed(0)}% threshold for a ${input.range_class} cuisine: design for non-Chinese guests or pick an alternative cuisine` });
         break;
       }
-      case 'competitive_position':
-        out.push({ dimension: w.id, value: input.competitors.walk10_l1_l2_count, text_zh: `步行 10 分钟内中餐 ${input.competitors.walk10_l1_l2_count} 家：${input.competitors.walk10_l1_l2_count === 0 ? '冷启动，需自带流量（预算 ≥ 3 个月营销）' : '需明确价格 × 体验差异化，避免正面价格战'}`, text_en: `${input.competitors.walk10_l1_l2_count} Chinese restaurants within a 10-min walk: ${input.competitors.walk10_l1_l2_count === 0 ? 'cold start — budget ≥ 3 months of marketing' : 'differentiate on price × experience'}` });
+      case 'competitive_position': {
+        const n = input.competitors.walk10_l1_l2_count;
+        const cold = n === 0;
+        out.push({
+          dimension: w.id,
+          value: n,
+          text_zh: general
+            ? `步行 10 分钟内同类目门店 ${n} 家：${cold ? '冷启动，需自带流量（预算 ≥ 3 个月营销）' : '需明确价格 × 体验差异化，避免正面价格战'}`
+            : `步行 10 分钟内中餐 ${n} 家：${cold ? '冷启动，需自带流量（预算 ≥ 3 个月营销）' : '需明确价格 × 体验差异化，避免正面价格战'}`,
+          text_en: general
+            ? `${n} same-category places within a 10-min walk: ${cold ? 'cold start — budget ≥ 3 months of marketing' : 'differentiate on price × experience'}`
+            : `${n} Chinese restaurants within a 10-min walk: ${cold ? 'cold start — budget ≥ 3 months of marketing' : 'differentiate on price × experience'}`,
+        });
         break;
+      }
       case 'access_traffic':
         out.push({ dimension: w.id, value: input.access.parking.spaces, text_zh: '核实停车位数量与晚市可用性；无轨道站时以车流客为主设计动线', text_en: 'Verify parking count and evening availability; design for drive-in guests when no rail is walkable' });
         break;

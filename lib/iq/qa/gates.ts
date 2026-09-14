@@ -92,7 +92,15 @@ export function gateReconciliation(m: ReportModel): GateResult {
     const cov = Math.round((m.demand.captured_monthly_usd / f.breakeven_monthly) * 1000) / 1000;
     if (m.demand.coverage_ratio == null || Math.abs(cov - m.demand.coverage_ratio) > 0.002) d.push(`coverage_ratio ${m.demand.coverage_ratio} ≠ ${cov}`);
   }
-  if (m.score.alternatives.length && m.score.alternatives.length !== 14 && m.score.alternatives.length < 3) d.push(`替代菜系表 ${m.score.alternatives.length} 行`);
+  // Alternatives (§4.2 + §4.1): the concept's own category plus the top 3 of the other categories — at least 3 rows, the user's concept among them, ranked by total.
+  const alts = m.score.alternatives;
+  if (alts.length) {
+    if (alts.length < 3) d.push(`替代菜系表 ${alts.length} 行`);
+    const mine = alts.findIndex((a) => a.cuisine === m.input.cuisine);
+    if (mine < 0) d.push('替代菜系表缺少用户所选业态');
+    else if (m.score.user_cuisine_rank !== mine + 1) d.push(`user_cuisine_rank ${m.score.user_cuisine_rank} ≠ 表中名次 ${mine + 1}`);
+    for (let i = 1; i < alts.length; i++) if (alts[i].total > alts[i - 1].total) d.push('替代菜系表未按总分排序');
+  }
   return { id: 'reconciliation', passed: d.length === 0, details: d };
 }
 

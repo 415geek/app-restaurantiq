@@ -182,6 +182,10 @@ export default async function IqReportPage({ params, searchParams }: Props) {
   }
 
   const marketData = (report.market_data_json as Record<string, unknown> | null) ?? null;
+  // Data provenance (§4.7 d): the 360° model's source ledger when it exists.
+  const model360 = (report.report_model_json as { sources?: unknown[]; meta?: { data_as_of?: string } } | null) ?? null;
+  const modelSources = Array.isArray(model360?.sources) ? model360.sources : null;
+  const dataAsOf = typeof model360?.meta?.data_as_of === 'string' ? model360.meta.data_as_of : null;
   const mapPins = buildCompetitorMapPins({
     marketData,
     reportCompetitors: Array.isArray(full?.competitors) ? full.competitors : [],
@@ -206,6 +210,8 @@ export default async function IqReportPage({ params, searchParams }: Props) {
           initialLang={lang}
           marketData={marketData}
           staticMapUrl={staticMapUrl}
+          modelSources={modelSources}
+          dataAsOf={dataAsOf}
         />
 
         {/* Share Section - hidden during print */}

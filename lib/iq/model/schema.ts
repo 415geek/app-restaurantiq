@@ -81,8 +81,29 @@ export const competitorSchema = z.object({
   source: z.enum(['overture', 'google', 'both']),
   hours_per_week: nullableNum,
   offers_delivery: z.boolean().nullable(),
+  /** §4.2 walking network distance (Distance Matrix), metres; when present `distance_mi` is the walking distance. */
+  walk_m: nullableNum.optional(),
+  walk_min: nullableNum.optional(),
 });
 export type Competitor = z.infer<typeof competitorSchema>;
+
+/** §4.2 Layer 3 品牌锚点: city-wide brand benchmarks (≥ 500 reviews) — never counted in density / cluster / Huff / coverage. */
+export const brandAnchorSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  name_zh: z.string().nullable(),
+  lat: z.number(),
+  lng: z.number(),
+  /** Straight-line distance from the site. */
+  distance_mi: z.number(),
+  rating: nullableNum,
+  rating_count: nullableNum,
+  price_level: nullableNum,
+  primary_type: z.string().nullable(),
+  /** True when the anchor is also inside Layer 1 / 2 (shown on a card as well). */
+  in_trade_area: z.boolean(),
+});
+export type BrandAnchor = z.infer<typeof brandAnchorSchema>;
 
 export const reportModelSchema = z.object({
   meta: z.object({
@@ -110,6 +131,10 @@ export const reportModelSchema = z.object({
     cuisine: z.string(),
     cuisine_label_zh: z.string(),
     cuisine_label_en: z.string(),
+    /** §4.1: Spanish label, concept category and demand audience of the taxonomy entry (absent on models stored before §4.1 → Chinese). */
+    cuisine_label_es: z.string().optional(),
+    concept_category: z.enum(['chinese_regional', 'chinese_format', 'asian_other', 'bakery_dessert', 'beverage', 'western_other']).optional(),
+    audience: z.enum(['chinese', 'general']).optional(),
     range_class: z.enum(['everyday', 'regular', 'destination']),
     rent_usd: nullableNum,
     sqft: nullableNum,
@@ -181,6 +206,12 @@ export const reportModelSchema = z.object({
     pool_radius_mi: z.number().optional(),
     /** Nearest same-cuisine restaurant found *outside* the pool — "no L1" is a finding, not a gap. */
     l1_nearest_outside_pool: z.object({ name: z.string(), distance_mi: z.number() }).nullable().optional(),
+    /** §4.2 Layer 3 brand anchors (city-wide, ≥ 500 reviews, top 5). Not competitors: excluded from every count. */
+    brand_anchors: z.array(brandAnchorSchema).optional(),
+    /** Largest Layer-1 keyword-search radius completed (800 → 1600 m); null when Google did not run. */
+    l1_search_radius_m: nullableNum.optional(),
+    /** Layer-1 steps completed (e.g. ["direct@800", "direct@1600"]); a void claim requires both. */
+    l1_layers_tried: z.array(z.string()).optional(),
   }),
   demand: z.object({
     captured_monthly_usd: nullableNum,
@@ -268,7 +299,7 @@ export const reportModelSchema = z.object({
       }),
     ),
     conditions: z.array(z.object({ dimension: z.string(), text_zh: z.string(), text_en: z.string(), value: nullableNum })),
-    alternatives: z.array(z.object({ cuisine: z.string(), label_zh: z.string(), label_en: z.string(), total: z.number(), verdict: z.string() })),
+    alternatives: z.array(z.object({ cuisine: z.string(), label_zh: z.string(), label_en: z.string(), label_es: z.string().optional(), total: z.number(), verdict: z.string() })),
     user_cuisine_rank: z.number(),
     cannibalization: z.array(z.object({ store: z.string(), diverted_share: z.number() })),
   }),

@@ -11,6 +11,7 @@
  * guard in every language whenever it passes in one.
  */
 import { toLocale, type Locale } from '@/lib/i18n/locale';
+import { CONCEPT_CATEGORY_LABELS } from '../concept/labels';
 import type { ReportModel } from '../model/schema';
 import { localizedField, plainEn, plainEs, plainZh } from './plain';
 
@@ -25,7 +26,7 @@ export const PAGES: Array<{ id: PageId; n: number; zh: string; en: string; es: s
   { id: 'page_4', n: 4, zh: '商圈需求', en: 'Demand Coverage', es: 'Demanda del área', fragment: ['trade_area', 'demand.cuisine_share'] },
   { id: 'page_5', n: 5, zh: '客群画像', en: 'Audience', es: 'Perfil de clientes', fragment: ['audience', 'trade_area.rings', 'demand.lunch_usd', 'demand.dinner_usd'] },
   { id: 'page_6', n: 6, zh: '竞争格局', en: 'Competitive Landscape', es: 'Panorama competitivo', fragment: ['competitors'] },
-  { id: 'page_7', n: 7, zh: '直接竞品对标', en: 'Direct Competitors', es: 'Competidores directos', fragment: ['competitors.l1', 'competitors.benchmark_revenue_band', 'finance.breakeven_monthly', 'finance.rent_excluded', 'competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'competitors.guard_passed'] },
+  { id: 'page_7', n: 7, zh: '直接竞品对标', en: 'Direct Competitors', es: 'Competidores directos', fragment: ['competitors.l1', 'competitors.benchmark_revenue_band', 'finance.breakeven_monthly', 'finance.rent_excluded', 'competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'competitors.guard_passed', 'competitors.l1_search_radius_m', 'competitors.l1_layers_tried', 'competitors.brand_anchors'] },
   { id: 'page_8', n: 8, zh: '品类缺口与替代菜系', en: 'Category Gap & Alternatives', es: 'Hueco de categoría y alternativas', fragment: ['competitors.void', 'competitors.density_per_10k_chinese', 'score.alternatives', 'score.user_cuisine_rank'] },
   { id: 'page_9', n: 9, zh: '需求捕获模型', en: 'Demand Capture', es: 'Captura de demanda', fragment: ['demand', 'finance.breakeven_monthly', 'finance.rent_excluded'] },
   { id: 'page_10', n: 10, zh: '财务模型', en: 'Financial Model', es: 'Modelo financiero', fragment: ['finance', 'input.rent_usd', 'input.seats'] },
@@ -127,13 +128,36 @@ export function dimensionName(d: { id: string; label_zh: string; label_en: strin
 export function sensitivityName(s: { id: string; label_zh: string; label_en: string }, lang: Locale): string {
   return SENSITIVITY_NAME[lang][s.id] ?? (lang === 'zh' ? s.label_zh : s.label_en);
 }
-type CuisineLike = { cuisine: string } & ({ label_zh: string; label_en: string } | { cuisine_label_zh: string; cuisine_label_en: string });
+type CuisineLike = { cuisine: string } & ({ label_zh: string; label_en: string; label_es?: string } | { cuisine_label_zh: string; cuisine_label_en: string; cuisine_label_es?: string });
+/** Taxonomy label in the report language: the model's own `label_es` (§4.1) first, the legacy table for models stored before it, English last. */
 export function cuisineName(c: CuisineLike, lang: Locale): string {
   const zh = 'label_zh' in c ? c.label_zh : c.cuisine_label_zh;
   const en = 'label_en' in c ? c.label_en : c.cuisine_label_en;
   if (lang === 'zh') return zh;
-  if (lang === 'es') return CUISINE_ES[c.cuisine] ?? en;
+  if (lang === 'es') {
+    const es = 'label_es' in c ? c.label_es : 'cuisine_label_es' in c ? c.cuisine_label_es : undefined;
+    return es || CUISINE_ES[c.cuisine] || en;
+  }
   return en;
+}
+
+/**
+ * Layer words for the narrative (§4.1 step 5): a Chinese concept keeps
+ * 同菜系竞品 / 其他中餐; any other concept reads "direct competitors / other
+ * <category>" so an egg-tart shop never sees "其他中餐".
+ */
+export function layerWords(m: Pick<ReportModel, 'input'>, lang: Locale): { chinese: boolean; l1: string; l2: string; all: string; anchors: string } {
+  const category = m.input.concept_category ?? 'chinese_regional';
+  const chinese = category === 'chinese_regional' || category === 'chinese_format';
+  if (chinese) {
+    if (lang === 'zh') return { chinese, l1: '同菜系竞品', l2: '其他中餐', all: '中餐', anchors: '华人客流聚集点' };
+    if (lang === 'es') return { chinese, l1: 'competidores de la misma cocina', l2: 'otros restaurantes chinos', all: 'restaurantes chinos', anchors: 'anclas de la comunidad china' };
+    return { chinese, l1: 'same-cuisine competitors', l2: 'other Chinese restaurants', all: 'Chinese restaurants', anchors: 'Chinese-community anchors' };
+  }
+  const cat = CONCEPT_CATEGORY_LABELS[category][lang];
+  if (lang === 'zh') return { chinese, l1: '同品类直接竞品', l2: '同类目其他业态', all: '同类目门店', anchors: '客流聚集点' };
+  if (lang === 'es') return { chinese, l1: 'competidores directos', l2: `otros locales de ${cat.toLowerCase()}`, all: `locales de ${cat.toLowerCase()}`, anchors: 'anclas de tráfico' };
+  return { chinese, l1: 'direct competitors', l2: `other ${cat.toLowerCase()} places`, all: `${cat.toLowerCase()} places`, anchors: 'traffic anchors' };
 }
 
 /** The report language the model was generated in (defaults to en, never guessed from content). */
@@ -192,6 +216,7 @@ function templateZh(m: ReportModel, page: PageId): Narrative {
   const { pr, pi, p, d10i, d10, cov } = f;
   const verdictZh = VERDICT_ZH[m.score.verdict] ?? m.score.verdict;
   const cuisine = m.input.cuisine_label_zh;
+  const L = layerWords(m, 'zh');
   const condsZh = m.score.conditions.map((c) => c.text_zh).join('；') || '无';
   const xr = f.rentExcluded ? EX_RENT.zh : '';
   switch (page) {
@@ -208,7 +233,7 @@ function templateZh(m: ReportModel, page: PageId): Narrative {
     case 'page_3':
       return {
         title: `主商圈为${ringZh(m, pr)}，覆盖 ${fmtInt(p?.pop)} 位居民`,
-        body: `主商圈（客源主要来自的范围）为${ringZh(m, pr)} [src:trade_area.primary_ring]，常住人口 ${fmtInt(p?.pop)} [src:trade_area.rings.${pi}.pop]；同菜系竞品 ${m.competitors.l1.length} 家 [src:competitors.l1]，其他中餐 ${m.competitors.l2_count} 家 [src:competitors.l2_count]，华人客流聚集点（超市、银行、学校等）${m.competitors.l4.length} 处 [src:competitors.l4]。${m.trade_area.isochrone_method === 'radius' ? '可达范围以直线半径近似 [src:trade_area.isochrone_method]。' : ''}`,
+        body: `主商圈（客源主要来自的范围）为${ringZh(m, pr)} [src:trade_area.primary_ring]，常住人口 ${fmtInt(p?.pop)} [src:trade_area.rings.${pi}.pop]；${L.l1} ${m.competitors.l1.length} 家 [src:competitors.l1]，${L.l2} ${m.competitors.l2_count} 家 [src:competitors.l2_count]，${L.anchors}（超市、银行、学校等）${m.competitors.l4.length} 处 [src:competitors.l4]。${m.trade_area.isochrone_method === 'radius' ? '可达范围以直线半径近似 [src:trade_area.isochrone_method]。' : ''}`,
         refs: ['trade_area.primary_ring', `trade_area.rings.${pi}.pop`, 'competitors.l1', 'competitors.l2_count', 'competitors.l4'],
       };
     case 'page_4':
@@ -227,11 +252,11 @@ function templateZh(m: ReportModel, page: PageId): Narrative {
     }
     case 'page_6': {
       const c = m.competitors;
-      const bands = ['冷启动区间（周边几乎没有中餐）', '低集聚区间', '集聚红利区间（扎堆带客流）', '偏饱和区间', '饱和区间'];
+      const bands = [`冷启动区间（周边几乎没有${L.all}）`, '低集聚区间', '集聚红利区间（扎堆带客流）', '偏饱和区间', '饱和区间'];
       const band = bands[f.bandIdx];
       return {
-        title: `同菜系竞品 ${c.l1.length} 家、中餐共 ${c.l1.length + c.l2_count} 家，处于${band.split('（')[0]}`,
-        body: `${ringZh(m, 'walk10')}内中餐 ${c.walk10_l1_l2_count} 家 [src:competitors.walk10_l1_l2_count]，集聚分（衡量周边中餐店多少是否合适）${c.cluster_score} [src:competitors.cluster_score]，处于${band}；同菜系竞品 Google 平均评分 ${c.avg_rating_l1 ?? '未获取'} [src:competitors.avg_rating_l1]；关店率 ${fmtPct(c.closure_rate)} [src:competitors.closure_rate]。`,
+        title: `${L.l1} ${c.l1.length} 家、${L.all}共 ${c.l1.length + c.l2_count} 家，处于${band.split('（')[0]}`,
+        body: `${ringZh(m, 'walk10')}内${L.all} ${c.walk10_l1_l2_count} 家 [src:competitors.walk10_l1_l2_count]，集聚分（衡量周边${L.all}多少是否合适）${c.cluster_score} [src:competitors.cluster_score]，处于${band}；${L.l1} Google 平均评分 ${c.avg_rating_l1 ?? '未获取'} [src:competitors.avg_rating_l1]；关店率 ${fmtPct(c.closure_rate)} [src:competitors.closure_rate]。`,
         refs: ['competitors.walk10_l1_l2_count', 'competitors.cluster_score', 'competitors.avg_rating_l1', 'competitors.closure_rate'],
       };
     }
@@ -242,9 +267,9 @@ function templateZh(m: ReportModel, page: PageId): Narrative {
         const r = m.competitors.pool_radius_mi ?? 5;
         const near = m.competitors.l1_nearest_outside_pool;
         return {
-          title: `${r} 英里内没有同菜系门店，本址是${cuisine}的空档`,
-          body: `周边 ${r} 英里内没有一家同菜系餐厅 [src:competitors.pool_radius_mi]` + (near ? `，最近的一家「${near.name}」在 ${near.distance_mi} 英里外 [src:competitors.l1_nearest_outside_pool.distance_mi]` : '') + `。没有同行分客流，也没有同行替你教育市场；保本线${xr} ${fmtUsd(be)} [src:finance.breakeven_monthly]。`,
-          refs: ['competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'finance.breakeven_monthly'],
+          title: `${r} 英里内没有${L.chinese ? '同菜系门店' : '同品类直接竞品'}，本址是${cuisine}的空档`,
+          body: `周边 ${r} 英里内没有一家${L.chinese ? '同菜系餐厅' : '同品类直接竞品'} [src:competitors.pool_radius_mi]` + (near ? `，最近的一家「${near.name}」在 ${near.distance_mi} 英里外 [src:competitors.l1_nearest_outside_pool.distance_mi]` : '') + `（关键词检索已完成 800 / 1600 米两级 [src:competitors.l1_layers_tried]）。没有同行分客流，也没有同行替你教育市场；保本线${xr} ${fmtUsd(be)} [src:finance.breakeven_monthly]。`,
+          refs: ['competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'competitors.l1_layers_tried', 'finance.breakeven_monthly'],
         };
       }
       const title = b.median != null && be != null ? `同类门店中位月营收 ${fmtUsd(b.median)}，${b.median < be ? '低于' : '高于'}本址保本线${xr}` : '同类门店营收缺历史数据，只能给相对客流等级';
@@ -258,7 +283,7 @@ function templateZh(m: ReportModel, page: PageId): Narrative {
       const top = f.top;
       return {
         title: top.length ? `本址更适合${top[0].label_zh}（${top[0].total} 分），${cuisine}排第 ${m.score.user_cuisine_rank} 位` : `${cuisine}排第 ${m.score.user_cuisine_rank} 位`,
-        body: `${m.competitors.void.is_void ? '该品类为空白 [src:competitors.void.is_void]' : '该品类供给较少，但未满足「品类缺口」的三个条件（华裔人口、门店密度、其他中餐数量） [src:competitors.void.is_void]'}；更适合的替代菜系前三：${top.map((a) => `${a.label_zh} ${a.total} 分`).join('、')} [src:score.alternatives]；您选的${cuisine}排第 ${m.score.user_cuisine_rank} 位 [src:score.user_cuisine_rank]。`,
+        body: `${m.competitors.void.is_void ? '该品类为空白 [src:competitors.void.is_void]' : `该品类供给较少，但未满足「品类缺口」的三个条件（华裔人口、门店密度、${L.l2}数量） [src:competitors.void.is_void]`}；更适合的替代菜系前三：${top.map((a) => `${a.label_zh} ${a.total} 分`).join('、')} [src:score.alternatives]；您选的${cuisine}排第 ${m.score.user_cuisine_rank} 位 [src:score.user_cuisine_rank]。`,
         refs: ['competitors.void.is_void', 'score.alternatives', 'score.user_cuisine_rank'],
       };
     }
@@ -344,6 +369,7 @@ function templateEn(m: ReportModel, page: PageId): Narrative {
   const { pr, pi, p, d10i, d10, cov } = f;
   const verdict = verdictWord(m.score.verdict, 'en');
   const cuisine = m.input.cuisine_label_en;
+  const L = layerWords(m, 'en');
   const conds = m.score.conditions.map((c) => plainEn(c.text_en)).join('; ') || 'none';
   const ringL = (id: string) => ringLabel(m, id, 'en');
   const xr = f.rentExcluded ? EX_RENT.en : '';
@@ -372,7 +398,7 @@ function templateEn(m: ReportModel, page: PageId): Narrative {
     case 'page_3':
       return {
         title: `The primary trade area is the ${ringL(pr)}, home to ${fmtInt(p?.pop)} residents`,
-        body: `The primary trade area (where most guests come from) is the ${ringL(pr)} [src:trade_area.primary_ring] with ${fmtInt(p?.pop)} residents [src:trade_area.rings.${pi}.pop]; ${m.competitors.l1.length} same-cuisine competitors [src:competitors.l1], ${m.competitors.l2_count} other Chinese restaurants [src:competitors.l2_count] and ${m.competitors.l4.length} Chinese-community anchors (grocers, banks, schools) [src:competitors.l4].${m.trade_area.isochrone_method === 'radius' ? ' Reach is approximated with straight-line radii [src:trade_area.isochrone_method].' : ''}`,
+        body: `The primary trade area (where most guests come from) is the ${ringL(pr)} [src:trade_area.primary_ring] with ${fmtInt(p?.pop)} residents [src:trade_area.rings.${pi}.pop]; ${m.competitors.l1.length} ${L.l1} [src:competitors.l1], ${m.competitors.l2_count} ${L.l2} [src:competitors.l2_count] and ${m.competitors.l4.length} ${L.anchors} (grocers, banks, schools) [src:competitors.l4].${m.trade_area.isochrone_method === 'radius' ? ' Reach is approximated with straight-line radii [src:trade_area.isochrone_method].' : ''}`,
         refs: ['trade_area.primary_ring', `trade_area.rings.${pi}.pop`, 'competitors.l1', 'competitors.l2_count', 'competitors.l4'],
       };
     case 'page_4':
@@ -391,11 +417,11 @@ function templateEn(m: ReportModel, page: PageId): Narrative {
     }
     case 'page_6': {
       const c = m.competitors;
-      const bands = ['the cold-start band (almost no Chinese food nearby)', 'the low-cluster band', 'the cluster-dividend band (a cluster draws traffic)', 'the near-saturated band', 'the saturated band'];
+      const bands = [`the cold-start band (almost no ${L.all} nearby)`, 'the low-cluster band', 'the cluster-dividend band (a cluster draws traffic)', 'the near-saturated band', 'the saturated band'];
       const band = bands[f.bandIdx];
       return {
-        title: `${c.l1.length} same-cuisine competitors, ${c.l1.length + c.l2_count} Chinese restaurants in all: ${band.split(' (')[0]}`,
-        body: `${c.walk10_l1_l2_count} Chinese restaurants inside the ${ringL('walk10')} [src:competitors.walk10_l1_l2_count]; cluster score (whether the amount of nearby Chinese food is healthy) ${c.cluster_score} [src:competitors.cluster_score], in ${band}; same-cuisine competitors average ${c.avg_rating_l1 ?? 'n/a'} on Google [src:competitors.avg_rating_l1]; closure rate ${fmtPct(c.closure_rate)} [src:competitors.closure_rate].`,
+        title: `${c.l1.length} ${L.l1}, ${c.l1.length + c.l2_count} ${L.all} in all: ${band.split(' (')[0]}`,
+        body: `${c.walk10_l1_l2_count} ${L.all} inside the ${ringL('walk10')} [src:competitors.walk10_l1_l2_count]; cluster score (whether the amount of nearby ${L.all} is healthy) ${c.cluster_score} [src:competitors.cluster_score], in ${band}; ${L.l1} average ${c.avg_rating_l1 ?? 'n/a'} on Google [src:competitors.avg_rating_l1]; closure rate ${fmtPct(c.closure_rate)} [src:competitors.closure_rate].`,
         refs: ['competitors.walk10_l1_l2_count', 'competitors.cluster_score', 'competitors.avg_rating_l1', 'competitors.closure_rate'],
       };
     }
@@ -406,9 +432,9 @@ function templateEn(m: ReportModel, page: PageId): Narrative {
         const r = m.competitors.pool_radius_mi ?? 5;
         const near = m.competitors.l1_nearest_outside_pool;
         return {
-          title: `No same-cuisine restaurant within ${r} miles: an opening for ${cuisine}`,
-          body: `There is no same-cuisine restaurant within ${r} miles [src:competitors.pool_radius_mi]` + (near ? `; the nearest, "${near.name}", is ${near.distance_mi} miles away [src:competitors.l1_nearest_outside_pool.distance_mi]` : '') + `. Nobody splits the traffic, but nobody has educated the market either; break-even${xr} is ${fmtUsd(be)} [src:finance.breakeven_monthly].`,
-          refs: ['competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'finance.breakeven_monthly'],
+          title: `No ${L.chinese ? 'same-cuisine restaurant' : 'direct competitor'} within ${r} miles: an opening for ${cuisine}`,
+          body: `There is no ${L.chinese ? 'same-cuisine restaurant' : 'direct competitor'} within ${r} miles [src:competitors.pool_radius_mi]` + (near ? `; the nearest, "${near.name}", is ${near.distance_mi} miles away [src:competitors.l1_nearest_outside_pool.distance_mi]` : '') + ` (keyword search completed at both 800 and 1600 m [src:competitors.l1_layers_tried]). Nobody splits the traffic, but nobody has educated the market either; break-even${xr} is ${fmtUsd(be)} [src:finance.breakeven_monthly].`,
+          refs: ['competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'competitors.l1_layers_tried', 'finance.breakeven_monthly'],
         };
       }
       const title = b.median != null && be != null ? `Peer median revenue ${fmtUsd(b.median)} a month, ${b.median < be ? 'below' : 'above'} this site's break-even${xr}` : 'No revenue history for peers: only a relative traffic tier';
@@ -422,7 +448,7 @@ function templateEn(m: ReportModel, page: PageId): Narrative {
       const top = f.top;
       return {
         title: top.length ? `${top[0].label_en} fits this site better (${top[0].total}); ${cuisine} ranks #${m.score.user_cuisine_rank}` : `${cuisine} ranks #${m.score.user_cuisine_rank}`,
-        body: `${m.competitors.void.is_void ? 'The category is a true gap [src:competitors.void.is_void]' : 'Supply in this category is thin, but the three category-gap tests (Chinese population, store density, other Chinese supply) are not all met [src:competitors.void.is_void]'}; the three best-fit alternatives are ${top.map((a) => `${a.label_en} ${a.total}`).join(', ')} [src:score.alternatives]; your ${cuisine} ranks #${m.score.user_cuisine_rank} [src:score.user_cuisine_rank].`,
+        body: `${m.competitors.void.is_void ? 'The category is a true gap [src:competitors.void.is_void]' : `Supply in this category is thin, but the three category-gap tests (Chinese population, store density, ${L.l2}) are not all met [src:competitors.void.is_void]`}; the three best-fit alternatives are ${top.map((a) => `${a.label_en} ${a.total}`).join(', ')} [src:score.alternatives]; your ${cuisine} ranks #${m.score.user_cuisine_rank} [src:score.user_cuisine_rank].`,
         refs: ['competitors.void.is_void', 'score.alternatives', 'score.user_cuisine_rank'],
       };
     }
@@ -504,6 +530,7 @@ function templateEs(m: ReportModel, page: PageId): Narrative {
   const { pr, pi, p, d10i, d10, cov } = f;
   const verdict = verdictWord(m.score.verdict, 'es');
   const cuisine = cuisineName(m.input, 'es');
+  const L = layerWords(m, 'es');
   const conds = m.score.conditions.map((c) => localizedField(c.text_zh, c.text_en, 'es')).join('; ') || 'ninguna';
   const ringL = (id: string) => ringLabel(m, id, 'es');
   const alt = (a: ReportModel['score']['alternatives'][number]) => cuisineName(a, 'es');
@@ -533,7 +560,7 @@ function templateEs(m: ReportModel, page: PageId): Narrative {
     case 'page_3':
       return {
         title: `La zona principal es el ${ringL(pr)}, con ${fmtInt(p?.pop)} residentes`,
-        body: `La zona principal (de donde vienen la mayoría de los clientes) es el ${ringL(pr)} [src:trade_area.primary_ring], con ${fmtInt(p?.pop)} residentes [src:trade_area.rings.${pi}.pop]; ${m.competitors.l1.length} competidores de la misma cocina [src:competitors.l1], ${m.competitors.l2_count} otros restaurantes chinos [src:competitors.l2_count] y ${m.competitors.l4.length} anclas de la comunidad china (supermercados, bancos, escuelas) [src:competitors.l4].${m.trade_area.isochrone_method === 'radius' ? ' El alcance se aproxima con radios en línea recta [src:trade_area.isochrone_method].' : ''}`,
+        body: `La zona principal (de donde vienen la mayoría de los clientes) es el ${ringL(pr)} [src:trade_area.primary_ring], con ${fmtInt(p?.pop)} residentes [src:trade_area.rings.${pi}.pop]; ${m.competitors.l1.length} ${L.l1} [src:competitors.l1], ${m.competitors.l2_count} ${L.l2} [src:competitors.l2_count] y ${m.competitors.l4.length} ${L.anchors} (supermercados, bancos, escuelas) [src:competitors.l4].${m.trade_area.isochrone_method === 'radius' ? ' El alcance se aproxima con radios en línea recta [src:trade_area.isochrone_method].' : ''}`,
         refs: ['trade_area.primary_ring', `trade_area.rings.${pi}.pop`, 'competitors.l1', 'competitors.l2_count', 'competitors.l4'],
       };
     case 'page_4':
@@ -552,11 +579,11 @@ function templateEs(m: ReportModel, page: PageId): Narrative {
     }
     case 'page_6': {
       const c = m.competitors;
-      const bands = ['la franja de arranque en frío (casi sin comida china cerca)', 'la franja de baja aglomeración', 'la franja de dividendo de aglomeración (el grupo atrae tráfico)', 'la franja cercana a la saturación', 'la franja saturada'];
+      const bands = [`la franja de arranque en frío (casi sin ${L.all} cerca)`, 'la franja de baja aglomeración', 'la franja de dividendo de aglomeración (el grupo atrae tráfico)', 'la franja cercana a la saturación', 'la franja saturada'];
       const band = bands[f.bandIdx];
       return {
-        title: `${c.l1.length} competidores de la misma cocina, ${c.l1.length + c.l2_count} restaurantes chinos en total: ${band.split(' (')[0]}`,
-        body: `${c.walk10_l1_l2_count} restaurantes chinos dentro del ${ringL('walk10')} [src:competitors.walk10_l1_l2_count]; puntuación de aglomeración (si la cantidad de comida china cercana es adecuada) ${c.cluster_score} [src:competitors.cluster_score], en ${band}; los competidores de la misma cocina promedian ${c.avg_rating_l1 ?? 'n/d'} en Google [src:competitors.avg_rating_l1]; tasa de cierre ${fmtPct(c.closure_rate)} [src:competitors.closure_rate].`,
+        title: `${c.l1.length} ${L.l1}, ${c.l1.length + c.l2_count} ${L.all} en total: ${band.split(' (')[0]}`,
+        body: `${c.walk10_l1_l2_count} ${L.all} dentro del ${ringL('walk10')} [src:competitors.walk10_l1_l2_count]; puntuación de aglomeración (si la cantidad de ${L.all} cercanos es adecuada) ${c.cluster_score} [src:competitors.cluster_score], en ${band}; los ${L.l1} promedian ${c.avg_rating_l1 ?? 'n/d'} en Google [src:competitors.avg_rating_l1]; tasa de cierre ${fmtPct(c.closure_rate)} [src:competitors.closure_rate].`,
         refs: ['competitors.walk10_l1_l2_count', 'competitors.cluster_score', 'competitors.avg_rating_l1', 'competitors.closure_rate'],
       };
     }
@@ -567,9 +594,9 @@ function templateEs(m: ReportModel, page: PageId): Narrative {
         const r = m.competitors.pool_radius_mi ?? 5;
         const near = m.competitors.l1_nearest_outside_pool;
         return {
-          title: `Sin restaurantes de la misma cocina en ${r} millas: una oportunidad para ${cuisine}`,
-          body: `No hay ningún restaurante de la misma cocina en ${r} millas [src:competitors.pool_radius_mi]` + (near ? `; el más cercano, "${near.name}", está a ${near.distance_mi} millas [src:competitors.l1_nearest_outside_pool.distance_mi]` : '') + `. Nadie reparte el tráfico, pero nadie ha educado al mercado; el punto de equilibrio${xr} es ${fmtUsd(be)} [src:finance.breakeven_monthly].`,
-          refs: ['competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'finance.breakeven_monthly'],
+          title: `Sin ${L.chinese ? 'restaurantes de la misma cocina' : 'competidores directos'} en ${r} millas: una oportunidad para ${cuisine}`,
+          body: `No hay ningún ${L.chinese ? 'restaurante de la misma cocina' : 'competidor directo'} en ${r} millas [src:competitors.pool_radius_mi]` + (near ? `; el más cercano, "${near.name}", está a ${near.distance_mi} millas [src:competitors.l1_nearest_outside_pool.distance_mi]` : '') + ` (búsqueda por palabra clave completada a 800 y 1600 m [src:competitors.l1_layers_tried]). Nadie reparte el tráfico, pero nadie ha educado al mercado; el punto de equilibrio${xr} es ${fmtUsd(be)} [src:finance.breakeven_monthly].`,
+          refs: ['competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'competitors.l1_layers_tried', 'finance.breakeven_monthly'],
         };
       }
       const title = b.median != null && be != null ? `Ingreso mediano de locales similares ${fmtUsd(b.median)} al mes, ${b.median < be ? 'por debajo' : 'por encima'} del equilibrio${xr} de este local` : 'Sin historial de ingresos de locales similares: solo un nivel relativo de tráfico';
@@ -583,7 +610,7 @@ function templateEs(m: ReportModel, page: PageId): Narrative {
       const top = f.top;
       return {
         title: top.length ? `${alt(top[0])} encaja mejor en este local (${top[0].total}); ${cuisine} queda en el puesto ${m.score.user_cuisine_rank}` : `${cuisine} queda en el puesto ${m.score.user_cuisine_rank}`,
-        body: `${m.competitors.void.is_void ? 'La categoría es un hueco real [src:competitors.void.is_void]' : 'La oferta de esta categoría es escasa, pero no se cumplen las tres condiciones de hueco de categoría (población china, densidad de locales, otra oferta china) [src:competitors.void.is_void]'}; las tres mejores alternativas son ${top.map((a) => `${alt(a)} ${a.total}`).join(', ')} [src:score.alternatives]; su ${cuisine} queda en el puesto ${m.score.user_cuisine_rank} [src:score.user_cuisine_rank].`,
+        body: `${m.competitors.void.is_void ? 'La categoría es un hueco real [src:competitors.void.is_void]' : `La oferta de esta categoría es escasa, pero no se cumplen las tres condiciones de hueco de categoría (población china, densidad de locales, ${L.l2}) [src:competitors.void.is_void]`}; las tres mejores alternativas son ${top.map((a) => `${alt(a)} ${a.total}`).join(', ')} [src:score.alternatives]; su ${cuisine} queda en el puesto ${m.score.user_cuisine_rank} [src:score.user_cuisine_rank].`,
         refs: ['competitors.void.is_void', 'score.alternatives', 'score.user_cuisine_rank'],
       };
     }

@@ -57,3 +57,21 @@ test('confidence is computed from source status', () => {
   assert.equal(failed.total, 0);
   assert.equal(failed.level, 'low');
 });
+
+test('§4.1 general-audience concept: audience fit scores household density + income, never the Chinese share; wording says same-category', () => {
+  const egg: ScoreInput = { ...good, cuisine: 'egg_tart', range_class: 'everyday', primary_ring: { ...good.primary_ring, chinese_hh_share: 0.02 } };
+  const dims = scoreDimensions(egg);
+  const fit = dims.find((d) => d.id === 'audience_fit')!;
+  assert.ok(!fit.drivers.some((x) => /^中文家庭占比/.test(x)), fit.drivers.join(' | '));
+  assert.match(fit.drivers[0], /大众客群业态：主商圈户密度 1025 户\/平方英里/);
+  // the same site scored as a Hunan concept with a 2 % Chinese share is penalised; the egg-tart shop is not
+  const hunanLow = scoreDimensions({ ...good, primary_ring: { ...good.primary_ring, chinese_hh_share: 0.02 } }).find((d) => d.id === 'audience_fit')!;
+  assert.ok(fit.score > hunanLow.score, `${fit.score} vs ${hunanLow.score}`);
+  const comp = dims.find((d) => d.id === 'competitive_position')!;
+  assert.match(comp.drivers[0], /同类目门店/);
+  const weakAudience: ScoreInput = { ...egg, primary_ring: { ...egg.primary_ring, hh: 2_000, area_sq_mi: 40, median_income: 40_000 } };
+  const conds = buildConditions(scoreDimensions(weakAudience), weakAudience);
+  const aud = conds.find((c) => c.dimension === 'audience_fit');
+  assert.ok(aud && /户密度 50 户/.test(aud.text_zh) && /Household density 50/.test(aud.text_en), JSON.stringify(conds));
+  assert.ok(!conds.some((c) => /中餐|Chinese restaurants/.test(c.text_zh + c.text_en)));
+});

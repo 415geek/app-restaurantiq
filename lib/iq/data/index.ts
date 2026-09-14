@@ -10,6 +10,7 @@ import { fetchAcs, type AcsData } from './acs';
 import { fetchCex, type CexTable } from './cex';
 import { fetchDevPipeline, type DevPipelineData } from './dev-pipeline';
 import { fetchGeocode, type GeocodeData } from './geocode';
+import { fetchWalkingDistances } from './distance-matrix';
 import { buildCallPlan, fetchGooglePlaces, type GooglePlacesData, type GooglePlacesInput, type PlaceCall } from './google-places';
 import { fetchIsochrones, type IsochroneData } from './isochrone';
 import { fetchLodes, type LodesData } from './lodes';
@@ -52,6 +53,8 @@ export type Fetchers = {
   transit: typeof fetchTransit;
   cex: typeof fetchCex;
   dev: typeof fetchDevPipeline;
+  /** §4.2 walking legs (Distance Matrix) — run by the pipeline once Layer 1 / 2 are known. */
+  walking: typeof fetchWalkingDistances;
 };
 
 export const defaultFetchers: Fetchers = {
@@ -66,6 +69,7 @@ export const defaultFetchers: Fetchers = {
   transit: fetchTransit,
   cex: fetchCex,
   dev: fetchDevPipeline,
+  walking: fetchWalkingDistances,
 };
 
 /** "1711 El Camino Real, Millbrae, CA 94030" → "Millbrae". */
@@ -80,7 +84,7 @@ const RADIUS_DRIVE15_M = 5 * 1_609.344;
 
 /** User-named competitors add at most this many Text Search calls on top of the default D6 plan. */
 export const KNOWN_COMPETITOR_MAX_CALLS = 3;
-const KNOWN_COMPETITOR_RADIUS_M = 8047; // 5 mi, same bias circle as the cuisine Text Search
+const KNOWN_COMPETITOR_RADIUS_M = 8047; // 5 mi bias circle (the candidate pool radius)
 
 /**
  * D6 request for a site: the default plan, plus one Text Search per user-named
@@ -96,6 +100,7 @@ export function buildGooglePlacesRequest(site: Pick<SiteInput, 'cuisine' | 'know
     radiusM: KNOWN_COMPETITOR_RADIUS_M,
     label: `text:user:${name}`,
     textQuery: name,
+    layer: 'user',
   }));
   return { lat, lng, cuisineId: site.cuisine, maxCalls: defaultsCap + extra.length, plan: [...buildCallPlan(site.cuisine, defaultsCap), ...extra] };
 }

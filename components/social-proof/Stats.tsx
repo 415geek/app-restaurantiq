@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Social proof (评审 Spec §4.7): only the real number of analyses generated,
+ * read from GET /api/iq/stats. No accuracy claims, no invented counts — when
+ * the count is unavailable the number is hidden rather than faked.
+ */
+import { useEffect, useState } from 'react';
 import type { Locale } from '@/lib/i18n/locale';
 
 type StatsProps = {
@@ -7,22 +13,10 @@ type StatsProps = {
   variant?: 'default' | 'compact';
 };
 
-const stats: Record<Locale, { value: string; label: string }[]> = {
-  en: [
-    { value: '12,847', label: 'reports generated' },
-    { value: '$2.4M', label: 'in potential losses avoided' },
-    { value: '94%', label: 'accuracy rate' },
-  ],
-  zh: [
-    { value: '12,847', label: '份已生成报告' },
-    { value: '$240万', label: '帮助规避的潜在损失' },
-    { value: '94%', label: '预测准确率' },
-  ],
-  es: [
-    { value: '12,847', label: 'informes generados' },
-    { value: '$2.4M', label: 'en pérdidas potenciales evitadas' },
-    { value: '94%', label: 'de precisión' },
-  ],
+const COPY: Record<Locale, { generated: (n: string) => string; badge: (n: string) => string }> = {
+  en: { generated: (n) => `${n} analyses generated`, badge: (n) => `${n} location analyses generated so far` },
+  zh: { generated: (n) => `已生成 ${n} 份分析`, badge: (n) => `已生成 ${n} 份选址分析` },
+  es: { generated: (n) => `${n} análisis generados`, badge: (n) => `${n} análisis de ubicación generados hasta ahora` },
 };
 
 const testimonials: Record<Locale, { quote: string; author: string }[]> = {
@@ -58,38 +52,64 @@ const testimonials: Record<Locale, { quote: string; author: string }[]> = {
   ],
 };
 
-const badge: Record<Locale, string> = {
-  en: '12,847 owners have made smarter location decisions',
-  zh: '已帮助 12,847 位老板做出更明智的选址决策',
-  es: '12,847 dueños ya tomaron mejores decisiones de ubicación',
-};
+let cachedCount: number | null | undefined;
+let inflight: Promise<number | null> | null = null;
+
+async function fetchReportCount(): Promise<number | null> {
+  if (cachedCount !== undefined) return cachedCount;
+  if (!inflight) {
+    inflight = fetch('/api/iq/stats', { cache: 'no-store' })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const json = (await res.json()) as { reports?: unknown };
+        return typeof json.reports === 'number' && Number.isFinite(json.reports) && json.reports > 0 ? json.reports : null;
+      })
+      .catch(() => null)
+      .then((n) => {
+        cachedCount = n;
+        inflight = null;
+        return n;
+      });
+  }
+  return inflight;
+}
+
+/** Real report count, or null while loading / when unavailable. */
+export function useReportCount(): number | null {
+  const [count, setCount] = useState<number | null>(cachedCount ?? null);
+  useEffect(() => {
+    let alive = true;
+    void fetchReportCount().then((n) => {
+      if (alive) setCount(n);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return count;
+}
+
+function fmt(n: number): string {
+  return n.toLocaleString('en-US');
+}
 
 export function SocialProofStats({ locale = 'en', variant = 'default' }: StatsProps) {
-  const s = stats[locale];
+  const count = useReportCount();
+  if (count == null) return null;
+  const line = COPY[locale].generated(fmt(count));
 
   if (variant === 'compact') {
     return (
       <div className="flex items-center justify-center gap-6 text-sm text-gray-500">
-        <span>
-          ✓ <strong className="text-gray-300">{s[0].value}</strong> {s[0].label}
-        </span>
-        <span className="hidden sm:inline">
-          ✓ <strong className="text-gray-300">{s[2].value}</strong> {s[2].label}
-        </span>
+        <span>✓ {line}</span>
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
-      <div className="grid grid-cols-3 gap-4 text-center">
-        {s.map((stat, i) => (
-          <div key={i}>
-            <div className="text-2xl font-bold text-white">{stat.value}</div>
-            <div className="mt-1 text-xs text-gray-500">{stat.label}</div>
-          </div>
-        ))}
-      </div>
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 text-center">
+      <div className="text-2xl font-bold text-white">{fmt(count)}</div>
+      <div className="mt-1 text-xs text-gray-500">{COPY[locale].generated('').trim()}</div>
     </div>
   );
 }
@@ -108,13 +128,15 @@ export function SocialProofTestimonial({ locale = 'en' }: { locale?: Locale }) {
 }
 
 export function SocialProofBadge({ locale = 'en' }: { locale?: Locale }) {
+  const count = useReportCount();
+  if (count == null) return null;
   return (
     <div className="inline-flex items-center gap-2 rounded-full bg-zinc-800/50 px-4 py-2 text-xs text-gray-400">
       <span className="relative flex h-2 w-2">
         <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75"></span>
         <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
       </span>
-      {badge[locale]}
+      {COPY[locale].badge(fmt(count))}
     </div>
   );
 }

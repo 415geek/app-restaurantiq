@@ -198,6 +198,38 @@ export async function iqInsertReport(input: {
   return data.id as string;
 }
 
+/**
+ * Idempotent analyze (§4.5): the most recent row whose
+ * `market_data_json.analyze_key` equals `key`, created at/after `sinceIso`.
+ * Index-free JSON path filter; the language column narrows the scan.
+ */
+export async function iqFindRecentReportByAnalyzeKey(input: {
+  key: string;
+  language: string;
+  sinceIso: string;
+}): Promise<IqReportRow | null> {
+  const sb = supabaseAdmin();
+  const { data, error } = await sb
+    .from(TABLE)
+    .select('*')
+    .eq('language', input.language)
+    .eq('market_data_json->>analyze_key', input.key)
+    .gte('created_at', input.sinceIso)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message || JSON.stringify(error));
+  return (data as IqReportRow | null) ?? null;
+}
+
+/** `count(*)` of `iq_location_reports` for the social-proof line (§4.7). */
+export async function iqCountReports(): Promise<number> {
+  const sb = supabaseAdmin();
+  const { count, error } = await sb.from(TABLE).select('id', { count: 'exact', head: true });
+  if (error) throw new Error(error.message || JSON.stringify(error));
+  return count ?? 0;
+}
+
 export async function iqIncrementShareCount(reportId: string): Promise<void> {
   const sb = supabaseAdmin();
   

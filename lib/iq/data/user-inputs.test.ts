@@ -106,3 +106,19 @@ test('D12 known_competitors: string or array, split on comma/newline/Chinese sep
   assert.deepEqual(input.known_competitors, ['Hunan Home', '湘水缘']);
   assert.match(result.coverage_note, /用户指定竞品 2 家/);
 });
+
+test('§4.1 concept resolution: picker id wins, dictionary over every category, unresolved text is declared not silently bucketed', () => {
+  const picked = normalizeUserInputs({ report_id: 'r', address: 'a', cuisine_text: '好吃的', concept_id: 'egg_tart' });
+  assert.equal(picked.input.cuisine, 'egg_tart');
+  assert.equal(picked.concept.confirmed, true);
+  assert.match(picked.result.coverage_note, /用户确认业态 egg_tart/);
+  assert.equal(normalizeUserInputs({ report_id: 'r', address: 'a', cuisine_text: 'Portuguese egg tarts' }).input.cuisine, 'egg_tart');
+  assert.equal(normalizeUserInputs({ report_id: 'r', address: 'a', cuisine_text: '港式茶餐厅' }).input.cuisine, 'hk_cafe');
+  assert.equal(normalizeUserInputs({ report_id: 'r', address: 'a', cuisine: 'la taqueria' }).input.cuisine, 'mexican');
+  const unresolved = normalizeUserInputs({ report_id: 'r', address: 'a', cuisine_text: '好吃的' });
+  assert.equal(unresolved.input.cuisine, 'other_chinese');
+  assert.equal(unresolved.concept.confirmed, false);
+  assert.match(unresolved.result.coverage_note, /未确认 → other_chinese/);
+  assert.equal(normalizeUserInputs({ report_id: 'r', address: 'a' }).concept.confirmed, false);
+  assert.equal(normalizeUserInputs({ report_id: 'r', address: 'a', concept_id: 'nope', cuisine: 'hunan' }).input.cuisine, 'hunan');
+});

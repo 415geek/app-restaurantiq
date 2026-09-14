@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cityOf, etaLabel, phaseOf, pickMessage, tickerMessages } from './GenerationTicker';
+import { cityOf, etaLabel, phaseOf, pickMessage, tickerMessages, tickerPhaseForStage } from './GenerationTicker';
 
 test('cityOf extracts the city from US addresses', () => {
   assert.equal(cityOf('1115 Clement St, San Francisco, CA 94118'), 'San Francisco');
@@ -46,16 +46,16 @@ test('a long phase keeps saying new things and never repeats the previous line',
   assert.equal(pickMessage(groups, last, 7), groups[last][7 % groups[last].length]);
 });
 
-test('eta: hidden during grace, counts down from 3 min and never goes back up', () => {
+test('eta: hidden during grace, counts down from the 3–5 min midpoint and never goes back up', () => {
   assert.equal(etaLabel('zh', 5, 10), null);
-  assert.equal(etaLabel('zh', 30, 20), '预计还需约 2 分 30 秒');
-  assert.equal(etaLabel('zh', 100, 60), '预计还需约 1 分 20 秒');
-  assert.equal(etaLabel('zh', 125, 60), '预计还需不到 1 分钟');
-  assert.equal(etaLabel('zh', 170, 60), '预计还需不到 1 分钟'); // no 5-minute stretch any more
-  assert.equal(etaLabel('zh', 200, 70), '比平时慢一些，正在收尾…');
+  assert.equal(etaLabel('zh', 30, 20), '预计还需约 3 分 30 秒');
+  assert.equal(etaLabel('zh', 160, 60), '预计还需约 1 分 20 秒');
+  assert.equal(etaLabel('zh', 185, 60), '预计还需不到 1 分钟');
+  assert.equal(etaLabel('zh', 230, 60), '预计还需不到 1 分钟'); // never stretches back up
+  assert.equal(etaLabel('zh', 260, 70), '比平时慢一些，正在收尾…');
   assert.equal(etaLabel('zh', 100, 95), '正在收尾，马上就好');
-  assert.equal(etaLabel('en', 30, 20), 'About 2:30 to go');
-  assert.equal(etaLabel('en', 150, 40), 'Under a minute to go');
+  assert.equal(etaLabel('en', 30, 20), 'About 3:30 to go');
+  assert.equal(etaLabel('en', 210, 40), 'Under a minute to go');
 
   // Monotonic: the numeric remaining time parsed from consecutive seconds never increases.
   const secs = (label: string | null): number => {
@@ -73,9 +73,23 @@ test('eta: hidden during grace, counts down from 3 min and never goes back up', 
 
 test('eta: Spanish strings', () => {
   assert.equal(etaLabel('es', 5, 10), null);
-  assert.equal(etaLabel('es', 30, 20), 'Faltan unos 2:30');
-  assert.equal(etaLabel('es', 60, 20), 'Faltan unos 2 min');
-  assert.equal(etaLabel('es', 150, 40), 'Falta menos de un minuto');
+  assert.equal(etaLabel('es', 30, 20), 'Faltan unos 3:30');
+  assert.equal(etaLabel('es', 60, 20), 'Faltan unos 3 min');
+  assert.equal(etaLabel('es', 210, 40), 'Falta menos de un minuto');
   assert.equal(etaLabel('es', 320, 70), 'Está tardando un poco más de lo normal; terminando…');
   assert.equal(etaLabel('es', 100, 95), 'Terminando; ya casi está');
+});
+
+test('ticker follows the real server stage when one is reported', () => {
+  const groups = tickerMessages('zh', '1711 El Camino Real, Millbrae, CA');
+  const n = groups.length;
+  // competitors → demographics → finance → write → layout map onto ascending wording groups.
+  const phases = [0, 1, 2, 3, 4].map((i) => tickerPhaseForStage(i, n));
+  for (let i = 1; i < phases.length; i++) assert.ok(phases[i] > phases[i - 1], `stage ${i} must move forward`);
+  assert.equal(tickerPhaseForStage(4, n), n - 1, 'layout uses the last (排版 / proof) wording group');
+  assert.ok(pickMessage(groups, tickerPhaseForStage(1, n), 0).includes('人口'), 'demographics stage talks about population');
+  assert.ok(pickMessage(groups, tickerPhaseForStage(4, n), 1).includes('排版'), 'layout stage talks about layout');
+  // Out-of-range indexes clamp instead of throwing.
+  assert.equal(tickerPhaseForStage(99, n), n - 1);
+  assert.equal(tickerPhaseForStage(-3, n), 0);
 });

@@ -107,6 +107,8 @@ export async function runPartialAnalysis(input: {
   sqft?: number;
   /** When true, skip n8n and use OpenAI only (e.g. after analyzeWithN8n already failed). */
   openAiOnly?: boolean;
+  /** Resolved taxonomy label (§4.1); replaces the raw typed text in the prompt when present. */
+  conceptLabel?: string;
 }): Promise<{
   verdict: string;
   headline: string;
@@ -124,7 +126,7 @@ export async function runPartialAnalysis(input: {
     const raw = await postN8nJson<unknown>(n8nUrl, {
       address: input.location,
       industry: 'restaurant',
-      cuisine_type: input.businessType || undefined,
+      cuisine_type: input.conceptLabel || input.businessType || undefined,
       language,
     });
     return partialSchema.parse(raw);
@@ -134,7 +136,7 @@ export async function runPartialAnalysis(input: {
 
   const userPrompt = locationIqV2FreeUser(language, {
     location: input.location,
-    businessType: input.businessType || defaultBusinessTypeLabel(language),
+    businessType: input.conceptLabel || input.businessType || defaultBusinessTypeLabel(language),
     marketDataBrief: input.marketDataBrief,
     monthlyRentUsd: input.monthlyRentUsd,
     sqft: input.sqft,

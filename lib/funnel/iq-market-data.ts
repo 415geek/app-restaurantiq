@@ -2,16 +2,29 @@
  * Server-side market snapshot for IQ funnel when n8n analyze is not used.
  * Shape loosely matches n8n GatherMarketData `external_data` so paid prompts behave consistently.
  *
- * As of D-1 (2026-05-26) this is a multi-source gather:
- *   1. Google Places — geocode + textsearch (existing)
- *   2. Yelp Fusion   — businesses/search around the geocoded lat/lng
- *   3. Foursquare    — places/search around the geocoded lat/lng (US fallback + price tier)
+ * Multi-source gather:
+ *   1. Google — geocode, then the §4.2 three-layer competitor retrieval
+ *      (lib/iq/data/google-places.ts `fetchThreeLayerCompetitors`): Layer 1 直接竞品
+ *      (concept keyword, 800 → 1600 m), Layer 2 替代竞品 (same category, 1600 m),
+ *      Layer 3 品牌锚点 (city-wide, ≥ 500 reviews, top 5) + walking legs (Distance Matrix).
+ *      The legacy metro-wide "<cuisine> restaurant near <address>" Text Search is gone.
+ *   2. Yelp Fusion   — businesses/search around the geocoded lat/lng (supplementary)
+ *   3. Foursquare    — places/search around the geocoded lat/lng (supplementary)
+ *   Yelp / Foursquare rows that duplicate a Google record (name + ≤ 150 m) are dropped;
+ *   survivors are tagged with the layer their name / categories imply.
+ *
+ * `summary.competitor_count_google` = Layer 1 + Layer 2 within 1600 m (brand anchors
+ * are never counted); `summary.competitor_layers` carries the per-layer counts and
+ * every `sample_competitors_google[]` row carries `layer` and `walk_min`.
  *
  * Each source is independent: any one of them succeeding produces useful market_data.
- * Total wall-clock <3s when caches are warm; <8s cold.
  */
 
-import { envValue } from '@/lib/env-value';
+import { createFetchContext } from '@/lib/iq/data/context';
+import { fetchThreeLayerCompetitors, type GooglePlace, type PlaceLayer, type ThreeLayerCompetitors } from '@/lib/iq/data/google-places';
+import { matchesLayer1, toTableAType, typesMatch, type ConceptSearchProfile } from '@/lib/iq/data/search-profile';
+import type { FetchContext } from '@/lib/iq/data/types';
+import { haversineM } from '@/lib/iq/geo';
 import {
   searchYelpCompetitors,
   isYelpCompetitorSearchConfigured,
@@ -38,6 +51,29 @@ type AddressComponent = {
   short_name?: string;
   types?: string[];
 };
+
+/** Legacy Places row shape every downstream reader (competitor map, DeepSeek insights, anchors) already understands, plus the §4.2 fields. */
+export type GoogleCompetitorRow = {
+  name: string;
+  rating?: number;
+  user_ratings_total?: number;
+  price_level?: number;
+  formatted_address?: string;
+  types?: string[];
+  place_id?: string;
+  geometry?: { location?: { lat: number; lng: number } };
+  business_status?: string | null;
+  /** §4.2 layer: direct | substitute | brand_anchor. */
+  layer: PlaceLayer;
+  /** Straight-line metres from the site. */
+  distance_m: number;
+  /** Walking leg (Distance Matrix) when available. */
+  walk_m: number | null;
+  walk_min: number | null;
+};
+
+/** Layer tag for a supplementary (Yelp / Foursquare) row. */
+export type SupplementaryLayer = 'direct' | 'substitute' | 'other';
 
 function componentOfType(components: AddressComponent[] | undefined, type: string): string | undefined {
   const c = components?.find((x) => Array.isArray(x.types) && x.types.includes(type));
@@ -76,35 +112,95 @@ function staticGeocodeFallback(addressRaw: string): GeocodeResult | null {
   return null;
 }
 
+export function toGoogleCompetitorRow(p: GooglePlace, layer: PlaceLayer): GoogleCompetitorRow {
+  return {
+    name: p.name || 'Unknown',
+    rating: p.rating ?? undefined,
+    user_ratings_total: p.user_rating_count ?? undefined,
+    price_level: p.price_level ?? undefined,
+    formatted_address: p.formatted_address ?? undefined,
+    types: p.types,
+    place_id: p.id,
+    geometry: { location: { lat: p.lat, lng: p.lng } },
+    business_status: p.business_status,
+    layer,
+    distance_m: p.distance_m,
+    walk_m: p.walk_m ?? null,
+    walk_min: p.walk_min ?? null,
+  };
+}
+
+const nameKey = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[（(][^）)]*[）)]/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\b(the|restaurant|cafe|bakery|kitchen|house|inc|llc|co)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const DEDUPE_RADIUS_M = 150;
+
+/** True when a supplementary row is the same business as one of the Google records (normalized name + ≤ 150 m). */
+export function duplicatesGoogle(row: { name: string; lat: number | null; lng: number | null }, google: GoogleCompetitorRow[]): GoogleCompetitorRow | null {
+  const k = nameKey(row.name);
+  if (!k) return null;
+  for (const g of google) {
+    const gk = nameKey(g.name);
+    const nameHit = gk === k || (gk.length > 3 && k.length > 3 && (gk.includes(k) || k.includes(gk)));
+    if (!nameHit) continue;
+    const gl = g.geometry?.location;
+    if (row.lat == null || row.lng == null || !gl) {
+      if (gk === k) return g; // exact name, no coordinates to disprove it
+      continue;
+    }
+    if (haversineM({ lat: row.lat, lng: row.lng }, gl) <= DEDUPE_RADIUS_M) return g;
+  }
+  return null;
+}
+
+/** Layer a supplementary row implies from its name / categories (no query provenance available). */
+export function supplementaryLayer(row: { name: string; categories: string[] }, profile: ConceptSearchProfile): SupplementaryLayer {
+  const catTypes = row.categories.map((c) => toTableAType(c.toLowerCase().replace(/ies$/, 'y').replace(/s$/, ''))).filter((x): x is string => x != null);
+  if (matchesLayer1(`${row.name} ${row.categories.join(' ')}`, [...catTypes], profile)) return 'direct';
+  if (typesMatch(catTypes, profile.types) && profile.origin !== 'text') return 'direct';
+  if (typesMatch(catTypes, profile.substitute_types)) return 'substitute';
+  if (profile.sibling_ids.length && row.categories.some((c) => /chinese|中餐/i.test(c)) && profile.substitute_types.includes('chinese_restaurant')) return 'substitute';
+  return 'other';
+}
+
+function placesStatusOf(three: ThreeLayerCompetitors | null): string {
+  if (!three) return 'NOT_RUN';
+  if (three.api_status === 'ok') return 'OK';
+  if (three.api_status === 'no_key') return 'NO_KEY';
+  if (three.api_status === 'partial') return 'PARTIAL';
+  return 'ERROR';
+}
+
 export async function gatherIqMarketDataFromGoogle(input: {
   location: string;
   businessType: string;
+  /** Taxonomy id when the concept was already confirmed (skips the text classifier). */
+  conceptId?: string | null;
+  /** Injectable fetch / cache / env / cost context (tests, scripts); defaults to the Supabase-cached production context. */
+  ctx?: FetchContext;
 }): Promise<Record<string, unknown> | null> {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
+  const ctx = input.ctx ?? createFetchContext();
+  const apiKey = (ctx.env('GOOGLE_MAPS_API_KEY') ?? '').trim();
   const location = input.location.trim();
   const cuisine = input.businessType.trim();
   if (!location) return null;
 
   let geocode: GeocodeResult | null = null;
-  let placesStatus: string = 'NOT_RUN';
-  let gRows: Array<{
-    name?: string;
-    rating?: number;
-    user_ratings_total?: number;
-    price_level?: number;
-    formatted_address?: string;
-    types?: string[];
-    place_id?: string;
-    geometry?: { location?: { lat: number; lng: number } };
-  }> = [];
+  let three: ThreeLayerCompetitors | null = null;
 
-  // ── Step 1: Google geocode + textsearch (best-effort) ───────────────────────────
+  // ── Step 1: Google geocode (best-effort) ────────────────────────────────────────
   if (apiKey) {
     try {
       const geocodeUrl = new URL('https://maps.googleapis.com/maps/api/geocode/json');
       geocodeUrl.searchParams.set('address', location);
       geocodeUrl.searchParams.set('key', apiKey);
-      const geocodeRes = await fetch(geocodeUrl, { cache: 'no-store' });
+      const geocodeRes = await ctx.fetch(geocodeUrl, { cache: 'no-store' });
       if (geocodeRes.ok) {
         const geocodeData = (await geocodeRes.json()) as {
           status?: string;
@@ -122,52 +218,13 @@ export async function gatherIqMarketDataFromGoogle(input: {
             state: componentOfType(top.address_components, 'administrative_area_level_1'),
           };
         } else {
-          console.warn(
-            '[iq-market-data] geocode non-OK status=%s message=%s',
-            geocodeData.status,
-            geocodeData.error_message ?? '',
-          );
+          console.warn('[iq-market-data] geocode non-OK status=%s message=%s', geocodeData.status, geocodeData.error_message ?? '');
         }
       } else {
         console.warn('[iq-market-data] geocode http=%d', geocodeRes.status);
       }
     } catch (err) {
       console.warn('[iq-market-data] geocode threw:', err);
-    }
-
-    if (geocode) {
-      try {
-        const query =
-          cuisine.length > 0
-            ? `${cuisine} restaurant near ${location}`
-            : `restaurants near ${location}`;
-        const placesUrl = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json');
-        placesUrl.searchParams.set('query', query);
-        placesUrl.searchParams.set('type', 'restaurant');
-        placesUrl.searchParams.set('key', apiKey);
-        const placesRes = await fetch(placesUrl, { cache: 'no-store' });
-        if (placesRes.ok) {
-          const placesData = (await placesRes.json()) as {
-            status?: string;
-            error_message?: string;
-            results?: typeof gRows;
-          };
-          placesStatus = placesData.status ?? 'UNKNOWN';
-          if (placesData.status === 'OK' && Array.isArray(placesData.results)) {
-            gRows = placesData.results.slice(0, 12);
-          } else if (placesData.status !== 'OK') {
-            console.warn(
-              '[iq-market-data] places textsearch non-OK status=%s message=%s',
-              placesData.status,
-              placesData.error_message ?? '',
-            );
-          }
-        } else {
-          console.warn('[iq-market-data] places textsearch http=%d', placesRes.status);
-        }
-      } catch (err) {
-        console.warn('[iq-market-data] places textsearch threw:', err);
-      }
     }
   } else {
     console.warn('[iq-market-data] GOOGLE_MAPS_API_KEY missing — skipping Google leg');
@@ -181,54 +238,70 @@ export async function gatherIqMarketDataFromGoogle(input: {
       geocode = fallback;
     }
   }
-
-  // If we still have no geocode AND no Google places, there's nothing useful to return.
-  if (!geocode && gRows.length === 0) {
-    return null;
-  }
-
-  // We need a non-null geocode for Yelp/FSQ even if it's coarse; if still null, bail.
   if (!geocode) return null;
 
+  // ── Step 2: §4.2 three-layer competitor retrieval (Places (New) + Distance Matrix) ──
+  if (apiKey) {
+    try {
+      three = await fetchThreeLayerCompetitors({ lat: geocode.lat, lng: geocode.lng, conceptId: input.conceptId ?? null, text: cuisine || 'restaurant' }, ctx);
+      if (three.status === 'failed') console.warn('[iq-market-data] places three-layer failed: %s', three.note);
+    } catch (err) {
+      console.warn('[iq-market-data] places three-layer threw:', err);
+    }
+  }
+
   try {
+    const direct = (three?.direct ?? []).map((p) => toGoogleCompetitorRow(p, 'direct'));
+    const substitute = (three?.substitute ?? []).map((p) => toGoogleCompetitorRow(p, 'substitute'));
+    const brandAnchors = (three?.brand_anchors ?? []).map((p) => toGoogleCompetitorRow(p, 'brand_anchor'));
+    // Layer 1 first, then Layer 2 — each by walking distance (straight-line when no leg).
+    const gRows: GoogleCompetitorRow[] = [...direct, ...substitute];
+    const allGoogle = [...gRows, ...brandAnchors];
+
     const ratings = gRows.map((x) => num(x.rating)).filter((x): x is number => x !== null);
     const reviews = gRows.map((x) => num(x.user_ratings_total)).filter((x): x is number => x !== null);
-    const avg = (arr: number[]) =>
-      arr.length ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 100) / 100 : null;
+    const avg = (arr: number[]) => (arr.length ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 100) / 100 : null);
 
-    // Fan out to Yelp + Foursquare in parallel using the geocoded lat/lng.
-    // The cuisine term (when present) is much more selective than a bare address query.
-    const yelpTerm = cuisine || 'restaurant';
-    const fsqTerm = cuisine || 'restaurant';
+    // Fan out to Yelp + Foursquare in parallel using the geocoded lat/lng (supplementary lists).
+    const term = three?.profile.query || cuisine || 'restaurant';
     const [yelpPack, fsqPack] = await Promise.all([
-      isYelpCompetitorSearchConfigured()
-        ? searchYelpCompetitors({ lat: geocode.lat, lng: geocode.lng, term: yelpTerm, limit: 20 }).catch(() => null)
-        : Promise.resolve(null),
-      isFoursquareConfigured()
-        ? searchFoursquareCompetitors({ lat: geocode.lat, lng: geocode.lng, term: fsqTerm, limit: 20 }).catch(() => null)
-        : Promise.resolve(null),
+      isYelpCompetitorSearchConfigured() ? searchYelpCompetitors({ lat: geocode.lat, lng: geocode.lng, term, limit: 20 }).catch(() => null) : Promise.resolve(null),
+      isFoursquareConfigured() ? searchFoursquareCompetitors({ lat: geocode.lat, lng: geocode.lng, term, limit: 20 }).catch(() => null) : Promise.resolve(null),
     ]);
 
-    const yelpRows: YelpCompetitorRow[] = yelpPack?.api_status === 'ok' ? yelpPack.competitors : [];
-    const fsqRows: FoursquareCompetitorRow[] = fsqPack?.api_status === 'ok' ? fsqPack.competitors : [];
+    const yelpAll: YelpCompetitorRow[] = yelpPack?.api_status === 'ok' ? yelpPack.competitors : [];
+    const fsqAll: FoursquareCompetitorRow[] = fsqPack?.api_status === 'ok' ? fsqPack.competitors : [];
+    const profile = three?.profile ?? null;
+    const tagged = <T extends { name: string; lat: number | null; lng: number | null; categories: string[] }>(rows: T[]) => {
+      const kept: Array<T & { layer: SupplementaryLayer }> = [];
+      let duplicates = 0;
+      for (const r of rows) {
+        if (duplicatesGoogle(r, allGoogle)) {
+          duplicates++;
+          continue;
+        }
+        kept.push({ ...r, layer: profile ? supplementaryLayer(r, profile) : 'other' });
+      }
+      return { kept, duplicates };
+    };
+    const yelp = tagged(yelpAll);
+    const fsq = tagged(fsqAll);
 
-    const yelpRatings = yelpRows
-      .map((r) => num(r.rating))
-      .filter((x): x is number => x !== null);
-    const yelpReviewCounts = yelpRows
-      .map((r) => num(r.review_count))
-      .filter((x): x is number => x !== null);
+    const yelpRatings = yelp.kept.map((r) => num(r.rating)).filter((x): x is number => x !== null);
+    const yelpReviewCounts = yelp.kept.map((r) => num(r.review_count)).filter((x): x is number => x !== null);
 
     const summary = {
-      competitor_count_google: gRows.length,
-      competitor_count_yelp: yelpRows.length,
-      competitor_count_foursquare: fsqRows.length,
+      /** §4.2: Layer 1 + Layer 2 within 1600 m; brand anchors are never counted. */
+      competitor_count_google: direct.length + substitute.length,
+      competitor_layers: { direct: direct.length, substitute: substitute.length, brand_anchor: brandAnchors.length },
+      competitor_count_yelp: yelp.kept.length,
+      competitor_count_foursquare: fsq.kept.length,
       avg_rating_google: avg(ratings),
       avg_rating_yelp: avg(yelpRatings),
       avg_review_count_google: avg(reviews),
       avg_review_count_yelp: avg(yelpReviewCounts),
-      sample_competitors_google: gRows.slice(0, 10).map((x) => ({
-        name: x.name ?? 'Unknown',
+      sample_competitors_google: gRows.slice(0, 12).map((x) => ({
+        name: x.name,
         rating: x.rating ?? null,
         reviews: x.user_ratings_total ?? null,
         price_level: x.price_level ?? null,
@@ -239,8 +312,25 @@ export async function gatherIqMarketDataFromGoogle(input: {
         // D-5: include place_id so the DeepSeek competitor-insight pipeline
         // can pull Place Details reviews without a second name->id lookup.
         place_id: x.place_id ?? null,
+        layer: x.layer,
+        distance_m: x.distance_m,
+        walk_m: x.walk_m,
+        walk_min: x.walk_min,
       })),
-      sample_competitors_yelp: yelpRows.slice(0, 12).map((r) => ({
+      /** §4.2 Layer 3 品牌锚点 — city-wide benchmarks, reported separately, not competition. */
+      sample_brand_anchors_google: brandAnchors.map((x) => ({
+        name: x.name,
+        rating: x.rating ?? null,
+        reviews: x.user_ratings_total ?? null,
+        price_level: x.price_level ?? null,
+        address: x.formatted_address ?? null,
+        lat: x.geometry?.location?.lat ?? null,
+        lng: x.geometry?.location?.lng ?? null,
+        place_id: x.place_id ?? null,
+        layer: 'brand_anchor' as const,
+        distance_m: x.distance_m,
+      })),
+      sample_competitors_yelp: yelp.kept.slice(0, 12).map((r) => ({
         yelp_id: r.yelp_id,
         name: r.name,
         rating: r.rating,
@@ -254,8 +344,9 @@ export async function gatherIqMarketDataFromGoogle(input: {
         lng: r.lng,
         url: r.url,
         transactions: r.transactions,
+        layer: r.layer,
       })),
-      sample_competitors_foursquare: fsqRows.slice(0, 12).map((r) => ({
+      sample_competitors_foursquare: fsq.kept.slice(0, 12).map((r) => ({
         fsq_id: r.fsq_id,
         name: r.name,
         categories: r.categories,
@@ -264,10 +355,16 @@ export async function gatherIqMarketDataFromGoogle(input: {
         address: r.address,
         lat: r.lat,
         lng: r.lng,
+        layer: r.layer,
       })),
-      places_status: placesStatus,
+      supplementary_duplicates_dropped: { yelp: yelp.duplicates, foursquare: fsq.duplicates },
+      places_status: placesStatusOf(three),
       yelp_status: yelpPack?.api_status ?? 'not_configured',
       foursquare_status: fsqPack?.api_status ?? 'not_configured',
+      /** §4.2 provenance: which Layer-1 radii were searched (a void needs both) and how the concept resolved. */
+      l1_search_radius_m: three?.l1_search_radius_m ?? null,
+      l1_layers_tried: three?.l1_layers_tried ?? [],
+      concept: three ? { ...three.concept, query: three.profile.query } : null,
     };
 
     return {
@@ -278,22 +375,11 @@ export async function gatherIqMarketDataFromGoogle(input: {
       geocode,
       summary,
       google_raw: {
-        textsearch: {
-          status: placesStatus,
-          results: gRows,
-        },
+        // Legacy key kept for readers of the old textsearch shape; the rows are the Layer 1 + 2 set.
+        textsearch: { status: summary.places_status, results: gRows },
+        three_layer: three ? { concept: three.concept, calls: three.calls, calls_made: three.calls_made, cost_usd: three.cost_usd, note: three.note, brand_anchors: brandAnchors } : null,
       },
-      yelp_raw: yelpPack
-        ? {
-            search: yelpPack,
-            details: [],
-            reviews: [],
-          }
-        : {
-            search: null,
-            details: [],
-            reviews: [],
-          },
+      yelp_raw: yelpPack ? { search: yelpPack, details: [], reviews: [] } : { search: null, details: [], reviews: [] },
       foursquare_raw: fsqPack ? { search: fsqPack } : null,
     };
   } catch (err) {
@@ -307,4 +393,3 @@ export async function gatherIqMarketDataFromGoogle(input: {
 // Re-export the function with a name that better matches its new behaviour, while
 // keeping the legacy import name working for existing call sites.
 export { gatherIqMarketDataFromGoogle as gatherIqMarketDataMultiSource };
-

@@ -21,7 +21,7 @@ function scrubDisclaimer(text: string): string {
       if (/双模型|Dual-model|主模型|Report LLM|报告主模型|复核.*→|→\s*复核/i.test(t)) {
         return false;
       }
-      if (/mimo|openai|tavily|deepseek|gpt-/i.test(t)) return false;
+      if (/mimo|openai|tavily|deepseek|gpt-|anthropic|claude|opus|sonnet|gemini/i.test(t)) return false;
       return true;
     })
     .join('\n')
@@ -35,7 +35,7 @@ function scrubWarnings(warnings: unknown): string[] | undefined {
     .map((w) =>
       w
         .replace(/Primary\s+[\w/]+\s+failed[^.]*\./gi, '')
-        .replace(/mimo|openai/gi, 'alternate engine')
+        .replace(/mimo|openai|anthropic|claude|opus|sonnet|gemini|deepseek/gi, 'alternate engine')
         .trim(),
     )
     .filter((w) => w.length > 0);

@@ -5,7 +5,8 @@
  * so the report can hide dependent sections (e.g. "缺 CapEx → 回收期隐藏").
  */
 import { toLocale } from '@/lib/i18n/locale';
-import { classifyCuisineText, getTaxonomy } from '@/lib/iq/params';
+import { classifyConceptSync } from '@/lib/iq/concept/classify';
+import { classifyCuisineText, findCuisine } from '@/lib/iq/params';
 import type { DataResult, SiteInput } from './types';
 import { DATA_SOURCE_NAMES } from './types';
 
@@ -20,6 +21,8 @@ export type RawSiteInput = {
   address: string;
   cuisine?: string | null;
   cuisine_text?: string | null;
+  /** Taxonomy id the customer confirmed in the concept picker (评审 Spec §4.1 step 3); wins over the free text. */
+  concept_id?: string | null;
   language?: string | null;
   listing_urls?: unknown;
   existing_stores?: unknown;
@@ -116,19 +119,38 @@ export function coerceKnownCompetitors(v: unknown): string[] {
   return out;
 }
 
-function resolveCuisine(raw: RawSiteInput): { id: string; how: string } {
+export interface CuisineResolution {
+  id: string;
+  /** Lineage note for the D12 coverage note (Chinese engine string; rendered through plain.ts). */
+  how: string;
+  /** False when the concept was neither confirmed by the customer nor matched by the dictionary — the report then runs on other_chinese and declares it. */
+  confirmed: boolean;
+}
+
+/**
+ * Concept resolution (§4.1 step 4): the picker's `concept_id` wins; otherwise the
+ * typed business type goes through the dictionary classifier over every
+ * category; a legacy `cuisine` value may be a taxonomy id or free text. Nothing
+ * falls silently into other_chinese: an unresolved concept keeps that id (the
+ * engines need a valid one) but is recorded as 未确认 so the pipeline can flag it.
+ */
+export function resolveCuisine(raw: RawSiteInput): CuisineResolution {
+  const picked = findCuisine((raw.concept_id ?? '').trim());
+  if (picked) return { id: picked.id, how: `用户确认业态 ${picked.id}（${picked.label_zh}）`, confirmed: true };
   const text = (raw.cuisine_text ?? '').trim();
   const id = (raw.cuisine ?? '').trim();
   if (text) {
-    const c = classifyCuisineText(text);
-    return { id: c.id, how: c.matched ? `文本 "${text}" → ${c.id}（匹配 "${c.matched}"）` : `文本 "${text}" 未匹配 → other_chinese` };
+    const c = classifyConceptSync(text);
+    if (!c.needs_confirmation) return { id: c.id, how: `文本 "${text}" → ${c.id}（匹配 "${c.matched}"）`, confirmed: true };
+    return { id: 'other_chinese', how: `文本 "${text}" 未确认 → other_chinese`, confirmed: false };
   }
-  if (id && getTaxonomy().cuisines.some((c) => c.id === id)) return { id, how: `taxonomy id ${id}` };
+  if (findCuisine(id)) return { id, how: `taxonomy id ${id}`, confirmed: true };
   if (id) {
-    const c = classifyCuisineText(id);
-    return { id: c.id, how: c.matched ? `"${id}" → ${c.id}（匹配 "${c.matched}"）` : `"${id}" 未匹配 → other_chinese` };
+    const c = classifyCuisineText(id, { scope: 'all' });
+    if (c.matched) return { id: c.id, how: `"${id}" → ${c.id}（匹配 "${c.matched}"）`, confirmed: true };
+    return { id: 'other_chinese', how: `"${id}" 未确认 → other_chinese`, confirmed: false };
   }
-  return { id: 'other_chinese', how: '未提供菜系 → other_chinese' };
+  return { id: 'other_chinese', how: '未提供业态 未确认 → other_chinese', confirmed: false };
 }
 
 const FIELD_LABELS: Array<[keyof SiteInput, string]> = [
@@ -142,7 +164,7 @@ const FIELD_LABELS: Array<[keyof SiteInput, string]> = [
   ['parking_spaces', '车位数'],
 ];
 
-export function normalizeUserInputs(raw: RawSiteInput): { input: SiteInput; result: DataResult<SiteInput> } {
+export function normalizeUserInputs(raw: RawSiteInput): { input: SiteInput; result: DataResult<SiteInput>; concept: CuisineResolution } {
   const language: SiteInput['language'] = toLocale(raw.language);
   const cuisine = resolveCuisine(raw);
   const input: SiteInput = {
@@ -168,7 +190,7 @@ export function normalizeUserInputs(raw: RawSiteInput): { input: SiteInput; resu
   const parts = [
     `已提供：${provided.length ? provided.join('、') : '无'}`,
     `缺失：${missing.length ? missing.join('、') : '无'}`,
-    `菜系：${cuisine.how}`,
+    `业态：${cuisine.how}`,
   ];
   if (input.listing_urls.length) parts.push(`挂牌链接 ${input.listing_urls.length} 条`);
   if (input.existing_stores.length) parts.push(`现有门店 ${input.existing_stores.length} 家`);
@@ -188,5 +210,5 @@ export function normalizeUserInputs(raw: RawSiteInput): { input: SiteInput; resu
     coverage_note: parts.join('；'),
     cache: 'none',
   };
-  return { input, result };
+  return { input, result, concept: cuisine };
 }

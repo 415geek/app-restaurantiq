@@ -60,7 +60,7 @@ const COPY: Record<Locale, Copy> = {
       more: 'Add rent and size (optional — sharper finance pages)',
       less: 'Hide',
       cta: 'Get my free risk score',
-      trust: ['Verdict in 60 seconds', 'U.S. Census · Google Maps · open data', 'Free tier — no sign-up needed'],
+      trust: ['Verdict in 60 seconds', 'U.S. Census · Google Maps · open data', 'Free tier — no sign-up; leave an email to save your result'],
     },
     how: {
       title: 'Three steps from address to verdict',
@@ -100,7 +100,7 @@ const COPY: Record<Locale, Copy> = {
     pricing: {
       title: 'Look for free. Pay only if it’s worth it.',
       sub: 'The price of one dinner, against a wrong lease.',
-      free: { name: 'Free', price: '$0', items: ['Overall score and verdict', 'Three key insights', 'No sign-up needed'], cta: 'Start free' },
+      free: { name: 'Free', price: '$0', items: ['Overall score and verdict', 'Three key insights', 'No sign-up — an email only if you want to save the result'], cta: 'Start free' },
       pro: {
         name: 'Professional report',
         price: `$${PRICE_USD}`,
@@ -153,7 +153,7 @@ const COPY: Record<Locale, Copy> = {
       more: '补充租金和面积（选填，财务更准）',
       less: '收起',
       cta: '免费生成风险评分',
-      trust: ['60 秒出结论', '美国人口普查 · Google 地图 · 公开数据', '免费版不需要注册'],
+      trust: ['60 秒出结论', '美国人口普查 · Google 地图 · 公开数据', '免费版无需注册，留邮箱可保存结果'],
     },
     how: {
       title: '三步，从地址到结论',
@@ -193,7 +193,7 @@ const COPY: Record<Locale, Copy> = {
     pricing: {
       title: '先免费看，值得再付',
       sub: '一顿饭的钱，避免一个错误的租约。',
-      free: { name: '免费版', price: '$0', items: ['综合评分与判定', '3 条最要紧的洞察', '不需要注册'], cta: '免费开始' },
+      free: { name: '免费版', price: '$0', items: ['综合评分与判定', '3 条最要紧的洞察', '无需注册，留邮箱可保存结果'], cta: '免费开始' },
       pro: {
         name: '专业版报告',
         price: `$${PRICE_USD}`,
@@ -246,7 +246,7 @@ const COPY: Record<Locale, Copy> = {
       more: 'Agregar renta y tamaño (opcional; finanzas más precisas)',
       less: 'Ocultar',
       cta: 'Obtener mi puntuación de riesgo gratis',
-      trust: ['Veredicto en 60 segundos', 'Censo de EE. UU. · Google Maps · datos abiertos', 'Plan gratuito sin registro'],
+      trust: ['Veredicto en 60 segundos', 'Censo de EE. UU. · Google Maps · datos abiertos', 'Plan gratuito sin registro; deja tu correo para guardar el resultado'],
     },
     how: {
       title: 'Tres pasos: de la dirección al veredicto',
@@ -286,7 +286,7 @@ const COPY: Record<Locale, Copy> = {
     pricing: {
       title: 'Míralo gratis. Paga solo si vale la pena.',
       sub: 'El precio de una cena, frente a un contrato equivocado.',
-      free: { name: 'Gratis', price: '$0', items: ['Puntuación general y veredicto', 'Tres observaciones clave', 'Sin registro'], cta: 'Empezar gratis' },
+      free: { name: 'Gratis', price: '$0', items: ['Puntuación general y veredicto', 'Tres observaciones clave', 'Sin registro; correo solo si quieres guardar el resultado'], cta: 'Empezar gratis' },
       pro: {
         name: 'Informe profesional',
         price: `$${PRICE_USD}`,

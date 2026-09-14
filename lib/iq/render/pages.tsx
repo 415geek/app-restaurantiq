@@ -55,7 +55,7 @@ import {
   TwinBars,
 } from './charts';
 import { PALETTE, dataNotes, fmtDate, makeFormatters, nameKey, precheckReasons, probColor, ring, scoreColor, stripCitations, verdictLabel, type Formatters } from './format';
-import { fill, strings, type ReportStrings } from './i18n';
+import { conceptStrings, fill, strings, type ConceptWording, type ReportStrings } from './i18n';
 import { MapFigure } from './map';
 import type { StaticMaps } from './static-map';
 
@@ -80,9 +80,15 @@ interface Ctx {
   field: (zh: string | null | undefined, en: string | null | undefined) => string;
 }
 
+/** §4.1: which wording family the concept uses (models stored before §4.1 carry no category → Chinese). */
+function conceptWordingOf(model: ReportModel): ConceptWording {
+  const category = model.input.concept_category ?? 'chinese_regional';
+  return { chinese: category === 'chinese_regional' || category === 'chinese_format', category };
+}
+
 function ctxOf(model: ReportModel, lang?: Locale): Ctx {
   const l = lang ?? toLocale(model.meta.language);
-  return { lang: l, S: strings(l), F: makeFormatters(l), t: (s) => plainText(s, l), field: (zh, en) => localizedField(zh, en, l) };
+  return { lang: l, S: conceptStrings(l, conceptWordingOf(model)), F: makeFormatters(l), t: (s) => plainText(s, l), field: (zh, en) => localizedField(zh, en, l) };
 }
 
 const PAGE_ICON: Record<PageId, IconType> = {
@@ -105,7 +111,7 @@ const PAGE_ICON: Record<PageId, IconType> = {
 
 /** Chinese edition keeps a one-line English subtitle under the title; en / es render in one language only. */
 const SUBTITLE_EN: Record<PageId, string> = {
-  page_1: '360° site-selection report for a Chinese restaurant concept',
+  page_1: '360° site-selection report for a restaurant concept',
   page_2: 'Executive Summary · verdict, evidence, risks and pre-lease conditions',
   page_3: 'Trade Area Map · reach rings, competitors, anchors and rail access',
   page_4: 'Demand Coverage · four-ring profile against the county benchmark',
@@ -698,6 +704,22 @@ function Page6({ model, lang }: PageProps) {
 /* ------------------------------------------------------------------ */
 /* 7 · Competitor cards                                                  */
 /* ------------------------------------------------------------------ */
+/** Page-7 fallback block when no peer revenue band exists (评审 Spec §4.8); strings kept local to the block. */
+const P7_REVIEW_DIST: Record<Locale, { title: string; note: string }> = {
+  zh: {
+    title: '同类竞品评论量分布',
+    note: '{method}，因此没有同类门店的营收区间；上图为 Google / Yelp 评论数原始值（前 8 家），只反映相对客流热度，不是营收。本址保本线见财务页。',
+  },
+  en: {
+    title: 'Layer-1 review-count distribution',
+    note: '{method}, so no peer revenue band is available; the bars are raw Google / Yelp review counts (top 8) — a relative traffic signal, not revenue. This site’s break-even is on the finance page.',
+  },
+  es: {
+    title: 'Distribución de reseñas de competidores directos',
+    note: '{method}, por lo que no hay un rango de ingresos de pares; las barras son conteos de reseñas de Google / Yelp (8 principales): una señal relativa de tráfico, no ingresos. El punto de equilibrio de este local está en la página financiera.',
+  },
+};
+
 function Page7({ model, lang }: PageProps) {
   const c = ctxOf(model, lang);
   const { S, F } = c;
@@ -716,6 +738,16 @@ function Page7({ model, lang }: PageProps) {
   ];
   const tierLabel = (t: number | null) => (t == null ? na : fill(S.p7.tierValue, { n: t }));
   const near = m.competitors.l1_nearest_outside_pool;
+  // §4.8: without a peer revenue median the band table is meaningless — show the
+  // Layer-1 review-count distribution (raw platform values, top 8) instead.
+  const reviewRows = uniqueCompetitors([...m.competitors.l1].sort((a, b2) => (b2.rating_count ?? 0) - (a.rating_count ?? 0)))
+    .filter((x) => x.rating_count != null && x.rating_count > 0)
+    .slice(0, 8)
+    .map((x) => ({ label: (c.lang === 'zh' ? x.name_zh || x.name : x.name).slice(0, 22), value: x.rating_count }));
+  // §4.2: the void claim is only shown when both Layer-1 keyword radii (800 / 1600 m) were searched (guard) — say so.
+  const bothRadii = ['direct@800', 'direct@1600'].every((l) => (m.competitors.l1_layers_tried ?? []).includes(l));
+  const anchors = m.competitors.brand_anchors ?? [];
+  const anchorIds = new Set(anchors.map((a) => a.id));
   return (
     <PageShell c={c} model={m} pageId="page_7" chips={<SourceChips model={m} ids={['D5', 'D6', 'D7']} model_labels={[S.p7.chipShare]} lang={c.lang} />}>
       <div className="cards-grid">
@@ -726,6 +758,7 @@ function Page7({ model, lang }: PageProps) {
               <p>
                 {fill(S.p7.voidBody, { cuisine, radius: m.competitors.pool_radius_mi ?? 5 })}
                 {near ? fill(S.p7.voidNearest, { name: near.name, dist: F.miles(near.distance_mi) }) : null}
+                {bothRadii ? S.p7.voidSearched : null}
                 {S.p7.voidTail}
               </p>
             </div>
@@ -739,12 +772,14 @@ function Page7({ model, lang }: PageProps) {
               <span className="comp-rank">{i + 1}</span>
               <CompetitorName c={x} lang={c.lang} />
               {x.is_chain ? <span className="tag">{S.p7.chain}</span> : null}
+              {anchorIds.has(x.id) ? <span className="tag">{S.p7.anchorTag}</span> : null}
             </div>
             <dl className="comp-facts">
               <dt>{S.p7.distance}</dt>
               <dd className="num">{F.miles(x.distance_mi)}</dd>
-              <dt>{S.p7.drive}</dt>
-              <dd className="num">{F.minutes(x.drive_min)}</dd>
+              {/* §4.2 距离用路网: the walking time replaces the (never populated) drive row when a leg exists. */}
+              <dt>{x.walk_min != null ? S.p7.walk : S.p7.drive}</dt>
+              <dd className="num">{x.walk_min != null ? fill(S.p7.walkValue, { n: F.int(x.walk_min) }) : F.minutes(x.drive_min)}</dd>
               <dt>{S.p7.rating}</dt>
               <dd className="num">{F.num(x.rating, 1)}</dd>
               <dt>{S.p7.reviews}</dt>
@@ -765,9 +800,54 @@ function Page7({ model, lang }: PageProps) {
           </div>
         ))}
       </div>
-      <h2 className="h2">{S.p7.band}</h2>
-      <HBars rows={bandRows} valueLabel={(v) => F.usd(v)} labelWidth={c.lang === 'zh' ? 110 : 150} valueWidth={90} height={16} gap={6} />
-      <p className="table-note">{fill(S.p7.bandNote, { method: S.bandMethod[b.method] ?? c.t(b.method), onlyBreakeven: b.median == null ? S.p7.bandOnlyBreakeven : '' })}</p>
+      {anchors.length ? (
+        <>
+          <h2 className="h2">{S.p7.anchors}</h2>
+          <table className="data-table compact">
+            <thead>
+              <tr>
+                <th>{S.p7.anchorName}</th>
+                <th className="num">{S.p7.anchorRating}</th>
+                <th className="num">{S.p7.anchorReviews}</th>
+                <th className="num">{S.p7.anchorDistance}</th>
+                <th>{S.p7.anchorInArea}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {anchors.map((a) => (
+                <tr key={a.id}>
+                  <td>
+                    <CompetitorName c={a} lang={c.lang} />
+                  </td>
+                  <td className="num">{F.num(a.rating, 1)}</td>
+                  <td className="num">{F.int(a.rating_count)}</td>
+                  <td className="num">{F.miles(a.distance_mi)}</td>
+                  <td>{a.in_trade_area ? S.p7.yes : S.p7.no}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="table-note">{S.p7.anchorsNote}</p>
+        </>
+      ) : null}
+      {/* §4.8: fixed-height footnote area (.p7-band) so the band + note can never run into the summary paragraph. */}
+      {b.median == null ? (
+        <div className="p7-band">
+          <h2 className="h2">{P7_REVIEW_DIST[c.lang].title}</h2>
+          {reviewRows.length > 0 ? (
+            <HBars rows={reviewRows} valueLabel={(v) => F.int(v)} labelWidth={c.lang === 'zh' ? 110 : 150} valueWidth={60} height={11} gap={3} />
+          ) : (
+            <p className="table-note">{fill(S.p7.noData, { na })}</p>
+          )}
+          <p className="table-note">{fill(P7_REVIEW_DIST[c.lang].note, { method: S.bandMethod[b.method] ?? c.t(b.method) })}</p>
+        </div>
+      ) : (
+        <div className="p7-band">
+          <h2 className="h2">{S.p7.band}</h2>
+          <HBars rows={bandRows} valueLabel={(v) => F.usd(v)} labelWidth={c.lang === 'zh' ? 110 : 150} valueWidth={90} height={16} gap={6} />
+          <p className="table-note">{fill(S.p7.bandNote, { method: S.bandMethod[b.method] ?? c.t(b.method), onlyBreakeven: '' })}</p>
+        </div>
+      )}
     </PageShell>
   );
 }

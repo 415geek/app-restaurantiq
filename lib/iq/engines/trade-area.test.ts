@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { circlePolygon, destination } from '../geo';
 import { computeTradeArea, primaryRingFor, type BlockGroupInput, type RingInput } from './trade-area';
-import { computeHuff } from './demand-huff';
+import { computeHuff, lunchAudienceFor } from './demand-huff';
 
 const site = { lat: 37.5985, lng: -122.3872 };
 
@@ -98,4 +98,20 @@ test('huff: closer / stronger competitors take more; changing β changes capture
   assert.notEqual(everyday.captured_monthly_usd, weak.captured_monthly_usd);
   assert.equal(everyday.huff.beta, 2.0);
   assert.ok(weak.by_ring.length >= 1 && weak.by_ring[0].share <= 1);
+});
+
+test('§4.1 demand basis: a general-audience concept multiplies ALL restaurant spend, a Chinese concept the Chinese spend', () => {
+  const groups = [bg('060816023001', site, 500)];
+  const chinese = computeTradeArea({ rings, block_groups: groups, params });
+  const general = computeTradeArea({ rings, block_groups: groups, params: { ...params, demand_basis: 'restaurant_spend' } });
+  const c = chinese.bg_demand[0];
+  const g = general.bg_demand[0];
+  assert.equal(c.restaurant_spend_usd, g.restaurant_spend_usd);
+  assert.ok(Math.abs(c.cuisine_demand_usd - c.chinese_spend_usd * 0.1) < 1e-6);
+  assert.ok(Math.abs(g.cuisine_demand_usd - g.restaurant_spend_usd * 0.1) < 1e-6);
+  assert.ok(g.cuisine_demand_usd > c.cuisine_demand_usd);
+  const lunch = lunchAudienceFor({ audience: 'general' }, { chinese_share: 0.3, asian_job_share: 0.4, concept_share: 0.05, ticket_lunch: 8 });
+  assert.deepEqual(lunch, { asian_job_share: null, ticket_lunch: 8, chinese_share: 0.05 });
+  assert.deepEqual(lunchAudienceFor({ audience: 'chinese', daypart_profile: 'lunch_dinner' }, { chinese_share: 0.3, asian_job_share: 0.4, concept_share: 0.05, ticket_lunch: 18 }), { asian_job_share: 0.4, ticket_lunch: 18, chinese_share: 0.3 });
+  assert.equal(lunchAudienceFor({ audience: 'chinese', daypart_profile: 'dinner' }, { chinese_share: 0.3, asian_job_share: 0.4, concept_share: 0.05, ticket_lunch: 26 }).ticket_lunch, null, 'dinner-only formats have no lunch pool');
 });

@@ -8,6 +8,7 @@ import { ReportAccountBlock } from './ReportAccountBlock';
 import { ReportMarkdown } from './ReportMarkdown';
 import { RiskAuditReportSections } from './RiskAuditReportSections';
 import { DataProvenance, ReportDataViz } from './ReportDataViz';
+import { verifiedListings } from '@/lib/funnel/iq-corridor-listings';
 import { normalizeConfidenceLevel } from '@/lib/funnel/iq-full-report-schema';
 import { normalizeRiskAuditFromFull, productPositioningLine } from '@/lib/funnel/iq-risk-audit-model';
 import { LOCALES, LOCALE_LABEL, type Locale } from '@/lib/i18n/locale';
@@ -28,6 +29,10 @@ type Props = {
   initialLang?: Locale;
   marketData?: Record<string, unknown> | null;
   staticMapUrl?: string | null;
+  /** `report_model_json.sources` when the 360° model exists (data provenance rows). */
+  modelSources?: unknown[] | null;
+  /** `report_model_json.meta.data_as_of` when available. */
+  dataAsOf?: string | null;
 };
 
 type Copy = {
@@ -70,6 +75,8 @@ type Copy = {
   langSwitchError: (name: string) => string;
   langSwitchTimeout: (name: string) => string;
   upgrading: string;
+  scenarioBasis: string;
+  corridorTextOnly: string;
   overallScore: string;
   footTraffic: string;
   competition: string;
@@ -156,7 +163,9 @@ const translations: Record<Locale, Copy> = {
     generatingVersion: (n) => `Generating the ${n} version…`,
     langSwitchError: (n) => `Could not generate the ${n} version. Please try again in a moment.`,
     langSwitchTimeout: (n) => `The ${n} version timed out. Please try again.`,
-    upgrading: 'You are viewing the fast edition; the professional-depth report (full market data + dual-model verification) is generating in the background and this page will refresh automatically.',
+    upgrading: 'You are viewing the standard edition. The in-depth edition will replace this automatically once it is ready — no action needed.',
+    scenarioBasis: 'The three scenarios are seats × turns per day × average ticket; the 360° report models demand capture instead, so the two figures use different bases.',
+    corridorTextOnly: 'No verified listing (LoopNet / Crexi) for this corridor — size and rent are not shown. Verify on site or with a broker.',
     overallScore: 'Overall',
     footTraffic: 'Foot traffic',
     competition: 'Competition',
@@ -240,7 +249,9 @@ const translations: Record<Locale, Copy> = {
     generatingVersion: (n) => `正在生成${n}版…`,
     langSwitchError: (n) => `无法生成${n}版，请稍后重试。`,
     langSwitchTimeout: (n) => `生成${n}版超时，请稍后重试。`,
-    upgrading: '当前为快速版报告；专业深度版（完整市场数据 + 双模型交叉验证）正在后台生成，完成后将自动更新本页。',
+    upgrading: '当前为标准版报告；深度版稍后自动替换，无需任何操作。',
+    scenarioBasis: '三场景按座位 × 翻台 × 客单价测算；360° 报告按需求捕获测算，口径不同。',
+    corridorTextOnly: '该走廊暂无经核实的在租房源（LoopNet / Crexi），不展示面积与租金；请踩盘或向经纪核实。',
     overallScore: '综合分',
     footTraffic: '客流指数',
     competition: '竞争强度',
@@ -324,7 +335,9 @@ const translations: Record<Locale, Copy> = {
     generatingVersion: (n) => `Generando la versión en ${n}…`,
     langSwitchError: (n) => `No se pudo generar la versión en ${n}. Inténtalo de nuevo en un momento.`,
     langSwitchTimeout: (n) => `La versión en ${n} tardó demasiado. Inténtalo de nuevo.`,
-    upgrading: 'Estás viendo la edición rápida; el informe profesional a fondo (datos de mercado completos + verificación con dos modelos) se está generando en segundo plano y esta página se actualizará automáticamente.',
+    upgrading: 'Estás viendo la edición estándar. La edición a fondo la reemplazará automáticamente cuando esté lista; no tienes que hacer nada.',
+    scenarioBasis: 'Los tres escenarios se calculan como asientos × rotaciones por día × ticket promedio; el informe 360° modela la captura de demanda, así que las dos cifras usan bases distintas.',
+    corridorTextOnly: 'No hay un anuncio verificado (LoopNet / Crexi) para este corredor; no se muestran superficie ni renta. Verifícalo en sitio o con un corredor.',
     overallScore: 'General',
     footTraffic: 'Tráfico peatonal',
     competition: 'Competencia',
@@ -440,6 +453,8 @@ export function ReportContent({
   initialLang = 'en',
   marketData = null,
   staticMapUrl = null,
+  modelSources = null,
+  dataAsOf = null,
 }: Props) {
   const [lang, setLang] = useState<Locale>(initialLang);
   useEffect(() => {
@@ -454,46 +469,39 @@ export function ReportContent({
   const [langSwitchError, setLangSwitchError] = useState<string | null>(null);
   const [pendingLang, setPendingLang] = useState<Locale | null>(null);
 
-  // Auto-upgrade: a 'standard' (fast lean) report silently regenerates the
-  // professional-depth version in the background, then swaps it in on reload.
+  // §4.5 d: the professional pass is scheduled by the server once the standard
+  // report is persisted (iq-report-job → maybeKickAutoUpgrade). This page only
+  // watches the status endpoint and reloads when the tier flips.
   const generationTier = typeof full.generation_tier === 'string' ? full.generation_tier : null;
   const [upgrading, setUpgrading] = useState(generationTier === 'standard');
-  const upgradeFired = useRef(false);
+  const upgradeWatchStarted = useRef(false);
   useEffect(() => {
-    if (generationTier !== 'standard' || upgradeFired.current) return;
-    upgradeFired.current = true;
+    if (generationTier !== 'standard' || upgradeWatchStarted.current) return;
+    upgradeWatchStarted.current = true;
     let cancelled = false;
     (async () => {
-      try {
-        const res = await fetch('/api/funnel/full-report', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reportId: report.id, force: true, quality: true }),
-        });
+      const startedAt = Date.now();
+      let idleChecks = 0;
+      while (!cancelled && Date.now() - startedAt < 20 * 60_000) {
+        const s = await fetch(`/api/funnel/full-report/status?reportId=${encodeURIComponent(report.id)}`, {
+          cache: 'no-store',
+        })
+          .then((r) => r.json())
+          .catch(() => null);
         if (cancelled) return;
-        if (res.status === 202) {
-          // Background job: poll until the professional tier is stored, then swap it in.
-          const startedAt = Date.now();
-          while (!cancelled && Date.now() - startedAt < 20 * 60_000) {
-            await new Promise((r) => setTimeout(r, 6_000));
-            const s = await fetch(`/api/funnel/full-report/status?reportId=${report.id}`, {
-              cache: 'no-store',
-            })
-              .then((r) => r.json())
-              .catch(() => null);
-            if (!s || cancelled) continue;
-            if (s.status === 'done' && s.generationTier === 'professional') {
-              window.location.reload();
-              return;
-            }
-            if (s.status === 'failed' || s.legacy) break;
+        if (s) {
+          if (s.generationTier === 'professional') {
+            window.location.reload();
+            return;
           }
-        } else if (res.ok) {
-          window.location.reload();
-          return;
+          if (s.legacy || s.status === 'failed') break;
+          // Nothing running and nothing scheduled (auto-upgrade disabled or already attempted): stop watching.
+          if (s.status !== 'running') {
+            idleChecks += 1;
+            if (idleChecks >= 3) break;
+          }
         }
-      } catch {
-        /* keep the standard report; user can retry via regenerate */
+        await new Promise((r) => setTimeout(r, 6_000));
       }
       if (!cancelled) setUpgrading(false);
     })();
@@ -808,15 +816,19 @@ export function ReportContent({
           <div className="space-y-8">
             {alternativeCorridors.map((cor, ci) => {
               const c = cor as Record<string, unknown>;
-              const listings = safeArr(c.listings);
+              // §4.7 c: only LoopNet/Crexi-sourced rows may show sqft / rent; otherwise text only.
+              const listings = verifiedListings(c.listings);
               return (
-                <div key={ci} className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-4">
+                <div key={ci} className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-4" data-corridor={listings.length > 0 ? 'table' : 'text'}>
                   <h3 className="text-lg font-semibold text-zinc-100">
                     {String(c.corridor_name ?? `—`)}
                   </h3>
                   {str(c.rationale) && (
                     <p className="mt-2 text-sm text-zinc-400">{c.rationale as string}</p>
                   )}
+                  {listings.length === 0 ? (
+                    <p className="mt-2 text-xs text-zinc-500">{t.corridorTextOnly}</p>
+                  ) : null}
                   {listings.length > 0 ? (
                     <div className="mt-4 overflow-x-auto rounded-lg border border-zinc-800">
                       <table className="w-full min-w-[560px] border-collapse text-left text-sm">
@@ -872,25 +884,25 @@ export function ReportContent({
             | { paragraph_zh?: string; paragraph_en?: string; model?: string; generated_at?: string }
             | null;
           // The narrative is stored in zh + en; Spanish readers get the English paragraph.
-          const claudePara =
+          const aiPara =
             demoNarrative && typeof demoNarrative === 'object'
               ? lang === 'zh'
                 ? demoNarrative.paragraph_zh
                 : demoNarrative.paragraph_en
               : null;
           const hasLlm = str(fullView.demographic_profile);
-          if (!hasLlm && !claudePara) return null;
+          if (!hasLlm && !aiPara) return null;
           return (
             <SectionShell title={t.demographicProfile} icon="👥">
-              {claudePara && (
+              {aiPara && (
                 <div className="mb-4 rounded-lg border border-blue-700/40 bg-blue-950/30 p-4 text-sm leading-relaxed text-blue-100">
                   <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-blue-300">
                     <span>{t.demographicBrief}</span>
                     <span className="rounded bg-blue-800/40 px-1.5 py-0.5 text-[10px] text-blue-200">
-                      Claude · ACS B03002/B19001/B15003
+                      {lang === 'zh' ? 'AI 提炼' : lang === 'es' ? 'Extraído por IA' : 'AI-extracted'} · ACS B03002/B19001/B15003
                     </span>
                   </div>
-                  <p className="whitespace-pre-line">{claudePara}</p>
+                  <p className="whitespace-pre-line">{aiPara}</p>
                 </div>
               )}
               {hasLlm && <ReportMarkdown>{fullView.demographic_profile as string}</ReportMarkdown>}
@@ -953,6 +965,9 @@ export function ReportContent({
             <SectionShell title={t.revenueModel} icon="📈">
               {str(revenueModel.methodology as string) && (
                 <ReportMarkdown className="mb-4">{String(revenueModel.methodology)}</ReportMarkdown>
+              )}
+              {scenarios.length > 0 && (
+                <p className="mb-3 text-xs leading-relaxed text-zinc-500">{t.scenarioBasis}</p>
               )}
               {scenarios.length > 0 && (
                 <div className="space-y-3">
@@ -1247,7 +1262,7 @@ export function ReportContent({
         </SectionShell>
       )}
 
-      <DataProvenance marketData={marketData} lang={lang} />
+      <DataProvenance marketData={marketData} lang={lang} modelSources={modelSources} dataAsOf={dataAsOf} />
 
       {str(fullView.data_sources_and_disclaimer) && (
         <SectionShell title={t.dataSources} icon="📎">

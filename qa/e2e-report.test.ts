@@ -2,7 +2,8 @@
  * Phase 2/3/4 acceptance on the Millbrae golden case (offline fixtures):
  *  - four rings, coverage_ratio explainable (intermediates present)
  *  - cuisine → 中式快餐 moves the primary ring to drive5 and changes capture
- *  - L1 ≥ 1 / L2 ≥ 15 / L4 ≥ 1; emptied POI table trips the guard
+ *  - L1 ≥ 1 / L2 ≥ 10 (§4.2: other *Chinese* concepts only — boba / dessert are beverage & bakery
+ *    categories now and surface as L4 anchors instead) / L4 ≥ 1; emptied POI table trips the guard
  *  - reconciliation: one score(), weights = 100, scenarios self-consistent,
  *    payback null without CapEx, alternatives table
  */
@@ -15,6 +16,7 @@ import { fetchOverturePois } from '@/lib/iq/data/overture';
 import { fetchTrafficProxy } from '@/lib/iq/data/traffic-proxy';
 import { runReport360 } from '@/lib/iq/pipeline';
 import { reportModelSchema } from '@/lib/iq/model/schema';
+import { cuisineById, getTaxonomy } from '@/lib/iq/params';
 import { createOfflineContext } from './fixtures/router';
 
 const golden = JSON.parse(readFileSync(join(process.cwd(), 'qa/golden_set/millbrae_1711.json'), 'utf8')) as { input: Record<string, unknown> & { address: string } };
@@ -74,8 +76,16 @@ test('Phase 2: four rings, explainable coverage ratio, range_class drives the pr
 test('Phase 3: layers populated for Millbrae; guard trips when the POI pipeline is empty (R1)', async () => {
   const { model } = await runMillbrae({ skipAlternatives: true });
   assert.ok(model.competitors.l1.length >= 1, `L1 = ${model.competitors.l1.length}`);
-  assert.ok(model.competitors.l2_count >= 15, `L2 = ${model.competitors.l2_count}`);
+  // §4.2 Layer 2 for a Chinese regional concept = other Chinese restaurants (12 in the Millbrae fixtures);
+  // boba shops are `beverage` now, so they are traffic anchors (bubble_tea_shop ∈ l4_anchors.other_types), not L2.
+  assert.ok(model.competitors.l2_count >= 10, `L2 = ${model.competitors.l2_count}`);
+  assert.ok(model.competitors.l2.every((c) => c.sub_cuisine !== 'boba' && c.sub_cuisine !== 'dessert'), 'no beverage / dessert rows in L2');
   assert.ok(model.competitors.l4.length >= 1, 'L4 anchor (99 Ranch)');
+  assert.ok(model.competitors.l4.some((c) => /boba/i.test(c.name)), 'boba shops are L4 anchors for a Chinese concept');
+  // §4.2 provenance: both Layer-1 keyword radii ran (the fixture router answers Text Searches with nothing).
+  assert.deepEqual(model.competitors.l1_layers_tried, ['direct@800', 'direct@1600']);
+  assert.equal(model.competitors.l1_search_radius_m, 1600);
+  assert.deepEqual(model.competitors.brand_anchors, []);
   assert.equal(model.competitors.guard_passed, true, model.competitors.guard_notes.join('; '));
   assert.ok(model.competitors.l1.every((c) => c.rating != null || c.source === 'overture'));
   assert.ok(model.competitors.l1.some((c) => c.huff_share != null));
@@ -106,9 +116,15 @@ test('Phase 4: single score(), reconciliation, hidden payback, alternatives', as
     assert.ok(Math.abs(s.dine_in_covers_day - s.seats * s.turns_per_day) < 0.11);
   }
   assert.equal(model.finance.payback_months, null);
-  assert.equal(model.score.alternatives.length, 14);
+  // §4.1 alternatives: the concept's own category (chinese_regional: 10 entries) + the top 3 of the other categories.
+  const sameCategory = getTaxonomy().cuisines.filter((c) => c.category === cuisineById(model.input.cuisine).category).length;
+  assert.equal(model.score.alternatives.length, sameCategory + 3);
+  assert.equal(model.score.alternatives.filter((a) => cuisineById(a.cuisine).category !== 'chinese_regional').length, 3);
   assert.ok(model.score.alternatives.slice(0, 3).every((a) => a.total >= model.score.alternatives[3].total));
-  assert.ok(model.score.user_cuisine_rank >= 1 && model.score.user_cuisine_rank <= 14);
+  assert.ok(model.score.user_cuisine_rank >= 1 && model.score.user_cuisine_rank <= model.score.alternatives.length);
+  assert.equal(model.score.alternatives[model.score.user_cuisine_rank - 1].cuisine, 'hunan');
+  assert.equal(model.input.concept_category, 'chinese_regional');
+  assert.equal(model.input.audience, 'chinese');
   assert.equal(model.score.conditions.length, 2);
   assert.ok(model.confidence.total > 0 && model.confidence.total <= 100);
   assert.equal(model.sources.length, 12);

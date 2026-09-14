@@ -1,5 +1,19 @@
 'use client';
 
+/**
+ * Wait screen for the paid report (评审 Spec §4.6).
+ *
+ *  - The five checklist rows and the percentage come from the status endpoint
+ *    (`stages` / `progress`): a row is ticked only when that work actually
+ *    finished; nothing is time-eased.
+ *  - "Usually 3–5 minutes" + a live elapsed clock.
+ *  - After 6 minutes the "email me when it's done" form is shown regardless of
+ *    whether sending is configured; the address is stored either way and the
+ *    copy says whether a mail will actually go out.
+ *  - After 10 minutes a support link is added. (A stored standard-tier body
+ *    reloads into the report page as soon as it exists — the in-depth edition
+ *    then replaces it automatically, see ReportContent.)
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { rememberPaidReport } from '@/components/iq/SupportBubble';
 import { GenerationTicker } from '@/components/iq/GenerationTicker';
@@ -10,6 +24,7 @@ import {
   IqAnalysisProgressBar,
   progressFromElapsed,
 } from '@/components/iq/IqAnalysisProgress';
+import type { UiStage } from '@/lib/funnel/iq-generation-stages';
 import type { Locale } from '@/lib/i18n/locale';
 import { withLang } from '@/lib/i18n/resolve';
 
@@ -26,6 +41,9 @@ type StatusView = {
   stage?: string | null;
   progress?: number;
   activeIndex?: number;
+  stages?: UiStage[];
+  standardReady?: boolean;
+  startedAt?: string | null;
   error?: string | null;
   hasReport?: boolean;
   notifyEmail?: string | null;
@@ -34,6 +52,10 @@ type StatusView = {
 };
 
 const POLL_MS = 3_000;
+/** Show the email form to everyone after this long (§4.6 b). */
+const EMAIL_AFTER_SEC = 6 * 60;
+/** Add the support handoff after this long (§4.6 c). */
+const SUPPORT_AFTER_SEC = 10 * 60;
 
 const COPY: Record<
   Locale,
@@ -41,14 +63,19 @@ const COPY: Record<
     genericError: string;
     timeoutError: string;
     title: string;
-    subtitleEmail: (headline: string) => string;
-    subtitleWait: (headline: string) => string;
+    usually: string;
+    elapsed: (mmss: string) => string;
     willEmail: (email: string) => string;
+    savedNoSend: (email: string) => string;
     emailPrompt: string;
+    emailPromptLate: string;
     emailPlaceholder: string;
     saving: string;
     emailMe: string;
     emailError: string;
+    lateNote: string;
+    support: string;
+    supportFallback: string;
     retry: string;
     retryNote: string;
     back: string;
@@ -58,14 +85,19 @@ const COPY: Record<
     genericError: 'Full report generation failed. Tap Retry or refresh later.',
     timeoutError: 'Generation timed out. Tap Retry below to try again.',
     title: 'Generating your full risk audit…',
-    subtitleEmail: (h) => `${h} · Usually 2–5 min. Don’t want to wait? Leave an email and we’ll send it over.`,
-    subtitleWait: (h) => `${h} · Usually 2–5 min — keep this tab open`,
+    usually: 'Usually 3–5 minutes',
+    elapsed: (m) => `${m} elapsed`,
     willEmail: (e) => `✓ We’ll email ${e} when the report is ready — you can leave this page.`,
+    savedNoSend: (e) => `✓ ${e} is saved with this report. Email sending is not switched on yet, so the link will go out once it is — keep this page or come back to it later.`,
     emailPrompt: 'Rather not wait? Email me when it’s ready:',
+    emailPromptLate: 'This one is taking longer than usual. Leave an email and we’ll send the report when it’s done:',
     emailPlaceholder: 'you@example.com',
     saving: 'Saving…',
     emailMe: 'Email me',
     emailError: 'Could not save that email — check the format and try again.',
+    lateNote: 'Over 10 minutes — the job is still running and will resume on its own if a step fails. If you would rather talk to a person:',
+    support: 'Contact support',
+    supportFallback: 'use the support bubble at the bottom right.',
     retry: 'Retry generation',
     retryNote: 'Retry resumes from the last completed step.',
     back: '← Back to the analyzer',
@@ -74,14 +106,19 @@ const COPY: Record<
     genericError: '完整报告生成失败，请点击「重试生成」或稍后刷新。',
     timeoutError: '生成时间较长已超时，请点击下方「重试生成」再试一次。',
     title: '正在生成完整风险审计…',
-    subtitleEmail: (h) => `${h} · 通常需 2–5 分钟。不想等？留下邮箱，生成后自动发送。`,
-    subtitleWait: (h) => `${h} · 通常需 2–5 分钟，请勿关闭本页`,
+    usually: '通常 3–5 分钟',
+    elapsed: (m) => `已用时 ${m}`,
     willEmail: (e) => `✓ 报告完成后会发送到 ${e}，您现在可以离开此页。`,
+    savedNoSend: (e) => `✓ ${e} 已保存到这份报告。邮件发送功能尚未开通，开通后会自动发出链接——请保留本页或稍后回来查看。`,
     emailPrompt: '不想等待？报告生成后发送到邮箱：',
+    emailPromptLate: '这次比平时慢一些。留下邮箱，完成后我们发送报告：',
     emailPlaceholder: 'you@example.com',
     saving: '保存中…',
     emailMe: '发送到邮箱',
     emailError: '邮箱保存失败，请检查格式后重试。',
+    lateNote: '已超过 10 分钟——任务仍在后台运行，某一步失败会自动续跑。如果想直接找人：',
+    support: '联系客服',
+    supportFallback: '点击右下角的在线客服。',
     retry: '重试生成',
     retryNote: '重试会从上次中断的步骤继续，不会从头开始。',
     back: '← 返回分析页',
@@ -90,14 +127,19 @@ const COPY: Record<
     genericError: 'No se pudo generar el informe completo. Toca Reintentar o actualiza la página más tarde.',
     timeoutError: 'La generación tardó demasiado. Toca Reintentar abajo para volver a intentarlo.',
     title: 'Generando tu auditoría de riesgo completa…',
-    subtitleEmail: (h) => `${h} · Normalmente tarda de 2 a 5 min. ¿No quieres esperar? Déjanos tu correo y te lo enviamos.`,
-    subtitleWait: (h) => `${h} · Normalmente tarda de 2 a 5 min; mantén esta pestaña abierta`,
+    usually: 'Normalmente tarda de 3 a 5 minutos',
+    elapsed: (m) => `${m} transcurridos`,
     willEmail: (e) => `✓ Enviaremos el informe a ${e} cuando esté listo; puedes salir de esta página.`,
+    savedNoSend: (e) => `✓ ${e} quedó guardado con este informe. El envío de correos aún no está activado; el enlace saldrá cuando lo esté. Conserva esta página o vuelve más tarde.`,
     emailPrompt: '¿Prefieres no esperar? Te avisamos por correo cuando esté listo:',
+    emailPromptLate: 'Esta vez está tardando más de lo normal. Déjanos un correo y te enviamos el informe al terminar:',
     emailPlaceholder: 'tu@correo.com',
     saving: 'Guardando…',
     emailMe: 'Enviarme por correo',
     emailError: 'No se pudo guardar ese correo. Revisa el formato e inténtalo de nuevo.',
+    lateNote: 'Más de 10 minutos: el proceso sigue en marcha y se reanuda solo si un paso falla. Si prefieres hablar con una persona:',
+    support: 'Contactar soporte',
+    supportFallback: 'usa la burbuja de soporte abajo a la derecha.',
     retry: 'Reintentar generación',
     retryNote: 'Al reintentar se retoma desde el último paso completado.',
     back: '← Volver al analizador',
@@ -121,7 +163,7 @@ async function startGeneration(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // No `force`: a failed job resumes from its last checkpoint instead of
-      // restarting; the professional upgrade is a separate background pass.
+      // restarting; the professional upgrade is scheduled by the server.
       body: JSON.stringify({ reportId, quality: false }),
     });
   } catch {
@@ -134,7 +176,7 @@ async function startGeneration(
   let msg = t.genericError;
   try {
     const j = JSON.parse(raw) as { error?: string };
-    if (j.error && !/openai|mimo|tavily|n8n|gpt-|anthropic|claude/i.test(j.error)) msg = j.error;
+    if (j.error && !/openai|mimo|tavily|n8n|gpt-|anthropic|claude|gemini|deepseek/i.test(j.error)) msg = j.error;
   } catch {
     if (res.status === 504) msg = t.timeoutError;
   }
@@ -161,6 +203,43 @@ function generationStart(reportId: string, reset: boolean): number {
   return now;
 }
 
+function mmss(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function SupportLink({ lang, reportId, location }: { lang: Locale; reportId: string; location: string }) {
+  const t = COPY[lang];
+  const [cfg, setCfg] = useState<{ whatsapp: string | null; email: string | null } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/iq/support/config', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (alive && j) setCfg(j as { whatsapp: string | null; email: string | null });
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const text = encodeURIComponent(`Report ${reportId} · ${location} · still generating after 10 min`);
+  const href = cfg?.whatsapp ? `https://wa.me/${cfg.whatsapp}?text=${text}` : cfg?.email ? `mailto:${cfg.email}?subject=${text}` : null;
+  return (
+    <p className="text-xs text-zinc-400" data-testid="late-support">
+      {t.lateNote}{' '}
+      {href ? (
+        <a href={href} target="_blank" rel="noreferrer" className="text-emerald-400 underline underline-offset-4">
+          {t.support}
+        </a>
+      ) : (
+        <span>{t.supportFallback}</span>
+      )}
+    </p>
+  );
+}
+
 export function IqFullReportGenerating({ reportId, location, headline, lang }: Props) {
   const t = COPY[lang];
   const [error, setError] = useState<string | null>(null);
@@ -171,19 +250,21 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
   const [serverProgress, setServerProgress] = useState(0);
   const [email, setEmail] = useState('');
   const [emailState, setEmailState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [emailWillSend, setEmailWillSend] = useState<boolean | null>(null);
   const runningRef = useRef(false);
   const stoppedRef = useRef(false);
 
-  const stages = useMemo(() => getFullReportStages(lang), [lang]);
+  const live = Boolean(serverStatus && !serverStatus.legacy);
+  const stages = useMemo(() => getFullReportStages(lang, live ? serverStatus?.stages : null), [lang, live, serverStatus?.stages]);
+  const activeIndex = live && typeof serverStatus?.activeIndex === 'number' ? serverStatus.activeIndex : null;
 
   // Progress: the server's stage-based value when polling; the old time curve
-  // on the legacy synchronous path (no status available there).
+  // only on the legacy synchronous path (no status available there).
   const percent = useMemo(() => {
     if (done) return 100;
-    const timeBased = progressFromElapsed(elapsedSec, FULL_REPORT_PHASES, { maxPctUntilDone: 92 });
-    if (serverStatus && !serverStatus.legacy) return Math.min(98, Math.max(serverProgress, 2));
-    return timeBased;
-  }, [done, elapsedSec, serverStatus, serverProgress]);
+    if (live) return Math.min(98, Math.max(serverProgress, 2));
+    return progressFromElapsed(elapsedSec, FULL_REPORT_PHASES, { maxPctUntilDone: 92 });
+  }, [done, elapsedSec, live, serverProgress]);
 
   const finish = useCallback(async () => {
     setDone(true);
@@ -245,8 +326,7 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
 
   // Elapsed time is measured from a start timestamp remembered per report, so a
   // refresh, a language switch or a re-run of this effect continues the same
-  // countdown instead of restarting it at "about 2:45 to go". Only an explicit
-  // retry starts a new clock.
+  // clock instead of restarting it. Only an explicit retry starts a new clock.
   const startRef = useRef<number>(0);
   useEffect(() => {
     const tick = window.setInterval(() => {
@@ -256,13 +336,21 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
     return () => window.clearInterval(tick);
   }, [error, done]);
 
+  // The server's own start time wins when it is earlier (another tab / a reload after the local clock expired).
+  useEffect(() => {
+    const started = serverStatus?.startedAt ? Date.parse(serverStatus.startedAt) : NaN;
+    if (Number.isFinite(started) && started < startRef.current && Date.now() - started < 4 * 60 * 60_000) {
+      startRef.current = started;
+    }
+  }, [serverStatus?.startedAt]);
+
   useEffect(() => {
     rememberPaidReport(reportId, location);
   }, [reportId, location]);
 
   useEffect(() => {
     startRef.current = generationStart(reportId, retryKey > 0);
-    setElapsedSec(Math.max(0, Math.floor((Date.now() - startRef.current) / 1000)));
+    setElapsedSec(Math.max(0, Math.floor((Date.now() - startRef.current) / 1000))); // eslint-disable-line react-hooks/set-state-in-effect
     void runGeneration();
     return () => {
       stoppedRef.current = true;
@@ -280,17 +368,27 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reportId, email: addr }),
       });
-      setEmailState(res.ok ? 'saved' : 'error');
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; willSend?: boolean };
+      if (res.ok && j.ok) {
+        setEmailWillSend(j.willSend !== false);
+        setEmailState('saved');
+      } else {
+        setEmailState('error');
+      }
     } catch {
       setEmailState('error');
     }
   }, [email, reportId]);
 
   const emailEnabled = Boolean(serverStatus?.emailEnabled) && !serverStatus?.legacy;
+  const late = elapsedSec >= EMAIL_AFTER_SEC;
+  const veryLate = elapsedSec >= SUPPORT_AFTER_SEC;
+  const showEmailForm = !error && (emailEnabled || late);
   const savedEmail =
     emailState === 'saved' ? email.trim() : serverStatus?.notifyEmail && !serverStatus.notified ? serverStatus.notifyEmail : null;
+  const savedWillSend = emailState === 'saved' ? emailWillSend !== false : emailEnabled;
 
-  const subtitle = emailEnabled ? t.subtitleEmail(headline) : t.subtitleWait(headline);
+  const subtitle = `${headline} · ${t.usually} · ${t.elapsed(mmss(elapsedSec))}`;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6 py-16">
@@ -303,17 +401,23 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
           stages={stages}
           percent={percent}
           elapsedSec={elapsedSec}
-          activeIndex={serverStatus && !serverStatus.legacy ? serverStatus.activeIndex : undefined}
-          statusLine={!error && !done ? <GenerationTicker lang={lang} location={location} elapsedSec={elapsedSec} percent={percent} /> : undefined}
+          activeIndex={activeIndex ?? undefined}
+          statusLine={
+            !error && !done ? (
+              <GenerationTicker lang={lang} location={location} elapsedSec={elapsedSec} percent={percent} stageIndex={activeIndex} />
+            ) : undefined
+          }
         />
 
-        {emailEnabled && !error ? (
-          <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+        {showEmailForm ? (
+          <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4" data-testid="notify-form">
             {savedEmail ? (
-              <p className="text-sm text-emerald-400">{t.willEmail(savedEmail)}</p>
+              <p className={`text-sm ${savedWillSend ? 'text-emerald-400' : 'text-amber-300'}`}>
+                {savedWillSend ? t.willEmail(savedEmail) : t.savedNoSend(savedEmail)}
+              </p>
             ) : (
               <>
-                <p className="text-sm text-zinc-300">{t.emailPrompt}</p>
+                <p className="text-sm text-zinc-300">{late ? t.emailPromptLate : t.emailPrompt}</p>
                 <form
                   className="mt-3 flex flex-col gap-2 sm:flex-row"
                   onSubmit={(e) => {
@@ -340,6 +444,11 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
                 {emailState === 'error' ? <p className="mt-2 text-xs text-rose-400">{t.emailError}</p> : null}
               </>
             )}
+            {veryLate ? (
+              <div className="mt-3 border-t border-zinc-800 pt-3">
+                <SupportLink lang={lang} reportId={reportId} location={location} />
+              </div>
+            ) : null}
           </div>
         ) : null}
 

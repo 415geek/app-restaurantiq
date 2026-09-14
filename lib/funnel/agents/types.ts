@@ -40,6 +40,10 @@ export type ScoredCompetitor = {
   address: string | null;
   /** rating × ln(1+reviews) — proxy for drawing power (Huff attractiveness). */
   attractiveness: number | null;
+  /** §4.2 retrieval layer: 'direct' (Layer 1) ranks first, then 'substitute'; brand anchors are never listed here. */
+  layer?: string | null;
+  /** Walking time from the site (Distance Matrix), minutes. */
+  walk_min?: number | null;
 };
 
 /** Deterministic, formula-derived metrics. Every number here is reproducible from inputs. */

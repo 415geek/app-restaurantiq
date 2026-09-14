@@ -33,8 +33,17 @@ import {
   parseIqFullReport,
   type IqReportWithGrounding,
 } from '@/lib/funnel/iq-full-report-schema';
+import {
+  activeStageIndex,
+  computeStageProgress,
+  deriveUiStages,
+  stageCeiling,
+  type StepTimes,
+  type UiStage,
+  type UiStageId,
+} from '@/lib/funnel/iq-generation-stages';
 import { runFullPremiumReport } from '@/lib/funnel/iq-llm';
-import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
+import { resolveMarketDataForIqReport, type MarketResolveStep } from '@/lib/funnel/iq-market-data-resolve';
 import { extractCompetitorWhitelist } from '@/lib/funnel/iq-market-signals';
 import { stripInternalIqReportFields } from '@/lib/funnel/iq-report-sanitize';
 import {
@@ -74,6 +83,10 @@ export type GenerationState = {
   draft?: Record<string, unknown>;
   draftSource?: 'multi_agent' | 'n8n' | 'llm';
   verified?: boolean;
+  /** Start/finish timestamps of the five UI stages (评审 Spec §4.6); advanced only by real completions. */
+  steps?: StepTimes;
+  /** The standard-tier run already scheduled its professional upgrade (once per row). */
+  autoUpgradeKicked?: boolean;
   log: string[];
 };
 
@@ -82,10 +95,14 @@ export type GenerationStatusView = {
   status: 'idle' | 'running' | 'done' | 'failed';
   stage: GenerationStage | null;
   mode: GenerationMode | null;
-  /** 0–100, derived from stage + time spent in it. */
+  /** 0–100: completed-stage weight + a capped in-stage creep (never past the stage's end). */
   progress: number;
-  /** Index into the 6-row UI checklist. */
+  /** Index into `stages` (the five-row UI checklist). */
   activeIndex: number;
+  /** The five real stages with their live state. */
+  stages: UiStage[];
+  /** A standard-tier body is already stored (the professional pass replaces it later). */
+  standardReady: boolean;
   updatedAt: string | null;
   startedAt: string | null;
   error: string | null;
@@ -117,6 +134,35 @@ function readState(row: IqReportRow): GenerationState | null {
 function hasStoredReport(row: IqReportRow): boolean {
   const f = row.full_report_json;
   return Boolean(f && typeof f === 'object' && Object.keys(f).length > 0);
+}
+
+function storedTier(row: IqReportRow): string | null {
+  if (!hasStoredReport(row)) return null;
+  const t = (row.full_report_json as Record<string, unknown>).generation_tier;
+  return typeof t === 'string' ? t : null;
+}
+
+const RESOLVE_STEP_TO_UI: Record<MarketResolveStep, UiStageId> = {
+  places: 'competitors',
+  acs: 'demographics',
+  finance: 'finance',
+};
+
+/** Record a UI-stage boundary in the checkpoint (idempotent: a retry keeps the first start). */
+function markStep(state: GenerationState, id: UiStageId, phase: 'start' | 'done'): void {
+  const steps: StepTimes = state.steps ?? {};
+  const cur = steps[id] ?? {};
+  if (phase === 'start') {
+    if (!cur.startedAt) steps[id] = { ...cur, startedAt: nowIso() };
+  } else {
+    steps[id] = { startedAt: cur.startedAt ?? nowIso(), finishedAt: nowIso() };
+  }
+  state.steps = steps;
+}
+
+/** IQ_AUTO_UPGRADE=false disables the automatic professional pass after a standard report. */
+function autoUpgradeEnabled(): boolean {
+  return (process.env.IQ_AUTO_UPGRADE ?? '').trim().toLowerCase() !== 'false';
 }
 
 // ---------------------------------------------------------------------------
@@ -281,6 +327,12 @@ async function stageEnrich(ctx: StageCtx): Promise<void> {
       // starve the LLM draft, so let the professional tier have it.
       skipDeepResearchFetch: !professional || !deadline.hasBudget(120_000),
       leanResolve: !professional,
+      // §4.6: the checklist advances on real completions (places → ACS → finance),
+      // persisted as they happen so the poller sees them mid-stage.
+      onStep: async (step, phase) => {
+        markStep(state, RESOLVE_STEP_TO_UI[step], phase);
+        await iqUpdateReportGeneration(row.id, { stateJson: state });
+      },
     });
     if (enriched && Object.keys(enriched).length > 0) {
       await iqUpdateMarketDataJson(row.id, enriched);
@@ -404,8 +456,38 @@ async function stageFinalize(ctx: StageCtx): Promise<void> {
   // Drop the (large) draft from the checkpoint once the report is stored.
   delete state.draft;
   pushLog(state, `finalized (${clean.generation_tier})`);
-  // 360° engine runs in its own invocation once the legacy report is safe on disk.
+  // 360° engine runs in its own invocation once the legacy report is safe on disk
+  // (idempotent server-side: an existing model is returned, not rebuilt).
   await kickReport360(row.id);
+}
+
+/**
+ * §4.5: the server schedules the professional pass itself once the standard
+ * report is persisted (the report page used to POST it on mount, once per
+ * visitor). Guarded so it happens once per row: not when a professional body
+ * is already stored, not when this run is the upgrade, and not twice.
+ */
+async function maybeKickAutoUpgrade(reportId: string, state: GenerationState): Promise<void> {
+  if (state.mode !== 'standard' || state.trigger === 'auto-upgrade' || state.autoUpgradeKicked) return;
+  if (!autoUpgradeEnabled()) return;
+  const fresh = await iqGetReport(reportId);
+  if (!fresh || !fresh.paid) return;
+  if (storedTier(fresh) === 'professional') return;
+  state.autoUpgradeKicked = true;
+  pushLog(state, 'auto-upgrade: scheduling professional pass');
+  await iqUpdateReportGeneration(reportId, { stateJson: state });
+  try {
+    const started = await startReportGeneration({
+      reportId,
+      mode: 'professional',
+      language: state.language,
+      force: true,
+      trigger: 'auto-upgrade',
+    });
+    console.log(`[iq-report-job] ${reportId}: auto-upgrade → ${started.kind}`);
+  } catch (e) {
+    console.error(`[iq-report-job] ${reportId}: auto-upgrade kick failed:`, shortErr(e));
+  }
 }
 
 async function notifyIfRequested(row: IqReportRow, language: Locale): Promise<void> {
@@ -464,6 +546,9 @@ export async function runReportGenerationStage(reportId: string): Promise<void> 
 
   const attempt = (state.attempts[stage] ?? 0) + 1;
   state.attempts[stage] = attempt;
+  // UI checklist (§4.6): "write" spans draft + verify, "layout" spans finalize + 360 kick.
+  if (stage === 'draft') markStep(state, 'write', 'start');
+  if (stage === 'finalize') markStep(state, 'layout', 'start');
   // Heartbeat so a concurrent starter sees a live claim.
   await iqUpdateReportGeneration(reportId, { stage, stateJson: state });
 
@@ -476,13 +561,20 @@ export async function runReportGenerationStage(reportId: string): Promise<void> 
     else if (stage === 'verify') await stageVerify(ctx);
     else if (stage === 'finalize') await stageFinalize(ctx);
     state.timingsMs[stage] = Date.now() - t0;
+    if (stage === 'enrich') {
+      // Whatever the resolver reported, the three enrich sub-stages are over now.
+      for (const id of ['competitors', 'demographics', 'finance'] as const) markStep(state, id, 'done');
+    }
+    if (stage === 'verify') markStep(state, 'write', 'done');
 
     const next = nextStage(stage);
     if (next === 'done') {
+      markStep(state, 'layout', 'done');
       await iqUpdateReportGeneration(reportId, { status: 'done', stage: 'done', stateJson: state, error: null });
       console.log(`[iq-report-job] ${reportId}: done (${JSON.stringify(state.timingsMs)})`);
       const fresh = await iqGetReport(reportId);
       if (fresh) await notifyIfRequested(fresh, language);
+      await maybeKickAutoUpgrade(reportId, state);
       return;
     }
     await iqUpdateReportGeneration(reportId, { stage: next, stateJson: state, error: null });
@@ -504,28 +596,6 @@ export async function runReportGenerationStage(reportId: string): Promise<void> 
 // ---------------------------------------------------------------------------
 // Status (polled by the browser) + email opt-in
 // ---------------------------------------------------------------------------
-
-/** Progress band per stage: [start, end, expectedMs]. */
-const STAGE_BANDS: Record<GenerationStage, [number, number, number]> = {
-  enrich: [4, 30, 40_000],
-  draft: [30, 84, 170_000],
-  verify: [84, 92, 60_000],
-  finalize: [92, 98, 8_000],
-  done: [100, 100, 1],
-};
-
-/** Checklist row (6 rows in the UI) per stage. */
-const STAGE_CHECKLIST_INDEX: Record<GenerationStage, number> = {
-  enrich: 1,
-  draft: 3,
-  verify: 4,
-  finalize: 5,
-  done: 5,
-};
-
-function easeOut(t: number): number {
-  return 1 - (1 - Math.min(1, Math.max(0, t))) ** 2;
-}
 
 export async function getReportGenerationStatus(
   reportId: string,
@@ -550,28 +620,23 @@ export async function getReportGenerationStatus(
   }
   if (status === 'done' && !hasReport) status = 'failed';
 
-  let progress = 0;
-  if (status === 'done') progress = 100;
-  else if (stage && status === 'running') {
-    const [start, end, expected] = STAGE_BANDS[stage];
-    const elapsed = updatedAt ? Date.now() - Date.parse(updatedAt) : 0;
-    progress = start + (end - start) * easeOut(elapsed / expected) * 0.95;
-  } else if (stage && status === 'failed') {
-    progress = STAGE_BANDS[stage][0];
-  }
+  // §4.6: stage-based, not time-eased. Finished stages count in full; the
+  // running stage adds a small creep that stays below its own end.
+  const stages = deriveUiStages({ steps: state?.steps, jobStage: stage, status, updatedAt });
+  const progress =
+    status === 'done' ? 100 : Math.min(computeStageProgress(stages), Math.max(0, stageCeiling(stages) - 1));
 
-  const tier =
-    hasReport && typeof (row.full_report_json as Record<string, unknown>).generation_tier === 'string'
-      ? String((row.full_report_json as Record<string, unknown>).generation_tier)
-      : null;
+  const tier = storedTier(row);
 
   return {
     legacy: false,
     status,
     stage,
     mode: state?.mode ?? null,
-    progress: Math.round(progress),
-    activeIndex: stage ? STAGE_CHECKLIST_INDEX[stage] : 0,
+    progress,
+    activeIndex: Math.min(stages.length - 1, activeStageIndex(stages)),
+    stages,
+    standardReady: tier === 'standard',
     updatedAt,
     startedAt: row.generation_started_at ?? null,
     error: status === 'failed' ? row.generation_error ?? null : null,

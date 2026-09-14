@@ -8,10 +8,11 @@
  * Everything numeric in the report is produced here exactly once.
  */
 import { circlePolygon, haversineM, pointInGeometry } from './geo';
-import { fetchAllData, sourcesFromResults, type DataBundle, type Fetchers } from './data';
+import { defaultFetchers, fetchAllData, sourcesFromResults, type DataBundle, type Fetchers } from './data';
 import { createFetchContext } from './data/context';
 import { cexFafhForHousehold, CEX_2023_TABLE } from './data/cex';
 import { fetchGeocode } from './data/geocode';
+import { L1_RADIUS_FAR_M } from './data/google-places';
 import { normalizeUserInputs, type RawSiteInput } from './data/user-inputs';
 import type { FetchContext, Geometry, LatLng, SiteInput } from './data/types';
 import { computeAudience } from './engines/audience';
@@ -22,14 +23,16 @@ import {
   computeCompetitors,
   dedupeCandidates,
   normalizeName,
+  promoteDirectLayerHits,
+  selectBrandAnchors,
   type CandidatePoi,
   type CompetitorEngineResult,
   type LlmClassifier,
 } from './engines/competitor';
 import { computeConfidence, type SourceStatusMap } from './engines/confidence';
 import { buildConditions, dimensionRow, scoreDemandCoverage, scoreDimensions, scoreFinancialViability, totalScore, verdictFor, type ScoreInput } from './engines/cuisine-fit';
-import { computeCuisineShare } from './engines/cuisine-share';
-import { computeHuff, type HuffCompetitor, type HuffResult } from './engines/demand-huff';
+import { computeConceptShare, type DemandBasis } from './engines/cuisine-share';
+import { computeHuff, lunchAudienceFor, type HuffCompetitor, type HuffResult } from './engines/demand-huff';
 import { computeFinance } from './engines/finance';
 import { computeRisks } from './engines/risk';
 import { computeTradeArea, primaryRingFor, RING_ORDER, type BlockGroupInput, type RingInput, type TradeAreaResult } from './engines/trade-area';
@@ -54,7 +57,7 @@ export interface Report360Result {
     trade_area: TradeAreaResult;
     competitors: CompetitorEngineResult;
     huff: HuffResult;
-    cuisine_share: ReturnType<typeof computeCuisineShare>;
+    cuisine_share: ReturnType<typeof computeConceptShare>;
   };
 }
 
@@ -175,9 +178,25 @@ function rawCandidatesFromBundle(bundle: DataBundle): CandidatePoi[] {
       price_level: g.price_level,
       operating_status: g.business_status ?? 'unknown',
       hours_per_week: g.opening_hours_weekday ? estimateHoursPerWeek(g.opening_hours_weekday) : null,
+      layers: g.layers ?? [],
     });
   }
   return out;
+}
+
+/**
+ * §4.2 「距离用路网」: replace the straight-line `distance_mi` of Layer 1 / 2
+ * competitors within 1600 m by the walking network distance when a leg exists.
+ * Ring membership stays isochrone-based; only the displayed distance changes.
+ */
+export function applyWalkingLegs(list: Competitor[], walk: Record<string, { walk_m: number; walk_min: number }>): Competitor[] {
+  return list
+    .map((c) => {
+      const leg = walk[c.id];
+      if (!leg) return c;
+      return { ...c, walk_m: leg.walk_m, walk_min: leg.walk_min, distance_mi: Math.round((leg.walk_m / MI) * 100) / 100 };
+    })
+    .sort((a, b) => a.distance_mi - b.distance_mi);
 }
 
 function estimateHoursPerWeek(lines: string[]): number | null {
@@ -215,7 +234,7 @@ async function hubMedianDensity(ctx: FetchContext, metro: string | null, cuisine
 export async function runReport360(raw: RawSiteInput, opts: Report360Options = {}): Promise<Report360Result> {
   const t0 = Date.now();
   const ctx = opts.ctx ?? createFetchContext();
-  const { input: site, result: userResult } = normalizeUserInputs(raw);
+  const { input: site, result: userResult, concept } = normalizeUserInputs(raw);
   const bundle = await fetchAllData(site, userResult, ctx, opts.fetchers);
   if (bundle.fatal || !bundle.geocode.data) throw new Error(bundle.fatal ?? 'geocode failed');
   const geo = bundle.geocode.data;
@@ -257,6 +276,10 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
       }
     }
   }
+  // §4.2 Layer-1 query hits (D6 keyword search at 800 / 1600 m) whose name or types match the
+  // concept profile are the concept's own sub-cuisine — this is what makes L1 work for
+  // non-Chinese concepts (an egg-tart bakery has no Chinese sub-cuisine to classify into).
+  promoteDirectLayerHits(merged, site.cuisine);
   const leftovers = merged.filter((m) => m.is_food && m.is_chinese && !m.sub_cuisine).map((m) => ({ id: m.id, name: m.name, categories: m.categories }));
   if (leftovers.length) {
     const classify: LlmClassifier | null =
@@ -274,12 +297,15 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
   // Feed the pre-merged, classified list back as candidates so every downstream call shares one classification.
   const classifiedCandidates: CandidatePoi[] = merged.map((m) => ({ ...m, id: m.id, source: m.sources[0], sub_cuisine: m.sub_cuisine ?? null, sub_cuisine_method: m.classified_by === 'unclassified' ? null : m.classified_by }));
 
-  const share = computeCuisineShare(merged, site.cuisine);
+  // §4.1 step 4: the demand basis follows the concept's audience — Chinese-restaurant spend × sub-cuisine
+  // share for 中餐, all restaurant spend × category share for bakery / beverage / western / other Asian.
+  const share = computeConceptShare(merged, site.cuisine);
   const tradeArea = computeTradeArea({
     rings,
     block_groups: groups,
     params: {
       cuisine_share: share.share,
+      demand_basis: share.basis,
       range_class: cu.range_class,
       fafhForIncome: (inc) => cexFafhForHousehold(inc, cex).usd,
       jobs_method,
@@ -306,22 +332,51 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
     ticket_in: ticketIn,
     target_price_level: cu.price_tier.length,
   };
+  const googleData = bundle.google?.data ?? null;
   const competitors = computeCompetitors({
     ...competitorInput,
     cuisine: site.cuisine,
     metro_sub_cuisine_total: bundle.overture?.data?.loaded ? (metroTotals[site.cuisine] ?? 0) : null,
     hub_median_density_per_10k_chinese: hubMedian,
+    // §4.2: which Layer-1 radii D6 actually searched — the void guard needs both 800 and 1600 m.
+    l1_query: { layers_tried: googleData?.l1_layers_tried ?? [], radius_m: googleData?.l1_search_radius_m ?? null },
   });
-  competitors.pool_radius_mi = Math.round((CANDIDATE_POOL_RADIUS_M / 1_609.344) * 10) / 10;
+  // The candidate pool is the 5-mi Overture base; without it the Layer-1 reach is what Google searched.
+  const overtureLoadedForPool = Boolean(bundle.overture?.data?.loaded);
+  competitors.pool_radius_mi = overtureLoadedForPool
+    ? Math.round((CANDIDATE_POOL_RADIUS_M / MI) * 10) / 10
+    : Math.round(((googleData?.l1_search_radius_m ?? CANDIDATE_POOL_RADIUS_M) / MI) * 10) / 10;
   competitors.l1_nearest_outside_pool = nearestSameCuisineOutsidePool(bundle, siteLL, site.cuisine);
   // Google-side failure with an empty pool is a pipeline failure, not "no competition" (R1).
   if (bundle.google?.status === 'failed' && (bundle.overture?.status === 'failed' || !bundle.overture?.data?.loaded)) {
     competitors.guard_notes.push(`竞品源不可用：D5 ${bundle.overture?.coverage_note ?? '—'}；D6 ${bundle.google?.coverage_note ?? '—'}`);
     competitors.guard_passed = false;
   }
+  // §4.2 「距离用路网」: walking legs for Layer 1 / 2 within 1600 m straight-line (Distance Matrix, cached, budgeted).
+  const walkTargets = [...competitors.l1, ...competitors.l2].filter((c) => haversineM(siteLL, c) <= L1_RADIUS_FAR_M);
+  if (walkTargets.length) {
+    const walking = opts.fetchers?.walking ?? defaultFetchers.walking;
+    try {
+      const w = await walking({ origin: siteLL, destinations: walkTargets.map((c) => ({ id: c.id, lat: c.lat, lng: c.lng })) }, ctx);
+      competitors.l1 = applyWalkingLegs(competitors.l1, w.walk);
+      competitors.l2 = applyWalkingLegs(competitors.l2, w.walk);
+      if (w.status !== 'ok' && w.status !== 'empty') ctx.log(`[iq360] walking distances ${w.status}: ${w.note}`);
+    } catch (e) {
+      ctx.log('[iq360] walking distances failed', e);
+    }
+  }
+  // §4.2 Layer 3 品牌锚点 from the unfiltered pool (city-wide bias may return places beyond the 5-mi pool).
+  const tradeAreaIds = new Set<string>();
+  const l1l2 = new Set([...competitors.l1, ...competitors.l2].map((c) => c.id));
+  for (const m of competitors.merged) {
+    if (!l1l2.has(m.id)) continue;
+    for (const id of [m.id, m.ids.google, m.ids.overture]) if (id) tradeAreaIds.add(id);
+  }
+  competitors.brand_anchors = selectBrandAnchors(siteLL, rawCandidatesFromBundle(bundle), site.cuisine, tradeAreaIds);
 
   // ── Demand (Phase 2.4) ──────────────────────────────────────────────────
   const lunchTicket = Math.round(ticketIn * 0.75);
+  const chineseShareOf = (ring: Ring) => ring.chinese_hh_share ?? county.chinese_hh_share ?? 0.1;
   const huff = computeHuff({
     site: siteLL,
     range_class: cu.range_class,
@@ -329,7 +384,7 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
     bg_demand: tradeArea.bg_demand,
     seats: site.seats,
     walk10: ringGeom(rings, 'walk10'),
-    lunch: { jobs_walk10: walk10.jobs, asian_job_share, ticket_lunch: lunchTicket, chinese_share: primary.chinese_hh_share ?? county.chinese_hh_share ?? 0.1 },
+    lunch: { jobs_walk10: walk10.jobs, ...lunchAudienceFor(cu, { chinese_share: chineseShareOf(primary), asian_job_share, concept_share: share.share, ticket_lunch: lunchTicket }) },
   });
 
   // ── Finance (Phase 4.5) ─────────────────────────────────────────────────
@@ -403,34 +458,41 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
   const total = totalScore(dims);
   const conditions = buildConditions(dims, scoreInput);
 
-  // ── Alternatives (Phase 4.2): same data, only cuisine-dependent pieces change ──
+  // ── Alternatives (Phase 4.2): same data, only concept-dependent pieces change ──
+  // Every taxonomy entry is scored; the table keeps the concept's own category in full plus the
+  // top 3 of the other categories (§4.1), ranked by total, so user_cuisine_rank is a rank among peers.
   const alternatives: ReportModel['score']['alternatives'] = [];
   if (!opts.skipAlternatives) {
+    const demandOn = (basis: DemandBasis, altShare: number) => tradeArea.bg_demand.map((b) => ({ ...b, cuisine_demand_usd: (basis === 'restaurant_spend' ? b.restaurant_spend_usd : b.chinese_spend_usd) * altShare }));
+    const scored: ReportModel['score']['alternatives'] = [];
     for (const alt of getTaxonomy().cuisines) {
       if (alt.id === site.cuisine) {
-        alternatives.push({ cuisine: alt.id, label_zh: alt.label_zh, label_en: alt.label_en, total, verdict: verdictFor(total, rentMissing) });
+        scored.push({ cuisine: alt.id, label_zh: alt.label_zh, label_en: alt.label_en, label_es: alt.label_es ?? alt.label_en, total, verdict: verdictFor(total, rentMissing) });
         continue;
       }
-      const altShare = computeCuisineShare(merged, alt.id).share;
+      const altShare = computeConceptShare(merged, alt.id);
       const altComp = computeCompetitors({ ...competitorInput, cuisine: alt.id, ticket_in: alt.ticket_in, target_price_level: alt.price_tier.length, metro_sub_cuisine_total: null, hub_median_density_per_10k_chinese: await hubMedianDensity(ctx, geo.metro, alt.id) });
       const altPrimary = ringById(primaryRingFor(alt.range_class));
       const altHuff = computeHuff({
         site: siteLL,
         range_class: alt.range_class,
         competitors: huffCompetitorsOf(altComp),
-        bg_demand: tradeArea.bg_demand.map((b) => ({ ...b, cuisine_demand_usd: b.chinese_spend_usd * altShare })),
+        bg_demand: demandOn(altShare.basis, altShare.share),
         seats: site.seats,
         walk10: ringGeom(rings, 'walk10'),
-        lunch: { jobs_walk10: walk10.jobs, asian_job_share, ticket_lunch: Math.round(alt.ticket_in * 0.75), chinese_share: altPrimary.chinese_hh_share ?? county.chinese_hh_share ?? 0.1 },
+        lunch: { jobs_walk10: walk10.jobs, ...lunchAudienceFor(alt, { chinese_share: chineseShareOf(altPrimary), asian_job_share, concept_share: altShare.share, ticket_lunch: Math.round(alt.ticket_in * 0.75) }) },
       });
       const altFin = computeFinance({ cuisine: alt.id, rent_usd: site.rent_usd, sqft: site.sqft, seats: site.seats, capex_usd: site.capex_usd, ticket_in: null, ticket_delivery: null, delivery_ratio: site.delivery_ratio, median_income: altPrimary.median_income, state: geo.geography.state_abbr, captured_monthly_usd: altHuff.captured_monthly_usd });
       const altCov = altHuff.captured_monthly_usd != null && altFin.breakeven_monthly ? altHuff.captured_monthly_usd / altFin.breakeven_monthly : null;
       altComp.cluster_score = clusterScoreFor(altComp.walk10_l1_l2_count, altCov);
       const altDims = scoreDimensions(scoreInputFor(alt.id, altPrimary, altComp, altHuff, altFin, altCov));
       const altTotal = totalScore(altDims);
-      alternatives.push({ cuisine: alt.id, label_zh: alt.label_zh, label_en: alt.label_en, total: altTotal, verdict: verdictFor(altTotal, rentMissing) });
+      scored.push({ cuisine: alt.id, label_zh: alt.label_zh, label_en: alt.label_en, label_es: alt.label_es ?? alt.label_en, total: altTotal, verdict: verdictFor(altTotal, rentMissing) });
     }
-    alternatives.sort((a, b) => b.total - a.total);
+    scored.sort((a, b) => b.total - a.total);
+    const sameCategory = scored.filter((a) => cuisineById(a.cuisine).category === cu.category);
+    const otherTop3 = scored.filter((a) => cuisineById(a.cuisine).category !== cu.category).slice(0, 3);
+    alternatives.push(...[...sameCategory, ...otherTop3].sort((a, b) => b.total - a.total));
   }
   const user_cuisine_rank = Math.max(1, alternatives.findIndex((a) => a.cuisine === site.cuisine) + 1);
 
@@ -463,6 +525,8 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
   // acceptable POI base when it returned a real pool (≥ 15 food POIs). Declared
   // in meta.degradations and on page 14 — never silent.
   const degradations: string[] = [];
+  // §4.1: a concept nobody confirmed (no picker choice, no dictionary hit) ran as other_chinese — declared, never silent.
+  if (!concept.confirmed) degradations.push('concept_unconfirmed:other_chinese');
   const overtureLoaded = Boolean(bundle.overture?.data?.loaded);
   const foodPool = merged.filter((m) => m.is_food).length;
   if (!overtureLoaded && (bundle.google?.status === 'ok' || bundle.google?.status === 'partial') && foodPool >= 15) {
@@ -496,6 +560,9 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
       cuisine: site.cuisine,
       cuisine_label_zh: cu.label_zh,
       cuisine_label_en: cu.label_en,
+      cuisine_label_es: cu.label_es ?? cu.label_en,
+      concept_category: cu.category,
+      audience: cu.audience,
       range_class: cu.range_class,
       rent_usd: site.rent_usd,
       sqft: site.sqft,
@@ -542,6 +609,9 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
       metro_sub_cuisine_total: competitors.metro_sub_cuisine_total,
       pool_radius_mi: competitors.pool_radius_mi,
       l1_nearest_outside_pool: competitors.l1_nearest_outside_pool ?? null,
+      brand_anchors: competitors.brand_anchors ?? [],
+      l1_search_radius_m: competitors.l1_search_radius_m,
+      l1_layers_tried: competitors.l1_layers_tried,
     },
     demand: {
       captured_monthly_usd: huff.captured_monthly_usd,

@@ -90,6 +90,21 @@ const ENGINE_PHRASES: Rule[] = [
   // ---- score drivers (engines/cuisine-fit.ts)
   { re: /coverage_ratio 未知（需求或保本线缺失）→ 中性 50/g, en: 'Demand coverage unknown (demand or break-even missing) → neutral 50', es: 'Cobertura de demanda desconocida (falta demanda o punto de equilibrio) → neutral 50' },
   { re: /中文家庭占比 (\S+) vs 阈值 (\S+)/g, en: 'Chinese-speaking households $1 vs $2 threshold', es: 'Hogares de habla china $1 vs umbral $2' },
+  // ---- general-audience concepts (§4.1: audience fit on household density, competitors as "same-category places")
+  { re: /大众客群业态：主商圈户密度 (\S+) 户\/平方英里（不按中文家庭占比评分）/g, en: 'General-audience concept: $1 households per sq mi in the primary trade area (not scored on the Chinese-speaking share)', es: 'Concepto de público general: $1 hogares por milla² en la zona principal (no se puntúa por la cuota de hogares chinos)' },
+  { re: /大众客群业态：主商圈户密度 未获取（不按中文家庭占比评分）/g, en: 'General-audience concept: household density n/a (not scored on the Chinese-speaking share)', es: 'Concepto de público general: densidad de hogares n/d (no se puntúa por la cuota de hogares chinos)' },
+  { re: /集聚分 (\S+)（walk10 内同类目门店 (\d+) 家）/g, en: 'Cluster score $1 ($2 same-category places within a 10-minute walk)', es: 'Puntuación de aglomeración $1 ($2 locales de la misma categoría a 10 minutos a pie)' },
+  { re: /主商圈户密度 (\S+) 户\/平方英里，大众客群业态需靠日间上班人群与外卖补足客群/g, en: 'Household density $1 per sq mi in the primary trade area: a general-audience concept must lean on daytime workers and delivery', es: 'Densidad de hogares $1 por milla² en la zona principal: un concepto de público general debe apoyarse en los trabajadores diurnos y el delivery' },
+  { re: /主商圈户密度 未获取，大众客群业态需靠日间上班人群与外卖补足客群/g, en: 'Household density n/a in the primary trade area: a general-audience concept must lean on daytime workers and delivery', es: 'Densidad de hogares n/d en la zona principal: un concepto de público general debe apoyarse en los trabajadores diurnos y el delivery' },
+  {
+    re: /步行 10 分钟内同类目门店 (\d+) 家：(冷启动，需自带流量（预算 ≥ 3 个月营销）|需明确价格 × 体验差异化，避免正面价格战)/g,
+    en: (_m, n, tail) => `${n} same-category places within a 10-minute walk: ${tail.startsWith('冷启动') ? 'cold start — budget ≥ 3 months of marketing' : 'differentiate on price × experience, avoid a head-on price war'}`,
+    es: (_m, n, tail) => `${n} locales de la misma categoría a 10 minutos a pie: ${tail.startsWith('冷启动') ? 'arranque en frío — presupuesto de marketing ≥ 3 meses' : 'diferénciese en precio × experiencia, evite la guerra de precios'}`,
+  },
+  { re: /供给份额 ≈ 需求份额（大众客群）：品类份额 (\S+) × 品类内业态份额 (\S+)，按评论数 log 权重（D5\+D6），Laplace 平滑/g, en: 'Supply share ≈ demand share (general audience): category share $1 × subtype share within the category $2, review-weighted (map base + Google), smoothed', es: 'Cuota de oferta ≈ cuota de demanda (público general): cuota de categoría $1 × cuota del tipo dentro de la categoría $2, ponderada por reseñas (mapa + Google), suavizada' },
+  { re: /供给份额 ≈ 需求份额（大众客群）：品类份额 (\S+) × 品类内业态份额 (\S+)，按门店数（无评论数），Laplace 平滑/g, en: 'Supply share ≈ demand share (general audience): category share $1 × subtype share within the category $2, by store count (no reviews), smoothed', es: 'Cuota de oferta ≈ cuota de demanda (público general): cuota de categoría $1 × cuota del tipo dentro de la categoría $2, por número de locales (sin reseñas), suavizada' },
+  { re: /无餐饮供给样本 → 先验 3%/g, en: 'No food-place sample → prior 3%', es: 'Sin muestra de locales de comida → prior 3%' },
+  { re: /delivery_ratio\(取业态默认 (\d+)%\)/g, en: 'delivery share (concept default $1%)', es: 'cuota de delivery ($1% por defecto del concepto)' },
   { re: /收入中位 (\S+) vs 价位 (\S+) 理想 ≥ (\S+)/g, en: 'Median income $1 vs ideal ≥ $3 for a $2 price point', es: 'Ingreso mediano $1 vs ideal ≥ $3 para el nivel de precio $2' },
   { re: /walk10 岗位数 ÷ 主商圈人口/g, en: 'Jobs within a 10-minute walk ÷ primary-area population', es: 'Empleos a 10 minutos a pie ÷ población de la zona principal' },
   { re: /walk10 岗位 (\S+)/g, en: 'Jobs within a 10-minute walk: $1', es: 'Empleos a 10 minutos a pie: $1' },

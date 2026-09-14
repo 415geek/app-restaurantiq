@@ -447,39 +447,97 @@ export function ReportDataViz({
   );
 }
 
-export function DataProvenance({ marketData, lang }: { marketData: Md; lang: Locale }) {
+type ModelSourceRow = {
+  id?: string;
+  name?: string;
+  status?: string;
+  fetched_at?: string;
+  coverage_note?: string;
+  source?: string;
+  degraded_from?: string;
+};
+
+const PROV_COPY: Record<Locale, { partial: string; dataAsOf: (d: string) => string; siteHistory: (n: number) => string; notCalled: string; reviewsSampled: (n: number) => string }> = {
+  zh: { partial: '部分', dataAsOf: (d) => `数据截至：${d}`, siteHistory: (n) => `地址历史：${n} 家商家`, notCalled: '未调用', reviewsSampled: (n) => `采样评论 ${n} 条` },
+  en: { partial: 'Partial', dataAsOf: (d) => `Data as of ${d}`, siteHistory: (n) => `site history: ${n} businesses`, notCalled: 'Not called', reviewsSampled: (n) => `${n} reviews sampled` },
+  es: { partial: 'Parcial', dataAsOf: (d) => `Datos al ${d}`, siteHistory: (n) => `historial del local: ${n} negocios`, notCalled: 'No consultado', reviewsSampled: (n) => `${n} reseñas muestreadas` },
+};
+
+/**
+ * Data provenance (评审 Spec §4.7 d): rows are built from what was actually
+ * called — `summary.*_status` for the Places/Yelp/Foursquare pulls (with the
+ * site-history pack's own Google/Yelp usage folded in, so Yelp never reads
+ * "not called" when site history used it), the ACS + finance blocks, and the
+ * 360° model's source ledger when it exists. Nothing is listed that did not run.
+ */
+export function DataProvenance({
+  marketData,
+  lang,
+  modelSources = null,
+  dataAsOf = null,
+}: {
+  marketData: Md;
+  lang: Locale;
+  /** `report_model_json.sources` (D1..D12 ledger) when the 360° model exists. */
+  modelSources?: unknown[] | null;
+  /** `report_model_json.meta.data_as_of` when available; falls back to `market_data_json.fetched_at`. */
+  dataAsOf?: string | null;
+}) {
   const t = L[lang];
+  const p = PROV_COPY[lang];
   const summary = pick<Record<string, unknown>>(marketData, 'summary');
   const acs = pick<Record<string, unknown>>(marketData, 'acs_context');
   const finance = pick<Record<string, unknown>>(marketData, 'finance_model');
+  const siteHistory = pick<Record<string, unknown>>(marketData, 'site_history');
+  const siteApi = pick<Record<string, unknown>>(siteHistory, 'api_status');
+  const siteGoogle = String(pick(siteApi, 'google') ?? '');
+  const siteYelp = String(pick(siteApi, 'yelp') ?? '');
+  const siteBusinesses = (pick<unknown[]>(siteHistory, 'businesses') ?? []).length;
+  const siteReviews = num(pick(siteHistory, 'total_reviews_sampled')) ?? 0;
   const fetchedAt = pick<string>(marketData, 'fetched_at');
   const fetchedDate = typeof fetchedAt === 'string' ? fetchedAt.replace('T', ' ').slice(0, 16) : '—';
+  const siteFetched = typeof siteHistory?.fetched_at === 'string' ? String(siteHistory.fetched_at).replace('T', ' ').slice(0, 16) : fetchedDate;
 
+  const isOk = (v: unknown) => v === 'ok' || v === 'OK';
   const statusText = (s: unknown): string => {
     const v = String(s ?? '');
-    if (v === 'ok' || v === 'OK') return t.ok;
+    if (isOk(v)) return t.ok;
     if (v === 'not_configured' || v === '') return t.notConfigured;
+    if (v === 'partial') return p.partial;
     return `${t.failed} (${v})`;
   };
 
   const rows: { source: string; status: string; coverage: string; time: string }[] = [];
   if (summary) {
+    const gCount = fmtInt(num(pick(summary, 'competitor_count_google')) ?? 0);
+    const placesStatus = pick(summary, 'places_status');
+    const placesUsed = isOk(placesStatus) || isOk(siteGoogle);
     rows.push({
       source: 'Google Places',
-      status: statusText(pick(summary, 'places_status')),
-      coverage: t.competitorsCount(fmtInt(num(pick(summary, 'competitor_count_google')) ?? 0)),
+      status: placesUsed ? t.ok : statusText(placesStatus),
+      coverage: [t.competitorsCount(gCount), isOk(siteGoogle) ? p.siteHistory(siteBusinesses) : null].filter(Boolean).join(' · '),
       time: fetchedDate,
     });
+    const yelpStatus = pick(summary, 'yelp_status');
+    const yelpUsed = isOk(yelpStatus) || isOk(siteYelp);
     rows.push({
       source: 'Yelp Fusion',
-      status: statusText(pick(summary, 'yelp_status')),
-      coverage: t.competitorsCount(fmtInt(num(pick(summary, 'competitor_count_yelp')) ?? 0)),
-      time: fetchedDate,
+      status: yelpUsed ? t.ok : statusText(yelpStatus),
+      coverage: [
+        isOk(yelpStatus) ? t.competitorsCount(fmtInt(num(pick(summary, 'competitor_count_yelp')) ?? 0)) : null,
+        isOk(siteYelp) ? p.siteHistory(siteBusinesses) : null,
+        isOk(siteYelp) && siteReviews > 0 ? p.reviewsSampled(siteReviews) : null,
+        !yelpUsed ? p.notCalled : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      time: isOk(siteYelp) && !isOk(yelpStatus) ? siteFetched : fetchedDate,
     });
+    const fsqStatus = pick(summary, 'foursquare_status');
     rows.push({
       source: 'Foursquare Places',
-      status: statusText(pick(summary, 'foursquare_status')),
-      coverage: t.venuesCount(fmtInt(num(pick(summary, 'competitor_count_foursquare')) ?? 0)),
+      status: statusText(fsqStatus),
+      coverage: isOk(fsqStatus) ? t.venuesCount(fmtInt(num(pick(summary, 'competitor_count_foursquare')) ?? 0)) : p.notCalled,
       time: fetchedDate,
     });
   }
@@ -502,8 +560,25 @@ export function DataProvenance({ marketData, lang }: { marketData: Md; lang: Loc
       time: fetchedDate,
     });
   }
+  // 360° source ledger (Overture / LODES / Mapbox / …): exactly what the engine called.
+  const seen = new Set(rows.map((r) => r.source.toLowerCase()));
+  for (const raw of modelSources ?? []) {
+    if (!raw || typeof raw !== 'object') continue;
+    const m = raw as ModelSourceRow;
+    const name = typeof m.name === 'string' && m.name.trim() ? m.name.trim() : typeof m.source === 'string' ? m.source : null;
+    if (!name || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    const st = m.status === 'ok' ? t.ok : m.status === 'partial' ? p.partial : m.status === 'failed' ? t.failed : statusText(m.status);
+    rows.push({
+      source: m.id ? `${name} (${m.id})` : name,
+      status: m.degraded_from ? `${st} ← ${m.degraded_from}` : st,
+      coverage: typeof m.coverage_note === 'string' ? m.coverage_note : '',
+      time: typeof m.fetched_at === 'string' ? m.fetched_at.replace('T', ' ').slice(0, 16) : fetchedDate,
+    });
+  }
 
   if (rows.length === 0) return null;
+  const asOf = dataAsOf ?? (typeof fetchedAt === 'string' ? fetchedAt.slice(0, 10) : null);
 
   return (
     <section className="print-section rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 shadow-sm">
@@ -534,6 +609,7 @@ export function DataProvenance({ marketData, lang }: { marketData: Md; lang: Loc
           </tbody>
         </table>
       </div>
+      {asOf ? <p className="mt-3 text-[11px] text-zinc-500">{p.dataAsOf(asOf)}</p> : null}
     </section>
   );
 }

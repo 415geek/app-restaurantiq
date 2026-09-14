@@ -9,13 +9,18 @@
  *   captured_j = Σ_i cuisine_demand_i × P_ij            (dinner / weekend, all BGs)
  *              + lunch_demand × P_lunch                 (walk10 competitor set only)
  *
+ *   lunch_demand = jobs_walk10 × lunch_out_rate × audience_share × asian_adj × ticket_lunch × workdays
+ *     audience_share = Chinese-speaking share of the primary ring for a 中餐 concept, or the
+ *     concept's category share for a general-audience concept (asian_adj = 1 then);
+ *     `daypart_profile: dinner` concepts (hot pot, skewers) have no lunch pool.
+ *
  * The site competes with L1 (weight 1) and L2 (weight adjacent_weight) for each
  * block group's demand. Everything is a pure function of explicit inputs.
  */
 import { haversineM, METERS_PER_MILE, pointInGeometry } from '../geo';
 import type { Geometry, LatLng } from '../data/types';
 import type { RingId } from '../model/schema';
-import { getDefaults, type RangeClass } from '../params';
+import { getDefaults, type Audience, type DaypartProfile, type RangeClass } from '../params';
 import type { BlockGroupDemand } from './trade-area';
 
 export interface HuffCompetitor {
@@ -37,8 +42,26 @@ export interface HuffInput {
   /** Typical seats for the cuisine's L1 set when known; else 60. */
   median_seats?: number;
   walk10: Geometry;
+  /**
+   * `chinese_share` is the share of the walk10 workforce in the concept's audience: Chinese-speaking share
+   * for a 中餐 concept, the category share for a general-audience concept (see lunchAudienceFor).
+   */
   lunch: { jobs_walk10: number | null; asian_job_share: number | null; ticket_lunch: number | null; chinese_share: number };
   ring_of_bg?: (geoid: string) => RingId | null;
+}
+
+/**
+ * Lunch-pool audience inputs by concept (评审 Spec §4.1 step 4): a 中餐 concept draws on the Chinese-speaking
+ * share of the workforce (with the Asian-jobs adjustment); a general-audience concept draws on everyone,
+ * weighted by its category share; a dinner-only format has no lunch pool.
+ */
+export function lunchAudienceFor(
+  concept: { audience: Audience; daypart_profile?: DaypartProfile },
+  p: { chinese_share: number; asian_job_share: number | null; concept_share: number; ticket_lunch: number | null },
+): { asian_job_share: number | null; ticket_lunch: number | null; chinese_share: number } {
+  if (concept.daypart_profile === 'dinner') return { asian_job_share: null, ticket_lunch: null, chinese_share: 0 };
+  if (concept.audience === 'general') return { asian_job_share: null, ticket_lunch: p.ticket_lunch, chinese_share: p.concept_share };
+  return { asian_job_share: p.asian_job_share, ticket_lunch: p.ticket_lunch, chinese_share: p.chinese_share };
 }
 
 export interface HuffResult {

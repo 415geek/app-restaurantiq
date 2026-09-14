@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeFinance, rentForOccupancyTarget, scenarioRevenue, type FinanceInput } from './finance';
+import { archetypeFor, computeFinance, rentForOccupancyTarget, scenarioRevenue, type FinanceInput } from './finance';
 
 const millbrae: FinanceInput = {
   cuisine: 'hunan',
@@ -106,4 +106,31 @@ test('scenarioRevenue formula', () => {
   assert.equal(s.dine_in_covers_day, 138);
   assert.equal(s.delivery_orders_day, 46);
   assert.equal(s.monthly_revenue, Math.round((138 * 24 + 46 * 28) * 30));
+});
+
+test('§4.1: headcount, ticket, delivery share and dayparts come from the taxonomy entry, not the floor area', () => {
+  const egg = computeFinance({ cuisine: 'egg_tart', rent_usd: 4_000, sqft: 600, seats: null, capex_usd: null, ticket_in: null, ticket_delivery: null, delivery_ratio: null, median_income: 150_000, state: 'CA', captured_monthly_usd: null });
+  const eggArch = archetypeFor('egg_tart');
+  assert.equal(eggArch.headcount, 4);
+  assert.equal(eggArch.ticket_in, 10);
+  assert.equal(eggArch.delivery_ratio, 0.75);
+  assert.equal(eggArch.daypart_profile, 'morning_afternoon');
+  assert.equal(egg.fixed_cost.labor, Math.round(4 * 22 * 173 * 1.18), 'labor = 4 FTE at the HCOL wage');
+  assert.equal(egg.scenarios[1].ticket_in, 10);
+  assert.equal(egg.scenarios[1].delivery_ratio, 0.75);
+  assert.ok(egg.inputs_missing.includes('delivery_ratio(取业态默认 75%)'));
+  const hp = archetypeFor('hot_pot');
+  assert.equal(hp.headcount, 10);
+  assert.equal(hp.ticket_in, 35);
+  assert.equal(hp.daypart_profile, 'dinner');
+  assert.equal(computeFinance({ ...millbrae, cuisine: 'hot_pot', ticket_in: null }).fixed_cost.labor, Math.round(10 * 22 * 173 * 1.18));
+  // The hunan numbers are the legacy ones (12 FTE, 25 % delivery, $24 ticket).
+  const hunan = archetypeFor('hunan');
+  assert.equal(hunan.headcount, 12);
+  assert.equal(hunan.delivery_ratio, 0.25);
+  const h = computeFinance({ ...millbrae, ticket_in: null, delivery_ratio: null });
+  assert.equal(h.fixed_cost.labor, Math.round(12 * 22 * 173 * 1.18));
+  assert.equal(h.scenarios[1].ticket_in, 24);
+  assert.equal(h.scenarios[1].delivery_ratio, 0.25);
+  assert.ok(h.inputs_missing.includes('delivery_ratio(默认 25%)'));
 });
