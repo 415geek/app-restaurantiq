@@ -14,6 +14,14 @@
  *
  * Cost structure keeps the D-4 archetype benchmarks (docs/audit.md §3) but is
  * driven by explicit inputs instead of a market_data blob.
+ *
+ * Rent is NEVER estimated. When the customer did not enter a monthly rent
+ * (`rent_usd == null`) the report must not fill one in (owner rule: 「当用户没
+ * 输入租金信息时，请不要把你认为的租金信息填上」): `fixed_cost.rent` is null,
+ * `rent_excluded` is true, and fixed cost / break-even / safety line / scenario
+ * ratios are computed WITHOUT rent and labelled so by every renderer. Instead
+ * of a guess the report exposes `max_rent_for_10pct_usd` (captured demand ×
+ * 10 %) and a "each +$1,000 of rent" sensitivity row.
  */
 import { getDefaults, cuisineById } from '../params';
 import type { ReportModel } from '../model/schema';
@@ -22,6 +30,7 @@ export type FinanceScenario = ReportModel['finance']['scenarios'][number];
 
 export interface FinanceInput {
   cuisine: string;
+  /** The customer's monthly rent; null → no rent is assumed anywhere (see header). */
   rent_usd: number | null;
   sqft: number | null;
   seats: number | null;
@@ -29,14 +38,17 @@ export interface FinanceInput {
   ticket_in: number | null;
   ticket_delivery: number | null;
   delivery_ratio: number | null;
-  /** From the primary ring (drives wage + rent tier); null → mid-cost tier. */
+  /** From the primary ring (drives the wage tier); null → mid-cost tier. */
   median_income: number | null;
   state: string | null;
-  /** Median rent comp $/sqft/month (D8) when the user gave sqft but not rent. */
-  rent_psf_comp: number | null;
-  /** Captured monthly demand (Huff) — for occupancy_cost_ratio; null when unknown. */
+  /** Captured monthly demand (Huff) — for occupancy_cost_ratio and the rent ceiling; null when unknown. */
   captured_monthly_usd: number | null;
 }
+
+export type RentSource = 'user_input' | 'not_provided';
+
+/** Target occupancy cost (rent ÷ captured revenue) behind `max_rent_for_10pct_usd` and the rent conditions. */
+export const OCCUPANCY_TARGET = 0.1;
 
 interface Archetype {
   id: string;
@@ -58,10 +70,11 @@ const ARCHETYPES: Record<string, Archetype> = {
   default: { id: 'asian_casual', food_cost_pct: 0.32, paper_pct: 0.02, headcount: 12, other_fixed: 7_800, seats_per_100sqft: 2.3, default_sqft: 2_200, base_turns: 2.0 },
 };
 
+/** Wage tiers only — there is deliberately no rent $/sf here (rent is never estimated). */
 const TIERS = {
-  hcol: { wage: 22, rent_psf: 6.5 },
-  mcol: { wage: 18, rent_psf: 4.25 },
-  lcol: { wage: 15, rent_psf: 3.0 },
+  hcol: { wage: 22 },
+  mcol: { wage: 18 },
+  lcol: { wage: 15 },
 } as const;
 const HCOL_STATES = new Set(['CA', 'NY', 'WA', 'MA', 'HI', 'DC', 'NJ']);
 
@@ -125,21 +138,12 @@ export function computeFinance(input: FinanceInput): ReportModel['finance'] {
   const delivery_ratio = input.delivery_ratio ?? 0.25;
   if (input.delivery_ratio == null) inputs_missing.push('delivery_ratio(默认 25%)');
 
-  // Rent: user → sqft × comp psf → sqft × tier psf → default sqft × tier psf.
-  let rent: number;
-  let rent_source: string;
-  if (input.rent_usd != null) {
-    rent = input.rent_usd;
-    rent_source = 'user_input';
-  } else if (sqft != null && input.rent_psf_comp != null) {
-    rent = Math.round(sqft * input.rent_psf_comp);
-    rent_source = 'sqft × 对标 $/sf/月';
-    inputs_missing.push('rent(按对标估算)');
-  } else {
-    rent = Math.round((sqft ?? arch.default_sqft) * TIERS[tier].rent_psf);
-    rent_source = `sqft × ${tier} 档位 $${TIERS[tier].rent_psf}/sf/月`;
-    inputs_missing.push('rent(按档位估算)');
-  }
+  // Rent: the customer's figure or nothing. No comp / tier / sqft fallback — a rent the
+  // customer never gave must not drive break-even, occupancy cost or the verdict.
+  const rent: number | null = input.rent_usd ?? null;
+  const rent_source: RentSource = rent != null ? 'user_input' : 'not_provided';
+  const rent_excluded = rent == null;
+  if (rent_excluded) inputs_missing.push('rent(未提供)');
 
   const labor = Math.round(arch.headcount * TIERS[tier].wage * 173 * 1.18);
   const utilities = Math.round(arch.other_fixed * 0.3);
@@ -147,7 +151,8 @@ export function computeFinance(input: FinanceInput): ReportModel['finance'] {
   const pos = Math.round(arch.other_fixed * 0.08);
   const marketing = Math.round(arch.other_fixed * 0.25);
   const misc = arch.other_fixed - utilities - insurance - pos - marketing;
-  const fixed_total = rent + labor + utilities + insurance + pos + marketing + misc;
+  // Excludes rent when none was provided (flagged by rent_excluded, never silently).
+  const fixed_total = (rent ?? 0) + labor + utilities + insurance + pos + marketing + misc;
 
   const variable_rate = arch.food_cost_pct + arch.paper_pct + d.cc_fees_pct + d.delivery_blended_pct;
   const contribution_margin = Math.max(0.15, 1 - variable_rate);
@@ -176,31 +181,42 @@ export function computeFinance(input: FinanceInput): ReportModel['finance'] {
     monthly_revenue_delta: Math.round(rev - be - marginBase),
     breaks_breakeven: rev < be,
   });
-  const rentUp = Math.round((fixed_total + rent * 0.1) / contribution_margin);
+  // Rent row: "+10 %" of the customer's rent, or — when none was given — the revenue each
+  // extra $1,000 of monthly rent requires, so the reader can plug in their own figure.
+  const rentRow =
+    rent != null
+      ? sens('rent_plus_10', '租金 +10%', 'Rent +10%', base.monthly_revenue, Math.round((fixed_total + rent * 0.1) / contribution_margin))
+      : { id: 'rent_per_1000', label_zh: '月租每 +$1,000', label_en: 'Each +$1,000 rent', monthly_revenue_delta: -Math.round(1000 / contribution_margin), breaks_breakeven: false };
   const sensitivity = [
-    sens('rent_plus_10', '租金 +10%', 'Rent +10%', base.monthly_revenue, rentUp),
+    rentRow,
     sens('turns_minus_05', '翻台 −0.5', 'Turns −0.5', scenarioRevenue({ ...base, turns_per_day: Math.max(0.5, bt - 0.5) }).monthly_revenue),
     sens('ticket_minus_125', '客单价 −12.5%', 'Ticket −12.5%', scenarioRevenue({ ...base, ticket_in: ticket_in * 0.875, ticket_delivery: ticket_delivery * 0.875 }).monthly_revenue),
     sens('delivery_plus_15pt', '外卖占比 +15pt', 'Delivery +15 pt', scenarioRevenue({ ...base, delivery_ratio: Math.min(0.7, delivery_ratio + 0.15) }).monthly_revenue),
   ];
 
   const occupancy_cost_ratio =
-    input.captured_monthly_usd != null && input.captured_monthly_usd > 0 ? Math.round((rent / input.captured_monthly_usd) * 1000) / 1000 : null;
+    rent != null && input.captured_monthly_usd != null && input.captured_monthly_usd > 0 ? Math.round((rent / input.captured_monthly_usd) * 1000) / 1000 : null;
+  const max_rent_for_10pct_usd = rentForOccupancyTarget(input.captured_monthly_usd);
 
   let payback_months: number | null = null;
-  if (input.capex_usd != null && input.capex_usd > 0) {
+  if (input.capex_usd == null || input.capex_usd <= 0) {
+    inputs_missing.push('capex(缺 → 回收期隐藏)');
+  } else if (rent_excluded) {
+    // Profit computed without rent would overstate payback — hidden, not guessed.
+    inputs_missing.push('payback(租金未提供 → 回收期隐藏)');
+  } else {
     const revenueForPayback = input.captured_monthly_usd ?? base.monthly_revenue;
     const monthlyProfit = (revenueForPayback - breakeven_monthly) * contribution_margin;
     payback_months = monthlyProfit > 0 ? Math.round(input.capex_usd / monthlyProfit) : null;
     if (payback_months == null) inputs_missing.push('payback(捕获营收未超过保本线)');
-  } else {
-    inputs_missing.push('capex(缺 → 回收期隐藏)');
   }
 
   return {
     method: 'seats×turns 单一口径；保本 = 固定成本 ÷ 边际贡献率；安全线 = 保本 × ' + d.safety_multiplier,
     fixed_cost: { rent, labor, utilities, insurance, pos, marketing, misc, total: fixed_total },
     rent_source,
+    rent_excluded,
+    max_rent_for_10pct_usd,
     contribution_margin: Math.round(contribution_margin * 1000) / 1000,
     variable_rate: Math.round(variable_rate * 1000) / 1000,
     breakeven_monthly,
@@ -213,7 +229,7 @@ export function computeFinance(input: FinanceInput): ReportModel['finance'] {
   };
 }
 
-/** Rent that makes rent ÷ captured revenue ≤ target (for auto-generated conditions). */
-export function rentForOccupancyTarget(capturedMonthly: number | null, target = 0.1): number | null {
+/** Rent that makes rent ÷ captured revenue ≤ target (for auto-generated conditions and the rent ceiling). */
+export function rentForOccupancyTarget(capturedMonthly: number | null, target = OCCUPANCY_TARGET): number | null {
   return capturedMonthly != null && capturedMonthly > 0 ? Math.round(capturedMonthly * target) : null;
 }

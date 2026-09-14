@@ -160,7 +160,8 @@ export function paramNotes(lang: NarrativeLanguage): string {
       'null = 未获取，只能写「未获取」，不得估算。' +
       '写作时不要照抄字段名、圈层代号或英文缩写：walk10 写「步行 10 分钟范围」，drive5 / drive10 / drive15 写「开车 5 / 10 / 15 分钟范围」，' +
       'L1 写「同菜系竞品」，L2 写「其他中餐」，L3 写「其他亚洲餐」，L4 写「华人客流聚集点」，coverage_ratio 写「需求覆盖率」，occupancy_cost_ratio 写「占用成本比」，' +
-      'cluster_score 写「集聚分」，huff 写「需求分流模型」，benchmark_revenue_band 的 p25 / median / p75 写「低位 / 中位 / 高位」，hhi 写「集中度」，confidence 写「数据完整度」，capex 写「开办投入（装修与设备）」；GO / CONDITIONAL_GO / NO_GO 写「可做 / 有条件可做 / 不建议」。'
+      'cluster_score 写「集聚分」，huff 写「需求分流模型」，benchmark_revenue_band 的 p25 / median / p75 写「低位 / 中位 / 高位」，hhi 写「集中度」，confidence 写「数据完整度」，capex 写「开办投入（装修与设备）」；GO / CONDITIONAL_GO / NO_GO 写「可做 / 有条件可做 / 不建议」。' +
+      RENT_NOTE.zh
     );
   }
   if (lang === 'es') {
@@ -173,7 +174,8 @@ export function paramNotes(lang: NarrativeLanguage): string {
       'null = no disponible: escribe «no disponible», nunca estimes. ' +
       'Al redactar no copies nombres de campo, códigos de anillo ni abreviaturas en inglés: walk10 se escribe «área a 10 minutos a pie», drive5 / drive10 / drive15 «área a 5 / 10 / 15 minutos en coche», ' +
       'L1 «competidores de la misma cocina», L2 «otros restaurantes chinos», L3 «otros restaurantes asiáticos», L4 «anclas de la comunidad china», coverage_ratio «cobertura de demanda», occupancy_cost_ratio «ratio de costo de ocupación», ' +
-      'cluster_score «puntuación de aglomeración», huff «modelo de reparto de demanda», p25 / median / p75 de benchmark_revenue_band «bajo / mediano / alto», hhi «concentración», confidence «integridad de datos», capex «inversión inicial (obra y equipo)»; GO / CONDITIONAL_GO / NO_GO se escriben «viable / viable con condiciones / no viable».'
+      'cluster_score «puntuación de aglomeración», huff «modelo de reparto de demanda», p25 / median / p75 de benchmark_revenue_band «bajo / mediano / alto», hhi «concentración», confidence «integridad de datos», capex «inversión inicial (obra y equipo)»; GO / CONDITIONAL_GO / NO_GO se escriben «viable / viable con condiciones / no viable». ' +
+      RENT_NOTE.es
     );
   }
   return (
@@ -185,9 +187,44 @@ export function paramNotes(lang: NarrativeLanguage): string {
     'null = not available: write "not available", never estimate. ' +
     'Never copy field names, ring ids or engine abbreviations into the prose: walk10 is "the 10-minute walk area", drive5 / drive10 / drive15 are "the 5 / 10 / 15-minute drive area", ' +
     'L1 is "same-cuisine competitors", L2 "other Chinese restaurants", L3 "other Asian restaurants", L4 "Chinese-community anchors", coverage_ratio "demand coverage", occupancy_cost_ratio "occupancy cost ratio", ' +
-    'cluster_score "cluster score", huff "the demand-split model", p25 / median / p75 of benchmark_revenue_band "low / median / high", hhi "concentration", confidence "data completeness", capex "start-up investment (build-out and equipment)"; GO / CONDITIONAL_GO / NO_GO are "GO / CONDITIONAL GO / NO GO".'
+    'cluster_score "cluster score", huff "the demand-split model", p25 / median / p75 of benchmark_revenue_band "low / median / high", hhi "concentration", confidence "data completeness", capex "start-up investment (build-out and equipment)"; GO / CONDITIONAL_GO / NO_GO are "GO / CONDITIONAL GO / NO GO". ' +
+    RENT_NOTE.en
   );
 }
+
+/**
+ * What `finance.rent_excluded` means for the prose. Always part of the
+ * parameter notes; repeated as a standalone instruction on pages whose fragment
+ * carries the flag set to true (see `fragmentRentExcluded`).
+ */
+export const RENT_NOTE: Record<NarrativeLanguage, string> = {
+  zh:
+    'finance.rent_excluded 为 true 表示用户没有提供月租：本报告没有假设任何租金，finance.fixed_cost.rent 为 null，固定成本、保本线、安全线、需求覆盖率都不含租金。' +
+    '写到保本线、安全线或需求覆盖率时必须注明「不含租金」；必须写明「未提供月租」；绝不能写出任何租金金额、租金占比或占用成本比（它们不在 JSON 里）。' +
+    'finance.max_rent_for_10pct_usd 是按 10% 占用成本反推的月租上限，可以引用并建议用户补充实际月租后重新生成。',
+  en:
+    'finance.rent_excluded = true means the customer did not provide a monthly rent: this report assumes no rent, finance.fixed_cost.rent is null, and fixed cost, break-even, safety line and demand coverage all EXCLUDE rent. ' +
+    'Whenever you mention break-even, the safety line or demand coverage you must say "(excluding rent)"; you must say the rent was not provided; and you must never state any rent figure, rent share or occupancy cost ratio (none is in the JSON). ' +
+    'finance.max_rent_for_10pct_usd is the monthly rent ceiling at a 10% occupancy cost — you may cite it and tell the owner to add the actual rent and regenerate.',
+  es:
+    'finance.rent_excluded = true significa que el cliente no indicó el alquiler mensual: este informe no asume ningún alquiler, finance.fixed_cost.rent es null y el costo fijo, el punto de equilibrio, la línea de seguridad y la cobertura de demanda se calculan SIN renta. ' +
+    'Siempre que menciones el punto de equilibrio, la línea de seguridad o la cobertura de demanda debes escribir «(sin renta)»; debes decir que no se indicó el alquiler; y nunca debes escribir una cifra de alquiler, una cuota de alquiler ni un ratio de costo de ocupación (no están en el JSON). ' +
+    'finance.max_rent_for_10pct_usd es el tope de alquiler mensual con un costo de ocupación del 10%: puedes citarlo y pedir al dueño que indique el alquiler real y vuelva a generar el informe.',
+};
+
+/** True when the page fragment says no rent was provided (`finance.rent_excluded` as a key or inside `finance`). */
+export function fragmentRentExcluded(fragment: Record<string, unknown>): boolean {
+  if (fragment['finance.rent_excluded'] === true) return true;
+  const fin = fragment.finance;
+  return Boolean(fin && typeof fin === 'object' && (fin as { rent_excluded?: unknown }).rent_excluded === true);
+}
+
+/** Standalone instruction appended to the user prompt of a no-rent page. */
+const RENT_INSTRUCTION: Record<NarrativeLanguage, string> = {
+  zh: '注意：本报告未提供月租（finance.rent_excluded = true）。保本线 / 安全线 / 需求覆盖率一律写「不含租金」，写明「未提供月租」，不得出现任何租金金额或占用成本比。',
+  en: 'Note: no monthly rent was provided for this report (finance.rent_excluded = true). Label every break-even / safety line / demand coverage figure "(excluding rent)", say the rent was not provided, and never state a rent figure or an occupancy cost ratio.',
+  es: 'Atención: en este informe no se indicó el alquiler mensual (finance.rent_excluded = true). Escribe «(sin renta)» junto a cada punto de equilibrio / línea de seguridad / cobertura de demanda, di que no se indicó el alquiler y nunca escribas una cifra de alquiler ni un ratio de costo de ocupación.',
+};
 
 /**
  * Spanish narratives copy conditions verbatim from `text_es`, which the engine
@@ -217,12 +254,13 @@ export function buildNarrativePrompts(pageId: PageId, fragment: Record<string, u
   const suffix = tier !== 'summary' ? '' : pageId === 'page_15' ? P.final : P.summary;
   const system = `${P.base}${suffix ? ` ${suffix}` : ''}`;
   const frag = lang === 'es' ? withSpanishConditions(fragment) : fragment;
-  const user =
+  const base =
     lang === 'zh'
       ? `页面 = ${pageId}（${spec.zh}/${spec.en}）；页面 JSON 片段 = ${JSON.stringify(frag)}；参数说明 = ${paramNotes('zh')}`
       : lang === 'es'
         ? `página = ${pageId} (${spec.es}/${spec.en}); fragmento JSON de la página = ${JSON.stringify(frag)}; notas de parámetros = ${paramNotes('es')}`
         : `page = ${pageId} (${spec.en}); page JSON fragment = ${JSON.stringify(frag)}; parameter notes = ${paramNotes('en')}`;
+  const user = fragmentRentExcluded(frag) ? `${base}\n${RENT_INSTRUCTION[lang]}` : base;
   return { system, user, tier };
 }
 

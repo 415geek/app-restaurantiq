@@ -5,6 +5,7 @@
  */
 import { cuisineById, getDefaults, type RangeClass } from '../params';
 import type { ReportModel } from '../model/schema';
+import { rentForOccupancyTarget } from './finance';
 
 export type ScoreDimensionId = ReportModel['score']['dimensions'][number]['id'];
 
@@ -67,19 +68,54 @@ function avg(xs: Array<number | null>): number | null {
 
 const PRICE_TIER_INCOME: Record<string, number> = { $: 60_000, $$: 90_000, $$$: 120_000, $$$$: 160_000 };
 
+/** One dimension row with the weight from params and the rounded weighted score. */
+export function dimensionRow(id: ScoreDimensionId, score: number, drivers: string[]): ReportModel['score']['dimensions'][number] {
+  const weight = getDefaults().score.weights[id];
+  const s = Math.round(clamp(score) * 10) / 10;
+  return { id, label_zh: LABELS[id].zh, label_en: LABELS[id].en, score: s, weight, weighted: Math.round(((s * weight) / 100) * 100) / 100, drivers };
+}
+
+/** 1 需求覆盖 — banded on coverage_ratio; neutral 50 when it cannot be computed. */
+export function scoreDemandCoverage(coverage_ratio: number | null): { score: number; drivers: string[] } {
+  if (coverage_ratio == null) return { score: 50, drivers: ['coverage_ratio 未知（需求或保本线缺失）→ 中性 50'] };
+  return { score: bandScore(getDefaults().score.coverage_bands as Array<[number, number, number]>, coverage_ratio), drivers: [`coverage_ratio=${coverage_ratio.toFixed(2)}`] };
+}
+
+/**
+ * 5 财务可行 — occupancy-cost bands ± the captured-vs-safety adjustment. With no
+ * rent provided there is nothing to band and the ex-rent break-even must not
+ * earn or lose points, so the dimension is a flat neutral 50 that says why.
+ */
+export function scoreFinancialViability(f: ScoreInput['finance'], captured_monthly_usd: number | null): { score: number; drivers: string[] } {
+  if (f.rent == null) return { score: 50, drivers: ['租金未提供，财务维度按中性 50 分'] };
+  let occ = f.occupancy_cost_ratio;
+  let occNote = '占用成本比 = 租金 ÷ 捕获营收';
+  if (occ == null && f.base_revenue) {
+    occ = f.rent / f.base_revenue;
+    occNote = '占用成本比 = 租金 ÷ 基准情景营收（捕获需求缺失）';
+  }
+  let fin = occ == null ? 50 : bandScore(getDefaults().finance.occupancy_cost_bands as Array<[number, number, number]>, occ);
+  const drivers = [occ == null ? '占用成本比未知' : `${occNote}：${(occ * 100).toFixed(1)}%`];
+  const cap = captured_monthly_usd;
+  if (cap != null && f.safety_monthly != null && cap >= f.safety_monthly) {
+    fin += 10;
+    drivers.push('捕获营收 ≥ 安全线 +10');
+  } else if (cap != null && f.breakeven_monthly != null && cap < f.breakeven_monthly) {
+    fin -= 10;
+    drivers.push('捕获营收 < 保本线 −10');
+  }
+  return { score: fin, drivers };
+}
+
 export function scoreDimensions(input: ScoreInput): ReportModel['score']['dimensions'] {
   const d = getDefaults().score;
   const cu = cuisineById(input.cuisine);
   const dims: ReportModel['score']['dimensions'] = [];
-  const push = (id: ScoreDimensionId, score: number, drivers: string[]) => {
-    const weight = d.weights[id];
-    const s = Math.round(clamp(score) * 10) / 10;
-    dims.push({ id, label_zh: LABELS[id].zh, label_en: LABELS[id].en, score: s, weight, weighted: Math.round(((s * weight) / 100) * 100) / 100, drivers });
-  };
+  const push = (id: ScoreDimensionId, score: number, drivers: string[]) => dims.push(dimensionRow(id, score, drivers));
 
   // 1 需求覆盖
-  if (input.coverage_ratio == null) push('demand_coverage', 50, ['coverage_ratio 未知（需求或保本线缺失）→ 中性 50']);
-  else push('demand_coverage', bandScore(d.coverage_bands as Array<[number, number, number]>, input.coverage_ratio), [`coverage_ratio=${input.coverage_ratio.toFixed(2)}`]);
+  const cov = scoreDemandCoverage(input.coverage_ratio);
+  push('demand_coverage', cov.score, cov.drivers);
 
   // 2 客群匹配
   const thr = d.audience_thresholds[input.range_class];
@@ -134,24 +170,8 @@ export function scoreDimensions(input: ScoreInput): ReportModel['score']['dimens
   ]);
 
   // 5 财务可行
-  const f = input.finance;
-  let occ = f.occupancy_cost_ratio;
-  let occNote = '占用成本比 = 租金 ÷ 捕获营收';
-  if (occ == null && f.rent != null && f.base_revenue) {
-    occ = f.rent / f.base_revenue;
-    occNote = '占用成本比 = 租金 ÷ 基准情景营收（捕获需求缺失）';
-  }
-  let fin = occ == null ? 50 : bandScore(d.weights ? (getDefaults().finance.occupancy_cost_bands as Array<[number, number, number]>) : [], occ);
-  const drivers5 = [occ == null ? '占用成本比未知' : `${occNote}：${(occ * 100).toFixed(1)}%`];
-  const cap = input.demand.captured_monthly_usd;
-  if (cap != null && f.safety_monthly != null && cap >= f.safety_monthly) {
-    fin += 10;
-    drivers5.push('捕获营收 ≥ 安全线 +10');
-  } else if (cap != null && f.breakeven_monthly != null && cap < f.breakeven_monthly) {
-    fin -= 10;
-    drivers5.push('捕获营收 < 保本线 −10');
-  }
-  push('financial_viability', fin, drivers5);
+  const fin = scoreFinancialViability(input.finance, input.demand.captured_monthly_usd);
+  push('financial_viability', fin.score, fin.drivers);
 
   // 6 场景与外卖
   const lunch = input.demand.lunch_usd;
@@ -170,9 +190,26 @@ export function scoreDimensions(input: ScoreInput): ReportModel['score']['dimens
   return dims;
 }
 
-export function verdictFor(total: number): ReportModel['score']['verdict'] {
+/**
+ * Verdict from the total score. With no rent provided the verdict is capped at
+ * CONDITIONAL_GO — a GO that never saw the largest fixed cost is indefensible.
+ */
+export function verdictFor(total: number, rentMissing = false): ReportModel['score']['verdict'] {
   const v = getDefaults().verdict;
-  return total >= v.go ? 'GO' : total >= v.conditional ? 'CONDITIONAL_GO' : 'NO_GO';
+  const verdict = total >= v.go ? 'GO' : total >= v.conditional ? 'CONDITIONAL_GO' : 'NO_GO';
+  return rentMissing && verdict === 'GO' ? 'CONDITIONAL_GO' : verdict;
+}
+
+/** The condition every no-rent report carries first: add the rent, regenerate, and here is the ceiling. */
+export function rentNotProvidedCondition(captured_monthly_usd: number | null): ReportModel['score']['conditions'][number] {
+  const cap = rentForOccupancyTarget(captured_monthly_usd);
+  const usd = cap == null ? null : `$${cap.toLocaleString()}`;
+  return {
+    dimension: 'financial_viability',
+    value: cap,
+    text_zh: `补充实际月租后重新生成：本报告未假设任何租金，保本线不含租金${usd ? `；按 10% 占用成本，月租上限约 ${usd}` : ''}`,
+    text_en: `Add the actual monthly rent and regenerate: this report assumes no rent, the break-even excludes rent${usd ? `; at 10% occupancy cost the rent ceiling is about ${usd}` : ''}`,
+  };
 }
 
 export function totalScore(dims: ReportModel['score']['dimensions']): number {
@@ -181,11 +218,19 @@ export function totalScore(dims: ReportModel['score']['dimensions']): number {
   return Math.round(dims.reduce((s, d) => s + (d.score * d.weight) / 100, 0) * 10) / 10;
 }
 
-/** Conditions come from the two weakest dimensions, with numbers back-solved from the model. */
+/**
+ * Two conditions, from the two weakest dimensions, with numbers back-solved from
+ * the model. When no rent was provided the rent condition always takes the first
+ * slot (the neutral, uninformative financial dimension is never picked as
+ * "weakest") and the weakest remaining dimension takes the second.
+ */
 export function buildConditions(dims: ReportModel['score']['dimensions'], input: ScoreInput): ReportModel['score']['conditions'] {
-  const weakest = [...dims].sort((a, b) => a.score - b.score).slice(0, 2);
+  const rentMissing = input.finance.rent == null;
+  const pool = rentMissing ? dims.filter((d) => d.id !== 'financial_viability') : dims;
+  const weakest = [...pool].sort((a, b) => a.score - b.score).slice(0, rentMissing ? 1 : 2);
   const out: ReportModel['score']['conditions'] = [];
   const cap = input.demand.captured_monthly_usd;
+  if (rentMissing) out.push(rentNotProvidedCondition(cap));
   for (const w of weakest) {
     switch (w.id) {
       case 'financial_viability': {

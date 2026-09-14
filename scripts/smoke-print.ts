@@ -9,8 +9,13 @@
  *   - the page is monolingual: no CJK on English / Spanish pages, no untranslated
  *     English sentences on Chinese pages (beyond the allowed subtitles / brand)
  *
- * Usage: npx tsx scripts/smoke-print.ts [--base http://localhost:3111] [--fixture millbrae] [--lang en|zh|es]
+ * Usage: npx tsx scripts/smoke-print.ts [--base http://localhost:3111] [--fixture millbrae] [--lang en|zh|es] [--no-rent]
  * Requires a running dev server (npx next dev -p 3111).
+ *
+ * `--no-rent` renders the fixture as if the customer had left the monthly rent
+ * blank (`?fixture=<name>-no-rent`, see lib/iq/render/load.ts → rederiveWithoutRent):
+ * the fixture's own rent must then appear nowhere on the page, every break-even /
+ * coverage label must say it excludes rent, and the rent ceiling must be shown.
  */
 import { execSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
@@ -26,7 +31,13 @@ const BASE = argOf('--base', process.env.SMOKE_BASE_URL ?? 'http://localhost:311
 const FIXTURE = argOf('--fixture', 'millbrae');
 /** Report language rendered via `?lang=` (labels + narratives); default English. */
 const LANG = (['en', 'zh', 'es'] as const).find((l) => l === argOf('--lang', 'en')) ?? 'en';
+/** Render the fixture with the monthly rent removed (no rent may be invented). */
+const NO_RENT = args.includes('--no-rent');
+const FIXTURE_PARAM = NO_RENT ? `${FIXTURE}-no-rent` : FIXTURE;
 const OUT = path.join(process.cwd(), 'qa', 'out');
+/** Ex-rent label every break-even / coverage figure must carry when no rent was provided. */
+const EX_RENT_LABEL: Record<typeof LANG, string> = { zh: '（不含租金）', en: '(excluding rent)', es: '(sin renta)' };
+const MAX_RENT_LABEL: Record<typeof LANG, string> = { zh: '租金上限', en: 'Max rent', es: 'Renta máxima' };
 /** Localized kicker of page 15 (总结与建议 / Summary / Conclusiones y recomendaciones). */
 const SUMMARY_KICKER: Record<typeof LANG, RegExp> = { zh: /总结与建议/, en: /\bSummary\b/, es: /Conclusiones y recomendaciones/ };
 /** 14 analysis pages + 总结与建议 (page 15). */
@@ -162,9 +173,9 @@ const PAGE_FILL_JS = `Array.from(document.querySelectorAll('section.page')).map(
 
 async function main() {
   await fs.mkdir(OUT, { recursive: true });
-  const url = `${BASE}/print/${FIXTURE}?fixture=${FIXTURE}&lang=${LANG}`;
+  const url = `${BASE}/print/${FIXTURE}?fixture=${FIXTURE_PARAM}&lang=${LANG}`;
   const exe = findChrome();
-  console.log(`[smoke-print] chromium=${exe} lang=${LANG}`);
+  console.log(`[smoke-print] chromium=${exe} lang=${LANG}${NO_RENT ? ' no-rent' : ''}`);
   console.log(`[smoke-print] url=${url}`);
   const launchArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'];
   // Sandboxes that only reach the internet through an egress proxy: let Chromium
@@ -232,6 +243,22 @@ async function main() {
     assert('page_15_is_summary', SUMMARY_KICKER[LANG].test(kickerP15) && titleP15.length > 0, `page 15 kicker: "${kickerP15}" · title: "${titleP15}"`);
     assert('document_lang', ((await page.evaluate(`document.querySelector('main.report')?.getAttribute('data-lang') || ''`)) as string) === LANG, `main.report[data-lang] = ${LANG}`);
 
+    // 3d) no-rent edition: the fixture's own rent must not appear, ex-rent labels + rent ceiling must
+    if (NO_RENT) {
+      const fixture = JSON.parse(await fs.readFile(path.join(process.cwd(), 'qa', 'fixtures', `report_model_${FIXTURE}.json`), 'utf8')) as { input: { rent_usd: number | null } };
+      const rent = fixture.input.rent_usd;
+      const rentForms = rent == null ? [] : [`$${rent.toLocaleString('en-US')}`, rent.toLocaleString('en-US'), String(rent)];
+      const leaked = rentForms.filter((s) => bodyText.includes(s));
+      assert('no_rent_figure', leaked.length === 0, leaked.length ? `fixture rent leaked as ${leaked.join(', ')}` : `fixture rent ${rentForms[0] ?? '(none)'} appears nowhere`);
+      const pageText = async (n: number) => (await page.evaluate(`(document.querySelector('section.page-${n}')?.textContent || '')`)) as string;
+      const p10 = await pageText(10);
+      const p15 = await pageText(15);
+      assert('ex_rent_label', p10.includes(EX_RENT_LABEL[LANG]) && p15.includes(EX_RENT_LABEL[LANG]), `"${EX_RENT_LABEL[LANG]}" on pages 10 and 15`);
+      assert('max_rent_shown', p10.includes(MAX_RENT_LABEL[LANG]) && p15.includes(MAX_RENT_LABEL[LANG]), `"${MAX_RENT_LABEL[LANG]}" on pages 10 and 15`);
+      const verdicts = await page.$$eval('.verdict-badge[data-verdict="GO"]', (els) => els.length);
+      assert('no_go_verdict_without_rent', verdicts === 0, `${verdicts} GO badges`);
+    }
+
     // 3c) monolingual page: en / es carry no CJK; zh carries no untranslated English sentences.
     // Competitor names and the schematic map carry place names from the data (any script), so they are excluded.
     const scriptText = (await page.evaluate(`(() => { const b = document.body.cloneNode(true); b.querySelectorAll('script, style, noscript, template, .trade-map, .comp-name, .page-foot, .cover-page-address, .cover-value, figcaption').forEach((e) => e.remove()); return b.textContent || ''; })()`)) as string;
@@ -269,7 +296,7 @@ async function main() {
     // 6) PDF
     await page.emulateMediaType('print');
     const pdf = await page.pdf({ format: 'Letter', printBackground: true, preferCSSPageSize: true, timeout: 60_000 });
-    const pdfPath = path.join(OUT, LANG === 'zh' ? `print-${FIXTURE}.pdf` : `print-${FIXTURE}-${LANG}.pdf`);
+    const pdfPath = path.join(OUT, `print-${FIXTURE}${NO_RENT ? '-no-rent' : ''}${LANG === 'zh' ? '' : `-${LANG}`}.pdf`);
     await fs.writeFile(pdfPath, pdf);
     const kb = pdf.length / 1024;
     assert('pdf_size', pdf.length > 50 * 1024 && pdf.length < 5 * 1024 * 1024, `${kb.toFixed(1)} KB → ${pdfPath}`);

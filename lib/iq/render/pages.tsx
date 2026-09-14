@@ -389,19 +389,22 @@ function Page2({ model, lang }: PageProps) {
   const probRank = { high: 0, medium: 1, low: 2 } as const;
   const risks = [...m.risks].sort((a, b) => probRank[a.prob] - probRank[b.prob] || (b.impact_usd ?? 0) - (a.impact_usd ?? 0)).slice(0, 3);
   const conds = m.score.conditions.slice(0, 3);
+  // No rent provided → break-even and coverage are ex-rent and every label says so.
+  const noRent = m.finance.rent_excluded;
+  const xr = noRent ? S.exRent : '';
   return (
     <PageShell c={c} model={m} pageId="page_2" chips={<SourceChips model={m} ids={['D2', 'D5', 'D6', 'D12']} model_labels={[S.p2.chipHuff, S.p2.chipBreakeven]} lang={c.lang} />}>
       <div className="summary-top">
         <VerdictBadge c={c} verdict={m.score.verdict} />
         <div className="summary-keys">
           <KeyNumber label={S.p2.score} value={`${F.num(m.score.total, 1)}`} sub={S.p2.scoreSub} />
-          <KeyNumber label={S.p2.coverage} value={F.pct(m.demand.coverage_ratio)} sub={S.p2.coverageSub} />
+          <KeyNumber label={`${S.p2.coverage}${xr}`} value={F.pct(m.demand.coverage_ratio)} sub={`${S.p2.coverageSub}${xr}`} />
           <KeyNumber label={S.p2.completeness} value={`${F.int(m.confidence.total)}`} sub={fill(S.p2.completenessSub, { level: S.level[m.confidence.level] })} />
         </div>
       </div>
       <div className="twin-wrap">
         <h2 className="h2">{S.p2.chart}</h2>
-        <TwinBars breakeven={m.finance.breakeven_monthly} captured={m.demand.captured_monthly_usd} safety={m.finance.safety_monthly} lang={c.lang} />
+        <TwinBars breakeven={m.finance.breakeven_monthly} captured={m.demand.captured_monthly_usd} safety={m.finance.safety_monthly} lang={c.lang} exRent={noRent} />
       </div>
       <div className="three-col">
         <div className="panel">
@@ -444,7 +447,7 @@ function Page2({ model, lang }: PageProps) {
           </ol>
         </div>
       </div>
-      <XRef>{fill(S.p2.xref, { ring: S.ring[m.trade_area.primary_ring].label, l1: m.competitors.l1.length, l2: m.competitors.l2_count, be: F.usd(m.finance.breakeven_monthly) })}</XRef>
+      <XRef>{fill(S.p2.xref, { ring: S.ring[m.trade_area.primary_ring].label, l1: m.competitors.l1.length, l2: m.competitors.l2_count, be: F.usd(m.finance.breakeven_monthly), exRent: xr })}</XRef>
     </PageShell>
   );
 }
@@ -709,7 +712,7 @@ function Page7({ model, lang }: PageProps) {
     { label: S.p7.bandLow, value: b.p25 },
     { label: S.p7.bandMedian, value: b.median },
     { label: S.p7.bandHigh, value: b.p75 },
-    { label: S.p7.bandBreakeven, value: be, color: PALETTE.coral },
+    { label: m.finance.rent_excluded ? S.p7.bandBreakevenNoRent : S.p7.bandBreakeven, value: be, color: PALETTE.coral },
   ];
   const tierLabel = (t: number | null) => (t == null ? na : fill(S.p7.tierValue, { n: t }));
   const near = m.competitors.l1_nearest_outside_pool;
@@ -898,8 +901,11 @@ function Page9({ model, lang }: PageProps) {
           </table>
         </div>
         <div>
-          <h2 className="h2">{S.p9.coverage}</h2>
-          <CoverageGauge ratio={d.coverage_ratio} lang={c.lang} />
+          <h2 className="h2">
+            {S.p9.coverage}
+            {model.finance.rent_excluded ? S.exRent : ''}
+          </h2>
+          <CoverageGauge ratio={d.coverage_ratio} lang={c.lang} exRent={model.finance.rent_excluded} />
         </div>
       </div>
       <XRef>{S.p9.xref}</XRef>
@@ -926,6 +932,10 @@ function Page10({ model, lang }: PageProps) {
     ['misc', S.p10.misc, fc.misc],
   ];
   const zh = c.lang === 'zh';
+  // No rent provided: the rent row says so (never a number), every total / break-even /
+  // safety / coverage label carries the ex-rent suffix, and the rent ceiling replaces the guess.
+  const noRent = f.rent_excluded;
+  const xr = noRent ? S.exRent : '';
   return (
     <PageShell c={c} model={model} pageId="page_10" chips={<SourceChips model={model} ids={['D12', 'D8']} model_labels={[S.p10.chipBreakeven, S.p10.chipSensitivity]} lang={c.lang} />}>
       <div className="two-col">
@@ -938,35 +948,52 @@ function Page10({ model, lang }: PageProps) {
               </tr>
             </thead>
             <tbody>
-              {costRows.map(([key, label, v]) => (
-                <tr key={key}>
-                  <th>
-                    {label}
-                    {key === 'rent' ? <span className="muted"> · {f.rent_source === 'user_input' ? S.p10.yourInput : c.t(f.rent_source)}</span> : null}
-                  </th>
-                  <Cell num na={S.na}>{F.usd(v)}</Cell>
-                </tr>
-              ))}
+              {costRows.map(([key, label, v]) =>
+                key === 'rent' && noRent ? (
+                  // No rent provided: the row carries the message across the table, never a number.
+                  <tr key={key}>
+                    <th colSpan={2}>
+                      {label}
+                      <span className="muted"> · {S.p10.rentNotProvided}</span>
+                    </th>
+                  </tr>
+                ) : (
+                  <tr key={key}>
+                    <th>
+                      {label}
+                      {key === 'rent' ? <span className="muted"> · {f.rent_source === 'user_input' ? S.p10.yourInput : c.t(f.rent_source)}</span> : null}
+                    </th>
+                    <Cell num na={S.na}>{F.usd(v)}</Cell>
+                  </tr>
+                ),
+              )}
               <tr className="total">
-                <th>{S.p10.total}</th>
+                <th>
+                  {S.p10.total}
+                  {xr}
+                </th>
                 <Cell num na={S.na}>{F.usd(fc.total)}</Cell>
               </tr>
               <tr>
                 <th>{S.p10.margin}</th>
                 <Cell num na={S.na}>{F.pct(f.contribution_margin, 1)}</Cell>
               </tr>
-              <tr>
-                <th>{S.p10.occupancy}</th>
-                <Cell num na={S.na}>{F.pct(f.occupancy_cost_ratio, 1)}</Cell>
-              </tr>
+              {/* rent ÷ revenue has no meaning without a rent; the rent ceiling key number stands in for it */}
+              {noRent ? null : (
+                <tr>
+                  <th>{S.p10.occupancy}</th>
+                  <Cell num na={S.na}>{F.pct(f.occupancy_cost_ratio, 1)}</Cell>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
         <div>
           <div className="key-row">
-            <KeyNumber label={S.p10.breakeven} value={F.usd(f.breakeven_monthly)} sub={S.p10.breakevenSub} />
-            <KeyNumber label={S.p10.safety} value={F.usd(f.safety_monthly)} sub={S.p10.safetySub} />
+            <KeyNumber label={noRent ? S.p10.breakevenNoRent : S.p10.breakeven} value={F.usd(f.breakeven_monthly)} sub={S.p10.breakevenSub} />
+            <KeyNumber label={noRent ? S.p10.safetyNoRent : S.p10.safety} value={F.usd(f.safety_monthly)} sub={S.p10.safetySub} />
           </div>
+          {noRent ? <KeyNumber label={S.p10.maxRent} value={F.usd(f.max_rent_for_10pct_usd)} sub={S.p10.maxRentSub} /> : null}
           {f.payback_months != null ? <KeyNumber label={S.p10.payback} value={fill(S.p10.paybackValue, { n: F.int(f.payback_months) })} sub={fill(S.p10.paybackSub, { capex: F.usd(model.input.capex_usd) })} /> : null}
           <table className="data-table compact">
             <tbody>
@@ -1003,7 +1030,10 @@ function Page10({ model, lang }: PageProps) {
             <th className="num">{S.p10.orders}</th>
             <th className="num">{S.p10.ticketCol}</th>
             <th className="num">{S.p10.revenue}</th>
-            <th className="num">{S.p10.vsBreakeven}</th>
+            <th className="num">
+              {S.p10.vsBreakeven}
+              {noRent ? S.exRentShort : ''}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -1030,7 +1060,7 @@ function Page10({ model, lang }: PageProps) {
       </table>
       <h2 className="h2">{S.p10.sensitivity}</h2>
       <div className="waterfall-wrap">
-        <SensitivityWaterfall base={base?.monthly_revenue ?? null} breakeven={f.breakeven_monthly} items={f.sensitivity.map((s) => ({ label: sensitivityName(s, c.lang), delta: s.monthly_revenue_delta, breaks: s.breaks_breakeven }))} lang={c.lang} />
+        <SensitivityWaterfall base={base?.monthly_revenue ?? null} breakeven={f.breakeven_monthly} items={f.sensitivity.map((s) => ({ label: sensitivityName(s, c.lang), delta: s.monthly_revenue_delta, breaks: s.breaks_breakeven }))} lang={c.lang} exRent={noRent} />
       </div>
       <p className="table-note">
         {fill(S.p10.note, { method: c.t(f.method) })}
@@ -1362,16 +1392,22 @@ function Page15({ model, lang }: PageProps) {
   const conds = m.score.conditions;
   const rankOf = (cuisine: string) => m.score.alternatives.findIndex((a) => a.cuisine === cuisine) + 1;
   const altName = (a: ReportModel['score']['alternatives'][number]) => cuisineName(a, c.lang);
+  // No rent provided: the occupancy-cost number is replaced by the rent ceiling and every
+  // break-even / coverage figure is labelled ex-rent; no rent is assumed anywhere on the page.
+  const noRent = m.finance.rent_excluded;
+  const xr = noRent ? S.exRent : '';
+  const maxRent = F.usd(m.finance.max_rent_for_10pct_usd);
 
+  const vars = { cuisine, verdict: v.label, captured: F.usd(m.demand.captured_monthly_usd), breakeven: F.usd(m.finance.breakeven_monthly), coverage: F.pct(cov), occupancy: F.pct(occ, 1), score: F.num(m.score.total, 1), maxRent };
   const conclusion =
-    fill(S.p15.conclusion, { cuisine, verdict: v.label, captured: F.usd(m.demand.captured_monthly_usd), breakeven: F.usd(m.finance.breakeven_monthly), coverage: F.pct(cov), occupancy: F.pct(occ, 1), score: F.num(m.score.total, 1) }) +
+    fill(noRent ? S.p15.conclusionNoRent : S.p15.conclusion, vars) +
     (weakest ? fill(S.p15.weakest, { dim: dimensionName(weakest, c.lang), score: F.num(weakest.score, 0) }) : S.p15.weakestNone) +
     (topRisk ? fill(S.p15.topRisk, { risk: c.field(topRisk.risk_zh, topRisk.risk_en) }) : '') +
     (bestAlt && m.score.verdict !== 'GO' ? fill(S.p15.bestAlt, { alt: altName(bestAlt), score: F.num(bestAlt.total, 1), verdict: verdictLabel(bestAlt.verdict, c.lang).label }) : '');
 
   const nextSteps = [
     conds.length ? fill(S.p15.step1, { n: conds.length }) : S.p15.step1None,
-    occ != null && occ > 0.1 ? fill(S.p15.step2, { occ: F.pct(occ, 1) }) : S.p15.step2Ok,
+    noRent ? fill(S.p15.step2NoRent, { maxRent }) : occ != null && occ > 0.1 ? fill(S.p15.step2, { occ: F.pct(occ, 1) }) : S.p15.step2Ok,
     missing.length ? S.p15.step3 : S.p15.step3Ok,
   ];
 
@@ -1380,8 +1416,8 @@ function Page15({ model, lang }: PageProps) {
       <div className="summary-top">
         <VerdictBadge c={c} verdict={m.score.verdict} />
         <div className="summary-keys">
-          <KeyNumber label={S.p15.coverage} value={F.pct(cov)} sub={S.p15.coverageSub} />
-          <KeyNumber label={S.p15.occupancy} value={F.pct(occ, 1)} sub={S.p15.occupancySub} />
+          <KeyNumber label={`${S.p15.coverage}${xr}`} value={F.pct(cov)} sub={`${S.p15.coverageSub}${xr}`} />
+          {noRent ? <KeyNumber label={S.p15.maxRent} value={maxRent} sub={S.p15.maxRentSub} /> : <KeyNumber label={S.p15.occupancy} value={F.pct(occ, 1)} sub={S.p15.occupancySub} />}
           <KeyNumber label={S.p15.score} value={`${F.num(m.score.total, 1)}`} sub={S.p15.scoreSub} />
         </div>
       </div>

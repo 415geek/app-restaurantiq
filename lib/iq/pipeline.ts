@@ -27,7 +27,7 @@ import {
   type LlmClassifier,
 } from './engines/competitor';
 import { computeConfidence, type SourceStatusMap } from './engines/confidence';
-import { buildConditions, scoreDimensions, totalScore, verdictFor, type ScoreInput } from './engines/cuisine-fit';
+import { buildConditions, dimensionRow, scoreDemandCoverage, scoreDimensions, scoreFinancialViability, totalScore, verdictFor, type ScoreInput } from './engines/cuisine-fit';
 import { computeCuisineShare } from './engines/cuisine-share';
 import { computeHuff, type HuffCompetitor, type HuffResult } from './engines/demand-huff';
 import { computeFinance } from './engines/finance';
@@ -344,9 +344,10 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
     delivery_ratio: site.delivery_ratio,
     median_income: primary.median_income,
     state: geo.geography.state_abbr,
-    rent_psf_comp: bundle.rent?.data?.comp_median_psf_month ?? null,
     captured_monthly_usd: huff.captured_monthly_usd,
   });
+  // No rent entered → nothing may be inferred from it: verdicts are capped at CONDITIONAL_GO (§verdictFor).
+  const rentMissing = site.rent_usd == null;
   const coverage_ratio = huff.captured_monthly_usd != null && finance.breakeven_monthly ? Math.round((huff.captured_monthly_usd / finance.breakeven_monthly) * 1000) / 1000 : null;
   competitors.cluster_score = clusterScoreFor(competitors.walk10_l1_l2_count, coverage_ratio);
   const captured_covers_day = huff.captured_monthly_usd != null ? Math.round(huff.captured_monthly_usd / ticketIn / d.finance.days_open_per_month) : null;
@@ -407,7 +408,7 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
   if (!opts.skipAlternatives) {
     for (const alt of getTaxonomy().cuisines) {
       if (alt.id === site.cuisine) {
-        alternatives.push({ cuisine: alt.id, label_zh: alt.label_zh, label_en: alt.label_en, total, verdict: verdictFor(total) });
+        alternatives.push({ cuisine: alt.id, label_zh: alt.label_zh, label_en: alt.label_en, total, verdict: verdictFor(total, rentMissing) });
         continue;
       }
       const altShare = computeCuisineShare(merged, alt.id).share;
@@ -422,12 +423,12 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
         walk10: ringGeom(rings, 'walk10'),
         lunch: { jobs_walk10: walk10.jobs, asian_job_share, ticket_lunch: Math.round(alt.ticket_in * 0.75), chinese_share: altPrimary.chinese_hh_share ?? county.chinese_hh_share ?? 0.1 },
       });
-      const altFin = computeFinance({ cuisine: alt.id, rent_usd: site.rent_usd, sqft: site.sqft, seats: site.seats, capex_usd: site.capex_usd, ticket_in: null, ticket_delivery: null, delivery_ratio: site.delivery_ratio, median_income: altPrimary.median_income, state: geo.geography.state_abbr, rent_psf_comp: bundle.rent?.data?.comp_median_psf_month ?? null, captured_monthly_usd: altHuff.captured_monthly_usd });
+      const altFin = computeFinance({ cuisine: alt.id, rent_usd: site.rent_usd, sqft: site.sqft, seats: site.seats, capex_usd: site.capex_usd, ticket_in: null, ticket_delivery: null, delivery_ratio: site.delivery_ratio, median_income: altPrimary.median_income, state: geo.geography.state_abbr, captured_monthly_usd: altHuff.captured_monthly_usd });
       const altCov = altHuff.captured_monthly_usd != null && altFin.breakeven_monthly ? altHuff.captured_monthly_usd / altFin.breakeven_monthly : null;
       altComp.cluster_score = clusterScoreFor(altComp.walk10_l1_l2_count, altCov);
       const altDims = scoreDimensions(scoreInputFor(alt.id, altPrimary, altComp, altHuff, altFin, altCov));
       const altTotal = totalScore(altDims);
-      alternatives.push({ cuisine: alt.id, label_zh: alt.label_zh, label_en: alt.label_en, total: altTotal, verdict: verdictFor(altTotal) });
+      alternatives.push({ cuisine: alt.id, label_zh: alt.label_zh, label_en: alt.label_en, total: altTotal, verdict: verdictFor(altTotal, rentMissing) });
     }
     alternatives.sort((a, b) => b.total - a.total);
   }
@@ -555,7 +556,7 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
     },
     access,
     finance,
-    score: { total, verdict: verdictFor(total), dimensions: dims, conditions, alternatives, user_cuisine_rank, cannibalization },
+    score: { total, verdict: verdictFor(total, rentMissing), dimensions: dims, conditions, alternatives, user_cuisine_rank, cannibalization },
     confidence,
     sources,
     narrative: {},
@@ -563,6 +564,89 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
   const risks = computeRisks({ ...partial, dev_projects: bundle.dev?.data?.projects.length ?? 0 });
   const model = parseReportModel({ ...partial, risks });
   return { model, bundle, ctx, intermediates: { trade_area: tradeArea, competitors, huff, cuisine_share: share } };
+}
+
+/**
+ * What a stored report would look like had the customer left the monthly rent
+ * blank (fixtures, smoke prints, tests). Re-derives everything downstream of the
+ * finance engine from the model alone: finance (no rent), coverage ratio, the
+ * demand-coverage and financial dimensions, total, capped verdicts, conditions,
+ * risks, confidence and the rent input itself. Narratives are dropped so the
+ * templates regenerate from the new numbers. Pieces that need the raw data
+ * bundle (cluster score, access details) are kept as stored.
+ */
+export function rederiveWithoutRent(model: ReportModel): ReportModel {
+  const m: ReportModel = JSON.parse(JSON.stringify(model));
+  const primary = m.trade_area.rings.find((r) => r.id === m.trade_area.primary_ring) ?? m.trade_area.rings[0];
+  const d5 = m.trade_area.rings.find((r) => r.id === 'drive5');
+  const w10 = m.trade_area.rings.find((r) => r.id === 'walk10');
+  m.input.rent_usd = null;
+  const finance = computeFinance({
+    cuisine: m.input.cuisine,
+    rent_usd: null,
+    sqft: m.input.sqft,
+    seats: m.input.seats,
+    capex_usd: m.input.capex_usd,
+    ticket_in: m.input.ticket_in,
+    ticket_delivery: m.input.ticket_delivery,
+    delivery_ratio: m.input.delivery_ratio,
+    median_income: primary?.median_income ?? null,
+    state: m.geo.state,
+    captured_monthly_usd: m.demand.captured_monthly_usd,
+  });
+  const captured = m.demand.captured_monthly_usd;
+  const coverage_ratio = captured != null && finance.breakeven_monthly ? Math.round((captured / finance.breakeven_monthly) * 1000) / 1000 : null;
+  const delivery = m.competitors.l1.filter((x) => x.offers_delivery != null);
+  const scoreInput: ScoreInput = {
+    cuisine: m.input.cuisine,
+    range_class: m.input.range_class,
+    coverage_ratio,
+    primary_ring: { chinese_hh_share: primary?.chinese_hh_share ?? null, median_income: primary?.median_income ?? null, family_share: primary?.family_share ?? null, hh: primary?.hh ?? null, area_sq_mi: primary?.area_sq_mi ?? null },
+    drive5: { hh: d5?.hh ?? null, area_sq_mi: d5?.area_sq_mi ?? null },
+    jobs_walk10: w10?.jobs ?? null,
+    competitors: {
+      cluster_score: m.competitors.cluster_score,
+      walk10_l1_l2_count: m.competitors.walk10_l1_l2_count,
+      avg_rating_l1: m.competitors.avg_rating_l1,
+      closure_rate: m.competitors.closure_rate,
+      l1_delivery_share: delivery.length ? delivery.filter((x) => x.offers_delivery).length / delivery.length : null,
+    },
+    access: {
+      walkable_rail: null,
+      nearest_rail_m: m.access.transit.length ? Math.min(...m.access.transit.map((s) => s.distance_m)) : null,
+      max_aadt: m.access.aadt.length ? Math.max(...m.access.aadt.map((a) => a.aadt)) : null,
+      parking: m.access.parking,
+      transit_commute_share: m.access.commute_mix.transit,
+    },
+    finance: { occupancy_cost_ratio: finance.occupancy_cost_ratio, rent: finance.fixed_cost.rent, breakeven_monthly: finance.breakeven_monthly, safety_monthly: finance.safety_monthly, base_revenue: finance.scenarios.find((s) => s.id === 'base')?.monthly_revenue ?? null },
+    demand: { captured_monthly_usd: captured, lunch_usd: m.demand.lunch_usd, dinner_usd: m.demand.dinner_usd },
+  };
+  const cov = scoreDemandCoverage(coverage_ratio);
+  const fin = scoreFinancialViability(scoreInput.finance, captured);
+  const dims = m.score.dimensions.map((dim) => (dim.id === 'demand_coverage' ? dimensionRow(dim.id, cov.score, cov.drivers) : dim.id === 'financial_viability' ? dimensionRow(dim.id, fin.score, fin.drivers) : dim));
+  const total = totalScore(dims);
+  const dev = m.risks.map((r) => /周边有 (\d+) 个在建/.exec(r.risk_zh)?.[1]).find(Boolean);
+  const statusMap: SourceStatusMap = {};
+  for (const s of m.sources) statusMap[s.id as keyof SourceStatusMap] = { status: s.status, coverage_note: s.coverage_note };
+  const alternatives = m.score.alternatives
+    .map((a) => ({ ...a, total: a.cuisine === m.input.cuisine ? total : a.total }))
+    .map((a) => ({ ...a, verdict: verdictFor(a.total, true) }))
+    .sort((a, b) => b.total - a.total);
+  m.finance = finance;
+  m.demand = { ...m.demand, coverage_ratio };
+  m.score = {
+    ...m.score,
+    total,
+    verdict: verdictFor(total, true),
+    dimensions: dims,
+    conditions: buildConditions(dims, scoreInput),
+    alternatives,
+    user_cuisine_rank: Math.max(1, alternatives.findIndex((a) => a.cuisine === m.input.cuisine) + 1),
+  };
+  m.risks = computeRisks({ ...m, dev_projects: dev ? Number(dev) : 0 });
+  m.confidence = computeConfidence({ sources: statusMap, guard_passed: m.competitors.guard_passed, user: { rent_usd: null, sqft: m.input.sqft, seats: m.input.seats, capex_usd: m.input.capex_usd } });
+  m.narrative = {};
+  return parseReportModel(m);
 }
 
 /** Which ring a point falls in (smallest first) — used by renderers. */

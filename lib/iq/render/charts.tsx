@@ -28,7 +28,7 @@ const text = (x: number, y: number, s: string, opts: { size?: number; anchor?: '
 /* ------------------------------------------------------------------ */
 /* Twin bars: break-even vs captured demand (page 2)                    */
 /* ------------------------------------------------------------------ */
-export function TwinBars({ breakeven, captured, safety, lang = DEFAULT_LOCALE }: { breakeven: number | null; captured: number | null; safety: number | null; lang?: Locale }) {
+export function TwinBars({ breakeven, captured, safety, lang = DEFAULT_LOCALE, exRent = false }: { breakeven: number | null; captured: number | null; safety: number | null; lang?: Locale; /** No rent provided: break-even and safety line are ex-rent and are labelled so. */ exRent?: boolean }) {
   const S = strings(lang);
   const na = S.na;
   const W = 420;
@@ -36,8 +36,8 @@ export function TwinBars({ breakeven, captured, safety, lang = DEFAULT_LOCALE }:
   const max = Math.max(breakeven ?? 0, captured ?? 0, safety ?? 0, 1);
   const left = 92;
   const span = W - left - 84;
-  const rows: Array<{ label: string; v: number | null; color: string }> = [
-    { label: S.chart.breakevenMo, v: breakeven, color: PALETTE.navy },
+  const rows: Array<{ label: string; v: number | null; color: string; sub?: string }> = [
+    { label: S.chart.breakevenMo, v: breakeven, color: PALETTE.navy, sub: exRent ? S.exRentWord : undefined },
     { label: S.chart.capturedMo, v: captured, color: PALETTE.coral },
   ];
   return (
@@ -47,7 +47,8 @@ export function TwinBars({ breakeven, captured, safety, lang = DEFAULT_LOCALE }:
         const w = r.v == null ? 0 : Math.max(2, (r.v / max) * span);
         return (
           <g key={r.label}>
-            {text(left - 8, y + 15, r.label, { anchor: 'end', size: 9.5 })}
+            {text(left - 8, y + (r.sub ? 11 : 15), r.label, { anchor: 'end', size: 9.5 })}
+            {r.sub ? text(left - 8, y + 21, r.sub, { anchor: 'end', size: 7.5, fill: PALETTE.muted }) : null}
             <rect x={left} y={y} width={span} height={22} fill={PALETTE.panel} />
             {r.v != null ? <rect x={left} y={y} width={w} height={22} fill={r.color} /> : null}
             {text(left + span + 6, y + 15, fmtUsd(r.v, { na }), { size: 10, weight: 600 })}
@@ -57,7 +58,7 @@ export function TwinBars({ breakeven, captured, safety, lang = DEFAULT_LOCALE }:
       {safety != null ? (
         <g>
           <line x1={left + (safety / max) * span} x2={left + (safety / max) * span} y1={8} y2={78} stroke={PALETTE.muted} strokeDasharray="3 2" />
-          {text(left + (safety / max) * span, 90, fill(S.chart.safety, { v: fmtUsd(safety, { na }) }), { anchor: 'middle', size: 8, fill: PALETTE.muted })}
+          {text(left + (safety / max) * span, 90, fill(S.chart.safety, { v: fmtUsd(safety, { na }) }) + (exRent ? S.exRentShort : ''), { anchor: 'middle', size: 8, fill: PALETTE.muted })}
         </g>
       ) : null}
     </svg>
@@ -246,7 +247,7 @@ export function StackedRingBar({ parts, total, lang = DEFAULT_LOCALE }: { parts:
 /* ------------------------------------------------------------------ */
 /* Coverage-ratio gauge (page 9)                                        */
 /* ------------------------------------------------------------------ */
-export function CoverageGauge({ ratio, lang = DEFAULT_LOCALE }: { ratio: number | null; lang?: Locale }) {
+export function CoverageGauge({ ratio, lang = DEFAULT_LOCALE, exRent = false }: { ratio: number | null; lang?: Locale; /** No rent provided: the gauge sub-label says the break-even excludes rent. */ exRent?: boolean }) {
   const S = strings(lang);
   const W = 220;
   const H = 130;
@@ -270,7 +271,7 @@ export function CoverageGauge({ ratio, lang = DEFAULT_LOCALE }: { ratio: number 
       {clamp > 0 ? <path d={arc(0, clamp)} stroke={color} strokeWidth={16} fill="none" /> : null}
       <line x1={cx + r * Math.cos(Math.PI * (1 - 1 / 1.5))} y1={cy - r * Math.sin(Math.PI * (1 - 1 / 1.5)) - 12} x2={cx + r * Math.cos(Math.PI * (1 - 1 / 1.5))} y2={cy - r * Math.sin(Math.PI * (1 - 1 / 1.5)) + 12} stroke={PALETTE.navy} strokeWidth={1.5} />
       {text(cx, cy - 22, ratio == null ? S.na : `${(ratio * 100).toFixed(0)}%`, { anchor: 'middle', size: 22, weight: 700 })}
-      {text(cx, cy - 6, S.chart.gaugeSub, { anchor: 'middle', size: 8.5, fill: PALETTE.muted })}
+      {text(cx, cy - 6, exRent ? S.chart.gaugeSubNoRent : S.chart.gaugeSub, { anchor: 'middle', size: 8.5, fill: PALETTE.muted })}
       {text(cx - r - 2, cy + 12, '0', { anchor: 'start', size: 8, fill: PALETTE.muted })}
       {text(cx + r + 2, cy + 12, '150%', { anchor: 'end', size: 8, fill: PALETTE.muted })}
       {text(cx + r * Math.cos(Math.PI * (1 - 1 / 1.5)) + 4, cy - r * Math.sin(Math.PI * (1 - 1 / 1.5)) - 14, S.chart.gaugeBreakeven, { size: 8, fill: PALETTE.navy })}
@@ -281,8 +282,12 @@ export function CoverageGauge({ ratio, lang = DEFAULT_LOCALE }: { ratio: number 
 /* ------------------------------------------------------------------ */
 /* Sensitivity waterfall (page 10)                                      */
 /* ------------------------------------------------------------------ */
-export function SensitivityWaterfall({ base, breakeven, items, lang = DEFAULT_LOCALE }: { base: number | null; breakeven: number | null; items: Array<{ label: string; delta: number; breaks: boolean }>; lang?: Locale }) {
+export function SensitivityWaterfall({ base, breakeven, items, lang = DEFAULT_LOCALE, exRent = false }: { base: number | null; breakeven: number | null; items: Array<{ label: string; delta: number; breaks: boolean }>; lang?: Locale; /** No rent provided: the break-even line is labelled ex-rent. */ exRent?: boolean }) {
   const S = strings(lang);
+  const beLabel = fill(S.chart.breakevenLine, { v: fmtUsd(breakeven, { compact: true, na: S.na }) });
+  // The ex-rent note goes on a second plate line rather than widening the plate into the neighbouring bar.
+  const exRentLine = exRent ? S.exRentShort.trim() : null;
+  const plateH = exRentLine ? 22 : 12;
   const W = 420;
   const H = 150;
   const left = 40;
@@ -329,8 +334,9 @@ export function SensitivityWaterfall({ base, breakeven, items, lang = DEFAULT_LO
         <g>
           <line x1={left} x2={right} y1={y(breakeven)} y2={y(breakeven)} stroke={PALETTE.coral} strokeWidth={1.2} strokeDasharray="4 2" />
           {/* label sits on its own white plate so it never lands on a bar */}
-          <rect x={right - 104} y={y(breakeven) - 13} width={104} height={12} fill="#FFFFFF" stroke={PALETTE.rule} strokeWidth={0.6} />
-          {text(right - 3, y(breakeven) - 4, fill(S.chart.breakevenLine, { v: fmtUsd(breakeven, { compact: true, na: S.na }) }), { anchor: 'end', size: 8, weight: 600 })}
+          <rect x={right - 104} y={y(breakeven) - 1 - plateH} width={104} height={plateH} fill="#FFFFFF" stroke={PALETTE.rule} strokeWidth={0.6} />
+          {text(right - 3, y(breakeven) - 4 - (exRentLine ? 10 : 0), beLabel, { anchor: 'end', size: 8, weight: 600 })}
+          {exRentLine ? text(right - 3, y(breakeven) - 4, exRentLine, { anchor: 'end', size: 7.5, fill: PALETTE.muted }) : null}
         </g>
       ) : null}
     </svg>

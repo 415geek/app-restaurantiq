@@ -20,21 +20,24 @@ export type PageId = `page_${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 
 
 export const PAGES: Array<{ id: PageId; n: number; zh: string; en: string; es: string; fragment: string[] }> = [
   { id: 'page_1', n: 1, zh: '报告概览', en: 'At a Glance', es: 'Resumen rápido', fragment: ['meta', 'input', 'score.total', 'score.verdict', 'confidence.total'] },
-  { id: 'page_2', n: 2, zh: '执行摘要', en: 'Executive Summary', es: 'Resumen ejecutivo', fragment: ['score', 'demand', 'finance.breakeven_monthly', 'finance.safety_monthly', 'risks', 'competitors.l1', 'competitors.l2_count', 'trade_area.primary_ring'] },
+  { id: 'page_2', n: 2, zh: '执行摘要', en: 'Executive Summary', es: 'Resumen ejecutivo', fragment: ['score', 'demand', 'finance.breakeven_monthly', 'finance.safety_monthly', 'finance.rent_excluded', 'risks', 'competitors.l1', 'competitors.l2_count', 'trade_area.primary_ring'] },
   { id: 'page_3', n: 3, zh: '商圈地图', en: 'Trade Area Map', es: 'Mapa del área comercial', fragment: ['trade_area.primary_ring', 'trade_area.rings', 'competitors.l1', 'competitors.l2_count', 'competitors.l4', 'access.transit'] },
   { id: 'page_4', n: 4, zh: '商圈需求', en: 'Demand Coverage', es: 'Demanda del área', fragment: ['trade_area', 'demand.cuisine_share'] },
   { id: 'page_5', n: 5, zh: '客群画像', en: 'Audience', es: 'Perfil de clientes', fragment: ['audience', 'trade_area.rings', 'demand.lunch_usd', 'demand.dinner_usd'] },
   { id: 'page_6', n: 6, zh: '竞争格局', en: 'Competitive Landscape', es: 'Panorama competitivo', fragment: ['competitors'] },
-  { id: 'page_7', n: 7, zh: '直接竞品对标', en: 'Direct Competitors', es: 'Competidores directos', fragment: ['competitors.l1', 'competitors.benchmark_revenue_band', 'finance.breakeven_monthly', 'competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'competitors.guard_passed'] },
+  { id: 'page_7', n: 7, zh: '直接竞品对标', en: 'Direct Competitors', es: 'Competidores directos', fragment: ['competitors.l1', 'competitors.benchmark_revenue_band', 'finance.breakeven_monthly', 'finance.rent_excluded', 'competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'competitors.guard_passed'] },
   { id: 'page_8', n: 8, zh: '品类缺口与替代菜系', en: 'Category Gap & Alternatives', es: 'Hueco de categoría y alternativas', fragment: ['competitors.void', 'competitors.density_per_10k_chinese', 'score.alternatives', 'score.user_cuisine_rank'] },
-  { id: 'page_9', n: 9, zh: '需求捕获模型', en: 'Demand Capture', es: 'Captura de demanda', fragment: ['demand', 'finance.breakeven_monthly'] },
+  { id: 'page_9', n: 9, zh: '需求捕获模型', en: 'Demand Capture', es: 'Captura de demanda', fragment: ['demand', 'finance.breakeven_monthly', 'finance.rent_excluded'] },
   { id: 'page_10', n: 10, zh: '财务模型', en: 'Financial Model', es: 'Modelo financiero', fragment: ['finance', 'input.rent_usd', 'input.seats'] },
   { id: 'page_11', n: 11, zh: '菜系匹配评分', en: 'Cuisine Fit Score', es: 'Puntuación de encaje', fragment: ['score.total', 'score.verdict', 'score.dimensions', 'score.conditions'] },
-  { id: 'page_12', n: 12, zh: '风险登记', en: 'Risk Register', es: 'Registro de riesgos', fragment: ['risks', 'finance.occupancy_cost_ratio', 'demand.coverage_ratio'] },
+  { id: 'page_12', n: 12, zh: '风险登记', en: 'Risk Register', es: 'Registro de riesgos', fragment: ['risks', 'finance.occupancy_cost_ratio', 'finance.rent_excluded', 'demand.coverage_ratio'] },
   { id: 'page_13', n: 13, zh: '签约核查与 90 天计划', en: 'Pre-lease Checklist & 90-day Plan', es: 'Lista previa al contrato y plan de 90 días', fragment: ['score.conditions', 'finance.inputs_missing', 'input'] },
   { id: 'page_14', n: 14, zh: '方法与数据来源', en: 'Method & Sources', es: 'Método y fuentes', fragment: ['sources', 'meta', 'confidence', 'demand.cuisine_share_method', 'finance.method'] },
-  { id: 'page_15', n: 15, zh: '总结与建议', en: 'Summary', es: 'Conclusiones y recomendaciones', fragment: ['score', 'demand.coverage_ratio', 'demand.captured_monthly_usd', 'finance.breakeven_monthly', 'finance.occupancy_cost_ratio', 'finance.inputs_missing', 'risks', 'input'] },
+  { id: 'page_15', n: 15, zh: '总结与建议', en: 'Summary', es: 'Conclusiones y recomendaciones', fragment: ['score', 'demand.coverage_ratio', 'demand.captured_monthly_usd', 'finance.breakeven_monthly', 'finance.occupancy_cost_ratio', 'finance.rent_excluded', 'finance.max_rent_for_10pct_usd', 'finance.inputs_missing', 'risks', 'input'] },
 ];
+
+/** Occupancy-cost warning line (rent ÷ revenue) the conditions and summaries quote as "10%". */
+export const OCCUPANCY_WARNING_PCT = 10;
 
 /** Page name (kicker) in the report language. */
 export function pageName(page: PageId, lang: Locale): string {
@@ -89,10 +92,13 @@ const DIMENSION_NAME: Record<Locale, Record<string, string>> = {
 };
 
 const SENSITIVITY_NAME: Record<Locale, Record<string, string>> = {
-  zh: { rent_plus_10: '租金 +10%', turns_minus_05: '翻台 −0.5', ticket_minus_125: '客单价 −12.5%', delivery_plus_15pt: '外卖占比 +15pt' },
-  en: { rent_plus_10: 'Rent +10%', turns_minus_05: 'Turns −0.5', ticket_minus_125: 'Ticket −12.5%', delivery_plus_15pt: 'Delivery +15 pt' },
-  es: { rent_plus_10: 'Alquiler +10%', turns_minus_05: 'Rotaciones −0.5', ticket_minus_125: 'Ticket −12.5%', delivery_plus_15pt: 'Delivery +15 pt' },
+  zh: { rent_plus_10: '租金 +10%', rent_per_1000: '月租每 +$1,000', turns_minus_05: '翻台 −0.5', ticket_minus_125: '客单价 −12.5%', delivery_plus_15pt: '外卖占比 +15pt' },
+  en: { rent_plus_10: 'Rent +10%', rent_per_1000: 'Each +$1,000 rent', turns_minus_05: 'Turns −0.5', ticket_minus_125: 'Ticket −12.5%', delivery_plus_15pt: 'Delivery +15 pt' },
+  es: { rent_plus_10: 'Alquiler +10%', rent_per_1000: 'Cada +$1,000 de renta', turns_minus_05: 'Rotaciones −0.5', ticket_minus_125: 'Ticket −12.5%', delivery_plus_15pt: 'Delivery +15 pt' },
 };
+
+/** "(不含租金)" / " (excluding rent)" / " (sin renta)" — appended to every break-even / coverage mention when no rent was provided. */
+export const EX_RENT: Record<Locale, string> = { zh: '（不含租金）', en: ' (excluding rent)', es: ' (sin renta)' };
 
 const CUISINE_ES: Record<string, string> = {
   cantonese: 'Cantonesa / asados',
@@ -169,7 +175,10 @@ function facts(m: ReportModel) {
   const base = m.finance.scenarios.find((x) => x.id === 'base');
   const breaking = m.finance.sensitivity.find((x) => x.breaks_breakeven);
   const degraded = m.sources.filter((s) => s.status !== 'ok').length;
-  return { pr, pi, p: m.trade_area.rings[pi], d10i, d10, ratio, seg, weakest, high, top, bandIdx, base, breaking, degraded, cov: m.demand.coverage_ratio };
+  // No rent provided: every break-even / coverage figure is ex-rent and must say so.
+  const rentExcluded = m.finance.rent_excluded === true;
+  const maxRent = rentExcluded ? (m.finance.max_rent_for_10pct_usd ?? null) : null;
+  return { pr, pi, p: m.trade_area.rings[pi], d10i, d10, ratio, seg, weakest, high, top, bandIdx, base, breaking, degraded, cov: m.demand.coverage_ratio, rentExcluded, maxRent };
 }
 
 /* ------------------------------------------------------------------ */
@@ -184,14 +193,15 @@ function templateZh(m: ReportModel, page: PageId): Narrative {
   const verdictZh = VERDICT_ZH[m.score.verdict] ?? m.score.verdict;
   const cuisine = m.input.cuisine_label_zh;
   const condsZh = m.score.conditions.map((c) => c.text_zh).join('；') || '无';
+  const xr = f.rentExcluded ? EX_RENT.zh : '';
   switch (page) {
     case 'page_1':
       return { title: `${cuisine}：${verdictZh}`, body: `综合评分 ${m.score.total} 分 [src:score.total]，数据完整度 ${m.confidence.total} 分 [src:confidence.total]。`, refs: ['score.total', 'confidence.total'] };
     case 'page_2': {
-      const title = cov == null ? `${verdictZh}：需求覆盖率未获取` : cov >= 1 ? `预计需求是保本线的 ${cov.toFixed(2)} 倍，${verdictZh}` : `预计需求只够保本线的 ${fmtPct(cov)}，${verdictZh}`;
+      const title = cov == null ? `${verdictZh}：需求覆盖率未获取` : cov >= 1 ? `预计需求是保本线${xr}的 ${cov.toFixed(2)} 倍，${verdictZh}` : `预计需求只够保本线${xr}的 ${fmtPct(cov)}，${verdictZh}`;
       return {
         title,
-        body: `模型预计本店每月能拿到的需求（捕获需求）${fmtUsd(m.demand.captured_monthly_usd)} [src:demand.captured_monthly_usd]，保本线（每月至少要做到的营收）${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly]，需求覆盖率 ${fmtPct(cov)} [src:demand.coverage_ratio]。综合评分 ${m.score.total} 分 [src:score.total]；签约前条件：${condsZh}。`,
+        body: `模型预计本店每月能拿到的需求（捕获需求）${fmtUsd(m.demand.captured_monthly_usd)} [src:demand.captured_monthly_usd]，保本线（${f.rentExcluded ? '不含租金；' : ''}每月至少要做到的营收）${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly]，需求覆盖率${xr} ${fmtPct(cov)} [src:demand.coverage_ratio]。综合评分 ${m.score.total} 分 [src:score.total]；签约前条件：${condsZh}。`,
         refs: ['demand.coverage_ratio', 'demand.captured_monthly_usd', 'finance.breakeven_monthly', 'score.total', 'score.conditions'],
       };
     }
@@ -233,14 +243,14 @@ function templateZh(m: ReportModel, page: PageId): Narrative {
         const near = m.competitors.l1_nearest_outside_pool;
         return {
           title: `${r} 英里内没有同菜系门店，本址是${cuisine}的空档`,
-          body: `周边 ${r} 英里内没有一家同菜系餐厅 [src:competitors.pool_radius_mi]` + (near ? `，最近的一家「${near.name}」在 ${near.distance_mi} 英里外 [src:competitors.l1_nearest_outside_pool.distance_mi]` : '') + `。没有同行分客流，也没有同行替你教育市场；保本线 ${fmtUsd(be)} [src:finance.breakeven_monthly]。`,
+          body: `周边 ${r} 英里内没有一家同菜系餐厅 [src:competitors.pool_radius_mi]` + (near ? `，最近的一家「${near.name}」在 ${near.distance_mi} 英里外 [src:competitors.l1_nearest_outside_pool.distance_mi]` : '') + `。没有同行分客流，也没有同行替你教育市场；保本线${xr} ${fmtUsd(be)} [src:finance.breakeven_monthly]。`,
           refs: ['competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'finance.breakeven_monthly'],
         };
       }
-      const title = b.median != null && be != null ? `同类门店中位月营收 ${fmtUsd(b.median)}，${b.median < be ? '低于' : '高于'}本址保本线` : '同类门店营收缺历史数据，只能给相对客流等级';
+      const title = b.median != null && be != null ? `同类门店中位月营收 ${fmtUsd(b.median)}，${b.median < be ? '低于' : '高于'}本址保本线${xr}` : '同类门店营收缺历史数据，只能给相对客流等级';
       return {
         title,
-        body: `${b.median != null ? `同类门店月营收：低位 ${fmtUsd(b.p25)} / 中位 ${fmtUsd(b.median)} / 高位 ${fmtUsd(b.p75)} [src:competitors.benchmark_revenue_band]` : '同类门店营收区间未获取 [src:competitors.benchmark_revenue_band.method]'}；本址保本线 ${fmtUsd(be)} [src:finance.breakeven_monthly]。`,
+        body: `${b.median != null ? `同类门店月营收：低位 ${fmtUsd(b.p25)} / 中位 ${fmtUsd(b.median)} / 高位 ${fmtUsd(b.p75)} [src:competitors.benchmark_revenue_band]` : '同类门店营收区间未获取 [src:competitors.benchmark_revenue_band.method]'}；本址保本线${xr} ${fmtUsd(be)} [src:finance.breakeven_monthly]。`,
         refs: ['competitors.benchmark_revenue_band', 'finance.breakeven_monthly'],
       };
     }
@@ -254,7 +264,7 @@ function templateZh(m: ReportModel, page: PageId): Narrative {
     }
     case 'page_9':
       return {
-        title: cov == null ? '需求测算缺少输入' : `预计每月能拿到 ${fmtUsd(m.demand.captured_monthly_usd)}，是保本线的 ${fmtPct(cov)}`,
+        title: cov == null ? '需求测算缺少输入' : `预计每月能拿到 ${fmtUsd(m.demand.captured_monthly_usd)}，是保本线${xr}的 ${fmtPct(cov)}`,
         body: `预计捕获月需求 ${fmtUsd(m.demand.captured_monthly_usd)} [src:demand.captured_monthly_usd]（午市 ${fmtUsd(m.demand.lunch_usd)} [src:demand.lunch_usd]，晚市 ${fmtUsd(m.demand.dinner_usd)} [src:demand.dinner_usd]），每天 ${fmtInt(m.demand.captured_covers_day)} 单 [src:demand.captured_covers_day]；参与分流的竞品 ${m.demand.huff.competitor_set} 家 [src:demand.huff.competitor_set]。`,
         refs: ['demand.captured_monthly_usd', 'demand.lunch_usd', 'demand.dinner_usd', 'demand.captured_covers_day', 'demand.huff.competitor_set'],
       };
@@ -262,8 +272,11 @@ function templateZh(m: ReportModel, page: PageId): Narrative {
       const s = f.breaking;
       const base = f.base;
       return {
-        title: s ? `${s.label_zh}就会跌破保本线` : `基准情景月营收 ${fmtUsd(base?.monthly_revenue)}，高于保本线`,
-        body: `保本线 ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly]、安全线（比保本线高出一截，留出缓冲）${fmtUsd(m.finance.safety_monthly)} [src:finance.safety_monthly]；基准情景 ${base?.seats} 座 × 每天翻台 ${base?.turns_per_day} 次 = 每天 ${base?.dine_in_covers_day} 位堂食客人 [src:finance.scenarios.1]，月营收 ${fmtUsd(base?.monthly_revenue)} [src:finance.scenarios.1.monthly_revenue]。${m.finance.payback_months == null ? '未提供开办投入（装修与设备），回收期不显示 [src:finance.payback_months]。' : `回收期 ${m.finance.payback_months} 个月 [src:finance.payback_months]。`}`,
+        title: s ? `${s.label_zh}就会跌破保本线${xr}` : `基准情景月营收 ${fmtUsd(base?.monthly_revenue)}，高于保本线${xr}`,
+        // No-rent edition: same numbers, the safety-line gloss gives way to the rent statement (the page is full).
+        body: f.rentExcluded
+          ? `未提供月租 [src:finance.rent_excluded]，保本线${xr} ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly]、安全线${xr} ${fmtUsd(m.finance.safety_monthly)} [src:finance.safety_monthly]；基准情景 ${base?.seats} 座 × 每天翻台 ${base?.turns_per_day} 次 = 每天 ${base?.dine_in_covers_day} 位堂食客人 [src:finance.scenarios.1]，月营收 ${fmtUsd(base?.monthly_revenue)} [src:finance.scenarios.1.monthly_revenue]。${m.finance.payback_months == null ? (m.input.capex_usd != null ? '租金未提供，回收期不显示 [src:finance.payback_months]。' : '未提供开办投入，回收期不显示 [src:finance.payback_months]。') : `回收期 ${m.finance.payback_months} 个月 [src:finance.payback_months]。`}`
+          : `保本线 ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly]、安全线（比保本线高出一截，留出缓冲）${fmtUsd(m.finance.safety_monthly)} [src:finance.safety_monthly]；基准情景 ${base?.seats} 座 × 每天翻台 ${base?.turns_per_day} 次 = 每天 ${base?.dine_in_covers_day} 位堂食客人 [src:finance.scenarios.1]，月营收 ${fmtUsd(base?.monthly_revenue)} [src:finance.scenarios.1.monthly_revenue]。${m.finance.payback_months == null ? '未提供开办投入（装修与设备），回收期不显示 [src:finance.payback_months]。' : `回收期 ${m.finance.payback_months} 个月 [src:finance.payback_months]。`}`,
         refs: ['finance.breakeven_monthly', 'finance.safety_monthly', 'finance.scenarios.1', 'finance.payback_months'],
       };
     }
@@ -301,14 +314,19 @@ function templateZh(m: ReportModel, page: PageId): Narrative {
       };
     case 'page_15': {
       const top = f.top;
-      const title = cov == null ? `${cuisine}：${verdictZh}` : `${cuisine}：${verdictZh}，需求覆盖率 ${fmtPct(cov)}`;
+      const title = cov == null ? `${cuisine}：${verdictZh}` : `${cuisine}：${verdictZh}，需求覆盖率${xr} ${fmtPct(cov)}`;
+      const occZh = f.rentExcluded
+        ? `租金未提供，占用成本比无法计算 [src:finance.occupancy_cost_ratio]${f.maxRent != null ? `，按 ${OCCUPANCY_WARNING_PCT}% 占用成本月租上限 ${fmtUsd(f.maxRent)} [src:finance.max_rent_for_10pct_usd]` : ''}`
+        : `占用成本比（租金 ÷ 预计营收）${fmtPct(m.finance.occupancy_cost_ratio)} [src:finance.occupancy_cost_ratio]`;
       return {
         title,
         body:
-          `结论：${cuisine}在本址${verdictZh}。三个决定性数字：需求覆盖率 ${fmtPct(cov)} [src:demand.coverage_ratio]，占用成本比（租金 ÷ 预计营收）${fmtPct(m.finance.occupancy_cost_ratio)} [src:finance.occupancy_cost_ratio]，综合评分 ${m.score.total} 分 [src:score.total]。` +
+          `结论：${cuisine}在本址${verdictZh}。三个决定性数字：需求覆盖率${xr} ${fmtPct(cov)} [src:demand.coverage_ratio]，${occZh}，综合评分 ${m.score.total} 分 [src:score.total]。` +
           `签约前必须做的事：${condsZh} [src:score.conditions]。` +
           (top.length ? `更适合的替代菜系：${top.map((a) => `${a.label_zh} ${a.total} 分`).join('、')} [src:score.alternatives]。` : '') +
-          '下一步：先落实签约前条件并补齐缺失输入，重跑报告；租金谈判以本报告给出的租金上限为目标；实地踩点午市、晚市与周末客流。',
+          (f.rentExcluded
+            ? '下一步：先在「补充信息」里填写实际月租并补齐缺失输入，重新生成报告；租金谈判以本报告给出的租金上限为目标；实地踩点午市、晚市与周末客流。'
+            : '下一步：先落实签约前条件并补齐缺失输入，重跑报告；租金谈判以本报告给出的租金上限为目标；实地踩点午市、晚市与周末客流。'),
         refs: ['demand.coverage_ratio', 'finance.occupancy_cost_ratio', 'score.total', 'score.conditions', 'score.alternatives'],
       };
     }
@@ -328,14 +346,26 @@ function templateEn(m: ReportModel, page: PageId): Narrative {
   const cuisine = m.input.cuisine_label_en;
   const conds = m.score.conditions.map((c) => plainEn(c.text_en)).join('; ') || 'none';
   const ringL = (id: string) => ringLabel(m, id, 'en');
+  const xr = f.rentExcluded ? EX_RENT.en : '';
+  const capEn = f.maxRent != null ? `; at ${OCCUPANCY_WARNING_PCT}% occupancy cost the rent ceiling is ${fmtUsd(f.maxRent)} [src:finance.max_rent_for_10pct_usd]` : '';
   switch (page) {
     case 'page_1':
       return { title: `${cuisine}: ${verdict}`, body: `Overall score ${m.score.total} [src:score.total]; data completeness ${m.confidence.total} [src:confidence.total].`, refs: ['score.total', 'confidence.total'] };
     case 'page_2': {
-      const title = cov == null ? `${verdict}: demand coverage not available` : cov >= 1 ? `Captured demand is ${cov.toFixed(2)}× break-even: ${verdict}` : `Captured demand covers only ${fmtPct(cov)} of break-even: ${verdict}`;
+      // no-rent titles are shorter so the ex-rent label still fits on one line
+      const title =
+        cov == null
+          ? `${verdict}: demand coverage not available`
+          : f.rentExcluded
+            ? cov >= 1
+              ? `Demand is ${cov.toFixed(2)}× break-even${xr}: ${verdict}`
+              : `Only ${fmtPct(cov)} of break-even${xr} covered: ${verdict}`
+            : cov >= 1
+              ? `Captured demand is ${cov.toFixed(2)}× break-even: ${verdict}`
+              : `Captured demand covers only ${fmtPct(cov)} of break-even: ${verdict}`;
       return {
         title,
-        body: `The model expects this site to capture ${fmtUsd(m.demand.captured_monthly_usd)} of demand a month [src:demand.captured_monthly_usd] against a break-even (the minimum monthly revenue) of ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly], a demand coverage of ${fmtPct(cov)} [src:demand.coverage_ratio]. Overall score ${m.score.total} [src:score.total]. Pre-lease conditions: ${conds}.`,
+        body: `The model expects this site to capture ${fmtUsd(m.demand.captured_monthly_usd)} of demand a month [src:demand.captured_monthly_usd] against a break-even${xr} (the minimum monthly revenue${f.rentExcluded ? ' before rent' : ''}) of ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly], a demand coverage${xr} of ${fmtPct(cov)} [src:demand.coverage_ratio]. Overall score ${m.score.total} [src:score.total]. Pre-lease conditions: ${conds}.`,
         refs: ['demand.coverage_ratio', 'demand.captured_monthly_usd', 'finance.breakeven_monthly', 'score.total', 'score.conditions'],
       };
     }
@@ -377,14 +407,14 @@ function templateEn(m: ReportModel, page: PageId): Narrative {
         const near = m.competitors.l1_nearest_outside_pool;
         return {
           title: `No same-cuisine restaurant within ${r} miles: an opening for ${cuisine}`,
-          body: `There is no same-cuisine restaurant within ${r} miles [src:competitors.pool_radius_mi]` + (near ? `; the nearest, "${near.name}", is ${near.distance_mi} miles away [src:competitors.l1_nearest_outside_pool.distance_mi]` : '') + `. Nobody splits the traffic, but nobody has educated the market either; break-even is ${fmtUsd(be)} [src:finance.breakeven_monthly].`,
+          body: `There is no same-cuisine restaurant within ${r} miles [src:competitors.pool_radius_mi]` + (near ? `; the nearest, "${near.name}", is ${near.distance_mi} miles away [src:competitors.l1_nearest_outside_pool.distance_mi]` : '') + `. Nobody splits the traffic, but nobody has educated the market either; break-even${xr} is ${fmtUsd(be)} [src:finance.breakeven_monthly].`,
           refs: ['competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'finance.breakeven_monthly'],
         };
       }
-      const title = b.median != null && be != null ? `Peer median revenue ${fmtUsd(b.median)} a month, ${b.median < be ? 'below' : 'above'} this site's break-even` : 'No revenue history for peers: only a relative traffic tier';
+      const title = b.median != null && be != null ? `Peer median revenue ${fmtUsd(b.median)} a month, ${b.median < be ? 'below' : 'above'} this site's break-even${xr}` : 'No revenue history for peers: only a relative traffic tier';
       return {
         title,
-        body: `${b.median != null ? `Peer monthly revenue: low ${fmtUsd(b.p25)} / median ${fmtUsd(b.median)} / high ${fmtUsd(b.p75)} [src:competitors.benchmark_revenue_band]` : 'Peer revenue band not available [src:competitors.benchmark_revenue_band.method]'}; this site's break-even is ${fmtUsd(be)} [src:finance.breakeven_monthly].`,
+        body: `${b.median != null ? `Peer monthly revenue: low ${fmtUsd(b.p25)} / median ${fmtUsd(b.median)} / high ${fmtUsd(b.p75)} [src:competitors.benchmark_revenue_band]` : 'Peer revenue band not available [src:competitors.benchmark_revenue_band.method]'}; this site's break-even${xr} is ${fmtUsd(be)} [src:finance.breakeven_monthly].`,
         refs: ['competitors.benchmark_revenue_band', 'finance.breakeven_monthly'],
       };
     }
@@ -398,7 +428,7 @@ function templateEn(m: ReportModel, page: PageId): Narrative {
     }
     case 'page_9':
       return {
-        title: cov == null ? 'Demand estimate is missing inputs' : `Expected capture ${fmtUsd(m.demand.captured_monthly_usd)} a month, ${fmtPct(cov)} of break-even`,
+        title: cov == null ? 'Demand estimate is missing inputs' : `Expected capture ${fmtUsd(m.demand.captured_monthly_usd)} a month, ${fmtPct(cov)} of break-even${xr}`,
         body: `Expected captured demand ${fmtUsd(m.demand.captured_monthly_usd)} a month [src:demand.captured_monthly_usd] (lunch ${fmtUsd(m.demand.lunch_usd)} [src:demand.lunch_usd], dinner ${fmtUsd(m.demand.dinner_usd)} [src:demand.dinner_usd]), ${fmtInt(m.demand.captured_covers_day)} orders a day [src:demand.captured_covers_day]; ${m.demand.huff.competitor_set} competitors share the pool [src:demand.huff.competitor_set].`,
         refs: ['demand.captured_monthly_usd', 'demand.lunch_usd', 'demand.dinner_usd', 'demand.captured_covers_day', 'demand.huff.competitor_set'],
       };
@@ -406,8 +436,8 @@ function templateEn(m: ReportModel, page: PageId): Narrative {
       const s = f.breaking;
       const base = f.base;
       return {
-        title: s ? `${s.label_en} alone breaks even` : `Base-case revenue ${fmtUsd(base?.monthly_revenue)} a month, above break-even`,
-        body: `Break-even ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly]; safety line (break-even plus a buffer) ${fmtUsd(m.finance.safety_monthly)} [src:finance.safety_monthly]; base case ${base?.seats} seats × ${base?.turns_per_day} turns a day = ${base?.dine_in_covers_day} dine-in guests a day [src:finance.scenarios.1], ${fmtUsd(base?.monthly_revenue)} a month [src:finance.scenarios.1.monthly_revenue]. ${m.finance.payback_months == null ? 'Start-up investment (build-out and equipment) not provided, so no payback period is shown [src:finance.payback_months].' : `Payback ${m.finance.payback_months} months [src:finance.payback_months].`}`,
+        title: s ? `${s.label_en} alone breaks even${xr}` : f.rentExcluded ? `Base case ${fmtUsd(base?.monthly_revenue)} a month, above break-even${xr}` : `Base-case revenue ${fmtUsd(base?.monthly_revenue)} a month, above break-even`,
+        body: `Break-even${xr} ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly]; safety line${xr} (break-even plus a buffer) ${fmtUsd(m.finance.safety_monthly)} [src:finance.safety_monthly]; base case ${base?.seats} seats × ${base?.turns_per_day} turns a day = ${base?.dine_in_covers_day} dine-in guests a day [src:finance.scenarios.1], ${fmtUsd(base?.monthly_revenue)} a month [src:finance.scenarios.1.monthly_revenue]. ${f.rentExcluded ? `No monthly rent was provided: fixed cost and break-even exclude rent [src:finance.rent_excluded]${capEn}. ` : ''}${m.finance.payback_months == null ? (f.rentExcluded && m.input.capex_usd != null ? 'Rent not provided, so no payback period is shown [src:finance.payback_months].' : 'Start-up investment (build-out and equipment) not provided, so no payback period is shown [src:finance.payback_months].') : `Payback ${m.finance.payback_months} months [src:finance.payback_months].`}`,
         refs: ['finance.breakeven_monthly', 'finance.safety_monthly', 'finance.scenarios.1', 'finance.payback_months'],
       };
     }
@@ -444,14 +474,19 @@ function templateEn(m: ReportModel, page: PageId): Narrative {
       };
     case 'page_15': {
       const top = f.top;
-      const title = cov == null ? `${cuisine}: ${verdict}` : `${cuisine}: ${verdict}, demand coverage ${fmtPct(cov)}`;
+      const title = cov == null ? `${cuisine}: ${verdict}` : `${cuisine}: ${verdict}, demand coverage${xr} ${fmtPct(cov)}`;
+      const occEn = f.rentExcluded
+        ? `occupancy cost ratio not computable because no rent was provided [src:finance.occupancy_cost_ratio]${f.maxRent != null ? `, rent ceiling at ${OCCUPANCY_WARNING_PCT}% occupancy cost ${fmtUsd(f.maxRent)} [src:finance.max_rent_for_10pct_usd]` : ''}`
+        : `occupancy cost ratio (rent ÷ expected revenue) ${fmtPct(m.finance.occupancy_cost_ratio)} [src:finance.occupancy_cost_ratio]`;
       return {
         title,
         body:
-          `Verdict: ${cuisine} at this address is ${verdict}. The three deciding numbers: demand coverage ${fmtPct(cov)} [src:demand.coverage_ratio], occupancy cost ratio (rent ÷ expected revenue) ${fmtPct(m.finance.occupancy_cost_ratio)} [src:finance.occupancy_cost_ratio], overall score ${m.score.total} [src:score.total]. ` +
+          `Verdict: ${cuisine} at this address is ${verdict}. The three deciding numbers: demand coverage${xr} ${fmtPct(cov)} [src:demand.coverage_ratio], ${occEn}, overall score ${m.score.total} [src:score.total]. ` +
           `Must do before signing: ${conds} [src:score.conditions]. ` +
           (top.length ? `Better-fit alternatives: ${top.map((a) => `${a.label_en} ${a.total}`).join(', ')} [src:score.alternatives]. ` : '') +
-          'Next steps: settle the pre-lease conditions and fill the missing inputs, then re-run the report; negotiate rent toward the cap this report gives; walk the site at lunch, dinner and on a weekend.',
+          (f.rentExcluded
+            ? 'Next steps: add the actual monthly rent under "Add details" and fill the missing inputs, then regenerate the report; negotiate rent toward the ceiling this report gives; walk the site at lunch, dinner and on a weekend.'
+            : 'Next steps: settle the pre-lease conditions and fill the missing inputs, then re-run the report; negotiate rent toward the cap this report gives; walk the site at lunch, dinner and on a weekend.'),
         refs: ['demand.coverage_ratio', 'finance.occupancy_cost_ratio', 'score.total', 'score.conditions', 'score.alternatives'],
       };
     }
@@ -472,14 +507,26 @@ function templateEs(m: ReportModel, page: PageId): Narrative {
   const conds = m.score.conditions.map((c) => localizedField(c.text_zh, c.text_en, 'es')).join('; ') || 'ninguna';
   const ringL = (id: string) => ringLabel(m, id, 'es');
   const alt = (a: ReportModel['score']['alternatives'][number]) => cuisineName(a, 'es');
+  const xr = f.rentExcluded ? EX_RENT.es : '';
+  const capEs = f.maxRent != null ? `; con un costo de ocupación del ${OCCUPANCY_WARNING_PCT}%, el tope de alquiler es ${fmtUsd(f.maxRent)} [src:finance.max_rent_for_10pct_usd]` : '';
   switch (page) {
     case 'page_1':
       return { title: `${cuisine}: ${verdict}`, body: `Puntuación global ${m.score.total} [src:score.total]; integridad de datos ${m.confidence.total} [src:confidence.total].`, refs: ['score.total', 'confidence.total'] };
     case 'page_2': {
-      const title = cov == null ? `${verdict}: cobertura de demanda no disponible` : cov >= 1 ? `La demanda captada es ${cov.toFixed(2)}× el punto de equilibrio: ${verdict}` : `La demanda captada cubre solo el ${fmtPct(cov)} del equilibrio: ${verdict}`;
+      // no-rent titles are shorter so the ex-rent label still fits on one line
+      const title =
+        cov == null
+          ? `${verdict}: cobertura de demanda no disponible`
+          : f.rentExcluded
+            ? cov >= 1
+              ? `Demanda ${cov.toFixed(2)}× el equilibrio${xr}: ${verdict}`
+              : `Solo el ${fmtPct(cov)} del equilibrio${xr} cubierto: ${verdict}`
+            : cov >= 1
+              ? `La demanda captada es ${cov.toFixed(2)}× el punto de equilibrio: ${verdict}`
+              : `La demanda captada cubre solo el ${fmtPct(cov)} del equilibrio: ${verdict}`;
       return {
         title,
-        body: `El modelo prevé que este local capte ${fmtUsd(m.demand.captured_monthly_usd)} de demanda al mes [src:demand.captured_monthly_usd] frente a un punto de equilibrio (ingreso mensual mínimo) de ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly], una cobertura de demanda del ${fmtPct(cov)} [src:demand.coverage_ratio]. Puntuación global ${m.score.total} [src:score.total]. Condiciones previas al contrato: ${conds}.`,
+        body: `El modelo prevé que este local capte ${fmtUsd(m.demand.captured_monthly_usd)} de demanda al mes [src:demand.captured_monthly_usd] frente a un punto de equilibrio${xr} (ingreso mensual mínimo${f.rentExcluded ? ' antes del alquiler' : ''}) de ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly], una cobertura de demanda${xr} del ${fmtPct(cov)} [src:demand.coverage_ratio]. Puntuación global ${m.score.total} [src:score.total]. Condiciones previas al contrato: ${conds}.`,
         refs: ['demand.coverage_ratio', 'demand.captured_monthly_usd', 'finance.breakeven_monthly', 'score.total', 'score.conditions'],
       };
     }
@@ -521,14 +568,14 @@ function templateEs(m: ReportModel, page: PageId): Narrative {
         const near = m.competitors.l1_nearest_outside_pool;
         return {
           title: `Sin restaurantes de la misma cocina en ${r} millas: una oportunidad para ${cuisine}`,
-          body: `No hay ningún restaurante de la misma cocina en ${r} millas [src:competitors.pool_radius_mi]` + (near ? `; el más cercano, "${near.name}", está a ${near.distance_mi} millas [src:competitors.l1_nearest_outside_pool.distance_mi]` : '') + `. Nadie reparte el tráfico, pero nadie ha educado al mercado; el punto de equilibrio es ${fmtUsd(be)} [src:finance.breakeven_monthly].`,
+          body: `No hay ningún restaurante de la misma cocina en ${r} millas [src:competitors.pool_radius_mi]` + (near ? `; el más cercano, "${near.name}", está a ${near.distance_mi} millas [src:competitors.l1_nearest_outside_pool.distance_mi]` : '') + `. Nadie reparte el tráfico, pero nadie ha educado al mercado; el punto de equilibrio${xr} es ${fmtUsd(be)} [src:finance.breakeven_monthly].`,
           refs: ['competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'finance.breakeven_monthly'],
         };
       }
-      const title = b.median != null && be != null ? `Ingreso mediano de locales similares ${fmtUsd(b.median)} al mes, ${b.median < be ? 'por debajo' : 'por encima'} del equilibrio de este local` : 'Sin historial de ingresos de locales similares: solo un nivel relativo de tráfico';
+      const title = b.median != null && be != null ? `Ingreso mediano de locales similares ${fmtUsd(b.median)} al mes, ${b.median < be ? 'por debajo' : 'por encima'} del equilibrio${xr} de este local` : 'Sin historial de ingresos de locales similares: solo un nivel relativo de tráfico';
       return {
         title,
-        body: `${b.median != null ? `Ingreso mensual de locales similares: bajo ${fmtUsd(b.p25)} / mediano ${fmtUsd(b.median)} / alto ${fmtUsd(b.p75)} [src:competitors.benchmark_revenue_band]` : 'Rango de ingresos de locales similares no disponible [src:competitors.benchmark_revenue_band.method]'}; el punto de equilibrio de este local es ${fmtUsd(be)} [src:finance.breakeven_monthly].`,
+        body: `${b.median != null ? `Ingreso mensual de locales similares: bajo ${fmtUsd(b.p25)} / mediano ${fmtUsd(b.median)} / alto ${fmtUsd(b.p75)} [src:competitors.benchmark_revenue_band]` : 'Rango de ingresos de locales similares no disponible [src:competitors.benchmark_revenue_band.method]'}; el punto de equilibrio${xr} de este local es ${fmtUsd(be)} [src:finance.breakeven_monthly].`,
         refs: ['competitors.benchmark_revenue_band', 'finance.breakeven_monthly'],
       };
     }
@@ -542,7 +589,7 @@ function templateEs(m: ReportModel, page: PageId): Narrative {
     }
     case 'page_9':
       return {
-        title: cov == null ? 'A la estimación de demanda le faltan datos' : `Captura prevista ${fmtUsd(m.demand.captured_monthly_usd)} al mes, el ${fmtPct(cov)} del equilibrio`,
+        title: cov == null ? 'A la estimación de demanda le faltan datos' : `Captura prevista ${fmtUsd(m.demand.captured_monthly_usd)} al mes, el ${fmtPct(cov)} del equilibrio${xr}`,
         body: `Demanda captada prevista ${fmtUsd(m.demand.captured_monthly_usd)} al mes [src:demand.captured_monthly_usd] (almuerzo ${fmtUsd(m.demand.lunch_usd)} [src:demand.lunch_usd], cena ${fmtUsd(m.demand.dinner_usd)} [src:demand.dinner_usd]), ${fmtInt(m.demand.captured_covers_day)} pedidos al día [src:demand.captured_covers_day]; ${m.demand.huff.competitor_set} competidores se reparten la demanda [src:demand.huff.competitor_set].`,
         refs: ['demand.captured_monthly_usd', 'demand.lunch_usd', 'demand.dinner_usd', 'demand.captured_covers_day', 'demand.huff.competitor_set'],
       };
@@ -550,8 +597,14 @@ function templateEs(m: ReportModel, page: PageId): Narrative {
       const s = f.breaking;
       const base = f.base;
       return {
-        title: s ? `${sensitivityName(s, 'es')} basta para caer bajo el equilibrio` : `Ingresos del escenario base ${fmtUsd(base?.monthly_revenue)} al mes, por encima del equilibrio`,
-        body: `Punto de equilibrio ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly]; línea de seguridad (equilibrio más un colchón) ${fmtUsd(m.finance.safety_monthly)} [src:finance.safety_monthly]; escenario base ${base?.seats} asientos × ${base?.turns_per_day} rotaciones al día = ${base?.dine_in_covers_day} comensales en sala al día [src:finance.scenarios.1], ${fmtUsd(base?.monthly_revenue)} al mes [src:finance.scenarios.1.monthly_revenue]. ${m.finance.payback_months == null ? 'No se indicó la inversión inicial (obra y equipo), así que no se muestra el plazo de recuperación [src:finance.payback_months].' : `Recuperación en ${m.finance.payback_months} meses [src:finance.payback_months].`}`,
+        title: f.rentExcluded
+          ? s
+            ? `${sensitivityName(s, 'es')}: cae bajo el equilibrio${xr}`
+            : `Escenario base ${fmtUsd(base?.monthly_revenue)} al mes, sobre el equilibrio${xr}`
+          : s
+            ? `${sensitivityName(s, 'es')} basta para caer bajo el equilibrio`
+            : `Ingresos del escenario base ${fmtUsd(base?.monthly_revenue)} al mes, por encima del equilibrio`,
+        body: `Punto de equilibrio${xr} ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly]; línea de seguridad${xr} (equilibrio más un colchón) ${fmtUsd(m.finance.safety_monthly)} [src:finance.safety_monthly]; escenario base ${base?.seats} asientos × ${base?.turns_per_day} rotaciones al día = ${base?.dine_in_covers_day} comensales en sala al día [src:finance.scenarios.1], ${fmtUsd(base?.monthly_revenue)} al mes [src:finance.scenarios.1.monthly_revenue]. ${f.rentExcluded ? `No se indicó el alquiler mensual: el costo fijo y el punto de equilibrio se calculan sin renta [src:finance.rent_excluded]${capEs}. ` : ''}${m.finance.payback_months == null ? (f.rentExcluded && m.input.capex_usd != null ? 'Sin alquiler indicado no se muestra el plazo de recuperación [src:finance.payback_months].' : 'No se indicó la inversión inicial (obra y equipo), así que no se muestra el plazo de recuperación [src:finance.payback_months].') : `Recuperación en ${m.finance.payback_months} meses [src:finance.payback_months].`}`,
         refs: ['finance.breakeven_monthly', 'finance.safety_monthly', 'finance.scenarios.1', 'finance.payback_months'],
       };
     }
@@ -589,14 +642,19 @@ function templateEs(m: ReportModel, page: PageId): Narrative {
       };
     case 'page_15': {
       const top = f.top;
-      const title = cov == null ? `${cuisine}: ${verdict}` : `${cuisine}: ${verdict}, cobertura de demanda ${fmtPct(cov)}`;
+      const title = cov == null ? `${cuisine}: ${verdict}` : `${cuisine}: ${verdict}, cobertura de demanda${xr} ${fmtPct(cov)}`;
+      const occEs = f.rentExcluded
+        ? `ratio de costo de ocupación no calculable porque no se indicó el alquiler [src:finance.occupancy_cost_ratio]${f.maxRent != null ? `, tope de alquiler con un ${OCCUPANCY_WARNING_PCT}% de costo de ocupación ${fmtUsd(f.maxRent)} [src:finance.max_rent_for_10pct_usd]` : ''}`
+        : `ratio de costo de ocupación (alquiler ÷ ingresos previstos) ${fmtPct(m.finance.occupancy_cost_ratio)} [src:finance.occupancy_cost_ratio]`;
       return {
         title,
         body:
-          `Conclusión: ${cuisine} en esta dirección es ${verdict}. Las tres cifras decisivas: cobertura de demanda ${fmtPct(cov)} [src:demand.coverage_ratio], ratio de costo de ocupación (alquiler ÷ ingresos previstos) ${fmtPct(m.finance.occupancy_cost_ratio)} [src:finance.occupancy_cost_ratio], puntuación global ${m.score.total} [src:score.total]. ` +
+          `Conclusión: ${cuisine} en esta dirección es ${verdict}. Las tres cifras decisivas: cobertura de demanda${xr} ${fmtPct(cov)} [src:demand.coverage_ratio], ${occEs}, puntuación global ${m.score.total} [src:score.total]. ` +
           `Imprescindible antes de firmar: ${conds} [src:score.conditions]. ` +
           (top.length ? `Alternativas con mejor encaje: ${top.map((a) => `${alt(a)} ${a.total}`).join(', ')} [src:score.alternatives]. ` : '') +
-          'Próximos pasos: resuelva las condiciones previas y complete los datos que faltan, luego vuelva a generar el informe; negocie el alquiler hacia el tope que da este informe; visite el local al mediodía, por la noche y un fin de semana.',
+          (f.rentExcluded
+            ? 'Próximos pasos: indique el alquiler mensual real en "Añadir datos" y complete los datos que faltan, luego vuelva a generar el informe; negocie el alquiler hacia el tope que da este informe; visite el local al mediodía, por la noche y un fin de semana.'
+            : 'Próximos pasos: resuelva las condiciones previas y complete los datos que faltan, luego vuelva a generar el informe; negocie el alquiler hacia el tope que da este informe; visite el local al mediodía, por la noche y un fin de semana.'),
         refs: ['demand.coverage_ratio', 'finance.occupancy_cost_ratio', 'score.total', 'score.conditions', 'score.alternatives'],
       };
     }
@@ -640,6 +698,8 @@ export function pageFragment(m: ReportModel, page: PageId): Record<string, unkno
     // "步行 10 分钟范围" / "10-minute walk area" / "área a 15 minutos en coche" name the ring by its minutes on every page
     ring_minutes: Object.fromEntries(m.trade_area.rings.map((r) => [r.id, r.minutes])),
     inputs_missing_count: m.finance.inputs_missing.length,
+    // the 10 % occupancy-cost warning line quoted by the rent conditions and the summaries
+    occupancy_warning_pct: OCCUPANCY_WARNING_PCT,
     lunch_share_pct: m.demand.lunch_usd != null && m.demand.dinner_usd != null && m.demand.lunch_usd + m.demand.dinner_usd > 0 ? Math.round((m.demand.lunch_usd / (m.demand.lunch_usd + m.demand.dinner_usd)) * 100) : null,
   };
   return out;

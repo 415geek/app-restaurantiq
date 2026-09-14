@@ -11,7 +11,9 @@ import {
   emptyPaidIntakeValues,
   hasPaidIntakeValues,
   PaidIntakeForm,
+  paidIntakeInputId,
   submitPaidIntake,
+  type PaidIntakeCoreKey,
   type PaidIntakeValues,
 } from '@/components/iq/PaidIntakeForm';
 import {
@@ -121,8 +123,14 @@ type Copy = {
   fallbackLoadFailed: string;
   loadingPage: string;
   riskAudit: string;
-  addDetails: string;
-  addDetailsHide: string;
+  /** Step 1 header above the intake fields (rent / size / seats). */
+  stepOne: string;
+  /** Prefix for the unlock button, e.g. "Step 2 · ". */
+  stepTwoPrefix: string;
+  /** Shown once when unlock is clicked with an empty rent field; never blocks payment. */
+  rentNotice: string;
+  rentNoticeFill: string;
+  rentNoticeProceed: string;
   verdict: Record<'go' | 'caution' | 'no', string>;
 };
 
@@ -151,8 +159,12 @@ const resultCopy: Record<Locale, Copy> = {
     reportNotSaved: 'The report was not saved — please rerun the analysis, then unlock.',
     fallbackLoadFailed: 'Could not load the result.',
     loadingPage: 'Loading…',
-    addDetails: 'Add details (optional, 1 min)',
-    addDetailsHide: 'Hide details',
+    stepOne: 'Step 1 · Three numbers make the report accurate (30 s, optional)',
+    stepTwoPrefix: 'Step 2 · ',
+    rentNotice:
+      'No monthly rent entered: the report will not assume one — it shows a rent-excluded break-even and a rent ceiling instead. Add it for a sharper report ↑',
+    rentNoticeFill: 'Add rent',
+    rentNoticeProceed: 'Pay anyway',
     verdict: { go: 'Opportunity', caution: 'Proceed with caution', no: 'High risk' },
   },
   zh: {
@@ -179,8 +191,11 @@ const resultCopy: Record<Locale, Copy> = {
     reportNotSaved: '报告尚未保存成功，请重新运行分析后再解锁。',
     fallbackLoadFailed: '结果加载失败。',
     loadingPage: '加载中…',
-    addDetails: '补充信息（可选，1 分钟）',
-    addDetailsHide: '收起补充信息',
+    stepOne: '第 1 步 · 填 3 个数字，报告更准（30 秒，可跳过）',
+    stepTwoPrefix: '第 2 步 · ',
+    rentNotice: '未填月租：报告将不假设租金，只给保本线（不含租金）与租金上限。填好更准 ↑',
+    rentNoticeFill: '填一下',
+    rentNoticeProceed: '直接付费',
     verdict: { go: '可进入', caution: '谨慎推进', no: '风险较高' },
   },
   es: {
@@ -207,8 +222,12 @@ const resultCopy: Record<Locale, Copy> = {
     reportNotSaved: 'El informe no se guardó. Vuelve a ejecutar el análisis y luego desbloquéalo.',
     fallbackLoadFailed: 'No se pudo cargar el resultado.',
     loadingPage: 'Cargando…',
-    addDetails: 'Agregar datos (opcional, 1 min)',
-    addDetailsHide: 'Ocultar datos',
+    stepOne: 'Paso 1 · Tres números hacen el informe más preciso (30 s, opcional)',
+    stepTwoPrefix: 'Paso 2 · ',
+    rentNotice:
+      'No ingresaste el alquiler mensual: el informe no asumirá ninguno; mostrará el punto de equilibrio sin alquiler y un tope de alquiler. Agrégalo para un informe más preciso ↑',
+    rentNoticeFill: 'Agregar alquiler',
+    rentNoticeProceed: 'Pagar de todos modos',
     verdict: { go: 'Oportunidad', caution: 'Proceder con cautela', no: 'Riesgo alto' },
   },
 };
@@ -275,8 +294,29 @@ function ResultContent() {
   const [accessCodeLoading, setAccessCodeLoading] = useState(false);
   const [accessCodeError, setAccessCodeError] = useState<string | null>(null);
   // Optional supplemental inputs for the paid 360° report (saved best-effort before checkout).
-  const [intake, setIntake] = useState<PaidIntakeValues>(() => emptyPaidIntakeValues());
-  const [intakeOpen, setIntakeOpen] = useState(false);
+  // Rent / size typed on the landing form travel here as URL params, so prefill them
+  // (they are already stored in market_data_json.user_inputs by /api/funnel/analyze).
+  const [intake, setIntake] = useState<PaidIntakeValues>(() => ({
+    ...emptyPaidIntakeValues(),
+    monthly_rent_usd: monthlyRentUsd.trim(),
+    sqft: sqft.trim(),
+  }));
+  const providedCoreKeys = useMemo<PaidIntakeCoreKey[]>(() => {
+    const keys: PaidIntakeCoreKey[] = [];
+    if (monthlyRentUsd.trim()) keys.push('monthly_rent_usd');
+    if (sqft.trim()) keys.push('sqft');
+    return keys;
+  }, [monthlyRentUsd, sqft]);
+  // The "no rent entered" nudge shows once; the next unlock click (or "pay anyway") proceeds.
+  const [rentNoticeShown, setRentNoticeShown] = useState(false);
+  const rentMissing = intake.monthly_rent_usd.trim().length === 0;
+
+  function focusRentInput() {
+    const el = document.getElementById(paidIntakeInputId('monthly_rent_usd'));
+    if (!(el instanceof HTMLInputElement)) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.focus({ preventScroll: true });
+  }
   // Lead capture gate — required before the free report is revealed.
   // Returning visitors who already left their email skip the modal.
   const [unlocked, setUnlocked] = useState(false);
@@ -370,9 +410,15 @@ function ResultContent() {
     };
   }, [location, businessType, monthlyRentUsd, sqft, locale, t.missingLocation, t.requestFailed]);
 
-  async function handleCheckout() {
+  async function handleCheckout(opts: { skipRentNotice?: boolean } = {}) {
     if (!data?.reportId) {
       setCheckoutError(t.reportNotSaved);
+      return;
+    }
+    // Non-blocking nudge: the first unlock click with an empty rent field only shows the
+    // notice; the second click (or "pay anyway") goes straight to checkout.
+    if (rentMissing && !rentNoticeShown && !opts.skipRentNotice) {
+      setRentNoticeShown(true);
       return;
     }
     setCheckoutLoading(true);
@@ -603,43 +649,56 @@ function ResultContent() {
             ))}
           </ul>
 
-          {/* Optional supplemental inputs — collapsed by default, saved on unlock. */}
-          <div className="mt-5 rounded-2xl border border-white/10 bg-black/20">
-            <button
-              type="button"
-              onClick={() => setIntakeOpen((o) => !o)}
-              aria-expanded={intakeOpen}
-              aria-controls="paid-intake-form"
-              className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-white/80 transition hover:text-white"
-            >
-              <span>
-                ✍️ {intakeOpen ? t.addDetailsHide : t.addDetails}
-                {!intakeOpen && hasPaidIntakeValues(intake) ? <span className="ml-2 text-xs text-emerald-300/80">✓</span> : null}
-              </span>
-              <span className="text-white/40">{intakeOpen ? '▴' : '▾'}</span>
-            </button>
-            {intakeOpen ? (
-              <div id="paid-intake-form" className="border-t border-white/10 px-4 pb-4 pt-3">
-                <PaidIntakeForm
-                  lang={locale}
-                  reportId={data.reportId}
-                  mode="embedded"
-                  value={intake}
-                  onChange={setIntake}
-                  disabled={checkoutLoading}
-                />
-              </div>
-            ) : null}
-          </div>
+          {/* Step 1 — always-visible intake (rent / size / seats first; the rest behind a toggle). Saved on unlock. */}
+          <section aria-labelledby="paid-intake-step" className="mt-5 rounded-2xl border border-white/10 bg-black/25 p-4">
+            <h3 id="paid-intake-step" className="mb-3 text-sm font-semibold leading-snug text-white">
+              {t.stepOne}
+            </h3>
+            <PaidIntakeForm
+              lang={locale}
+              reportId={data.reportId}
+              mode="embedded"
+              value={intake}
+              onChange={setIntake}
+              disabled={checkoutLoading}
+              collapsibleExtras
+              providedKeys={providedCoreKeys}
+            />
+          </section>
 
+          {/* Step 2 — unlock. Never blocked by the intake. */}
           <button
             type="button"
             onClick={() => void handleCheckout()}
             disabled={checkoutLoading}
-            className="mt-6 w-full rounded-2xl bg-emerald-400 px-6 py-4 text-lg font-bold text-black transition hover:bg-emerald-300 hover:shadow-lg hover:shadow-emerald-400/20 disabled:opacity-60"
+            className="mt-4 w-full rounded-2xl bg-emerald-400 px-6 py-4 text-lg font-bold text-black transition hover:bg-emerald-300 hover:shadow-lg hover:shadow-emerald-400/20 disabled:opacity-60"
           >
-            {checkoutLoading ? t.redirecting : t.unlockReport}
+            {checkoutLoading ? t.redirecting : `${t.stepTwoPrefix}${t.unlockReport}`}
           </button>
+          {rentNoticeShown && rentMissing && !checkoutLoading ? (
+            <div
+              role="status"
+              className="mt-3 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm leading-relaxed text-amber-100"
+            >
+              <p>{t.rentNotice}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                <button
+                  type="button"
+                  onClick={focusRentInput}
+                  className="rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-brand-navy transition hover:brightness-110"
+                >
+                  {t.rentNoticeFill}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleCheckout({ skipRentNotice: true })}
+                  className="text-xs text-white/60 underline underline-offset-4 transition hover:text-white"
+                >
+                  {t.rentNoticeProceed}
+                </button>
+              </div>
+            </div>
+          ) : null}
           {checkoutError && (
             <p className="mt-2 text-center text-sm text-rose-300">{checkoutError}</p>
           )}

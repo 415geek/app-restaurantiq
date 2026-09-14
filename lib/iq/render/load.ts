@@ -11,8 +11,11 @@ import path from 'node:path';
 import { iqGetReport } from '@/lib/funnel/iq-repository';
 import { isLocale, toLocale } from '@/lib/i18n/locale';
 import { reportModelSchema, type ReportModel } from '../model/schema';
+import { rederiveWithoutRent } from '../pipeline';
 
 const FIXTURE_RE = /^[a-z0-9_-]{1,40}$/;
+/** `<fixture>-no-rent` renders the fixture as if the customer had left the monthly rent blank (smoke-print --no-rent). */
+const NO_RENT_SUFFIX = /-no-rent$/;
 
 export function fixtureAllowed(): boolean {
   return process.env.NODE_ENV !== 'production';
@@ -20,10 +23,13 @@ export function fixtureAllowed(): boolean {
 
 export async function loadFixtureModel(name: string): Promise<ReportModel | null> {
   if (!fixtureAllowed() || !FIXTURE_RE.test(name)) return null;
-  const file = path.join(process.cwd(), 'qa', 'fixtures', `report_model_${name}.json`);
+  const noRent = NO_RENT_SUFFIX.test(name);
+  const base = name.replace(NO_RENT_SUFFIX, '');
+  const file = path.join(process.cwd(), 'qa', 'fixtures', `report_model_${base}.json`);
   try {
     const raw = JSON.parse(await fs.readFile(file, 'utf8')) as unknown;
-    return coerceModel(raw, `fixture:${name}`);
+    const model = coerceModel(raw, `fixture:${name}`);
+    return model && noRent ? rederiveWithoutRent(model) : model;
   } catch (err) {
     console.warn(`[iq/render/load] fixture ${name} unreadable:`, err instanceof Error ? err.message : err);
     return null;

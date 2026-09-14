@@ -17,6 +17,18 @@ export function computeRisks(m: Model): ReportModel['risks'] {
   let id = 1;
   const push = (r: Omit<ReportModel['risks'][number], 'id'>) => risks.push({ id: id++, ...r });
 
+  // No rent provided: the largest fixed cost is unknown, so the rent risk row below cannot
+  // be assessed and every break-even figure in the report is ex-rent. Say so, never guess.
+  if (f.rent_excluded) {
+    push({
+      risk_zh: '未提供月租：占用成本比无法评估，保本线不含租金',
+      risk_en: 'Monthly rent not provided: occupancy cost cannot be assessed; break-even excludes rent',
+      prob: 'high',
+      impact_usd: null,
+      trigger: '—',
+      hedge: '在「补充信息」里填写月租后重新生成；租金以本报告给出的上限为目标',
+    });
+  }
   if (f.occupancy_cost_ratio != null && f.occupancy_cost_ratio > 0.1) {
     const excess = f.fixed_cost.rent != null && d.captured_monthly_usd != null ? Math.round(f.fixed_cost.rent - d.captured_monthly_usd * 0.1) : null;
     push({
@@ -32,8 +44,8 @@ export function computeRisks(m: Model): ReportModel['risks'] {
   const tick = f.sensitivity.find((s) => s.id === 'ticket_minus_125');
   if (tick?.breaks_breakeven && base) {
     push({
-      risk_zh: `客单价下滑 12.5% 即击穿保本线（基准客单 $${base.ticket_in}）`,
-      risk_en: `A 12.5% ticket drop breaks even (base ticket $${base.ticket_in})`,
+      risk_zh: f.rent_excluded ? `客单价下滑 12.5% 即击穿保本线（不含租金；基准客单 $${base.ticket_in}）` : `客单价下滑 12.5% 即击穿保本线（基准客单 $${base.ticket_in}）`,
+      risk_en: f.rent_excluded ? `A 12.5% ticket drop breaks even (excluding rent; base ticket $${base.ticket_in})` : `A 12.5% ticket drop breaks even (base ticket $${base.ticket_in})`,
       prob: 'medium',
       impact_usd: Math.abs(tick.monthly_revenue_delta),
       trigger: '开业 3 个月后实际客单价 < 基准 × 0.9',
@@ -80,9 +92,10 @@ export function computeRisks(m: Model): ReportModel['risks'] {
     });
   }
   if (d.coverage_ratio != null && d.coverage_ratio < 1) {
+    const pct = (d.coverage_ratio * 100).toFixed(0);
     push({
-      risk_zh: `捕获需求仅覆盖保本线 ${(d.coverage_ratio * 100).toFixed(0)}%`,
-      risk_en: `Captured demand covers only ${(d.coverage_ratio * 100).toFixed(0)}% of break-even`,
+      risk_zh: f.rent_excluded ? `捕获需求仅覆盖保本线（不含租金）${pct}%` : `捕获需求仅覆盖保本线 ${pct}%`,
+      risk_en: f.rent_excluded ? `Captured demand covers only ${pct}% of break-even (excluding rent)` : `Captured demand covers only ${pct}% of break-even`,
       prob: d.coverage_ratio < 0.8 ? 'high' : 'medium',
       impact_usd: f.breakeven_monthly != null && d.captured_monthly_usd != null ? Math.round(f.breakeven_monthly - d.captured_monthly_usd) : null,
       trigger: '开业 6 个月月营收 < 保本线',
