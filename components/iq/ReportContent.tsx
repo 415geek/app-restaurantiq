@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { rememberPaidReport } from '@/components/iq/SupportBubble';
 import Link from 'next/link';
 import { useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
@@ -247,6 +248,9 @@ export function ReportContent({
   staticMapUrl = null,
 }: Props) {
   const [lang, setLang] = useState<'en' | 'zh'>(initialLang);
+  useEffect(() => {
+    rememberPaidReport(report.id, report.location);
+  }, [report.id, report.location]);
   const [linkedLocally, setLinkedLocally] = useState(false);
   const handleReportLinked = useCallback(() => setLinkedLocally(true), []);
   const [fullByLang, setFullByLang] = useState<Record<'en' | 'zh', FullReportView | null>>(() => ({
