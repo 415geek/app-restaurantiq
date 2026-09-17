@@ -96,7 +96,7 @@ export interface CompetitorEngineInput {
    * the query-hit path of the L1 rule and the void guard; omit for alternative
    * cuisines, whose candidates were not searched for.
    */
-  l1_query?: { layers_tried: string[]; radius_m: number | null } | null;
+  l1_query?: { layers_tried: string[]; radius_m: number | null; pool_truncated?: boolean } | null;
 }
 
 export interface CompetitorEngineResult {
@@ -509,6 +509,12 @@ export function assessCategoryGap(input: {
   profile: ConceptSearchProfile;
   /** True when D6 completed BOTH Layer-1 radii (direct@800 and direct@1600). */
   both_radii_searched: boolean;
+  /**
+   * 底层重构 §3.1 / INV-1: some search area was still at the API's per-call cap.
+   * "We did not find one" is then a statement about the search, not the world,
+   * so a gap claim is downgraded to `unknown` however clean the rest looks.
+   */
+  pool_truncated?: boolean;
 }): CategoryGapAssessment {
   const also: AlsoSellingStore[] = [];
   let unknown = 0;
@@ -535,6 +541,7 @@ export function assessCategoryGap(input: {
 
   let category_gap: CategoryGapAssessment['category_gap'];
   if (input.l1_count > 0 || also.length > 0) category_gap = 'false';
+  else if (input.pool_truncated) category_gap = 'unknown';
   else if (!input.both_radii_searched) category_gap = 'unknown';
   else if (input.layer2.length > 0 && unknown === input.layer2.length) category_gap = 'unknown';
   else category_gap = 'true';
@@ -678,7 +685,7 @@ export function computeCompetitors(input: CompetitorEngineInput): CompetitorEngi
     .map((m) => ({ id: m.id, name: m.name, categories: m.categories }));
 
   // §4.2 (P0-B): the hard constraint on a category-gap claim — both keyword radii AND a text probe of Layer 2.
-  const gap = assessCategoryGap({ l1_count: l1.length, layer2: l2m, profile, both_radii_searched: bothRadii });
+  const gap = assessCategoryGap({ l1_count: l1.length, layer2: l2m, profile, both_radii_searched: bothRadii, pool_truncated: input.l1_query?.pool_truncated === true });
 
   // §4.4 (P1-a): one set of counts. L3 substitutes and brand anchors stay outside `total`.
   const countedMerged = [...l1m, ...l2m];

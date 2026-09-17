@@ -14,22 +14,39 @@ function q(s: DataStatusLike | undefined): number {
 }
 type DataStatusLike = Pick<DataResult<unknown>, 'status' | 'coverage_note'>;
 
+/**
+ * 底层重构 §3.1 / INV-2: the Overture basemap is the PRIMARY source of competitor
+ * completeness and Google only supplements it. Scoring the pair with `max` let a
+ * report whose basemap had failed still take full marks for competitor data —
+ * the report said "餐饮门店底图未获取" on its methods page and scored the
+ * component 25% × 1.00 on the same run.
+ */
+const BASEMAP_WEIGHT = 0.6;
+const PLACES_WEIGHT = 0.4;
+
 export function computeConfidence(input: {
   sources: SourceStatusMap;
   guard_passed: boolean;
   user: Pick<SiteInput, 'rent_usd' | 'sqft' | 'seats' | 'capex_usd'>;
+  /** §3.1: a pool with a call still at the API's per-call cap is not a pool. */
+  pool_truncated?: boolean;
 }): ReportModel['confidence'] {
   const w = getDefaults().confidence_weights;
   const s = input.sources;
   const comp = (status: number, note: string) => ({ quality: status, note });
 
-  const compQ = input.guard_passed ? Math.max(q(s.D5), q(s.D6)) : 0;
+  const compQ = !input.guard_passed || input.pool_truncated ? 0 : BASEMAP_WEIGHT * q(s.D5) + PLACES_WEIGHT * q(s.D6);
+  const compNote = !input.guard_passed
+    ? '竞品守卫未通过'
+    : input.pool_truncated
+      ? '竞品检索触及单次返回上限，范围未穷尽'
+      : `D5 ${s.D5?.status ?? '—'} / D6 ${s.D6?.status ?? '—'}`;
   const provided = [input.user.rent_usd, input.user.sqft, input.user.seats].filter((x) => x != null).length;
   const userQ = provided >= 3 ? 1 : provided >= 1 ? 0.5 : 0;
 
   const components: ReportModel['confidence']['components'] = {
     acs: { weight: w.acs, ...comp(q(s.D2), s.D2?.coverage_note ?? '未获取') },
-    competitors: { weight: w.competitors, ...comp(compQ, input.guard_passed ? `D5 ${s.D5?.status ?? '—'} / D6 ${s.D6?.status ?? '—'}` : '竞品守卫未通过') },
+    competitors: { weight: w.competitors, ...comp(compQ, compNote) },
     traffic_proxy: { weight: w.traffic_proxy, ...comp(q(s.D7), s.D7?.coverage_note ?? '未获取') },
     rent_comps: { weight: w.rent_comps, ...comp(q(s.D8), s.D8?.coverage_note ?? '未获取') },
     daytime_pop: { weight: w.daytime_pop, ...comp(q(s.D3), s.D3?.coverage_note ?? '未获取') },

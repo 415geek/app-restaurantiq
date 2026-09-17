@@ -92,6 +92,15 @@ export interface GooglePlacesData {
   l1_search_radius_m: number | null;
   /** Direct-layer steps that completed, e.g. ['direct@800', 'direct@1600'] — a void claim needs both. */
   l1_layers_tried: string[];
+  /**
+   * 底层重构 §3.1: true when some area of the pool is still unexhausted — a call
+   * came back at the per-call cap and refining it either was not allowed or did
+   * not resolve it. A truncated pool may not be treated as the full set, which
+   * is what turned "Nearby returned 60" into "there are 60 restaurants here".
+   */
+  pool_truncated: boolean;
+  /** Labels of the calls still at the cap after refinement. */
+  truncated_calls: string[];
 }
 
 export interface GooglePlacesInput {
@@ -126,6 +135,10 @@ export interface PlaceCallOutcome extends PlaceCall {
   cache: 'hit' | 'miss' | 'skipped';
   results: number;
   error?: string;
+  /** 底层重构 §3.1: this call came back at the API's per-call cap, so its area is not exhausted. */
+  truncated?: boolean;
+  /** Set on the sub-cell calls a truncated parent was refined into. */
+  refined_from?: string;
 }
 
 const SOURCE_ID = 'D6' as const;
@@ -262,6 +275,38 @@ function callCacheKey(site: { lat: number; lng: number }, call: PlaceCall): stri
   return `${roundCoord(site.lat)},${roundCoord(site.lng)}:${what}:${call.radiusM}${call.restrict ? ':r' : ''}`;
 }
 
+/**
+ * 底层重构 §3.1: Places (New) returns at most this many records per call, so a
+ * call that comes back with exactly this many has almost certainly been cut off.
+ * In Chinatown, the San Gabriel Valley, Flushing or the Sunset — the markets this
+ * product exists for — that is the normal case, not the edge case.
+ */
+export const PLACES_PER_CALL_CAP = 20;
+/** Sub-cells a truncated call is split into. */
+const SUBDIVISION = 4;
+/** How many times one call may be refined; 2 levels turn one cell into at most 16. */
+const MAX_REFINE_DEPTH = 2;
+
+/**
+ * Split a call into four quadrant cells that together cover its circle. Each
+ * cell sits half a radius off centre and keeps 71% of the radius, which is the
+ * smallest radius that still covers the corners (½√2 ≈ 0.707).
+ */
+export function subdivideCall(call: PlaceCall, centre: { lat: number; lng: number }): Array<{ call: PlaceCall; centre: { lat: number; lng: number } }> {
+  const half = call.radiusM / 2;
+  const dLat = half / 111_320;
+  const dLng = half / (111_320 * Math.max(0.1, Math.cos((centre.lat * Math.PI) / 180)));
+  const cellRadius = Math.round(call.radiusM * 0.71);
+  const out: Array<{ call: PlaceCall; centre: { lat: number; lng: number } }> = [];
+  for (const [sLat, sLng] of [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const) {
+    out.push({
+      call: { ...call, radiusM: cellRadius, label: `${call.label}/${sLat > 0 ? 'n' : 's'}${sLng > 0 ? 'e' : 'w'}`, only_if_fewer_than: undefined },
+      centre: { lat: centre.lat + sLat * dLat, lng: centre.lng + sLng * dLng },
+    });
+  }
+  return out;
+}
+
 /** Bounding rectangle of the circle — Text Search (New) only restricts by rectangle; the circle is enforced client-side. */
 export function rectangleAround(site: { lat: number; lng: number }, radiusM: number): { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } } {
   const dLat = radiusM / 111_320;
@@ -284,10 +329,10 @@ async function nearby(ctx: FetchContext, key: string, site: { lat: number; lng: 
     ? {
         textQuery: call.textQuery,
         ...(call.includedTypes.length === 1 ? { includedType: call.includedTypes[0] } : {}),
-        maxResultCount: 20,
+        maxResultCount: PLACES_PER_CALL_CAP,
         ...(call.restrict ? { locationRestriction: { rectangle: rectangleAround(site, call.radiusM) } } : { locationBias: { circle } }),
       }
-    : { includedTypes: call.includedTypes, maxResultCount: 20, locationRestriction: { circle } };
+    : { includedTypes: call.includedTypes, maxResultCount: PLACES_PER_CALL_CAP, locationRestriction: { circle } };
   let res: Response;
   try {
     res = await fetchWithTimeout(ctx, call.textQuery ? TEXT_URL : NEARBY_URL, {
@@ -364,13 +409,22 @@ export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchCont
 
   const layerCount = (layer: PlaceLayer) => [...byId.values()].filter((p) => p.layers.includes(layer)).length;
 
-  for (const call of plan) {
+  // 底层重构 §3.1: the plan is a queue, not a list — a call that comes back at the
+  // per-call cap is re-run over four sub-cells, and those may refine again while
+  // budget lasts. `centre` is the cell's own centre; distances stay measured from
+  // the real site so a sub-cell hit still reports its true distance.
+  const queue: Array<{ call: PlaceCall; centre: { lat: number; lng: number }; depth: number }> = plan.map((call) => ({ call, centre: site, depth: 0 }));
+  const truncated = new Set<string>();
+  let refineBudget = Math.max(0, maxCalls - plan.length);
+
+  while (queue.length) {
+    const { call, centre, depth } = queue.shift() as { call: PlaceCall; centre: { lat: number; lng: number }; depth: number };
     // 先近后远: the wider Layer-1 radius runs only when the near one came back thin.
     if (call.only_if_fewer_than != null && call.layer && layerCount(call.layer) >= call.only_if_fewer_than) {
       outcomes.push({ ...call, cache: 'skipped', results: 0 });
       continue;
     }
-    const r = await nearby(ctx, key, site, call);
+    const r = await nearby(ctx, key, centre, call);
     if (r.ok) {
       succeeded++;
       if (r.cache === 'hit') cacheHits++;
@@ -380,13 +434,21 @@ export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchCont
         const p = toGooglePlace(raw, site, call.layer ? [call.layer] : []);
         if (!p) continue;
         // A restricted Text Search is only rectangle-restricted by Google: enforce the circle here.
-        if (call.restrict && p.distance_m > call.radiusM) continue;
+        if (call.restrict && haversineM(centre, p) > call.radiusM) continue;
         n++;
         mergePlace(byId, p);
       }
-      outcomes.push({ ...call, cache: r.cache, results: n });
+      const atCap = r.places.length >= PLACES_PER_CALL_CAP;
+      const cells = atCap && depth < MAX_REFINE_DEPTH && refineBudget >= SUBDIVISION ? subdivideCall(call, centre) : [];
+      if (cells.length) {
+        refineBudget -= cells.length;
+        for (const c of cells) queue.push({ ...c, depth: depth + 1 });
+      } else if (atCap) {
+        truncated.add(call.label);
+      }
+      outcomes.push({ ...call, cache: r.cache, results: n, ...(atCap ? { truncated: true } : {}), ...(depth ? { refined_from: call.label } : {}) });
       if (call.layer === 'direct') {
-        l1Tried.push(call.label);
+        if (!l1Tried.includes(call.label)) l1Tried.push(call.label);
         l1Radius = Math.max(l1Radius ?? 0, call.radiusM);
       }
       continue;
@@ -414,7 +476,7 @@ export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchCont
         error: fatal ?? errors.join('; '),
         cost_usd: costUsd,
       }),
-      data: { places: [], calls_made: networkCalls, api_status: 'error', calls: outcomes, l1_search_radius_m: null, l1_layers_tried: [] },
+      data: { places: [], calls_made: networkCalls, api_status: 'error', calls: outcomes, l1_search_radius_m: null, l1_layers_tried: [], pool_truncated: false, truncated_calls: [] },
       elapsed_ms: Date.now() - t0,
     };
   }
@@ -426,6 +488,7 @@ export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchCont
     `${plan.length} 步计划（执行 ${ran}）：成功 ${succeeded}（网络 ${networkCalls}，缓存 ${cacheHits}），去重后 ${places.length} 个地点，其中永久关闭 ${closed} 个。`,
     l1Radius != null ? `直接竞品关键词检索 ${l1Tried.map((l) => l.replace('direct@', '')).join(' → ')} m，命中 ${direct} 家。` : '直接竞品关键词检索未完成。',
   ];
+  const truncatedCalls = [...truncated];
   const data: GooglePlacesData = {
     places,
     calls_made: networkCalls,
@@ -433,7 +496,12 @@ export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchCont
     calls: outcomes,
     l1_search_radius_m: l1Radius,
     l1_layers_tried: l1Tried,
+    pool_truncated: truncatedCalls.length > 0,
+    truncated_calls: truncatedCalls,
   };
+  if (truncatedCalls.length) {
+    notes.push(`${truncatedCalls.length} 个检索仍触及单次返回上限（${truncatedCalls.join('、')}），该范围未穷尽：竞品池按「不完整」处理，不得据此判定品类空白。`);
+  }
   if (errors.length) {
     notes.push(`未完成：${errors.join('；')}${fatal ? '（已中止剩余调用）' : ''}。受影响类型的地点缺失，不做补估。`);
     return {

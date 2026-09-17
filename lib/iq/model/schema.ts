@@ -245,6 +245,12 @@ const reportModelShape = z.object({
   competitors: z.object({
     guard_passed: z.boolean(),
     guard_notes: z.array(z.string()),
+    /**
+     * 底层重构 §3.1: a Layer-1/2 search came back at the API's per-call cap, so
+     * its area was never exhausted. Defaults false so models stored before this
+     * field still parse — they simply make no truncation claim either way.
+     */
+    pool_truncated: z.boolean().default(false),
     candidates_total: z.number(),
     l1: z.array(competitorSchema),
     l2: z.array(competitorSchema),

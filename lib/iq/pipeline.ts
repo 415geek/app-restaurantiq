@@ -358,7 +358,7 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
     metro_sub_cuisine_total: bundle.overture?.data?.loaded ? (metroTotals[site.cuisine] ?? 0) : null,
     hub_median_density_per_10k_chinese: hubMedian,
     // §4.2: which Layer-1 radii D6 actually searched — the void guard needs both 800 and 1600 m.
-    l1_query: { layers_tried: googleData?.l1_layers_tried ?? [], radius_m: googleData?.l1_search_radius_m ?? null },
+    l1_query: { layers_tried: googleData?.l1_layers_tried ?? [], radius_m: googleData?.l1_search_radius_m ?? null, pool_truncated: googleData?.pool_truncated === true },
   });
   // The candidate pool is the 5-mi Overture base; without it the Layer-1 reach is what Google searched.
   const overtureLoadedForPool = Boolean(bundle.overture?.data?.loaded);
@@ -541,7 +541,7 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
   const sources = sourcesFromResults(bundle.results);
   const statusMap: SourceStatusMap = {};
   for (const r of bundle.results) statusMap[r.id] = { status: r.status, coverage_note: r.coverage_note };
-  const confidence = computeConfidence({ sources: statusMap, guard_passed: competitors.guard_passed, user: site });
+  const confidence = computeConfidence({ sources: statusMap, guard_passed: competitors.guard_passed, user: site, pool_truncated: googleData?.pool_truncated === true });
   const precheck_reasons: string[] = [];
   if (!competitors.guard_passed) precheck_reasons.push(...competitors.guard_notes);
   if (confidence.total < 60) precheck_reasons.push(`置信度 ${confidence.total} < 60`);
@@ -617,6 +617,7 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
     competitors: {
       guard_passed: competitors.guard_passed,
       guard_notes: competitors.guard_notes,
+      pool_truncated: googleData?.pool_truncated === true,
       candidates_total: competitors.candidates_total,
       l1: l1WithShare,
       l2: l2WithShare,

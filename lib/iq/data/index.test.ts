@@ -46,7 +46,7 @@ function stubFetchers(seen: GooglePlacesInput[]): Partial<Fetchers> {
     overture: down('D5') as Fetchers['overture'],
     google: async (i, c) => {
       seen.push(i);
-      return ok('D6', { places: [], calls_made: 0, api_status: 'ok' as const, calls: [], l1_search_radius_m: null, l1_layers_tried: [] }, c);
+      return ok('D6', { places: [], calls_made: 0, api_status: 'ok' as const, calls: [], l1_search_radius_m: null, l1_layers_tried: [], pool_truncated: false, truncated_calls: [] }, c);
     },
     traffic: down('D7') as Fetchers['traffic'],
     rent: down('D8') as Fetchers['rent'],

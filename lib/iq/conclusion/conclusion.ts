@@ -35,14 +35,59 @@ export function verdictThresholds(): { go: number; conditional: number } {
   return { go: v.go, conditional: v.conditional };
 }
 
+/** 底层重构 §4.3: below this completeness a GO may not be issued at all. */
+export const GO_MIN_COMPLETENESS = 80;
+/** …and below this, nothing above the neutral tier may be. */
+export const CONDITIONAL_MIN_COMPLETENESS = 55;
+
+export interface VerdictCapInput {
+  /** `confidence.total` — the weighted data completeness, 0–100. */
+  completeness?: number | null;
+  /** §3.1: a competitor search still at the API's per-call cap. */
+  poolTruncated?: boolean;
+  /** Any core source that came back degraded. */
+  coreSourceDegraded?: boolean;
+}
+
+/**
+ * 底层重构 §4.3 完整度 → 判定的硬联动.
+ *
+ * A verdict is a claim about the world, and its strength cannot exceed the
+ * strength of the evidence it rests on. The report that prompted this shipped
+ * `completeness = 75` and a failed competitor basemap and still printed GO.
+ *
+ * Returns the strongest verdict the evidence permits, so callers clamp rather
+ * than compute. `null` means the evidence does not support any verdict — the
+ * caller must say so instead of guessing.
+ */
+export function verdictCap(input: VerdictCapInput): Verdict | null {
+  if (input.poolTruncated) return null;
+  // Completeness omitted means the caller is not the one that knows the evidence
+  // (the pure score → verdict path); only an explicit number can clamp.
+  if (input.completeness == null) return input.coreSourceDegraded ? 'CONDITIONAL_GO' : 'GO';
+  if (input.completeness < CONDITIONAL_MIN_COMPLETENESS) return null;
+  if (input.completeness < GO_MIN_COMPLETENESS || input.coreSourceDegraded) return 'CONDITIONAL_GO';
+  return 'GO';
+}
+
+const VERDICT_RANK: Record<Verdict, number> = { NO_GO: 0, CONDITIONAL_GO: 1, GO: 2 };
+
 /**
  * Score → verdict. The missing-rent cap stays: without a real rent the model has
- * no occupancy cost, so a GO is only ever a CONDITIONAL GO.
+ * no occupancy cost, so a GO is only ever a CONDITIONAL GO. The §4.3 evidence cap
+ * applies on top: a weak-evidence run can be talked down but never up, and
+ * NO_GO is never capped — "the numbers do not work" needs no extra evidence.
  */
-export function verdictFromScore(total: number, opts: { rentMissing: boolean }): Verdict {
+export function verdictFromScore(total: number, opts: { rentMissing: boolean } & VerdictCapInput): Verdict {
   const t = verdictThresholds();
-  const v: Verdict = total >= t.go ? 'GO' : total >= t.conditional ? 'CONDITIONAL_GO' : 'NO_GO';
-  return opts.rentMissing && v === 'GO' ? 'CONDITIONAL_GO' : v;
+  let v: Verdict = total >= t.go ? 'GO' : total >= t.conditional ? 'CONDITIONAL_GO' : 'NO_GO';
+  if (opts.rentMissing && v === 'GO') v = 'CONDITIONAL_GO';
+  const cap = verdictCap(opts);
+  // A null cap means "not enough evidence to judge". Until the report carries a
+  // fourth badge for that, the honest floor is the neutral tier plus the reason
+  // the conclusion already records — never a confident GO.
+  const capped: Verdict = cap ?? 'CONDITIONAL_GO';
+  return VERDICT_RANK[v] > VERDICT_RANK[capped] ? capped : v;
 }
 
 /** The printed rule, generated from the ONE threshold set in defaults.yaml. */
@@ -70,7 +115,14 @@ export function conclusionFromModel(model: ReportModel): Conclusion {
     snapshot_id: snapshotIdFor(model.meta.report_id, model.meta.generated_at),
     data_as_of: model.meta.data_as_of,
     overall,
-    verdict: verdictFromScore(overall, { rentMissing: rent_excluded }),
+    verdict: verdictFromScore(overall, {
+      rentMissing: rent_excluded,
+      // §4.3: the conclusion is the one place that sees both the score and the
+      // evidence behind it, so this is where the evidence cap belongs.
+      completeness: model.confidence?.total ?? null,
+      poolTruncated: model.competitors?.pool_truncated === true,
+      coreSourceDegraded: model.competitors?.guard_passed === false,
+    }),
     dimensions: model.score.dimensions.map((d) => ({ id: d.id, score: d.score, weight: d.weight, weighted: d.weighted })),
     breakeven_monthly: f.breakeven_monthly ?? null,
     safety_monthly: f.safety_monthly ?? null,

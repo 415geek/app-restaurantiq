@@ -1,0 +1,103 @@
+/**
+ * 底层重构 §3.1 竞品池完整性契约 + INV-1 / INV-2.
+ *
+ * The defect these cover: Places (New) returns at most 20 records per call, so in
+ * Chinatown, the San Gabriel Valley, Flushing or the Sunset — the markets this
+ * product exists for — a search is truncated by default. The pool was then used
+ * as if it were the full set, which is how a report claimed "0 egg tart shops
+ * within a mile" 130 m from the most famous egg tart shop in San Francisco.
+ */
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { PLACES_PER_CALL_CAP, subdivideCall, type PlaceCall } from './google-places';
+import { assessCategoryGap } from '../engines/competitor';
+import { computeConfidence } from '../engines/confidence';
+import { conceptSearchProfile } from './search-profile';
+import { verdictCap, verdictFromScore } from '../conclusion/conclusion';
+import { haversineM } from '../geo';
+
+const CENTRE = { lat: 37.7946, lng: -122.4069 }; // 900 Grant Ave, San Francisco
+const call: PlaceCall = { includedTypes: ['bakery', 'cafe'], radiusM: 800, label: 'direct@800', textQuery: 'egg tart', layer: 'direct', restrict: true };
+
+test('§3.1 the four sub-cells together cover the parent circle', () => {
+  const cells = subdivideCall(call, CENTRE);
+  assert.equal(cells.length, 4);
+  for (const c of cells) assert.equal(c.call.radiusM, Math.round(800 * 0.71));
+
+  // Every point on the parent circle must fall inside at least one sub-cell,
+  // otherwise refinement would silently drop the ring it was meant to search.
+  for (let deg = 0; deg < 360; deg += 5) {
+    const rad = (deg * Math.PI) / 180;
+    const p = {
+      lat: CENTRE.lat + (800 * Math.cos(rad)) / 111_320,
+      lng: CENTRE.lng + (800 * Math.sin(rad)) / (111_320 * Math.cos((CENTRE.lat * Math.PI) / 180)),
+    };
+    const covered = cells.some((c) => haversineM(c.centre, p) <= c.call.radiusM + 1);
+    assert.ok(covered, `point at ${deg}° on the parent circle is in no sub-cell`);
+  }
+});
+
+test('§3.1 a sub-cell keeps the parent query and drops the 先近后远 gate', () => {
+  const gated: PlaceCall = { ...call, only_if_fewer_than: 5 };
+  for (const c of subdivideCall(gated, CENTRE)) {
+    assert.equal(c.call.textQuery, 'egg tart');
+    assert.deepEqual(c.call.includedTypes, ['bakery', 'cafe']);
+    // The parent already decided the search is warranted; re-applying the
+    // "only if thin" gate to its own sub-cells would skip most of them.
+    assert.equal(c.call.only_if_fewer_than, undefined);
+    assert.match(c.call.label, /^direct@800\/(n|s)(e|w)$/);
+  }
+});
+
+test('INV-1 a truncated pool can never support a category-gap claim', () => {
+  const profile = conceptSearchProfile('egg_tart');
+  const clean = assessCategoryGap({ l1_count: 0, layer2: [], profile, both_radii_searched: true });
+  assert.equal(clean.category_gap, 'true', 'exhausted search with no hits may still claim a gap');
+
+  const truncated = assessCategoryGap({ l1_count: 0, layer2: [], profile, both_radii_searched: true, pool_truncated: true });
+  assert.equal(truncated.category_gap, 'unknown', '"we did not find one" is a fact about the search, not the world');
+});
+
+test('INV-2 a failed basemap can no longer take full marks for competitor data', () => {
+  const user = { rent_usd: null, sqft: null, seats: null, capex_usd: null };
+  const basemapOk = computeConfidence({ sources: { D5: { status: 'ok' as const, coverage_note: '' }, D6: { status: 'ok' as const, coverage_note: '' } }, guard_passed: true, user });
+  const basemapFailed = computeConfidence({ sources: { D5: { status: 'failed' as const, coverage_note: '未获取' }, D6: { status: 'ok' as const, coverage_note: '' } }, guard_passed: true, user });
+
+  assert.equal(basemapOk.components.competitors.quality, 1);
+  // The shipped report printed "餐饮门店底图未获取" and scored this component
+  // 1.00 on the same run, because the two sources were combined with `max`.
+  assert.ok(basemapFailed.components.competitors.quality < 1, 'a failed primary source must cost quality');
+  assert.equal(Math.round(basemapFailed.components.competitors.quality * 100), 40);
+  assert.ok(basemapFailed.total < basemapOk.total);
+});
+
+test('INV-2 a truncated pool zeroes the competitor component whatever the sources say', () => {
+  const user = { rent_usd: null, sqft: null, seats: null, capex_usd: null };
+  const c = computeConfidence({ sources: { D5: { status: 'ok' as const, coverage_note: '' }, D6: { status: 'ok' as const, coverage_note: '' } }, guard_passed: true, user, pool_truncated: true });
+  assert.equal(c.components.competitors.quality, 0);
+  assert.match(c.components.competitors.note, /上限/);
+});
+
+test('§4.3 the evidence cap: completeness and truncation bound the verdict', () => {
+  assert.equal(verdictCap({ completeness: 90 }), 'GO');
+  assert.equal(verdictCap({ completeness: 80 }), 'GO');
+  // The report that prompted this: completeness 75 with a failed basemap, printed GO.
+  assert.equal(verdictCap({ completeness: 75 }), 'CONDITIONAL_GO');
+  assert.equal(verdictCap({ completeness: 90, coreSourceDegraded: true }), 'CONDITIONAL_GO');
+  assert.equal(verdictCap({ completeness: 54 }), null, 'below 55 no verdict is supported');
+  assert.equal(verdictCap({ completeness: 95, poolTruncated: true }), null, 'an unexhausted search supports no verdict');
+});
+
+test('§4.3 the cap clamps a verdict down and never lifts one up', () => {
+  assert.equal(verdictFromScore(95, { rentMissing: false }), 'GO', 'no completeness given → the pure score path is unchanged');
+  assert.equal(verdictFromScore(95, { rentMissing: false, completeness: 75 }), 'CONDITIONAL_GO');
+  assert.equal(verdictFromScore(95, { rentMissing: false, completeness: 95, poolTruncated: true }), 'CONDITIONAL_GO');
+  assert.equal(verdictFromScore(30, { rentMissing: false, completeness: 95 }), 'NO_GO', 'good data never rescues bad numbers');
+  assert.equal(verdictFromScore(30, { rentMissing: false, completeness: 20 }), 'NO_GO', 'and poor data never softens them either');
+});
+
+test('§3.1 the per-call cap constant is what the request actually asks for', () => {
+  // If these ever diverge, truncation detection silently stops firing.
+  assert.equal(PLACES_PER_CALL_CAP, 20, 'Places (New) maxResultCount ceiling');
+});
