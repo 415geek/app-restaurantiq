@@ -3,10 +3,17 @@
  *
  * The app's root layout still wraps this (Next.js allows a single root
  * layout), so print.css forces the light tokens with `!important` and
- * `color-scheme: light only`; prefers-color-scheme has no effect. Fonts come
- * from Google Fonts (Noto Serif SC for titles, Noto Sans SC for body, Inter for
- * numerals) with a real system fallback stack —
- * if the stylesheet cannot load, the page still renders with system CJK fonts.
+ * `color-scheme: light only`; prefers-color-scheme has no effect. Fonts are
+ * self-hosted (Noto Serif SC for titles, Noto Sans SC for body, Inter for
+ * numerals) behind the same system fallback stack, so the page still renders
+ * with system CJK fonts if a face fails to load.
+ *
+ * They are self-hosted rather than loaded from Google Fonts because the CSS API
+ * splits every CJK family into ~100 `unicode-range` slices. Chromium embedded
+ * each slice the document touched as its own Type3 font — 464 of them, about
+ * 4 MB — which put the Chinese PDF over the 5 MB smoke cap while the English
+ * one, touching only Latin slices, came in at 1.35 MB. One face per weight lets
+ * Chromium embed a single subset of the glyphs actually used instead.
  *
  * A tiny inline script sets `window.__REPORT_READY__ = true` once the window
  * has loaded and `document.fonts.ready` resolved; lib/iq/render/pdf.ts waits
@@ -14,14 +21,24 @@
  */
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import '@fontsource/inter/latin-400.css';
+import '@fontsource/inter/latin-500.css';
+import '@fontsource/inter/latin-600.css';
+import '@fontsource/inter/latin-700.css';
+import '@fontsource/inter/latin-800.css';
+import '@fontsource/noto-sans-sc/chinese-simplified-400.css';
+import '@fontsource/noto-sans-sc/chinese-simplified-500.css';
+import '@fontsource/noto-sans-sc/chinese-simplified-600.css';
+import '@fontsource/noto-sans-sc/chinese-simplified-700.css';
+import '@fontsource/noto-serif-sc/chinese-simplified-600.css';
+import '@fontsource/noto-serif-sc/chinese-simplified-700.css';
+import '@fontsource/noto-serif-sc/chinese-simplified-900.css';
 import './print.css';
 
 export const metadata: Metadata = {
   title: 'RestaurantIQ · 360° 选址报告',
   robots: { index: false, follow: false },
 };
-
-const FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@600;700;900&display=swap';
 
 const READY_SCRIPT = `(function(){
   var done=false;
@@ -34,9 +51,6 @@ const READY_SCRIPT = `(function(){
 export default function PrintLayout({ children }: { children: ReactNode }) {
   return (
     <div className="print-root" data-print-root="">
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link rel="stylesheet" href={FONTS_HREF} />
       {children}
       <script dangerouslySetInnerHTML={{ __html: READY_SCRIPT }} />
     </div>

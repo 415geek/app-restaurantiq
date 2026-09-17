@@ -496,7 +496,7 @@ function Page4({ model, lang }: PageProps) {
   const R = S.p4.rows;
   const zh = c.lang === 'zh';
   const cuisine = zh ? m.input.cuisine_label_zh : cuisineName(m.input, c.lang);
-  const rows: Array<{ key: string; label: string; en: string; get: (r: ReportModel['trade_area']['rings'][number]) => string; county: string }> = [
+  const allRows: Array<{ key: string; label: string; en: string; get: (r: ReportModel['trade_area']['rings'][number]) => string; county: string }> = [
     { key: 'pop', label: R.pop, en: 'Population', get: (r) => F.int(r.pop), county: NOT_APPLICABLE },
     { key: 'hh', label: R.hh, en: 'Households', get: (r) => F.int(r.hh), county: NOT_APPLICABLE },
     { key: 'income', label: R.income, en: 'Median HH income', get: (r) => F.usd(r.median_income), county: F.usd(cb.median_income) },
@@ -510,49 +510,55 @@ function Page4({ model, lang }: PageProps) {
     { key: 'family', label: R.family, en: 'Families w/ children', get: (r) => F.pct(r.family_share, 1), county: NOT_APPLICABLE },
     { key: 'area', label: R.area, en: 'Area (sq mi)', get: (r) => F.num(r.area_sq_mi, 2), county: NOT_APPLICABLE },
   ];
+  // §4.6 (P1-d): a metric missing for more than half the rings is dropped from the table
+  // rather than printed as a row of 「未获取」; the missing sources are named on page 14.
+  const rows = allRows.filter((row) => collapseIfSparse(rings, (r) => [row.get(r) === S.na ? null : row.get(r)]).length > 0);
   const jobsMethod = rings.find((r) => r.jobs_method !== 'none')?.jobs_method;
   const jobsMethodText = jobsMethod === 'lodes_wac' ? S.p4.jobsLodes : jobsMethod === 'acs_b08301_estimate' ? S.p4.jobsAcs : S.na;
   return (
     <PageShell c={c} model={m} pageId="page_4" chips={<SourceChips model={m} ids={['D2', 'D3', 'D10']} model_labels={[fill(S.p4.chipShare, { pct: F.pct(m.demand.cuisine_share, 1) })]} lang={c.lang} />}>
-      <table className="data-table ring-table">
-        <thead>
-          <tr>
-            <th className="row-head">{S.p4.metric}</th>
-            {rings.map((r) => (
-              <th key={r.id} className={r.id === m.trade_area.primary_ring ? 'primary' : undefined}>
-                {zh ? S.ring[r.id].label : S.ring[r.id].short}
-                <span className="th-en">
-                  {zh ? `${r.id === 'walk10' ? 'walk' : 'drive'} ${r.minutes}` : ''}
-                  {r.id === m.trade_area.primary_ring ? `${zh ? ' · ' : ''}${S.p4.primaryTag}` : zh ? '' : ' '}
-                </span>
-              </th>
-            ))}
-            <th className="county">
-              {S.p4.county}
-              <span className="th-en">{m.geo.county_name ?? m.geo.county}</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.key}>
-              <th className="row-head">
-                {row.label}
-                {zh ? <span className="th-en">{row.en}</span> : null}
-              </th>
+      {rows.length === 0 ? null : (
+        <table className="data-table ring-table">
+          <thead>
+            <tr>
+              <th className="row-head">{S.p4.metric}</th>
               {rings.map((r) => (
-                <Cell key={r.id} num className={r.id === m.trade_area.primary_ring ? 'primary' : undefined} na={S.na}>
-                  {row.get(r)}
-                </Cell>
+                <th key={r.id} className={r.id === m.trade_area.primary_ring ? 'primary' : undefined}>
+                  {zh ? S.ring[r.id].label : S.ring[r.id].short}
+                  <span className="th-en">
+                    {zh ? `${r.id === 'walk10' ? 'walk' : 'drive'} ${r.minutes}` : ''}
+                    {r.id === m.trade_area.primary_ring ? `${zh ? ' · ' : ''}${S.p4.primaryTag}` : zh ? '' : ' '}
+                  </span>
+                </th>
               ))}
-              <Cell num className="county" na={S.na}>
-                {row.county}
-              </Cell>
+              <th className="county">
+                {S.p4.county}
+                <span className="th-en">{m.geo.county_name ?? m.geo.county}</span>
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key}>
+                <th className="row-head">
+                  {row.label}
+                  {zh ? <span className="th-en">{row.en}</span> : null}
+                </th>
+                {rings.map((r) => (
+                  <Cell key={r.id} num className={r.id === m.trade_area.primary_ring ? 'primary' : undefined} na={S.na}>
+                    {row.get(r)}
+                  </Cell>
+                ))}
+                <Cell num className="county" na={S.na}>
+                  {row.county}
+                </Cell>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       <p className="table-note">{fill(S.p4.note, { jobs: jobsMethodText })}</p>
+      {rows.length < allRows.length ? <p className="table-note">{S.sparse}</p> : null}
       <XRef>{S.p4.xref}</XRef>
     </PageShell>
   );
@@ -569,7 +575,11 @@ function Page5({ model, lang }: PageProps) {
   const [lunch, dinner] = m.audience.lunch_dinner_split;
   // §4.3: the four dayparts of THIS concept. A model stored before §4.3 has none and
   // falls back to the old lunch / dinner bar — it is never re-derived here.
-  const dayparts = m.demand.dayparts ?? [];
+  // §4.6 (P1-d): a daypart table more than half of whose shares / dollars are missing
+  // collapses to the lunch / dinner bar instead of printing 「未获取」 four times.
+  const dayparts = collapseIfSparse(m.demand.dayparts ?? [], (d) => [d.share, d.monthly_usd]);
+  // …and the segment-basis table collapses to its one explanatory line the same way.
+  const basisRows = collapseIfSparse(segs, (s) => [s.basis]);
   return (
     <PageShell c={c} model={m} pageId="page_5" chips={<SourceChips model={m} ids={['D2', 'D3']} model_labels={[S.p5.chipIndex, S.p5.chipSplit]} lang={c.lang} />}>
       <h2 className="h2">{S.p5.segments}</h2>
@@ -623,9 +633,10 @@ function Page5({ model, lang }: PageProps) {
         </div>
         <div>
           <h2 className="h2">{S.p5.basis}</h2>
+          {basisRows.length === 0 ? <p className="table-note">{S.sparse}</p> : null}
           <table className="data-table compact">
             <tbody>
-              {segs.map((s) => (
+              {basisRows.map((s) => (
                 <tr key={s.id}>
                   <th>
                     {s.label}
@@ -874,7 +885,7 @@ function Page7({ model, lang }: PageProps) {
       </p>
       {/* §4.6 (P1-d): the nearby-Chinese fallback benchmark fills the hole a thin direct-competitor set leaves. */}
       {cards.length < 4 && otherChinese.length > 0 ? (
-        <>
+        <div className="p7-other">
           <h2 className="h2">{S.p7.otherChinese}</h2>
           <table className="data-table compact">
             <thead>
@@ -901,7 +912,7 @@ function Page7({ model, lang }: PageProps) {
             </tbody>
           </table>
           <p className="table-note">{fill(S.p7.otherChineseNote, { l1: cards.length, total: m.competitors.l2.length, rated: ratedL2.length, n: otherChinese.length })}</p>
-        </>
+        </div>
       ) : null}
       {anchorRows.length ? (
         <>
@@ -1498,6 +1509,9 @@ function Page13({ model, lang }: PageProps) {
   const { S } = c;
   const m = model;
   const missing = m.finance.inputs_missing;
+  const noAmountRisks = unquantifiedRisks(m);
+  /** How full the left panel is — a long checklist tightens the 90-day timeline so the page keeps its box. */
+  const checklistItems = m.score.conditions.length + missing.length + noAmountRisks.length;
   return (
     <PageShell c={c} model={m} pageId="page_13" chips={<SourceChips model={m} ids={['D12']} model_labels={[S.p13.chipConditions]} extra={[{ kind: 'model' as SourceKind, label: S.p13.chipChecklist }]} lang={c.lang} />}>
       <div className="two-col">
@@ -1521,7 +1535,7 @@ function Page13({ model, lang }: PageProps) {
               </li>
             ))}
             {/* §4.6 (P1-c): a risk with no derivable amount is settled here in words rather than shown as a $0 table row. */}
-            {unquantifiedRisks(m).map((r) => (
+            {noAmountRisks.map((r) => (
               <li key={`r${r.id}`} className="risk-item">
                 <span className="box" />
                 <span>
@@ -1534,7 +1548,7 @@ function Page13({ model, lang }: PageProps) {
                 </span>
               </li>
             ))}
-            {m.score.conditions.length === 0 && missing.length === 0 && unquantifiedRisks(m).length === 0 ? (
+            {checklistItems === 0 ? (
               <li>
                 <span className="box" />
                 <span>{S.p13.nothing}</span>
@@ -1555,7 +1569,7 @@ function Page13({ model, lang }: PageProps) {
         </div>
       </div>
       <h2 className="h2">{S.p13.plan}</h2>
-      <Timeline steps={S.p13.steps} lang={c.lang} />
+      <Timeline steps={S.p13.steps} lang={c.lang} dense={checklistItems > 5} />
     </PageShell>
   );
 }

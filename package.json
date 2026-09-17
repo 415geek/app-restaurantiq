@@ -15,6 +15,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
     "@clerk/nextjs": "^6.38.1",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/noto-sans-sc": "^5.3.0",
+    "@fontsource/noto-serif-sc": "^5.3.0",
     "@hookform/resolvers": "^5.2.2",
     "@sparticuz/chromium": "^143.0.4",
     "@supabase/supabase-js": "^2.99.1",

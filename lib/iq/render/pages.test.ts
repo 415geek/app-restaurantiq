@@ -123,3 +123,78 @@ test('page 7: brand anchors render as a city-wide table and tag overlapping L1 c
     assert.ok(p7.includes(S.p7.yes) && p7.includes(S.p7.no), `${lang}: in_trade_area yes/no cells missing`);
   }
 });
+
+/* 评审 Spec §4.6 PDF 交付质量 (P1-c / P1-d) ------------------------------- */
+
+test('P1-c: the risk register table carries only quantified risks; the rest are checklist prose', () => {
+  const model = loadModel();
+  const priced = model.risks.filter((r) => r.impact_usd != null);
+  const unpriced = model.risks.filter((r) => r.impact_usd == null);
+  assert.ok(priced.length > 0 && unpriced.length > 0, 'the fixture exercises both kinds of risk');
+  for (const lang of LOCALES) {
+    const html = render(model, lang);
+    const S = strings(lang);
+    const p12 = pageOf(html, 12);
+    const p13 = pageOf(html, 13);
+    const rows = p12.match(/<tr>[\s\S]*?<\/tr>/g) ?? [];
+    const bodyRows = rows.filter((r) => /class="dot"/.test(r));
+    assert.equal(bodyRows.length, priced.length, `${lang}: the register table has one row per quantified risk`);
+    for (const r of bodyRows) assert.ok(!r.includes(`>${S.na}<`), `${lang}: a register row prints the 'not available' placeholder: ${r.slice(0, 120)}`);
+    // the total is a real number, never $0, and each amount travels with its formula
+    const total = priced.reduce((a, r) => a + (r.impact_usd ?? 0), 0);
+    assert.ok(total > 0);
+    assert.ok(p12.includes(`$${total.toLocaleString('en-US')}`), `${lang}: page 12 does not print the quantified total`);
+    assert.equal((p12.match(/class="cell-formula"/g) ?? []).length, priced.length, `${lang}: every amount needs its formula`);
+    // the unquantified ones are named on page 12 and written out on page 13
+    assert.ok(p12.includes(longestLiteral(S.p12.unquantifiedNote)), `${lang}: page 12 lacks the "risks without an amount" line`);
+    assert.ok(p13.includes(S.p13.riskNoAmount), `${lang}: page 13 does not carry the unquantified risks`);
+    assert.equal((p13.match(/class="risk-item"/g) ?? []).length, unpriced.length, `${lang}: page 13 must list every unquantified risk`);
+  }
+});
+
+test('P1-c: with every risk quantified, page 12 shows no "risks without an amount" line', () => {
+  const base = loadModel();
+  const model: ReportModel = {
+    ...base,
+    risks: base.risks.map((r) => (r.impact_usd == null ? { ...r, impact_usd: 1234, impact_formula_zh: '测试 $1,234', impact_formula_en: 'test $1,234', unquantified_zh: null, unquantified_en: null } : r)),
+  };
+  for (const lang of LOCALES) {
+    const S = strings(lang);
+    const html = render(model, lang);
+    assert.ok(!pageOf(html, 12).includes(longestLiteral(S.p12.unquantifiedNote)), `${lang}: the "N without an amount" line must only appear when such rows exist`);
+    assert.ok(!pageOf(html, 13).includes('class="risk-item"'), `${lang}: nothing to fold into the checklist`);
+  }
+});
+
+test('P1-d: a review-count distribution that is more than half missing collapses instead of printing 「未获取」', () => {
+  const base = loadModel();
+  // the P1-d bug itself: every Layer-1 store without a review count
+  const model: ReportModel = {
+    ...base,
+    competitors: { ...base.competitors, l1: base.competitors.l1.map((x) => ({ ...x, rating_count: null, rating: null })) },
+  };
+  for (const lang of LOCALES) {
+    const html = render(model, lang);
+    const S = strings(lang);
+    const p7 = pageOf(html, 7);
+    assert.ok(!p7.includes(P7_TITLE[lang]), `${lang}: the distribution heading must be gone, not printed over empty bars`);
+    assert.ok(p7.includes(S.sparse), `${lang}: the collapsed block must say why`);
+    // and the page still carries content: the nearby-Chinese fallback benchmark
+    assert.ok(p7.includes(S.p7.otherChinese), `${lang}: page 7 must fall back to the nearby-Chinese benchmark`);
+  }
+});
+
+/** The longest literal run of a `{placeholder}` template — what to look for in the rendered page. */
+function longestLiteral(template: string): string {
+  return template
+    .split(/\{\w+\}/)
+    .map((s) => s.trim())
+    .sort((a, b) => b.length - a.length)[0];
+}
+
+/** Heading of the Layer-1 review-count block (pages.tsx → P7_REVIEW_DIST). */
+const P7_TITLE: Record<Locale, string> = {
+  zh: '同类竞品评论量分布',
+  en: 'Layer-1 review-count distribution',
+  es: 'Distribución de reseñas de competidores directos',
+};

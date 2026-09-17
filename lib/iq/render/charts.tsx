@@ -421,11 +421,14 @@ export function RiskMatrix({ risks, lang = DEFAULT_LOCALE }: { risks: Array<{ id
 /* ------------------------------------------------------------------ */
 /* 90-day timeline (page 13)                                            */
 /* ------------------------------------------------------------------ */
-export function Timeline({ steps, lang = DEFAULT_LOCALE }: { steps: Array<{ day: string; label: string }>; lang?: Locale }) {
+export function Timeline({ steps, lang = DEFAULT_LOCALE, dense = false }: { steps: Array<{ day: string; label: string }>; lang?: Locale; dense?: boolean }) {
   // Latin editions wrap longer labels on the same page: a wider, tighter viewBox renders ~25 % shorter.
   const compact = lang !== 'zh';
   const W = compact ? 520 : 420;
-  const rowH = compact ? 20 : 22;
+  // §4.6 (P1-c): the checklist above this timeline also carries the risks that have no
+  // amount, so a long checklist tightens the rows (the viewBox width is unchanged, so the
+  // labels keep their size — only the spacing closes up).
+  const rowH = dense ? (compact ? 15 : 17) : compact ? 20 : 22;
   const H = 40 + steps.length * rowH;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={strings(lang).chart.timelineAria}>
