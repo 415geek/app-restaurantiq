@@ -12,14 +12,17 @@
  *     品牌锚点      city-wide brands (≥ 500 reviews, top 5) — reported, never counted
  * 3.5 metrics, 3.6 U-shaped cluster score, 3.7 void analysis, 3.9 data-integrity guard
  *     (a Layer-1 void may only be claimed after both keyword radii, 800 m and 1600 m, were searched)
+ * §4.2 P0-B 品类空白判定加硬约束 — `assessCategoryGap`: 0 keyword hits is not a gap;
+ *     the same-category stores have to be cleared by a menu / review / editorial text probe first.
+ * §4.4 P1-a 计数单一化 — `counts`: the one count set every surface prints.
  *
  * Pure: no I/O. The LLM classifier is an injected async function so the engine
  * stays deterministic in tests.
  */
 import { haversineM, METERS_PER_MILE, pointInGeometry } from '../geo';
 import type { Geometry, LatLng } from '../data/types';
-import { conceptSearchProfile, isChineseCategory, matchesLayer1, typesMatch, type ConceptSearchProfile } from '../data/search-profile';
-import type { BrandAnchor, Competitor, Ring } from '../model/schema';
+import { conceptSearchProfile, findKeywordQuote, isChineseCategory, matchesLayer1, nameMatchesKeywords, typesMatch, type ConceptSearchProfile } from '../data/search-profile';
+import type { AlsoSellingStore, BrandAnchor, Competitor, CompetitorCounts, Ring } from '../model/schema';
 import { classifyCuisineText, cuisineById, getDefaults, getTaxonomy } from '../params';
 
 /** §4.2 layer of the Places query that returned a Google record. */
@@ -49,6 +52,14 @@ export interface CandidatePoi {
   sub_cuisine_method?: 'rule' | 'keyword' | 'llm' | null;
   /** Google records: which §4.2 plan steps returned them. */
   layers?: CandidateLayer[];
+  /**
+   * §4.2 品类空白判定 text probe inputs. Google `reviews[].text` (D6 field mask)
+   * and `editorialSummary`; `menu_text` where a Yelp menu was already fetched.
+   * All three absent = the store is `unknown`, never "does not sell it".
+   */
+  review_texts?: string[] | null;
+  editorial_summary?: string | null;
+  menu_text?: string | null;
 }
 
 export interface MergedPoi extends CandidatePoi {
@@ -115,6 +126,18 @@ export interface CompetitorEngineResult {
     conditions: { chinese_pop_ok: boolean; density_ok: boolean; l2_ok: boolean };
   };
   metro_sub_cuisine_total: number | null;
+  /** §4.2 品类空白判定加硬约束 (P0-B). */
+  category_gap: CategoryGapAssessment['category_gap'];
+  also_selling: AlsoSellingStore[];
+  also_selling_unknown_count: number;
+  coverage_discount: number | null;
+  coverage_adjustment: string | null;
+  /**
+   * §4.4 计数单一化 (P1-a): the ONE set of counts. `anchors` is filled by the
+   * pipeline once the city-wide brand anchors are selected (they come from the
+   * unfiltered pool); every other field is final here.
+   */
+  counts: CompetitorCounts;
   /** Set by the pipeline: candidate pool radius and the nearest same-cuisine restaurant beyond it. */
   pool_radius_mi?: number;
   l1_nearest_outside_pool?: { name: string; distance_mi: number } | null;
@@ -217,6 +240,10 @@ export function dedupeCandidates(site: LatLng, candidates: CandidatePoi[]): Merg
       else existing.ids.overture = c.id;
       if (!existing.sources.includes(c.source)) existing.sources.push(c.source);
       for (const l of c.layers ?? []) if (!existing.layers.includes(l)) existing.layers.push(l);
+      // §4.2 probe text is evidence: one source may carry reviews the other lacks — keep the union.
+      if (c.review_texts?.length) existing.review_texts = [...new Set([...(existing.review_texts ?? []), ...c.review_texts])];
+      existing.editorial_summary = existing.editorial_summary ?? c.editorial_summary ?? null;
+      existing.menu_text = existing.menu_text ?? c.menu_text ?? null;
       // Google carries the fresher quality/status signal; Overture the taxonomy.
       if (c.source === 'google') {
         existing.rating = c.rating ?? existing.rating;
@@ -250,6 +277,9 @@ export function dedupeCandidates(site: LatLng, candidates: CandidatePoi[]): Merg
       classified_by: cls.method ?? 'unclassified',
       distance_m: haversineM(site, c),
       layers: [...(c.layers ?? [])],
+      review_texts: c.review_texts ? [...c.review_texts] : null,
+      editorial_summary: c.editorial_summary ?? null,
+      menu_text: c.menu_text ?? null,
     });
   }
   return merged;
@@ -297,6 +327,10 @@ export function isLayer1(m: Pick<MergedPoi, 'name' | 'name_zh' | 'categories' | 
   // A category-mapping rule is not: a `bakery`-typed record maps to the sibling `bakery` id, which says nothing
   // about whether the Layer-1 keyword query that returned it was right — the profile match below decides.
   if (specific && specific !== profile.id && m.classified_by !== 'rule') return false;
+  // A name carrying the concept's own keywords ("Golden Gate Egg Tart") is self-sufficient
+  // evidence: it stands whether or not the Layer-1 query returned this record, and outranks
+  // a category-mapping rule that only saw a generic `bakery` type.
+  if (nameMatchesKeywords(`${m.name} ${m.name_zh ?? ''}`, profile.keywords)) return true;
   if (!queryHitsEnabled || !m.layers.includes('direct')) return false;
   return matchesLayer1(`${m.name} ${m.name_zh ?? ''}`, [m.primary_category, ...m.categories], profile);
 }
@@ -428,6 +462,94 @@ export function clusterScoreFor(count: number, coverageRatio: number | null): nu
 /** The two Layer-1 radii a void claim needs (labels as D6 reports them). */
 export const L1_VOID_RADII_LABELS = ['direct@800', 'direct@1600'] as const;
 
+/** §4.2: demand coverage factor when a gap claim rests on stores the text probe could not verify. */
+export const COVERAGE_UNVERIFIED_DISCOUNT = 0.8;
+
+export interface CategoryGapAssessment {
+  /** 'true' only when both §4.2 conditions hold; 'unknown' when the probe could not decide. */
+  category_gap: 'true' | 'false' | 'unknown';
+  also_selling: AlsoSellingStore[];
+  also_selling_unknown_count: number;
+  coverage_discount: number | null;
+  coverage_adjustment: string | null;
+}
+
+type ProbeText = { evidence: AlsoSellingStore['evidence']; text: string };
+
+/** Menu first, then the editorial blurb, then reviews — strongest evidence wins the quote. */
+function probeTextsOf(m: Pick<MergedPoi, 'review_texts' | 'editorial_summary' | 'menu_text'>): ProbeText[] {
+  const out: ProbeText[] = [];
+  if (m.menu_text?.trim()) out.push({ evidence: 'menu', text: m.menu_text });
+  if (m.editorial_summary?.trim()) out.push({ evidence: 'editorial', text: m.editorial_summary });
+  for (const t of m.review_texts ?? []) if (t?.trim()) out.push({ evidence: 'review', text: t });
+  return out;
+}
+
+/**
+ * 评审 Spec §4.2 品类空白判定加硬约束 (P0-B).
+ *
+ *   category_gap = TRUE  iff
+ *     (1) the Layer-1 keyword search at 0.5 mi AND 1 mi returned 0 hits, AND
+ *     (2) among the Layer-2 (same-category) stores, the number whose menu /
+ *         review / editorial text matches the concept's Layer-1 keywords = 0
+ *   otherwise → "无专营店，但 N 家兼售" with the N stores and their quotes.
+ *
+ * "egg tart keyword hits = 0" is NOT a category gap: 1115 Clement St had four
+ * Chinese bakeries selling egg tarts daily and the report still claimed a void.
+ * A store with no text at all is `unknown` — it is never counted as evidence of
+ * absence; when a gap claim rests on such stores the demand coverage ratio is
+ * discounted by COVERAGE_UNVERIFIED_DISCOUNT and the reason is recorded.
+ */
+export function assessCategoryGap(input: {
+  /** Layer-1 (direct) competitors found — any hit means there is no gap. */
+  l1_count: number;
+  /** The Layer-2 (same-category) stores to probe. */
+  layer2: Array<Pick<MergedPoi, 'id' | 'name' | 'name_zh' | 'distance_m' | 'review_texts' | 'editorial_summary' | 'menu_text'>>;
+  profile: ConceptSearchProfile;
+  /** True when D6 completed BOTH Layer-1 radii (direct@800 and direct@1600). */
+  both_radii_searched: boolean;
+}): CategoryGapAssessment {
+  const also: AlsoSellingStore[] = [];
+  let unknown = 0;
+  for (const m of input.layer2) {
+    const texts = probeTextsOf(m);
+    if (!texts.length) {
+      unknown++;
+      continue;
+    }
+    for (const p of texts) {
+      const quote = findKeywordQuote(p.text, input.profile.keywords);
+      if (!quote) continue;
+      also.push({
+        id: m.id,
+        name: m.name,
+        distance_mi: Math.round((m.distance_m / METERS_PER_MILE) * 100) / 100,
+        evidence: p.evidence,
+        quote,
+      });
+      break;
+    }
+  }
+  also.sort((a, b) => a.distance_mi - b.distance_mi);
+
+  let category_gap: CategoryGapAssessment['category_gap'];
+  if (input.l1_count > 0 || also.length > 0) category_gap = 'false';
+  else if (!input.both_radii_searched) category_gap = 'unknown';
+  else if (input.layer2.length > 0 && unknown === input.layer2.length) category_gap = 'unknown';
+  else category_gap = 'true';
+
+  const discounted = category_gap !== 'false' && unknown > 0;
+  return {
+    category_gap,
+    also_selling: also,
+    also_selling_unknown_count: unknown,
+    coverage_discount: discounted ? COVERAGE_UNVERIFIED_DISCOUNT : null,
+    coverage_adjustment: discounted
+      ? `品类空档判定涉及 ${unknown} 家同品类门店，但它们没有菜单／评论／简介文本可核验是否兼售「${input.profile.label_zh}」，需求覆盖率乘 ${COVERAGE_UNVERIFIED_DISCOUNT}`
+      : null,
+  };
+}
+
 export function computeCompetitors(input: CompetitorEngineInput): CompetitorEngineResult {
   const d = getDefaults();
   const t = getTaxonomy();
@@ -554,6 +676,20 @@ export function computeCompetitors(input: CompetitorEngineInput): CompetitorEngi
     .filter((m) => m.is_food && m.is_chinese && !m.sub_cuisine)
     .map((m) => ({ id: m.id, name: m.name, categories: m.categories }));
 
+  // §4.2 (P0-B): the hard constraint on a category-gap claim — both keyword radii AND a text probe of Layer 2.
+  const gap = assessCategoryGap({ l1_count: l1.length, layer2: l2m, profile, both_radii_searched: bothRadii });
+
+  // §4.4 (P1-a): one set of counts. L3 substitutes and brand anchors stay outside `total`.
+  const countedMerged = [...l1m, ...l2m];
+  const competitorCounts: CompetitorCounts = {
+    total: l1.length + l2.length,
+    direct: l1.length,
+    same_category: l2.length,
+    l3: l3m.length,
+    anchors: 0,
+    by_source: { google: countedMerged.filter((m) => m.ids.google != null).length, yelp: 0, foursquare: 0 },
+  };
+
   return {
     guard_passed: guard_notes.length === 0,
     guard_notes,
@@ -576,6 +712,12 @@ export function computeCompetitors(input: CompetitorEngineInput): CompetitorEngi
     benchmark_revenue_band,
     void: { is_void, reason, density_vs_hub_median, conditions: { chinese_pop_ok, density_ok, l2_ok } },
     metro_sub_cuisine_total: input.metro_sub_cuisine_total,
+    category_gap: gap.category_gap,
+    also_selling: gap.also_selling,
+    also_selling_unknown_count: gap.also_selling_unknown_count,
+    coverage_discount: gap.coverage_discount,
+    coverage_adjustment: gap.coverage_adjustment,
+    counts: competitorCounts,
     l1_search_radius_m: input.l1_query?.radius_m ?? null,
     l1_layers_tried: [...tried],
     unclassified,

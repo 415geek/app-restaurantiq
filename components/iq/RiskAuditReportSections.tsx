@@ -12,6 +12,12 @@ import {
   numScore,
   type RiskAuditFull,
 } from '@/lib/funnel/iq-risk-audit-model';
+import {
+  conclusionPendingNote,
+  occupancyCostPct,
+  parseConclusion,
+  type Conclusion,
+} from '@/lib/iq/conclusion/display';
 import { LOCALE_TAG, type Locale } from '@/lib/i18n/locale';
 
 type Props = {
@@ -60,6 +66,10 @@ type Copy = {
   costItem: string;
   costAmount: string;
   costNote: string;
+  /** §4.1: one line that says both surfaces print the same frozen numbers. */
+  snapshot: (id: string) => string;
+  exRent: string;
+  occupancy: string;
 };
 
 const COPY: Record<Locale, Copy> = {
@@ -89,6 +99,9 @@ const COPY: Record<Locale, Copy> = {
     costItem: 'Item',
     costAmount: 'Amount',
     costNote: 'Note',
+    snapshot: (id) => `Conclusion snapshot ${id} — the web report and the 360° PDF print these same figures.`,
+    exRent: 'excludes rent (none provided)',
+    occupancy: 'Occupancy cost',
   },
   zh: {
     competitorInsights: '竞品深度洞察',
@@ -116,6 +129,9 @@ const COPY: Record<Locale, Copy> = {
     costItem: '项目',
     costAmount: '金额',
     costNote: '说明',
+    snapshot: (id) => `结论快照 ${id} —— 网页版与 360° PDF 打印的是同一组数字。`,
+    exRent: '不含租金（未提供）',
+    occupancy: '占用成本',
   },
   es: {
     competitorInsights: 'Análisis a fondo de competidores',
@@ -143,6 +159,9 @@ const COPY: Record<Locale, Copy> = {
     costItem: 'Concepto',
     costAmount: 'Monto',
     costNote: 'Nota',
+    snapshot: (id) => `Snapshot de la conclusión ${id}: el informe web y el PDF 360° imprimen las mismas cifras.`,
+    exRent: 'sin renta (no proporcionada)',
+    occupancy: 'Costo de ocupación',
   },
 };
 
@@ -191,11 +210,25 @@ export function RiskAuditReportSections({
 
   // Grounding flags injected by lib/funnel/iq-full-report-schema.applyCompetitorWhitelist.
   const insufficientCompetitorData = full._insufficient_competitor_data === true;
+  // §4.4 P1-a 计数单一化: the canonical count block wins over the retrieval whitelist
+  // size, so the page never prints a competitor count of its own.
+  const canonicalCounts = full.competitor_counts as { total?: unknown } | undefined;
   const whitelistTotal =
-    typeof full._whitelist_total === 'number' ? (full._whitelist_total as number) : undefined;
+    canonicalCounts && typeof canonicalCounts.total === 'number'
+      ? canonicalCounts.total
+      : typeof full._whitelist_total === 'number'
+        ? (full._whitelist_total as number)
+        : undefined;
 
-  const breakEven = numScore(audit.break_even_revenue_monthly_usd);
-  const safeRev = numScore(audit.safe_revenue_monthly_usd);
+  // §4.1 单一结论源 (P0-A): the stored conclusion is what this section prints. The
+  // LLM's own break-even / safe revenue are only a pre-P0-A fallback, and when the
+  // deterministic core has not landed we print ONE pending line instead of a second
+  // set of numbers.
+  const conclusion: Conclusion | null = parseConclusion(full.conclusion);
+  const pending = full.conclusion_pending === true && !conclusion;
+  const breakEven = conclusion ? conclusion.breakeven_monthly ?? undefined : numScore(audit.break_even_revenue_monthly_usd);
+  const safeRev = conclusion ? conclusion.safety_monthly ?? undefined : numScore(audit.safe_revenue_monthly_usd);
+  const occupancy = conclusion ? occupancyCostPct(conclusion) : null;
   const costs = audit.cost_breakdown ?? [];
 
   // D-4: deterministic finance-model evidence stamp (set by applyFinanceModelOverride).
@@ -221,8 +254,15 @@ export function RiskAuditReportSections({
           audit={audit}
           lang={lang}
           businessType={businessType ?? undefined}
+          conclusion={conclusion}
+          verdictRule={typeof full.verdict_rule === 'string' ? full.verdict_rule : null}
         />
-        {(breakEven !== undefined || safeRev !== undefined) && (
+        {pending && (
+          <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-100/80">
+            {conclusionPendingNote(lang)}
+          </p>
+        )}
+        {!pending && (breakEven !== undefined || safeRev !== undefined) && (
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {breakEven !== undefined && (
               <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3">
@@ -241,7 +281,8 @@ export function RiskAuditReportSections({
                   ${breakEven.toLocaleString(numberLocale)}
                   {c.perMonth}
                 </div>
-                {financeSnapshot && (
+                {conclusion?.rent_excluded && <div className="mt-1 text-xs text-amber-200/70">{c.exRent}</div>}
+                {!conclusion && financeSnapshot && (
                   <div className="mt-1 text-xs text-amber-200/70">
                     {c.perDay(
                       financeSnapshot.break_even_daily_revenue_usd.toLocaleString('en-US'),
@@ -269,7 +310,8 @@ export function RiskAuditReportSections({
                   ${safeRev.toLocaleString(numberLocale)}
                   {c.perMonth}
                 </div>
-                {financeSnapshot && (
+                {conclusion?.rent_excluded && <div className="mt-1 text-xs text-emerald-200/70">{c.exRent}</div>}
+                {!conclusion && financeSnapshot && (
                   <div className="mt-1 text-xs text-emerald-200/70">
                     {c.perDay(
                       financeSnapshot.safe_daily_revenue_usd.toLocaleString('en-US'),
@@ -283,7 +325,14 @@ export function RiskAuditReportSections({
           </div>
         )}
 
-        {financeApplied && financeSnapshot && (
+        {conclusion && (
+          <p className="mt-4 text-[11px] text-zinc-500">
+            {occupancy != null ? `${c.occupancy}: ${occupancy}% · ` : ''}
+            {c.snapshot(conclusion.snapshot_id)}
+          </p>
+        )}
+
+        {!conclusion && financeApplied && financeSnapshot && (
           <details className="mt-4 rounded-xl border border-zinc-700/60 bg-zinc-900/40 px-4 py-3 text-sm text-zinc-300">
             <summary className="cursor-pointer font-medium text-zinc-100">
               {c.howCalculated}

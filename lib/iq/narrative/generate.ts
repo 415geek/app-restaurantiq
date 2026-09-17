@@ -16,7 +16,7 @@ import type { ReportModel } from '../model/schema';
 import { getDefaults } from '../params';
 import { hasLlmKey } from './llm';
 import { numberGuard } from './number-guard';
-import { PAGES, localizedField, pageFragment, templateNarrative, type PageId } from './templates';
+import { PAGES, RISK_WORDING_RULE, localizedField, pageFragment, templateNarrative, type PageId } from './templates';
 
 export type NarrativeTier = 'page' | 'summary';
 /** Narrative language = the report language (en / zh / es). */
@@ -161,7 +161,10 @@ export function paramNotes(lang: NarrativeLanguage): string {
       '写作时不要照抄字段名、圈层代号或英文缩写：walk10 写「步行 10 分钟范围」，drive5 / drive10 / drive15 写「开车 5 / 10 / 15 分钟范围」，' +
       'L1 写「同菜系竞品」，L2 写「其他中餐」，L3 写「其他亚洲餐」，L4 写「华人客流聚集点」，coverage_ratio 写「需求覆盖率」，occupancy_cost_ratio 写「占用成本比」，' +
       'cluster_score 写「集聚分」，huff 写「需求分流模型」，benchmark_revenue_band 的 p25 / median / p75 写「低位 / 中位 / 高位」，hhi 写「集中度」，confidence 写「数据完整度」，capex 写「开办投入（装修与设备）」；GO / CONDITIONAL_GO / NO_GO 写「可做 / 有条件可做 / 不建议」。' +
-      RENT_NOTE.zh
+      RENT_NOTE.zh +
+      // 评审 Spec §4.5 叙事与数字对齐 (P1-b): one rule, shared with the templates and the funnel prompts.
+      ' ' +
+      RISK_WORDING_RULE.zh
     );
   }
   if (lang === 'es') {
@@ -175,7 +178,10 @@ export function paramNotes(lang: NarrativeLanguage): string {
       'Al redactar no copies nombres de campo, códigos de anillo ni abreviaturas en inglés: walk10 se escribe «área a 10 minutos a pie», drive5 / drive10 / drive15 «área a 5 / 10 / 15 minutos en coche», ' +
       'L1 «competidores de la misma cocina», L2 «otros restaurantes chinos», L3 «otros restaurantes asiáticos», L4 «anclas de la comunidad china», coverage_ratio «cobertura de demanda», occupancy_cost_ratio «ratio de costo de ocupación», ' +
       'cluster_score «puntuación de aglomeración», huff «modelo de reparto de demanda», p25 / median / p75 de benchmark_revenue_band «bajo / mediano / alto», hhi «concentración», confidence «integridad de datos», capex «inversión inicial (obra y equipo)»; GO / CONDITIONAL_GO / NO_GO se escriben «viable / viable con condiciones / no viable». ' +
-      RENT_NOTE.es
+      RENT_NOTE.es +
+      // 评审 Spec §4.5 叙事与数字对齐 (P1-b): one rule, shared with the templates and the funnel prompts.
+      ' ' +
+      RISK_WORDING_RULE.es
     );
   }
   return (
@@ -188,7 +194,10 @@ export function paramNotes(lang: NarrativeLanguage): string {
     'Never copy field names, ring ids or engine abbreviations into the prose: walk10 is "the 10-minute walk area", drive5 / drive10 / drive15 are "the 5 / 10 / 15-minute drive area", ' +
     'L1 is "same-cuisine competitors", L2 "other Chinese restaurants", L3 "other Asian restaurants", L4 "Chinese-community anchors", coverage_ratio "demand coverage", occupancy_cost_ratio "occupancy cost ratio", ' +
     'cluster_score "cluster score", huff "the demand-split model", p25 / median / p75 of benchmark_revenue_band "low / median / high", hhi "concentration", confidence "data completeness", capex "start-up investment (build-out and equipment)"; GO / CONDITIONAL_GO / NO_GO are "GO / CONDITIONAL GO / NO GO". ' +
-    RENT_NOTE.en
+    RENT_NOTE.en +
+    // 评审 Spec §4.5 叙事与数字对齐 (P1-b): one rule, shared with the templates and the funnel prompts.
+    ' ' +
+    RISK_WORDING_RULE.en
   );
 }
 

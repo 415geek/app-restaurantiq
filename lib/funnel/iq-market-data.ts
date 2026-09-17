@@ -13,9 +13,12 @@
  *   Yelp / Foursquare rows that duplicate a Google record (name + ≤ 150 m) are dropped;
  *   survivors are tagged with the layer their name / categories imply.
  *
- * `summary.competitor_count_google` = Layer 1 + Layer 2 within 1600 m (brand anchors
- * are never counted); `summary.competitor_layers` carries the per-layer counts and
- * every `sample_competitors_google[]` row carries `layer` and `walk_min`.
+ * 评审 Spec §4.4 计数单一化: `summary.counts` is the ONE count set — total / direct /
+ * same_category / l3 / anchors / by_source — and every other competitor number here
+ * (`competitor_count_google|yelp|foursquare|total`, `competitor_layers`) is read from
+ * it, never counted again. `total` = Layer 1 + Layer 2 across the three platforms after
+ * deduplication; brand anchors and 'other' supplementary rows are never inside it.
+ * Every `sample_competitors_google[]` row carries `layer` and `walk_min`.
  *
  * Each source is independent: any one of them succeeding produces useful market_data.
  */
@@ -24,6 +27,7 @@ import { createFetchContext } from '@/lib/iq/data/context';
 import { fetchThreeLayerCompetitors, type GooglePlace, type PlaceLayer, type ThreeLayerCompetitors } from '@/lib/iq/data/google-places';
 import { matchesLayer1, toTableAType, typesMatch, type ConceptSearchProfile } from '@/lib/iq/data/search-profile';
 import type { FetchContext } from '@/lib/iq/data/types';
+import type { CompetitorCounts } from '@/lib/iq/model/schema';
 import { haversineM } from '@/lib/iq/geo';
 import {
   searchYelpCompetitors,
@@ -290,12 +294,32 @@ export async function gatherIqMarketDataFromGoogle(input: {
     const yelpRatings = yelp.kept.map((r) => num(r.rating)).filter((x): x is number => x !== null);
     const yelpReviewCounts = yelp.kept.map((r) => num(r.review_count)).filter((x): x is number => x !== null);
 
+    // 评审 Spec §4.4 计数单一化 (P1-a): ONE set of counts. Every competitor number any surface
+    // prints (dashboard, provenance table, metrics digest, prompts) reads these fields — nothing
+    // re-counts. `total` = direct + same_category across all three platforms after deduplication;
+    // supplementary rows that are neither (layer 'other') sit in `l3`, brand anchors in `anchors`,
+    // and neither is ever inside `total`.
+    const layerCountOf = (rows: Array<{ layer: SupplementaryLayer }>, layer: SupplementaryLayer) => rows.filter((r) => r.layer === layer).length;
+    const countedOf = (rows: Array<{ layer: SupplementaryLayer }>) => layerCountOf(rows, 'direct') + layerCountOf(rows, 'substitute');
+    const counts: CompetitorCounts = {
+      total: direct.length + substitute.length + countedOf(yelp.kept) + countedOf(fsq.kept),
+      direct: direct.length + layerCountOf(yelp.kept, 'direct') + layerCountOf(fsq.kept, 'direct'),
+      same_category: substitute.length + layerCountOf(yelp.kept, 'substitute') + layerCountOf(fsq.kept, 'substitute'),
+      l3: layerCountOf(yelp.kept, 'other') + layerCountOf(fsq.kept, 'other'),
+      anchors: brandAnchors.length,
+      by_source: { google: direct.length + substitute.length, yelp: countedOf(yelp.kept), foursquare: countedOf(fsq.kept) },
+    };
+
     const summary = {
-      /** §4.2: Layer 1 + Layer 2 within 1600 m; brand anchors are never counted. */
-      competitor_count_google: direct.length + substitute.length,
-      competitor_layers: { direct: direct.length, substitute: substitute.length, brand_anchor: brandAnchors.length },
-      competitor_count_yelp: yelp.kept.length,
-      competitor_count_foursquare: fsq.kept.length,
+      /** §4.4: the single source of truth for every competitor count in this report. */
+      counts,
+      /** §4.2: Layer 1 + Layer 2 within 1600 m; brand anchors are never counted. Reads `counts`, never re-counts. */
+      competitor_count_google: counts.by_source.google,
+      competitor_layers: { direct: direct.length, substitute: substitute.length, brand_anchor: counts.anchors },
+      competitor_count_yelp: counts.by_source.yelp,
+      competitor_count_foursquare: counts.by_source.foursquare,
+      /** Total competitive set across platforms — the number the dashboard and the narrative must quote. */
+      competitor_count_total: counts.total,
       avg_rating_google: avg(ratings),
       avg_rating_yelp: avg(yelpRatings),
       avg_review_count_google: avg(reviews),

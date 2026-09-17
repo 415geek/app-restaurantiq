@@ -6,13 +6,21 @@
  *   A_j  = median A of direct (L1) competitors; scaled by seats / median seats when given
  *   d    = drive minutes (straight-line / default_speed_mph when no matrix)
  *
- *   captured_j = Σ_i cuisine_demand_i × P_ij            (dinner / weekend, all BGs)
- *              + lunch_demand × P_lunch                 (walk10 competitor set only)
+ *   captured_j = Σ_i cuisine_demand_i × P_ij            (resident pool, all BGs)
+ *              + lunch_demand × P_lunch                 (walk10 workplace pool, walk10 competitor set only)
  *
  *   lunch_demand = jobs_walk10 × lunch_out_rate × audience_share × asian_adj × ticket_lunch × workdays
  *     audience_share = Chinese-speaking share of the primary ring for a 中餐 concept, or the
  *     concept's category share for a general-audience concept (asian_adj = 1 then);
  *     `daypart_profile: dinner` concepts (hot pot, skewers) have no lunch pool.
+ *
+ * 评审 Spec §4.3 daypart 按业态取值 — the split is four dayparts, not lunch/dinner:
+ *   resident pool  → split by the concept's own `dayparts` table (早市 / 午市 / 午后 / 晚市),
+ *                    i.e. breakfast and afternoon draw on residents and passers-by exactly as
+ *                    dinner does, weighted by what the concept actually sells at that hour;
+ *   workplace pool → added to the 午市 daypart only (it is a jobs pool, by construction).
+ * The captured total is unchanged (resident + workplace); only its distribution across the
+ * day is now concept-specific, so a bakery never reports 午市 0% / 晚市 100%.
  *
  * The site competes with L1 (weight 1) and L2 (weight adjacent_weight) for each
  * block group's demand. Everything is a pure function of explicit inputs.
@@ -20,7 +28,7 @@
 import { haversineM, METERS_PER_MILE, pointInGeometry } from '../geo';
 import type { Geometry, LatLng } from '../data/types';
 import type { RingId } from '../model/schema';
-import { getDefaults, type Audience, type DaypartProfile, type RangeClass } from '../params';
+import { DAYPART_IDS, getDefaults, type Audience, type DaypartId, type DaypartProfile, type Dayparts, type RangeClass } from '../params';
 import type { BlockGroupDemand } from './trade-area';
 
 export interface HuffCompetitor {
@@ -47,8 +55,20 @@ export interface HuffInput {
    * for a 中餐 concept, the category share for a general-audience concept (see lunchAudienceFor).
    */
   lunch: { jobs_walk10: number | null; asian_job_share: number | null; ticket_lunch: number | null; chinese_share: number };
+  /**
+   * §4.3: the concept's own daypart distribution. The resident pool is split with it;
+   * omitted only by callers that do not report a daypart mix (cannibalisation probes),
+   * which then fall back to the neutral lunch/dinner split below.
+   */
+  dayparts?: Dayparts;
   ring_of_bg?: (geoid: string) => RingId | null;
 }
+
+/**
+ * Fallback when a caller has no concept in hand (cannibalisation probes): the historical
+ * full-service basis, kept explicit so nothing silently re-introduces 午市 0% for a bakery.
+ */
+export const NEUTRAL_DAYPARTS: Dayparts = { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 };
 
 /**
  * Lunch-pool audience inputs by concept (评审 Spec §4.1 step 4): a 中餐 concept draws on the Chinese-speaking
@@ -64,11 +84,26 @@ export function lunchAudienceFor(
   return { asian_job_share: p.asian_job_share, ticket_lunch: p.ticket_lunch, chinese_share: p.chinese_share };
 }
 
+/** §4.3 one daypart of the captured demand: its share of the day and the dollars behind it. */
+export interface DaypartCapture {
+  id: DaypartId;
+  share: number;
+  monthly_usd: number;
+}
+
 export interface HuffResult {
   captured_monthly_usd: number | null;
   captured_covers_day: number | null;
+  /** 午市 daypart total (resident 午市 slice + the walk10 workplace pool). */
   lunch_usd: number | null;
+  /** 晚市 daypart total. */
   dinner_usd: number | null;
+  /** §4.3 all four dayparts, always in clock order; empty when nothing could be captured. */
+  dayparts: DaypartCapture[];
+  /** Resident (block-group) pool before the daypart split, monthly. */
+  resident_usd: number | null;
+  /** walk10 workplace lunch pool captured, monthly — the only part that is not resident demand. */
+  workplace_lunch_usd: number | null;
   by_ring: Array<{ ring: RingId; monthly_usd: number; share: number }>;
   huff: { alpha: number; beta: number; site_attractiveness: number | null; competitor_set: number };
   competitor_shares: Record<string, number>; // share of the site's own captured demand diverted per competitor, for cards
@@ -116,7 +151,7 @@ export function computeHuff(input: HuffInput): HuffResult {
 
   const shareAccum: Record<string, number> = {};
   const pValues: number[] = [];
-  let dinnerAnnual = 0;
+  let residentAnnual = 0;
   const ringAnnual: Partial<Record<RingId, number>> = {};
 
   for (const bg of input.bg_demand) {
@@ -134,7 +169,7 @@ export function computeHuff(input: HuffInput): HuffResult {
     const p = denom > 0 ? siteTerm / denom : 0;
     pValues.push(p);
     const captured = bg.cuisine_demand_usd * p;
-    dinnerAnnual += captured;
+    residentAnnual += captured;
     // Diversion: how much of this BG's demand goes to each competitor (for cards).
     compTerms.forEach((t, idx) => {
       shareAccum[t.c.id] = (shareAccum[t.c.id] ?? 0) + bg.cuisine_demand_usd * (compTerm[idx] / denom);
@@ -143,8 +178,8 @@ export function computeHuff(input: HuffInput): HuffResult {
     if (ringId) ringAnnual[ringId] = (ringAnnual[ringId] ?? 0) + captured;
   }
 
-  // Lunch: walk10 workplace demand shared with walk10 competitors only.
-  let lunchMonthly: number | null = null;
+  // 午市 workplace pool: walk10 jobs demand shared with the walk10 competitor set only.
+  let workplaceLunchMonthly: number | null = null;
   const L = input.lunch;
   if (L.jobs_walk10 != null && L.ticket_lunch != null && L.ticket_lunch > 0) {
     const asianAdj = L.asian_job_share != null ? Math.min(1.5, 0.5 + L.asian_job_share * 2) : 1;
@@ -153,17 +188,39 @@ export function computeHuff(input: HuffInput): HuffResult {
     const siteTerm = Math.pow(siteA, alpha);
     const denom = siteTerm + walkComps.reduce((s, t) => s + t.a, 0);
     const pLunch = denom > 0 ? siteTerm / denom : 0;
-    lunchMonthly = lunchPool * pLunch;
+    workplaceLunchMonthly = lunchPool * pLunch;
   }
 
-  const dinnerMonthly = input.bg_demand.length ? dinnerAnnual / 12 : null;
-  const capturedMonthly = dinnerMonthly == null && lunchMonthly == null ? null : (dinnerMonthly ?? 0) + (lunchMonthly ?? 0);
+  const residentMonthly = input.bg_demand.length ? residentAnnual / 12 : null;
+  const capturedMonthly =
+    residentMonthly == null && workplaceLunchMonthly == null ? null : (residentMonthly ?? 0) + (workplaceLunchMonthly ?? 0);
+
+  // §4.3: split the resident pool by the concept's own daypart table, then add the
+  // workplace pool to 午市 — that pool is by construction a lunch-hour jobs pool.
+  const profile = input.dayparts ?? NEUTRAL_DAYPARTS;
+  const resident = residentMonthly ?? 0;
+  const perDaypart: Record<DaypartId, number> = {
+    breakfast: resident * profile.breakfast,
+    lunch: resident * profile.lunch + (workplaceLunchMonthly ?? 0),
+    afternoon: resident * profile.afternoon,
+    dinner: resident * profile.dinner,
+  };
+  const daypartTotal = DAYPART_IDS.reduce((s, id) => s + perDaypart[id], 0);
+  const dayparts: DaypartCapture[] =
+    capturedMonthly == null
+      ? []
+      : DAYPART_IDS.map((id) => ({
+          id,
+          share: daypartTotal > 0 ? Math.round((perDaypart[id] / daypartTotal) * 1000) / 1000 : 0,
+          monthly_usd: Math.round(perDaypart[id]),
+        }));
+
   const totalAnnualRing = Object.values(ringAnnual).reduce((s, v) => s + (v ?? 0), 0);
   const by_ring = (Object.entries(ringAnnual) as Array<[RingId, number]>)
     .map(([ring, v]) => ({ ring, monthly_usd: Math.round(v / 12), share: totalAnnualRing > 0 ? Math.round((v / totalAnnualRing) * 1000) / 1000 : 0 }))
     .sort((a, b) => b.monthly_usd - a.monthly_usd);
 
-  const totalDiverted = Object.values(shareAccum).reduce((s, v) => s + v, 0) + dinnerAnnual;
+  const totalDiverted = Object.values(shareAccum).reduce((s, v) => s + v, 0) + residentAnnual;
   const competitor_shares: Record<string, number> = {};
   for (const [id, v] of Object.entries(shareAccum)) competitor_shares[id] = totalDiverted > 0 ? Math.round((v / totalDiverted) * 1000) / 1000 : 0;
 
@@ -171,8 +228,11 @@ export function computeHuff(input: HuffInput): HuffResult {
   return {
     captured_monthly_usd: capturedMonthly == null ? null : Math.round(capturedMonthly),
     captured_covers_day: null, // filled by the pipeline once the ticket is known (÷ ticket ÷ days_open)
-    lunch_usd: lunchMonthly == null ? null : Math.round(lunchMonthly),
-    dinner_usd: dinnerMonthly == null ? null : Math.round(dinnerMonthly),
+    lunch_usd: capturedMonthly == null ? null : Math.round(perDaypart.lunch),
+    dinner_usd: capturedMonthly == null ? null : Math.round(perDaypart.dinner),
+    dayparts,
+    resident_usd: residentMonthly == null ? null : Math.round(residentMonthly),
+    workplace_lunch_usd: workplaceLunchMonthly == null ? null : Math.round(workplaceLunchMonthly),
     by_ring,
     huff: { alpha, beta, site_attractiveness: Math.round(siteA * 1000) / 1000, competitor_set: input.competitors.length },
     competitor_shares,

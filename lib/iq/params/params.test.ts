@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CHINESE_CATEGORIES, CONCEPT_CATEGORIES, classifyCuisineText, cuisineById, cuisinesInCategory, findCuisine, getDefaults, getHubs, getTaxonomy, isChineseCategory } from './index';
+import { CHINESE_CATEGORIES, CONCEPT_CATEGORIES, DAYPART_IDS, DAYPART_SUM_TOLERANCE, classifyCuisineText, cuisineById, cuisinesInCategory, daypartsSchema, findCuisine, getDefaults, getHubs, getTaxonomy, isChineseCategory } from './index';
 
 /** The 14 ids that existed before §4.1; they must keep their ids (fixtures use `hunan`). */
 const LEGACY_IDS = ['cantonese', 'hk_cafe', 'dim_sum', 'sichuan', 'hunan', 'dongbei', 'shanghai', 'taiwanese', 'hot_pot', 'skewers', 'noodles', 'chinese_fast', 'boba', 'other_chinese'];
@@ -100,4 +100,40 @@ test('cuisine rule classifier (Chinese sub-cuisines by default; every category w
   assert.equal(classifyCuisineText('葡挞、甜点', { scope: 'all' }).id, 'egg_tart');
   assert.equal(classifyCuisineText('甜点、葡挞', { scope: 'all' }).id, 'dessert');
   assert.equal(classifyCuisineText('Hong Kong Cafe 茶餐厅', { scope: 'all' }).id, 'hk_cafe');
+});
+
+test('§4.3 daypart 按业态取值: every concept carries a four-daypart table summing to 1, with the spec values', () => {
+  const t = getTaxonomy();
+  for (const c of t.cuisines) {
+    const dp = c.dayparts;
+    assert.ok(dp, `${c.id} dayparts`);
+    const sum = dp.breakfast + dp.lunch + dp.afternoon + dp.dinner;
+    assert.ok(Math.abs(sum - 1) <= DAYPART_SUM_TOLERANCE, `${c.id} dayparts sum ${sum}`);
+    for (const id of DAYPART_IDS) assert.ok(dp[id] >= 0 && dp[id] <= 1, `${c.id}.${id}`);
+  }
+  // The four rows the spec fixes by name.
+  assert.deepEqual(cuisineById('egg_tart').dayparts, { breakfast: 0.35, lunch: 0.25, afternoon: 0.3, dinner: 0.1 });
+  for (const c of cuisinesInCategory('bakery_dessert')) {
+    // dessert / ice_cream are the category's afternoon–evening formats and deviate by design (documented in the YAML).
+    if (c.id === 'dessert' || c.id === 'ice_cream') continue;
+    assert.deepEqual(c.dayparts, { breakfast: 0.35, lunch: 0.25, afternoon: 0.3, dinner: 0.1 }, c.id);
+  }
+  assert.deepEqual(cuisineById('boba').dayparts, { breakfast: 0.15, lunch: 0.25, afternoon: 0.4, dinner: 0.2 });
+  assert.deepEqual(cuisineById('hk_cafe').dayparts, { breakfast: 0.15, lunch: 0.4, afternoon: 0.15, dinner: 0.3 });
+  assert.deepEqual(cuisineById('hot_pot').dayparts, { breakfast: 0, lunch: 0.2, afternoon: 0.05, dinner: 0.75 });
+  // Category defaults.
+  assert.deepEqual(cuisineById('noodles').dayparts, { breakfast: 0.05, lunch: 0.5, afternoon: 0.1, dinner: 0.35 });
+  assert.deepEqual(cuisineById('roast').dayparts, { breakfast: 0, lunch: 0.45, afternoon: 0.1, dinner: 0.45 });
+  assert.deepEqual(cuisineById('skewers').dayparts, { breakfast: 0, lunch: 0.1, afternoon: 0.05, dinner: 0.85 });
+  assert.deepEqual(cuisineById('coffee').dayparts, { breakfast: 0.45, lunch: 0.25, afternoon: 0.25, dinner: 0.05 });
+  assert.deepEqual(cuisineById('juice').dayparts, { breakfast: 0.2, lunch: 0.3, afternoon: 0.35, dinner: 0.15 });
+  for (const c of cuisinesInCategory('chinese_regional')) {
+    assert.deepEqual(c.dayparts, { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 }, c.id);
+  }
+});
+
+test('§4.3 the zod schema rejects a daypart table that does not sum to 1', () => {
+  assert.throws(() => daypartsSchema.parse({ breakfast: 0.3, lunch: 0.3, afternoon: 0.3, dinner: 0.3 }), /sum to 1/);
+  // within the ±0.001 tolerance
+  assert.doesNotThrow(() => daypartsSchema.parse({ breakfast: 0.3005, lunch: 0.3, afternoon: 0.2, dinner: 0.2 }));
 });

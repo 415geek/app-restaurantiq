@@ -9,11 +9,13 @@ import { generateFullReportWithN8n, shouldUseN8nForIqFullReport } from '@/lib/n8
 import { stripInternalIqReportFields } from '@/lib/funnel/iq-report-sanitize';
 import {
   applyCompetitorWhitelist,
+  applyConclusionOverride,
   applyFinanceModelOverride,
   logFullReportQuality,
   parseIqFullReport,
   type IqReportWithGrounding,
 } from '@/lib/funnel/iq-full-report-schema';
+import { parseConclusion, verdictRuleText } from '@/lib/iq/conclusion/conclusion';
 import type { DeterministicFinanceModel } from '@/lib/funnel/iq-finance-model';
 import { extractCompetitorWhitelist } from '@/lib/funnel/iq-market-signals';
 import { applyDualModelVerification } from '@/lib/funnel/iq-dual-model-verify';
@@ -73,6 +75,18 @@ export async function generateIqFullReportWithN8nFallback(
     | DeterministicFinanceModel
     | null;
 
+  /**
+   * §4.1 单一结论源 (P0-A): when the deterministic core has already frozen a
+   * conclusion for this row, it — not the LLM, not a second finance engine —
+   * decides every headline figure. Without one this legacy synchronous path keeps
+   * its previous behaviour (the D-4 finance override).
+   */
+  const conclusion = parseConclusion(input.marketData?.conclusion);
+  const groundNumbers = (r: IqReportWithGrounding): IqReportWithGrounding =>
+    conclusion
+      ? applyConclusionOverride(r, conclusion, input.language, { financeModel, verdictRule: verdictRuleText(input.language) })
+      : applyFinanceModelOverride(r, financeModel, input.language);
+
   // Opt-in multi-agent engine (IQ_ENGINE=multi_agent): deterministic metrics →
   // 5 specialist analysts → coded decision matrix → synthesis → QA critic.
   // Kept opt-in so the tuned router/grounding pipeline below stays the default;
@@ -89,7 +103,7 @@ export async function generateIqFullReportWithN8nFallback(
         reportId: input.reportId,
       });
       const grounded = applyCompetitorWhitelist(parseIqFullReport(parsed), whitelist, input.language);
-      const withFinance = applyFinanceModelOverride(grounded, financeModel, input.language);
+      const withFinance = groundNumbers(grounded);
       logFullReportQuality(withFinance, `reportId=${input.reportId} multi-agent`);
       return stripInternalIqReportFields(withFinance);
     } catch (e) {
@@ -102,7 +116,7 @@ export async function generateIqFullReportWithN8nFallback(
       const raw = await generateFullReportWithN8n(payload);
       const parsed = parseIqFullReport(raw);
       const grounded = applyCompetitorWhitelist(parsed, whitelist, input.language);
-      const withFinance = applyFinanceModelOverride(grounded, financeModel, input.language);
+      const withFinance = groundNumbers(grounded);
       logFullReportQuality(withFinance, `reportId=${input.reportId} n8n`);
       const out = skipVerify
         ? withFinance
@@ -129,7 +143,7 @@ export async function generateIqFullReportWithN8nFallback(
     leanGeneration: input.leanGeneration,
     timeoutMs: input.timeoutMs,
   });
-  const withFinance = applyFinanceModelOverride(parsed, financeModel, input.language);
+  const withFinance = groundNumbers(parsed);
   logFullReportQuality(withFinance, `reportId=${input.reportId} llm`);
   const out = skipVerify
     ? withFinance

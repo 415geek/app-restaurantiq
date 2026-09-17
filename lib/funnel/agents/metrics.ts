@@ -129,12 +129,49 @@ function attractiveness(rating: number | null, reviews: number | null): number |
   return rating * Math.log(1 + Math.max(0, reviews ?? 0));
 }
 
+/** 评审 Spec §4.4 计数单一化: the ONE count set `market_data.summary.counts` carries. */
+export type CompetitorCountSet = {
+  total: number;
+  direct: number;
+  same_category: number;
+  l3: number;
+  anchors: number;
+  by_source: { google: number; yelp: number; foursquare: number };
+};
+
 type MarketSummaryLike = {
+  counts?: unknown;
   competitor_count_google?: unknown;
   avg_rating_google?: unknown;
   avg_review_count_google?: unknown;
   sample_competitors_google?: unknown;
 };
+
+/**
+ * §4.4 (P1-a): read `summary.counts` — never count the sample again. Only when a
+ * pre-§4.4 snapshot has no `counts` block do we fall back to the legacy
+ * `competitor_count_google`, and even then it is turned into the same one shape
+ * so every reader below (and every prompt) quotes one set of numbers.
+ */
+export function competitorCountsOf(summary: MarketSummaryLike, sampleSize: number): CompetitorCountSet | null {
+  const c = summary.counts as Partial<CompetitorCountSet> | null | undefined;
+  const int = (v: unknown, fallback = 0) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : fallback);
+  if (c && typeof c === 'object' && Number.isFinite(Number(c.total))) {
+    const by = (c.by_source ?? {}) as Partial<CompetitorCountSet['by_source']>;
+    return {
+      total: int(c.total),
+      direct: int(c.direct),
+      same_category: int(c.same_category),
+      l3: int(c.l3),
+      anchors: int(c.anchors),
+      by_source: { google: int(by.google), yelp: int(by.yelp), foursquare: int(by.foursquare) },
+    };
+  }
+  const legacy = num(summary.competitor_count_google);
+  const total = legacy ?? (sampleSize || null);
+  if (total == null) return null;
+  return { total, direct: total, same_category: 0, l3: 0, anchors: 0, by_source: { google: total, yelp: 0, foursquare: 0 } };
+}
 
 type AcsRowLike = {
   population?: unknown;
@@ -182,7 +219,9 @@ export function computeSiteMetrics(input: {
     })
     .sort((a, b) => rank(a.layer ?? null) - rank(b.layer ?? null) || (b.attractiveness ?? 0) - (a.attractiveness ?? 0));
 
-  const competitorCount = num(summary.competitor_count_google) ?? competitors.length;
+  // §4.4: one count set for every surface — this module never counts the sample for itself.
+  const counts = competitorCountsOf(summary, competitors.length);
+  const competitorCount = counts?.total ?? 0;
   const hasCompetition = competitorCount > 0 || competitors.length > 0;
   if (hasCompetition) sources.push(competitors.some((c) => c.layer) ? 'Google Places three-layer competitor search (§4.2)' : 'Google Places textsearch sample');
   else gaps.push('No competitor sample from Google Places — competition metrics unavailable.');
@@ -357,6 +396,7 @@ export function computeSiteMetrics(input: {
     competition: {
       data_available: hasCompetition,
       competitor_count: competitorCount,
+      counts,
       avg_rating: num(summary.avg_rating_google),
       avg_review_count: num(summary.avg_review_count_google),
       saturation_per_1k: saturationPer1k != null ? round(saturationPer1k, 2) : null,
@@ -429,11 +469,23 @@ export function formatMetricsDigest(m: SiteMetrics, lang: Locale): string {
         : pick(lang, { en: 'saturation not computable', zh: '饱和度不可计算', es: 'saturación no calculable' });
     L.push(
       pick(lang, {
-        en: `- Competition: sample n=${c.competitor_count}, avg ${c.avg_rating ?? '?'}★, ${sat}`,
-        zh: `- 竞争：样本 ${c.competitor_count} 家，均分 ${c.avg_rating ?? '?'}★，${sat}`,
-        es: `- Competencia: muestra n=${c.competitor_count}, promedio ${c.avg_rating ?? '?'}★, ${sat}`,
+        en: `- Competition: n=${c.competitor_count}, avg ${c.avg_rating ?? '?'}★, ${sat}`,
+        zh: `- 竞争：${c.competitor_count} 家，均分 ${c.avg_rating ?? '?'}★，${sat}`,
+        es: `- Competencia: n=${c.competitor_count}, promedio ${c.avg_rating ?? '?'}★, ${sat}`,
       }),
     );
+    // §4.4 计数单一化: the counts are HARD FACTS — the model must quote these and may never
+    // restate a competitor number of its own (no "about 30", no re-derived totals).
+    if (c.counts) {
+      const k = c.counts;
+      L.push(
+        pick(lang, {
+          en: `- Competitor counts (HARD FACTS — quote verbatim, never recompute or round): total=${k.total} (direct=${k.direct} + same-category=${k.same_category}); by source Google=${k.by_source.google}, Yelp=${k.by_source.yelp}, Foursquare=${k.by_source.foursquare}; occasion substitutes=${k.l3} and brand anchors=${k.anchors} are reported separately and are NOT in the total`,
+          zh: `- 竞品计数（硬事实——必须原样引用，不得重算或取整）：合计=${k.total}（直接=${k.direct} + 同品类=${k.same_category}）；按来源 Google=${k.by_source.google}、Yelp=${k.by_source.yelp}、Foursquare=${k.by_source.foursquare}；场景替代=${k.l3}、品牌锚点=${k.anchors} 单独列示，不计入合计`,
+          es: `- Conteos de competidores (DATOS FIJOS: cítelos textualmente, nunca los recalcule ni los redondee): total=${k.total} (directos=${k.direct} + misma categoría=${k.same_category}); por fuente Google=${k.by_source.google}, Yelp=${k.by_source.yelp}, Foursquare=${k.by_source.foursquare}; sustitutos de ocasión=${k.l3} y marcas de referencia=${k.anchors} se informan aparte y NO están en el total`,
+        }),
+      );
+    }
   }
   if (m.market_share.data_available) {
     const s = m.market_share;

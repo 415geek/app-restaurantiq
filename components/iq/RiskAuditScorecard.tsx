@@ -12,6 +12,7 @@ import {
   scoreLayerFootnote,
   type RiskAuditPreview,
 } from '@/lib/funnel/iq-risk-audit-model';
+import { dimensionLabel, verdictLabelOf, type Conclusion } from '@/lib/iq/conclusion/display';
 import type { Locale } from '@/lib/i18n/locale';
 
 type Props = {
@@ -19,6 +20,18 @@ type Props = {
   lang: Locale;
   businessType?: string;
   compact?: boolean;
+  /**
+   * §4.1 单一结论源 (P0-A): when the report carries the stored conclusion, the score,
+   * the verdict, the data confidence and the six dimension bars are read from IT —
+   * never from the LLM's `risk_audit` — so this card can never disagree with the PDF.
+   */
+  conclusion?: Conclusion | null;
+  /**
+   * The printed verdict rule, generated server-side from the ONE threshold set
+   * (`verdictRuleText`) and carried on the report body, so the page and the PDF
+   * quote the same numbers.
+   */
+  verdictRule?: string | null;
 };
 
 const COPY: Record<
@@ -73,12 +86,16 @@ function ScoreBar({ score, higherIsWorse }: { score: number; higherIsWorse?: boo
   );
 }
 
-export function RiskAuditScorecard({ audit, lang, businessType, compact }: Props) {
+export function RiskAuditScorecard({ audit, lang, businessType, compact, conclusion, verdictRule }: Props) {
   const t = COPY[lang];
   const tier = parseDecisionTier(audit.decision_tier);
   const tierCopy = decisionTierDisplay(tier, lang);
-  const overall = numScore(audit.overall_score);
-  const layers = audit.layers ?? [];
+  // The conclusion wins over every LLM-written figure on this card.
+  const overall = conclusion ? conclusion.overall : numScore(audit.overall_score);
+  const confidencePct = conclusion ? conclusion.data_confidence_pct : numScore(audit.data_confidence_pct) ?? audit.data_confidence_pct;
+  const layers = conclusion
+    ? conclusion.dimensions.map((d) => ({ id: d.id, score: d.score, label: dimensionLabel(d.id, lang), note: `${d.weight}% × ${d.score}` }))
+    : audit.layers ?? [];
   const radar = audit.radar ?? {};
   const radarEntries = Object.entries(radar).filter(([, v]) => numScore(v) !== undefined);
 
@@ -101,7 +118,7 @@ export function RiskAuditScorecard({ audit, lang, businessType, compact }: Props
           <span
             className={`inline-block rounded-full border px-4 py-1.5 text-sm font-semibold ${tierColors[tier] ?? 'border-white/20 bg-white/10 text-white/80'}`}
           >
-            {tierCopy.label}
+            {conclusion ? verdictLabelOf(conclusion.verdict, lang) : tierCopy.label}
           </span>
         )}
         {overall !== undefined && (
@@ -109,12 +126,12 @@ export function RiskAuditScorecard({ audit, lang, businessType, compact }: Props
             {t.overall(overall)}
           </span>
         )}
-        {audit.data_confidence_pct !== undefined && (
-          <span className="text-xs text-white/50">
-            {t.confidence(numScore(audit.data_confidence_pct) ?? audit.data_confidence_pct)}
-          </span>
+        {confidencePct !== undefined && (
+          <span className="text-xs text-white/50">{t.confidence(confidencePct)}</span>
         )}
       </div>
+
+      {conclusion && verdictRule && !compact && <p className="text-xs text-white/40">{verdictRule}</p>}
 
       {tierCopy && !compact && (
         <p className="text-sm text-white/55">{tierCopy.desc}</p>

@@ -122,6 +122,12 @@ const ENGINE_PHRASES: Rule[] = [
   { re: /租金未提供，财务维度按中性 50 分/g, en: 'Rent not provided: the financial dimension scores a neutral 50', es: 'Alquiler no indicado: la dimensión financiera puntúa un 50 neutral' },
   { re: /捕获营收 ≥ 安全线 \+10/g, en: 'Captured revenue ≥ safety line +10', es: 'Ingresos captados ≥ línea de seguridad +10' },
   { re: /捕获营收 < 保本线 −10/g, en: 'Captured revenue < break-even −10', es: 'Ingresos captados < punto de equilibrio −10' },
+  // §4.3 daypart-driven 场景与外卖 driver
+  {
+    re: /业态时段分布 早市 (\S+) \/ 午市 (\S+) \/ 午后 (\S+) \/ 晚市 (\S+)：午市看 walk10 岗位 (\S+)，其余时段看居民与过路客/g,
+    en: (_m, b, l, a, d, jobs) => `Concept daypart mix — morning ${b} / lunch ${l} / afternoon ${a} / evening ${d}: lunch is supplied by the ${jobs} jobs within a 10-minute walk, the other dayparts by residents and passers-by`,
+    es: (_m, b, l, a, d, jobs) => `Reparto por franja del concepto — mañana ${b} / almuerzo ${l} / tarde ${a} / noche ${d}: el almuerzo lo alimentan los ${jobs} empleos a 10 minutos a pie; las demás franjas, residentes y transeúntes`,
+  },
   { re: /午市占比 (\S+)/g, en: 'Lunch share $1', es: 'Cuota de almuerzo $1' },
   { re: /drive5 户密度 (\S+) 户\/平方英里/g, en: '$1 households per sq mi within a 5-minute drive', es: '$1 hogares por milla² a 5 minutos en coche' },
   { re: /drive5 户密度 未获取/g, en: 'Household density within a 5-minute drive: n/a', es: 'Densidad de hogares a 5 minutos en coche: n/d' },
@@ -162,7 +168,27 @@ const ENGINE_PHRASES: Rule[] = [
     es: (_m, n, tail) => `${n} restaurantes chinos a 10 minutos a pie: ${tail.startsWith('冷启动') ? 'arranque en frío — presupuesto de marketing ≥ 3 meses' : 'diferénciese en precio × experiencia, evite la guerra de precios'}`,
   },
   { re: /核实停车位数量与晚市可用性；无轨道站时以车流客为主设计动线/g, en: 'Verify parking count and evening availability; without a rail station, design for drive-in guests', es: 'Verifique las plazas de estacionamiento y su disponibilidad nocturna; sin tren cercano, diseñe para clientes en coche' },
-  { re: /午市偏弱：设计 ≤ \$18 套餐并接入 2 个外卖平台补足场景/g, en: 'Weak lunch: add a ≤ $$18 set menu and two delivery platforms', es: 'Almuerzo flojo: cree un menú ≤ $$18 y súmese a 2 plataformas de delivery' },
+  // §4.3 daypart-driven 场景与外卖 conditions (engines/cuisine-fit.ts#daypartCondition)
+  {
+    re: /午市偏弱：该业态午市应占 (\S+)，模型只捕获到 (\S+)——设计 ≤ \$18 套餐并接入 2 个外卖平台补足场景/g,
+    en: (_m, target, actual) => `Weak lunch: this format should do ${target} of its day at lunch but the model captures only ${actual} — add a ≤ $18 set menu and two delivery platforms`,
+    es: (_m, target, actual) => `Almuerzo flojo: este formato debería hacer el ${target} del día al mediodía y el modelo solo capta el ${actual}: cree un menú ≤ $18 y súmese a 2 plataformas de delivery`,
+  },
+  {
+    re: /主力时段在早市与午后（合计 (\S+)）：把出炉与备货排在 7:00–10:00 与 14:00–16:00，做周末上午的采买高峰与整盒预订 \/ 外带，不要按午市套餐设计/g,
+    en: (_m, share) => `The day is front-loaded: mornings plus the afternoon are ${share} of sales — time baking and restocking for 7:00–10:00 and 14:00–16:00, and build the weekend-morning buying peak with whole-box pre-orders and takeaway, not a lunch set menu`,
+    es: (_m, share) => `El día se concentra temprano: mañana y tarde son el ${share} de las ventas — programe horneado y reposición para 7:00–10:00 y 14:00–16:00 y trabaje el pico de compra del fin de semana por la mañana con pedidos por caja y para llevar, no con un menú de almuerzo`,
+  },
+  {
+    re: /主力时段在晚市（占 (\S+)）：把人手与备货压在晚市与周末，晚市翻台与等位管理决定营收，午市不必强开/g,
+    en: (_m, share) => `The day is dinner-led (${share} of sales): staff and prep for the evening and weekends — evening turns and wait-list management drive revenue; there is no need to force a lunch service`,
+    es: (_m, share) => `El día es de cena (${share} de las ventas): concentre personal y preparación en la noche y el fin de semana — las rotaciones nocturnas y la gestión de la espera mandan; no hace falta forzar el almuerzo`,
+  },
+  {
+    re: /午市已是主力时段（占 (\S+)）：维持出餐速度与套餐结构，外卖用于填补午后与晚市的空档/g,
+    en: (_m, share) => `Lunch is already the main daypart (${share} of sales): protect ticket times and the set-menu structure, and use delivery to fill the afternoon and evening gaps`,
+    es: (_m, share) => `El almuerzo ya es la franja principal (${share} de las ventas): cuide los tiempos de salida y la estructura de menús, y use el delivery para llenar los huecos de tarde y noche`,
+  },
   // ---- risk triggers / hedges (engines/risk.ts)
   { re: /签约租金高于本报告条件页给出的上限/g, en: 'Signed rent exceeds the cap on the conditions page', es: 'El alquiler firmado supera el tope de la página de condiciones' },
   { re: /争取免租期 \/ 阶梯租金 \/ 百分比租金条款/g, en: 'Negotiate free rent / stepped rent / percentage-rent clauses', es: 'Negociar meses de gracia / alquiler escalonado / alquiler porcentual' },
@@ -183,10 +209,16 @@ const ENGINE_PHRASES: Rule[] = [
   { re: /租约加入施工期租金减免条款/g, en: 'Add a construction-period rent abatement clause to the lease', es: 'Incluir una cláusula de reducción de alquiler durante las obras' },
   { re: /取得装修 \/ 设备报价后重跑报告/g, en: 'Re-run the report once build-out / equipment quotes are in', es: 'Volver a generar el informe con presupuestos de obra / equipo' },
   { re: /在「补充信息」里填写月租后重新生成；租金以本报告给出的上限为目标/g, en: 'Add the monthly rent under "Add details" and regenerate; negotiate toward the rent ceiling this report gives', es: 'Indique el alquiler mensual en "Añadir datos" y vuelva a generar; negocie hacia el tope de alquiler que da este informe' },
-  // ---- audience basis (engines/audience.ts)
+  // ---- audience basis (engines/audience.ts) — P1-i: one basis for share AND index
+  { re: /中文家庭 × 有孩家庭（主商圈家庭数占比，指数对标全县同一算法）/g, en: 'Chinese-speaking households × families with children (share of primary-area households; the index compares it with the same figure for the county)', es: 'Hogares de habla china × familias con hijos (cuota de los hogares de la zona principal; el índice la compara con la misma cifra del condado)' },
+  { re: /白天岗位 ÷ 常住人口（主商圈家庭数占比，指数对标全县同一算法）/g, en: 'Daytime jobs ÷ residents (share of primary-area households; the index compares it with the same figure for the county)', es: 'Empleos diurnos ÷ residentes (cuota de los hogares de la zona principal; el índice la compara con la misma cifra del condado)' },
+  { re: /中文家庭 × 25–44 岁（主商圈家庭数占比，指数对标全县同一算法）/g, en: 'Chinese-speaking households × age 25–44 (share of primary-area households; the index compares it with the same figure for the county)', es: 'Hogares de habla china × 25–44 años (cuota de los hogares de la zona principal; el índice la compara con la misma cifra del condado)' },
+  { re: /非中文家庭（主商圈家庭数占比，指数对标全县同一算法）/g, en: 'Non-Chinese-speaking households (share of primary-area households; the index compares it with the same figure for the county)', es: 'Hogares que no hablan chino (cuota de los hogares de la zona principal; el índice la compara con la misma cifra del condado)' },
+  // legacy basis strings on models stored before P1-i
   { re: /中文家庭占比 × 有孩家庭占比（主商圈）/g, en: 'Chinese-speaking household share × families with children (primary trade area)', es: 'Cuota de hogares de habla china × familias con hijos (zona principal)' },
   { re: /中文家庭占比 × 25–44 岁占比（全国基准 28%）/g, en: 'Chinese-speaking household share × age 25–44 share (national benchmark 28%)', es: 'Cuota de hogares de habla china × cuota de 25–44 años (referencia nacional 28%)' },
   { re: /非华裔人口 × 收入指数/g, en: 'Non-Chinese population × income index', es: 'Población no china × índice de ingresos' },
+  { re: /walk10 岗位数 ÷ 主商圈人口/g, en: 'Jobs within a 10-minute walk ÷ primary-area population', es: 'Empleos a 10 minutos a pie ÷ población de la zona principal' },
   // ---- finance / cuisine-share method lines
   { re: /seats×turns 单一口径；保本 = 固定成本 ÷ 边际贡献率；安全线 = 保本 × (\S+)/g, en: 'Single basis: seats × turns; break-even = fixed cost ÷ contribution margin; safety line = break-even × $1', es: 'Base única: asientos × rotaciones; punto de equilibrio = costo fijo ÷ margen de contribución; línea de seguridad = punto de equilibrio × $1' },
   { re: /无中餐供给样本 → 先验 8%/g, en: 'No Chinese-restaurant sample → prior 8%', es: 'Sin muestra de oferta china → prior 8%' },

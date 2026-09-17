@@ -16,6 +16,14 @@ import {
 } from '@/lib/funnel/iq-deepseek-competitor-insights';
 import { demographicNarrativeParagraph } from '@/lib/funnel/iq-demographic-narrative';
 import { financeArchetypeLabel } from '@/lib/funnel/iq-finance-model';
+import { decisionTierForVerdict } from '@/lib/funnel/iq-full-report-schema';
+import {
+  conclusionPendingNote,
+  occupancyCostPct,
+  parseConclusion,
+  verdictLabelOf,
+  verdictRuleText,
+} from '@/lib/iq/conclusion/conclusion';
 import type { Browser } from 'puppeteer-core';
 import { isVercelServerless, launchPdfBrowser } from '@/lib/iq/render/chromium';
 import { renderReportPdf } from '@/lib/iq/render/pdf';
@@ -221,6 +229,9 @@ type PdfLabels = {
   competitorMap: string;
   competitorInsights: string;
   dataConfidence: string;
+  occupancy: string;
+  snapshot: string;
+  dataAsOf: string;
   layer: string;
   overall: string;
   breakeven: string;
@@ -319,6 +330,9 @@ const PDF_LABELS: Record<Locale, PdfLabels> = {
     competitorMap: '竞品分布',
     competitorInsights: '竞品深度洞察',
     dataConfidence: '数据置信度',
+    occupancy: '占用成本',
+    snapshot: '结论快照',
+    dataAsOf: '数据截至',
     layer: '维度',
     overall: '综合分',
     breakeven: '盈亏平衡',
@@ -415,6 +429,9 @@ const PDF_LABELS: Record<Locale, PdfLabels> = {
     competitorMap: 'Competitor Map',
     competitorInsights: 'Competitor Deep Dive',
     dataConfidence: 'Data confidence',
+    occupancy: 'Occupancy cost',
+    snapshot: 'Conclusion snapshot',
+    dataAsOf: 'Data as of',
     layer: 'Layer',
     overall: 'Overall',
     breakeven: 'Break-even',
@@ -511,6 +528,9 @@ const PDF_LABELS: Record<Locale, PdfLabels> = {
     competitorMap: 'Mapa de competidores',
     competitorInsights: 'Análisis profundo de competidores',
     dataConfidence: 'Confianza de los datos',
+    occupancy: 'Costo de ocupación',
+    snapshot: 'Snapshot de la conclusión',
+    dataAsOf: 'Datos al',
     layer: 'Dimensión',
     overall: 'Puntaje general',
     breakeven: 'Punto de equilibrio',
@@ -552,12 +572,21 @@ function pdfRiskAuditBlock(
   const audit = normalizeRiskAuditFromFull(full);
   if (!audit) return '';
 
-  const tier = parseDecisionTier(audit.decision_tier ?? full.decision_tier);
+  // §4.1 单一结论源 (临时方案, kept): when the row carries the frozen conclusion the
+  // PDF prints IT — it never recomputes and never falls back to the LLM's numbers,
+  // so the web page and this document cannot disagree.
+  const conclusion = parseConclusion((full as Record<string, unknown>).conclusion);
+  const pendingConclusion = (full as Record<string, unknown>).conclusion_pending === true && !conclusion;
+  const tier = conclusion
+    ? decisionTierForVerdict(conclusion.verdict)
+    : parseDecisionTier(audit.decision_tier ?? full.decision_tier);
   const tierCopy = decisionTierDisplay(tier, lang);
-  const overall = numScore(audit.overall_score);
-  const breakEven = numScore(audit.break_even_revenue_monthly_usd);
-  const safeRev = numScore(audit.safe_revenue_monthly_usd);
-  const conf = numScore(audit.data_confidence_pct);
+  const verdictWord = conclusion ? verdictLabelOf(conclusion.verdict, lang) : tierCopy?.label ?? '';
+  const overall = conclusion ? conclusion.overall : numScore(audit.overall_score);
+  const breakEven = conclusion ? conclusion.breakeven_monthly ?? undefined : numScore(audit.break_even_revenue_monthly_usd);
+  const safeRev = conclusion ? conclusion.safety_monthly ?? undefined : numScore(audit.safe_revenue_monthly_usd);
+  const conf = conclusion ? conclusion.data_confidence_pct : numScore(audit.data_confidence_pct);
+  const occupancy = conclusion ? occupancyCostPct(conclusion) : null;
 
   const layers = (audit.layers ?? []).slice(0, 6);
   const layerRows = layers
@@ -618,14 +647,14 @@ function pdfRiskAuditBlock(
   const calcBadgeHtml = financeApplied
     ? `<span style="display:inline-block;margin-left:6px;padding:1px 6px;font-size:8pt;background:#dcfce7;color:#166534;border-radius:8px;border:1px solid #86efac;">${escapeHtml(L.calculated)}</span>`
     : '';
-  const dailyBreakHint = financeSnapshot && breakEven != null
+  const dailyBreakHint = !conclusion && financeSnapshot && breakEven != null
     ? L.dailyHint(
         financeSnapshot.break_even_daily_revenue_usd,
         financeSnapshot.daily_covers_needed_breakeven,
         financeSnapshot.avg_ticket_usd,
       )
     : '';
-  const dailySafeHint = financeSnapshot && safeRev != null
+  const dailySafeHint = !conclusion && financeSnapshot && safeRev != null
     ? L.dailyHint(
         financeSnapshot.safe_daily_revenue_usd,
         financeSnapshot.daily_covers_needed_safe,
@@ -640,7 +669,7 @@ function pdfRiskAuditBlock(
         : L.confLow
     : '';
 
-  const financeNoteHtml = financeApplied && financeSnapshot
+  const financeNoteHtml = !conclusion && financeApplied && financeSnapshot
     ? `<div style="margin:8px 0 14px;padding:10px 12px;border-left:3px solid #16a34a;background:#f0fdf4;font-size:9pt;color:#14532d;">
         <div style="font-weight:600;margin-bottom:4px;">
           ${escapeHtml(L.financeHow)}
@@ -661,8 +690,10 @@ function pdfRiskAuditBlock(
   return `
   <div class="section">
     <h2><span class="head-mark">■</span> ${escapeHtml(L.riskAudit)}</h2>
-    ${tierCopy ? `<p style="font-weight:700;color:#1a365d;margin-bottom:8px;">${escapeHtml(tierCopy.label)} — ${escapeHtml(tierCopy.desc)}</p>` : ''}
-    ${overall != null ? `<p style="margin-bottom:8px;"><strong>${escapeHtml(L.overall)}:</strong> ${overall}/100${conf != null ? ` · ${escapeHtml(L.dataConfidence)}: ${conf}%` : ''}</p>` : ''}
+    ${tierCopy ? `<p style="font-weight:700;color:#1a365d;margin-bottom:8px;">${escapeHtml(verdictWord || tierCopy.label)} — ${escapeHtml(tierCopy.desc)}</p>` : ''}
+    ${overall != null ? `<p style="margin-bottom:8px;"><strong>${escapeHtml(L.overall)}:</strong> ${overall}/100${conf != null ? ` · ${escapeHtml(L.dataConfidence)}: ${conf}%` : ''}${occupancy != null ? ` · ${escapeHtml(L.occupancy)}: ${occupancy}%` : ''}</p>` : ''}
+    ${conclusion ? `<p style="margin-bottom:8px;font-size:8.5pt;color:#475569;">${escapeHtml(verdictRuleText(lang))}</p>` : ''}
+    ${pendingConclusion ? `<p style="margin-bottom:8px;font-size:9pt;color:#92400e;">${escapeHtml(conclusionPendingNote(lang))}</p>` : ''}
     ${audit.one_line_conclusion || pickStr(full.one_line_conclusion) ? `<p style="margin-bottom:12px;font-style:italic;">${escapeHtml(audit.one_line_conclusion || pickStr(full.one_line_conclusion) || '')}</p>` : ''}
     ${layerRows ? `<table style="width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:14px;"><tr style="background:#1a365d;color:#fff;"><th style="padding:8px;text-align:left;">${escapeHtml(L.layer)}</th><th style="padding:8px;">${escapeHtml(L.score)}</th></tr>${layerRows}</table>` : ''}
     ${breakEven != null || safeRev != null ? `<p style="margin-bottom:10px;">${breakEven != null ? `<strong>${escapeHtml(L.breakEven)}:</strong> $${breakEven.toLocaleString()}${calcBadgeHtml} <span style="color:#92400e;font-size:8.5pt;">${dailyBreakHint}</span>` : ''}${safeRev != null ? `<br /><strong>${escapeHtml(L.safeRevenue)}:</strong> $${safeRev.toLocaleString()}${calcBadgeHtml} <span style="color:#15803d;font-size:8.5pt;">${dailySafeHint}</span>` : ''}</p>` : ''}
@@ -1096,6 +1127,7 @@ function generatePdfHtml(input: {
   const dateStr = new Date().toLocaleDateString(LOCALE_TAG[lang], { year: 'numeric', month: 'long', day: 'numeric' });
 
   const title = pickStr(full.report_title) || headline;
+  const footerConclusion = parseConclusion((full as Record<string, unknown>).conclusion);
 
   const cjkFontFace = cjkUri
     ? `@font-face {
@@ -1430,6 +1462,8 @@ function generatePdfHtml(input: {
   <div class="footer">
     <p>${escapeHtml(L.generatedBy)} · ${escapeHtml(dateStr)}</p>
     <p>${escapeHtml(L.confidence)}: ${escapeHtml(pickStr(full.confidence) || '—')}</p>
+    ${/* §4.1: the same snapshot id and data-as-of the web footer prints. */ ''}
+    ${footerConclusion ? `<p>${escapeHtml(L.snapshot)}: ${escapeHtml(footerConclusion.snapshot_id)} · ${escapeHtml(L.dataAsOf)}: ${escapeHtml(footerConclusion.data_as_of)}</p>` : ''}
   </div>
 
   <div class="confidential">${escapeHtml(L.confidential)}</div>

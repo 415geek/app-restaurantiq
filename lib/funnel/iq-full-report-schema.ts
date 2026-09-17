@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { DEFAULT_LOCALE, type Locale, pick } from '@/lib/i18n/locale';
-import { decisionTierSchema, riskAuditFullSchema } from '@/lib/funnel/iq-risk-audit-model';
+import { decisionTierDisplay, decisionTierSchema, riskAuditFullSchema, type DecisionTier } from '@/lib/funnel/iq-risk-audit-model';
+// ./display, not ./conclusion: this module is imported by client components, and the
+// threshold half of the conclusion module reads defaults.yaml off disk (node:fs).
+import { conclusionSchema, dimensionLabel, occupancyCostPct, type Conclusion } from '@/lib/iq/conclusion/display';
+import type { CompetitorCounts } from '@/lib/iq/model/schema';
 import {
   type CompetitorWhitelist,
   isCompetitorWhitelisted,
@@ -171,6 +175,21 @@ export const iqFullReportSchema = z
     risk_audit: riskAuditFullSchema.optional(),
     data_confidence_pct: z.union([z.number(), z.string()]).optional(),
     lease_checklist: z.array(z.string()).optional(),
+    /** §4.1 单一结论源: the stored conclusion both surfaces print, its pending flag and the printed rule. */
+    conclusion: conclusionSchema.optional(),
+    conclusion_pending: z.boolean().optional(),
+    verdict_rule: optionalString,
+    /** §4.4 P1-a 计数单一化: the ONE competitor count block, copied from the model. */
+    competitor_counts: z
+      .object({
+        total: z.number(),
+        direct: z.number(),
+        same_category: z.number(),
+        l3: z.number(),
+        anchors: z.number(),
+        by_source: z.object({ google: z.number(), yelp: z.number(), foursquare: z.number() }),
+      })
+      .optional(),
   })
   .passthrough();
 
@@ -271,6 +290,14 @@ export type IqReportGroundingFlags = {
   _finance_model_applied?: boolean;
   /** Snapshot of the finance model used (for UI callout). */
   _finance_model_snapshot?: import('./iq-finance-model').DeterministicFinanceModel;
+  /** True when §4.1 单一结论源 replaced every headline figure with the stored conclusion. */
+  _conclusion_applied?: boolean;
+  /** The stored conclusion the page and the PDF both print (not underscore-prefixed: the UI reads it). */
+  conclusion?: Conclusion;
+  /** True when the deterministic core had not landed at finalize time — the UI says so in one line. */
+  conclusion_pending?: boolean;
+  /** §4.4 P1-a: the ONE competitor count block every surface prints. */
+  competitor_counts?: CompetitorCounts;
 };
 
 export type IqReportWithGrounding = Record<string, unknown> & IqReportGroundingFlags;
@@ -373,6 +400,7 @@ const FINANCE_TEXT: Record<string, Record<Locale, string>> = {
   'Marketing / loyalty': { en: 'Marketing / loyalty', zh: '营销 / 会员', es: 'Marketing / lealtad' },
   'Misc / admin': { en: 'Misc / admin', zh: '杂项 / 行政', es: 'Varios / administración' },
   'Fixed total / mo': { en: 'Fixed total / mo', zh: '固定成本合计 / 月', es: 'Total fijo / mes' },
+  'Fixed total / mo (excl. rent)': { en: 'Fixed total / mo (excl. rent)', zh: '固定成本合计 / 月（不含租金）', es: 'Total fijo / mes (sin renta)' },
   'user-provided monthly rent': { en: 'user-provided monthly rent', zh: '用户提供的月租金', es: 'renta mensual proporcionada por el usuario' },
   'user-provided sqft': { en: 'user-provided sqft', zh: '用户提供的面积', es: 'pies cuadrados proporcionados por el usuario' },
   'ACS county/tract anchors': { en: 'ACS county/tract anchors', zh: 'ACS 县级/片区锚点', es: 'anclajes ACS de condado/tramo' },
@@ -383,6 +411,175 @@ const FINANCE_TEXT: Record<string, Record<Locale, string>> = {
 export function localizeFinanceText(text: string, lang: Locale): string {
   const entry = FINANCE_TEXT[text];
   return entry ? pick(lang, entry) : text;
+}
+
+/* ------------------------------------------------------------------------ */
+/*        §4.1 单一结论源 (P0-A): the conclusion overrides the LLM              */
+/* ------------------------------------------------------------------------ */
+
+/** Verdict → the five-tier product wording the web report renders. */
+export function decisionTierForVerdict(verdict: Conclusion['verdict']): DecisionTier {
+  return verdict === 'GO' ? 'strong_go' : verdict === 'CONDITIONAL_GO' ? 'go_with_conditions' : 'no_go';
+}
+
+const SCENARIO_NAME: Record<Conclusion['scenarios'][number]['id'], Record<Locale, string>> = {
+  pessimistic: { en: 'Pessimistic', zh: '保守情景', es: 'Pesimista' },
+  base: { en: 'Base case', zh: '基准情景', es: 'Caso base' },
+  optimistic: { en: 'Optimistic', zh: '乐观情景', es: 'Optimista' },
+};
+
+const BASIS_NOTE: Record<Conclusion['basis'], Record<Locale, string>> = {
+  seats_turns: {
+    en: 'Revenue basis: seats × turns × ticket (the single finance model).',
+    zh: '营收口径：座位数 × 翻台 × 客单价（唯一财务模型）。',
+    es: 'Base de ingresos: asientos × rotaciones × ticket (el modelo financiero único).',
+  },
+  demand_capture: {
+    en: 'Revenue basis: modelled captured demand (no seat count or floor area was provided).',
+    zh: '营收口径：模型捕获需求（未提供座位数或面积）。',
+    es: 'Base de ingresos: demanda captada modelada (no se indicaron asientos ni superficie).',
+  },
+};
+
+/** The 8 cost rows the report prints, built from the conclusion's fixed cost. */
+export function costBreakdownFromConclusion(
+  conclusion: Conclusion,
+  lang: Locale,
+): Array<{ item: string; amount_usd: number; note: string }> {
+  const fc = conclusion.fixed_cost;
+  const rentNote = pick(lang, {
+    en: 'Not provided — rent is never estimated; the break-even below EXCLUDES rent',
+    zh: '未提供——本报告不估算租金，下方保本线不含租金',
+    es: 'No proporcionada — la renta nunca se estima; el punto de equilibrio EXCLUYE la renta',
+  });
+  const totalNote = conclusion.rent_excluded
+    ? pick(lang, {
+        en: 'Labor + other fixed, EXCLUDING rent',
+        zh: '人工 + 其他固定成本，不含租金',
+        es: 'Mano de obra + otros fijos, SIN renta',
+      })
+    : pick(lang, { en: 'Rent + labor + other fixed', zh: '租金 + 人工 + 其他固定成本', es: 'Renta + mano de obra + otros fijos' });
+  const row = (item: string, amount_usd: number, note = '') => ({ item: localizeFinanceText(item, lang), amount_usd, note });
+  return [
+    row('Rent (NNN)', fc.rent ?? 0, conclusion.rent_excluded ? rentNote : ''),
+    row('Labor (loaded)', fc.labor),
+    row('Utilities', fc.utilities),
+    row('Insurance', fc.insurance),
+    row('POS / software', fc.pos),
+    row('Marketing / loyalty', fc.marketing),
+    row('Misc / admin', fc.misc),
+    row(conclusion.rent_excluded ? 'Fixed total / mo (excl. rent)' : 'Fixed total / mo', fc.total, totalNote),
+  ];
+}
+
+/**
+ * 评审 Spec §4.1 单一结论源 (P0-A) — THE override.
+ *
+ * Symptom: the same paid report showed 71 / 有条件可做 / break-even $51,937 on the
+ * web page and 76.8 / 可做 / $48,807 in the 360° PDF, because the web score was an
+ * LLM number (`risk_audit.overall_score`) and the web break-even came from a second
+ * finance engine. From now on the LLM writes PROSE ONLY: every figure a customer
+ * could compare across the two surfaces is replaced here by the stored conclusion
+ * (`report_model_json.conclusion`, derived by lib/iq/conclusion/conclusion.ts).
+ *
+ * `conclusion == null` (the deterministic core did not land inside its budget) falls
+ * back to the legacy finance-model override and marks the body `conclusion_pending`,
+ * so the UI says the numbers are preliminary instead of showing a second set.
+ *
+ * Pure function — does not mutate its input.
+ */
+export function applyConclusionOverride(
+  report: IqReportWithGrounding,
+  conclusion: Conclusion | null | undefined,
+  lang: Locale = DEFAULT_LOCALE,
+  opts: {
+    financeModel?: import('./iq-finance-model').DeterministicFinanceModel | null;
+    /** `verdictRuleText(lang)` — generated from the ONE threshold set by the caller (server side). */
+    verdictRule?: string | null;
+    /** §4.4 P1-a: `report_model_json.competitors.counts` — the ONE competitor count block. */
+    counts?: CompetitorCounts | null;
+  } = {},
+): IqReportWithGrounding {
+  if (!conclusion) {
+    const fallback = applyFinanceModelOverride(report, opts.financeModel, lang);
+    return { ...fallback, conclusion_pending: true };
+  }
+
+  const existingRiskAudit = report.risk_audit && typeof report.risk_audit === 'object' ? (report.risk_audit as Record<string, unknown>) : {};
+  const existingDashboard = report.dashboard && typeof report.dashboard === 'object' ? (report.dashboard as Record<string, unknown>) : {};
+  const existingRevenueModel = report.revenue_model && typeof report.revenue_model === 'object' ? (report.revenue_model as Record<string, unknown>) : {};
+  const llmScenarios = Array.isArray(existingRevenueModel.scenarios) ? (existingRevenueModel.scenarios as Array<Record<string, unknown>>) : [];
+
+  const tier = decisionTierForVerdict(conclusion.verdict);
+  const tierCopy = decisionTierDisplay(tier, lang);
+  const occupancy = occupancyCostPct(conclusion);
+  // §4.4 P1-e 竞争强度三个数: ONE competitive-strength number. The deterministic
+  // `competitive_position` dimension replaces the LLM's `dashboard.competition_intensity`
+  // and its flat risk_audit sibling, so 多维评分 / 关键指标 / 决策矩阵 can no longer
+  // print 66 / 75 / 66 for the same site.
+  const competition = conclusion.dimensions.find((d) => d.id === 'competitive_position');
+
+  // The six deterministic dimensions replace whatever bars the LLM invented.
+  const layers = conclusion.dimensions.map((d) => ({
+    id: d.id,
+    score: Math.round(d.score),
+    label: dimensionLabel(d.id, lang),
+    note: `${d.weight}% × ${d.score} = ${d.weighted}`,
+  }));
+
+  const scenarios = conclusion.scenarios.map((s, i) => {
+    const llm = llmScenarios[i] && typeof llmScenarios[i] === 'object' ? llmScenarios[i] : {};
+    return {
+      ...llm,
+      name: typeof llm.name === 'string' && llm.name.trim() ? llm.name : pick(lang, SCENARIO_NAME[s.id]),
+      monthly_revenue_usd: s.monthly_revenue,
+    };
+  });
+
+  const note = pick(lang, {
+    en: `Score, verdict, break-even, safe revenue, cost table and revenue scenarios come from the single stored conclusion (snapshot ${conclusion.snapshot_id}); the web report and the 360° PDF print the same numbers. ${pick(lang, BASIS_NOTE[conclusion.basis])}`,
+    zh: `综合分、结论、保本线、安全营收、成本表与营收情景均来自唯一结论快照（${conclusion.snapshot_id}）；网页版与 360° PDF 打印同一组数字。${pick(lang, BASIS_NOTE[conclusion.basis])}`,
+    es: `La puntuación, el veredicto, el punto de equilibrio, los ingresos seguros, la tabla de costos y los escenarios provienen de la conclusión única almacenada (snapshot ${conclusion.snapshot_id}); el informe web y el PDF 360° imprimen las mismas cifras. ${pick(lang, BASIS_NOTE[conclusion.basis])}`,
+  });
+  const existingWarnings = Array.isArray(report._warnings) ? report._warnings.slice() : [];
+
+  return {
+    ...report,
+    decision_tier: tier,
+    data_confidence_pct: conclusion.data_confidence_pct,
+    dashboard: {
+      ...existingDashboard,
+      overall_score: conclusion.overall,
+      occupancy_cost_pct: occupancy,
+      recommendation: tierCopy?.label ?? existingDashboard.recommendation,
+      ...(competition ? { competition_intensity: Math.round(competition.score) } : {}),
+    },
+    risk_audit: {
+      ...existingRiskAudit,
+      overall_score: conclusion.overall,
+      decision_tier: tier,
+      layers,
+      break_even_revenue_monthly_usd: conclusion.breakeven_monthly,
+      safe_revenue_monthly_usd: conclusion.safety_monthly,
+      cost_breakdown: costBreakdownFromConclusion(conclusion, lang),
+      data_confidence_pct: conclusion.data_confidence_pct,
+      ...(competition ? { competition_pressure_score: Math.round(competition.score) } : {}),
+    },
+    // 决策矩阵 is the same six weighted dimensions, never a second table.
+    decision_matrix: conclusion.dimensions.map((d) => ({
+      dimension: dimensionLabel(d.id, lang),
+      score_100: d.score,
+      weight_pct: d.weight,
+      weighted_score: d.weighted,
+    })),
+    revenue_model: { ...existingRevenueModel, scenarios },
+    conclusion,
+    conclusion_pending: false,
+    ...(opts.verdictRule ? { verdict_rule: opts.verdictRule } : {}),
+    ...(opts.counts ? { competitor_counts: opts.counts } : {}),
+    _conclusion_applied: true,
+    _warnings: [...existingWarnings, note],
+  };
 }
 
 /**

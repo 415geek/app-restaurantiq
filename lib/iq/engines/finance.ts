@@ -29,6 +29,7 @@
  * 10 %) and a "each +$1,000 of rent" sensitivity row.
  */
 import { getDefaults, cuisineById, type CuisineDef, type DaypartProfile } from '../params';
+import { archetypeIdFor, costTierFor, fixedCostScaleFor, headcountFor, laborMonthlyUsd, type ArchetypeId, type CostTier } from '../conclusion/cost-scale';
 import type { ReportModel } from '../model/schema';
 
 export type FinanceScenario = ReportModel['finance']['scenarios'][number];
@@ -56,12 +57,12 @@ export type RentSource = 'user_input' | 'not_provided';
 export const OCCUPANCY_TARGET = 0.1;
 
 export interface Archetype {
-  id: string;
+  /** Cost archetype id — resolved by the shared `archetypeIdFor` so both engines agree. */
+  id: ArchetypeId;
   food_cost_pct: number;
   paper_pct: number;
   /** Full-time-equivalent headcount — from the taxonomy `fte_default` when set. */
   headcount: number;
-  other_fixed: number;
   seats_per_100sqft: number;
   default_sqft: number;
   base_turns: number;
@@ -72,34 +73,31 @@ export interface Archetype {
   daypart_profile: DaypartProfile;
 }
 
-type ArchetypeBase = Omit<Archetype, 'ticket_in' | 'delivery_ratio' | 'daypart_profile'>;
+type ArchetypeBase = Omit<Archetype, 'id' | 'headcount' | 'ticket_in' | 'delivery_ratio' | 'daypart_profile'>;
 
-/** Cost-structure benchmarks by legacy sub-cuisine id (kept verbatim) and by concept category. */
+/**
+ * Capacity / variable-cost benchmarks by legacy sub-cuisine id and by concept
+ * category. The MONEY side (wages, utilities, insurance, POS, marketing, misc)
+ * deliberately lives in `cost_scale` (defaults.yaml) instead — see
+ * lib/iq/conclusion/cost-scale.ts — so the web report and the 360° cannot drift.
+ */
 const ARCHETYPES: Record<string, ArchetypeBase> = {
-  boba: { id: 'bubble_tea', food_cost_pct: 0.28, paper_pct: 0.04, headcount: 5, other_fixed: 4_500, seats_per_100sqft: 2.0, default_sqft: 900, base_turns: 6 },
-  chinese_fast: { id: 'qsr', food_cost_pct: 0.3, paper_pct: 0.03, headcount: 8, other_fixed: 6_000, seats_per_100sqft: 2.5, default_sqft: 1_400, base_turns: 4 },
-  noodles: { id: 'fast_casual', food_cost_pct: 0.31, paper_pct: 0.025, headcount: 9, other_fixed: 6_800, seats_per_100sqft: 2.5, default_sqft: 1_500, base_turns: 3.5 },
-  hk_cafe: { id: 'fast_casual', food_cost_pct: 0.31, paper_pct: 0.025, headcount: 10, other_fixed: 7_200, seats_per_100sqft: 2.5, default_sqft: 1_800, base_turns: 3 },
-  hot_pot: { id: 'casual_dining', food_cost_pct: 0.34, paper_pct: 0.015, headcount: 16, other_fixed: 9_500, seats_per_100sqft: 2.0, default_sqft: 3_000, base_turns: 1.6 },
-  default: { id: 'asian_casual', food_cost_pct: 0.32, paper_pct: 0.02, headcount: 12, other_fixed: 7_800, seats_per_100sqft: 2.3, default_sqft: 2_200, base_turns: 2.0 },
+  boba: { food_cost_pct: 0.28, paper_pct: 0.04, seats_per_100sqft: 2.0, default_sqft: 900, base_turns: 6 },
+  chinese_fast: { food_cost_pct: 0.3, paper_pct: 0.03, seats_per_100sqft: 2.5, default_sqft: 1_400, base_turns: 4 },
+  noodles: { food_cost_pct: 0.31, paper_pct: 0.025, seats_per_100sqft: 2.5, default_sqft: 1_500, base_turns: 3.5 },
+  hk_cafe: { food_cost_pct: 0.31, paper_pct: 0.025, seats_per_100sqft: 2.5, default_sqft: 1_800, base_turns: 3 },
+  hot_pot: { food_cost_pct: 0.34, paper_pct: 0.015, seats_per_100sqft: 2.0, default_sqft: 3_000, base_turns: 1.6 },
+  default: { food_cost_pct: 0.32, paper_pct: 0.02, seats_per_100sqft: 2.3, default_sqft: 2_200, base_turns: 2.0 },
   // ---- §4.1 concept categories (used for every id without a legacy row above)
-  mala_tang: { id: 'fast_casual', food_cost_pct: 0.31, paper_pct: 0.03, headcount: 6, other_fixed: 5_200, seats_per_100sqft: 2.5, default_sqft: 1_200, base_turns: 4 },
-  roast: { id: 'qsr', food_cost_pct: 0.33, paper_pct: 0.03, headcount: 8, other_fixed: 5_600, seats_per_100sqft: 2.5, default_sqft: 1_200, base_turns: 4 },
-  bakery_dessert: { id: 'coffee_bakery', food_cost_pct: 0.3, paper_pct: 0.03, headcount: 4, other_fixed: 4_200, seats_per_100sqft: 1.5, default_sqft: 1_000, base_turns: 6 },
-  beverage: { id: 'bubble_tea', food_cost_pct: 0.28, paper_pct: 0.04, headcount: 3, other_fixed: 4_000, seats_per_100sqft: 1.5, default_sqft: 800, base_turns: 6 },
-  asian_other: { id: 'asian_casual', food_cost_pct: 0.32, paper_pct: 0.02, headcount: 10, other_fixed: 7_400, seats_per_100sqft: 2.3, default_sqft: 2_000, base_turns: 2.2 },
-  western_other: { id: 'casual_dining', food_cost_pct: 0.32, paper_pct: 0.02, headcount: 10, other_fixed: 7_600, seats_per_100sqft: 2.2, default_sqft: 2_200, base_turns: 2.2 },
-  mexican: { id: 'fast_casual', food_cost_pct: 0.3, paper_pct: 0.03, headcount: 8, other_fixed: 6_000, seats_per_100sqft: 2.5, default_sqft: 1_500, base_turns: 3.5 },
-  italian: { id: 'pizza', food_cost_pct: 0.3, paper_pct: 0.025, headcount: 10, other_fixed: 7_000, seats_per_100sqft: 2.2, default_sqft: 2_000, base_turns: 2.2 },
+  mala_tang: { food_cost_pct: 0.31, paper_pct: 0.03, seats_per_100sqft: 2.5, default_sqft: 1_200, base_turns: 4 },
+  roast: { food_cost_pct: 0.33, paper_pct: 0.03, seats_per_100sqft: 2.5, default_sqft: 1_200, base_turns: 4 },
+  bakery_dessert: { food_cost_pct: 0.3, paper_pct: 0.03, seats_per_100sqft: 1.5, default_sqft: 1_000, base_turns: 6 },
+  beverage: { food_cost_pct: 0.28, paper_pct: 0.04, seats_per_100sqft: 1.5, default_sqft: 800, base_turns: 6 },
+  asian_other: { food_cost_pct: 0.32, paper_pct: 0.02, seats_per_100sqft: 2.3, default_sqft: 2_000, base_turns: 2.2 },
+  western_other: { food_cost_pct: 0.32, paper_pct: 0.02, seats_per_100sqft: 2.2, default_sqft: 2_200, base_turns: 2.2 },
+  mexican: { food_cost_pct: 0.3, paper_pct: 0.03, seats_per_100sqft: 2.5, default_sqft: 1_500, base_turns: 3.5 },
+  italian: { food_cost_pct: 0.3, paper_pct: 0.025, seats_per_100sqft: 2.2, default_sqft: 2_000, base_turns: 2.2 },
 };
-
-/** Wage tiers only — there is deliberately no rent $/sf here (rent is never estimated). */
-const TIERS = {
-  hcol: { wage: 22 },
-  mcol: { wage: 18 },
-  lcol: { wage: 15 },
-} as const;
-const HCOL_STATES = new Set(['CA', 'NY', 'WA', 'MA', 'HI', 'DC', 'NJ']);
 
 /** Legacy default delivery share, used only for entries without `takeout_share`. */
 const LEGACY_DELIVERY_RATIO = 0.25;
@@ -113,18 +111,20 @@ const LEGACY_DELIVERY_RATIO = 0.25;
 export function archetypeFor(cuisine: string | CuisineDef): Archetype {
   const cu = typeof cuisine === 'string' ? cuisineById(cuisine) : cuisine;
   const base = ARCHETYPES[cu.id] ?? ARCHETYPES[cu.category] ?? ARCHETYPES.default;
+  const id = archetypeIdFor(cu);
   return {
     ...base,
-    headcount: cu.fte_default ?? base.headcount,
+    id,
+    headcount: cu.fte_default ?? headcountFor(id),
     ticket_in: cu.ticket_in,
     delivery_ratio: cu.takeout_share ?? LEGACY_DELIVERY_RATIO,
     daypart_profile: cu.daypart_profile ?? 'lunch_dinner',
   };
 }
 
-function tierFor(income: number | null, state: string | null): keyof typeof TIERS {
-  if (income != null) return income >= 110_000 ? 'hcol' : income >= 70_000 ? 'mcol' : 'lcol';
-  return state && HCOL_STATES.has(state.toUpperCase()) ? 'hcol' : 'mcol';
+/** @deprecated kept as a named export for callers; resolution lives in cost-scale.ts. */
+function tierFor(income: number | null, state: string | null): CostTier {
+  return costTierFor(income, state);
 }
 
 /** Single revenue formula. Everything in the scenario table calls this. */
@@ -184,12 +184,10 @@ export function computeFinance(input: FinanceInput): ReportModel['finance'] {
   const rent_excluded = rent == null;
   if (rent_excluded) inputs_missing.push('rent(未提供)');
 
-  const labor = Math.round(arch.headcount * TIERS[tier].wage * 173 * 1.18);
-  const utilities = Math.round(arch.other_fixed * 0.3);
-  const insurance = Math.round(arch.other_fixed * 0.12);
-  const pos = Math.round(arch.other_fixed * 0.08);
-  const marketing = Math.round(arch.other_fixed * 0.25);
-  const misc = arch.other_fixed - utilities - insurance - pos - marketing;
+  // §4.1 单一结论源: wages and the five non-rent fixed rows come from the ONE
+  // `cost_scale` table (defaults.yaml) that the funnel engine reads as well.
+  const labor = laborMonthlyUsd(arch.headcount, tier);
+  const { utilities, insurance, pos, marketing, misc } = fixedCostScaleFor(input.cuisine, tier);
   // Excludes rent when none was provided (flagged by rent_excluded, never silently).
   const fixed_total = (rent ?? 0) + labor + utilities + insurance + pos + marketing + misc;
 
@@ -199,7 +197,23 @@ export function computeFinance(input: FinanceInput): ReportModel['finance'] {
   const safety_monthly = Math.round(breakeven_monthly * d.safety_multiplier);
 
   const days_open = d.days_open_per_month;
-  const bt = arch.base_turns;
+  // Revenue basis (§4.1 单一结论源): normally seats × turns. When the customer gave
+  // neither seats nor floor area the seat count is a pure archetype guess, so the
+  // scenario table is re-anchored on the modelled captured demand instead — the
+  // turns are scaled, so covers ↔ orders ↔ revenue still reconcile exactly. The
+  // conclusion prints which basis produced the numbers; there is never a second set.
+  const capacityKnown = input.seats != null || input.sqft != null;
+  let revenue_basis: ReportModel['finance']['revenue_basis'] = 'seats_turns';
+  let bt = arch.base_turns;
+  if (!capacityKnown && input.captured_monthly_usd != null && input.captured_monthly_usd > 0) {
+    const trial = scenarioRevenue({ seats: seats!, turns_per_day: bt, delivery_ratio, ticket_in, ticket_delivery, days_open });
+    if (trial.monthly_revenue > 0) {
+      const factor = Math.min(4, Math.max(0.25, input.captured_monthly_usd / trial.monthly_revenue));
+      bt = Math.max(0.2, Math.round(bt * factor * 10) / 10);
+      revenue_basis = 'demand_capture';
+      inputs_missing.push('seats/sqft(未提供 → 情景按模型捕获需求标定)');
+    }
+  }
   const mk = (id: FinanceScenario['id'], turns: number, dr: number, tIn: number, tDel: number): FinanceScenario => {
     const s = scenarioRevenue({ seats: seats!, turns_per_day: turns, delivery_ratio: dr, ticket_in: tIn, ticket_delivery: tDel, days_open });
     return { id, ...s, vs_breakeven: Math.round((s.monthly_revenue / breakeven_monthly) * 1000) / 1000 };
@@ -260,6 +274,7 @@ export function computeFinance(input: FinanceInput): ReportModel['finance'] {
     variable_rate: Math.round(variable_rate * 1000) / 1000,
     breakeven_monthly,
     safety_monthly,
+    revenue_basis,
     scenarios,
     sensitivity,
     occupancy_cost_ratio,

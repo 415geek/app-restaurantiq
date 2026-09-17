@@ -20,6 +20,9 @@
  */
 
 import { kickReport360 } from '@/lib/iq/kick';
+import { generateReport360ForRow } from '@/lib/iq/generate';
+import { parseConclusion, verdictRuleText, type Conclusion } from '@/lib/iq/conclusion/conclusion';
+import type { CompetitorCounts } from '@/lib/iq/model/schema';
 import { type Locale, toLocale } from '@/lib/i18n/locale';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { getPublicBaseUrl } from '@/lib/funnel/base-url';
@@ -28,7 +31,7 @@ import { applyDualModelVerification } from '@/lib/funnel/iq-dual-model-verify';
 import type { DeterministicFinanceModel } from '@/lib/funnel/iq-finance-model';
 import {
   applyCompetitorWhitelist,
-  applyFinanceModelOverride,
+  applyConclusionOverride,
   logFullReportQuality,
   parseIqFullReport,
   type IqReportWithGrounding,
@@ -87,6 +90,8 @@ export type GenerationState = {
   steps?: StepTimes;
   /** The standard-tier run already scheduled its professional upgrade (once per row). */
   autoUpgradeKicked?: boolean;
+  /** §4.1 单一结论源: the deterministic core did not land before the draft — the body is marked preliminary. */
+  conclusionPending?: boolean;
   log: string[];
 };
 
@@ -347,11 +352,95 @@ async function stageEnrich(ctx: StageCtx): Promise<void> {
   }
 }
 
+/** How long the draft stage waits for the deterministic core before going ahead without it. */
+export const CONCLUSION_BUDGET_MS = 150_000;
+
+/** The conclusion already stored on the row, if the 360° core has run. */
+export function storedConclusion(row: IqReportRow): Conclusion | null {
+  const m = row.report_model_json as { conclusion?: unknown } | null | undefined;
+  return m && typeof m === 'object' ? parseConclusion(m.conclusion) : null;
+}
+
+/**
+ * §4.4 P1-a 计数单一化: the ONE competitor count block, taken from the model
+ * (`competitors.counts`) or from its funnel twin (`market_data.summary.counts`).
+ * The web body prints these instead of anything the LLM counted for itself.
+ */
+export function storedCompetitorCounts(row: IqReportRow): CompetitorCounts | null {
+  const fromModel = (row.report_model_json as { competitors?: { counts?: unknown } } | null | undefined)?.competitors?.counts;
+  const fromMarket = (row.market_data_json as { summary?: { counts?: unknown } } | null | undefined)?.summary?.counts;
+  const raw = fromModel ?? fromMarket;
+  if (!raw || typeof raw !== 'object') return null;
+  const c = raw as Record<string, unknown>;
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const by = (c.by_source ?? {}) as Record<string, unknown>;
+  const total = n(c.total);
+  if (total == null) return null;
+  return {
+    total,
+    direct: n(c.direct) ?? 0,
+    same_category: n(c.same_category) ?? 0,
+    l3: n(c.l3) ?? 0,
+    anchors: n(c.anchors) ?? 0,
+    by_source: { google: n(by.google) ?? 0, yelp: n(by.yelp) ?? 0, foursquare: n(by.foursquare) ?? 0 },
+  };
+}
+
+/**
+ * §4.1 单一结论源 (P0-A), ordering fix: the deterministic core runs BEFORE the LLM
+ * draft, not after it.
+ *
+ * The 360° model is generated WITHOUT narratives (prose is the slow part and it is
+ * not needed to freeze the numbers) inside a budget. If it lands, its conclusion is
+ * injected into the draft prompt anchors and into the finalize override, so the web
+ * report prints exactly what the PDF will print. If it does not land in time, the
+ * job falls back to today's behaviour and flags `conclusionPending`, and the body
+ * says the numbers are preliminary instead of showing a second set.
+ *
+ * Idempotent: a conclusion already stored on the row is reused, never recomputed.
+ */
+async function ensureConclusion(ctx: StageCtx, row: IqReportRow): Promise<Conclusion | null> {
+  const { state } = ctx;
+  const existing = storedConclusion(row);
+  if (existing) {
+    pushLog(state, 'conclusion: reused the stored 360° core');
+    return existing;
+  }
+  const budget = Math.min(CONCLUSION_BUDGET_MS, Math.max(0, ctx.deadline.remainingMs() - 30_000));
+  if (budget < 20_000) {
+    pushLog(state, 'conclusion: no budget left for the deterministic core');
+    return null;
+  }
+  const t0 = Date.now();
+  try {
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), budget).unref?.());
+    const run = generateReport360ForRow(row.id, { narrative: false }).then((r) => r?.model.conclusion ?? null);
+    const conclusion = await Promise.race([run, timeout]);
+    if (!conclusion) {
+      pushLog(state, `conclusion: core did not land in ${Math.round(budget / 1000)}s — numbers stay preliminary`);
+      return null;
+    }
+    pushLog(state, `conclusion: core landed in ${Date.now() - t0}ms (${conclusion.verdict} ${conclusion.overall})`);
+    return conclusion;
+  } catch (e) {
+    console.warn('[iq-report-job] deterministic core failed, continuing without a conclusion:', shortErr(e));
+    pushLog(state, `conclusion: core failed: ${shortErr(e).slice(0, 120)}`);
+    return null;
+  }
+}
+
 async function stageDraft(ctx: StageCtx): Promise<void> {
   const { state, deadline, language, professional } = ctx;
   // Re-read: enrich persisted a fresh market pack.
   const row = (await iqGetReport(ctx.row.id)) ?? ctx.row;
-  const marketData = (row.market_data_json as Record<string, unknown> | null) ?? undefined;
+  // §4.1: freeze the numbers FIRST, then let the LLM write prose around them.
+  const conclusion = await ensureConclusion(ctx, row);
+  state.conclusionPending = conclusion == null;
+  const marketData = ((): Record<string, unknown> | undefined => {
+    const md = (row.market_data_json as Record<string, unknown> | null) ?? undefined;
+    // The anchors block reads `market_data.conclusion` and turns it into hard rules.
+    return conclusion ? { ...(md ?? {}), conclusion } : md;
+  })();
   const base = {
     location: row.location,
     businessType: row.business_type,
@@ -444,10 +533,18 @@ async function stageFinalize(ctx: StageCtx): Promise<void> {
   const row = (await iqGetReport(ctx.row.id)) ?? ctx.row;
   const financeModel = ((row.market_data_json as Record<string, unknown> | null)?.finance_model ??
     null) as DeterministicFinanceModel | null;
-  const withFinance = applyFinanceModelOverride(
+  // §4.1 单一结论源: the stored conclusion replaces every headline figure the LLM
+  // wrote (score, verdict, break-even, safe revenue, cost table, occupancy, data
+  // confidence, revenue scenarios). The draft stage froze it; re-read in case this
+  // stage runs in a later invocation. Without one, the legacy finance override runs
+  // and the body is marked preliminary.
+  const conclusion = storedConclusion(row);
+  state.conclusionPending = conclusion == null;
+  const withFinance = applyConclusionOverride(
     state.draft as IqReportWithGrounding,
-    financeModel,
+    conclusion,
     ctx.language,
+    { financeModel, verdictRule: verdictRuleText(ctx.language), counts: storedCompetitorCounts(row) },
   );
   logFullReportQuality(withFinance, `reportId=${row.id} job/${state.draftSource ?? 'llm'}`);
   const clean = stripInternalIqReportFields(withFinance) as Record<string, unknown>;
@@ -455,9 +552,9 @@ async function stageFinalize(ctx: StageCtx): Promise<void> {
   await iqSetFullReport(row.id, clean);
   // Drop the (large) draft from the checkpoint once the report is stored.
   delete state.draft;
-  pushLog(state, `finalized (${clean.generation_tier})`);
-  // 360° engine runs in its own invocation once the legacy report is safe on disk
-  // (idempotent server-side: an existing model is returned, not rebuilt).
+  pushLog(state, `finalized (${clean.generation_tier}${conclusion ? `, conclusion ${conclusion.snapshot_id}` : ', conclusion pending'})`);
+  // The 360° pass now only writes the page narratives around the frozen numbers
+  // (idempotent server-side: an existing model is never recomputed).
   await kickReport360(row.id);
 }
 

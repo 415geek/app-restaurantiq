@@ -3,7 +3,8 @@
  * Every score displayed anywhere in the report is produced here; there is no
  * second dimension set (intercepts R5).
  */
-import { cuisineById, getDefaults, type RangeClass } from '../params';
+import { cuisineById, getDefaults, type DaypartId, type Dayparts, type RangeClass } from '../params';
+import { verdictFromScore } from '../conclusion/conclusion';
 import type { ReportModel } from '../model/schema';
 import { rentForOccupancyTarget } from './finance';
 
@@ -43,7 +44,38 @@ export interface ScoreInput {
     safety_monthly: number | null;
     base_revenue: number | null;
   };
-  demand: { captured_monthly_usd: number | null; lunch_usd: number | null; dinner_usd: number | null };
+  demand: {
+    captured_monthly_usd: number | null;
+    lunch_usd: number | null;
+    dinner_usd: number | null;
+    /** §4.3 modelled daypart mix; `[]` when the model predates the four-daypart split. */
+    dayparts?: Array<{ id: DaypartId; share: number; monthly_usd: number }>;
+  };
+}
+
+/**
+ * §4.3: a concept is "lunch-dependent" when its own taxonomy table puts at least
+ * this much of the day in 午市. Below it the 午市 set-menu + delivery advice is
+ * simply wrong for the format (an egg-tart bakery sells 25 % at lunch and 65 %
+ * outside it), so the trigger is never allowed to fire.
+ */
+export const LUNCH_DEPENDENT_SHARE = 0.25;
+
+/** Modelled share of the day that lands in one daypart; null when the model carries no daypart split. */
+export function modelledDaypartShare(demand: ScoreInput['demand'], id: DaypartId): number | null {
+  const dp = demand.dayparts ?? [];
+  const hit = dp.find((x) => x.id === id);
+  if (hit) return hit.share;
+  // Pre-§4.3 fallback: only 午市 / 晚市 existed, so a lunch share can still be recovered.
+  const l = demand.lunch_usd;
+  const d = demand.dinner_usd;
+  if (id === 'lunch' && l != null && d != null && l + d > 0) return l / (l + d);
+  return null;
+}
+
+/** The daypart the concept sells most of — the one its advice must be written for. */
+export function dominantDaypart(p: Dayparts): DaypartId {
+  return (['breakfast', 'lunch', 'afternoon', 'dinner'] as DaypartId[]).reduce((a, b) => (p[b] > p[a] ? b : a));
 }
 
 const LABELS: Record<ScoreDimensionId, { zh: string; en: string }> = {
@@ -179,16 +211,23 @@ export function scoreDimensions(input: ScoreInput): ReportModel['score']['dimens
   const fin = scoreFinancialViability(input.finance, input.demand.captured_monthly_usd);
   push('financial_viability', fin.score, fin.drivers);
 
-  // 6 场景与外卖
-  const lunch = input.demand.lunch_usd;
-  const dinner = input.demand.dinner_usd;
-  const lunchShare = lunch != null && dinner != null && lunch + dinner > 0 ? lunch / (lunch + dinner) : null;
-  const sBalance = lunchShare == null ? null : lunchShare >= 0.25 && lunchShare <= 0.5 ? 100 : lunchShare < 0.25 ? lin(lunchShare, 0, 0.25) : lin(1 - lunchShare, 0.3, 0.5);
+  // 6 场景与外卖 — §4.3 daypart 按业态取值: the concept's own daypart table says which
+  // hours it lives on, and the site is scored on what supplies THOSE hours. 午市 is
+  // supplied by the walk10 workplace pool; 早市 / 午后 / 晚市 by residents and passers-by.
+  // A bakery is therefore never marked down for selling only 10 % of its day at dinner.
+  const profile = cu.dayparts;
   const hhDensity = input.drive5.hh != null && input.drive5.area_sq_mi ? input.drive5.hh / input.drive5.area_sq_mi : null;
   const sDensity = hhDensity == null ? null : lin(hhDensity, 500, 3_000);
+  const jobsSupport = input.jobs_walk10 == null ? null : lin(input.jobs_walk10, 0, 6_000);
+  const residentSupport = sDensity;
+  const sDaypart =
+    jobsSupport == null && residentSupport == null
+      ? null
+      : profile.lunch * (jobsSupport ?? residentSupport ?? 50) + (1 - profile.lunch) * (residentSupport ?? jobsSupport ?? 50);
   const sDelivery = input.competitors.l1_delivery_share == null ? 60 : lin(input.competitors.l1_delivery_share, 0, 0.8);
-  push('occasion_delivery', avg([sBalance, sDensity, sDelivery]) ?? 50, [
-    `午市占比 ${lunchShare == null ? '未获取' : (lunchShare * 100).toFixed(0) + '%'}`,
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  push('occasion_delivery', avg([sDaypart, sDensity, sDelivery]) ?? 50, [
+    `业态时段分布 早市 ${pct(profile.breakfast)} / 午市 ${pct(profile.lunch)} / 午后 ${pct(profile.afternoon)} / 晚市 ${pct(profile.dinner)}：午市看 walk10 岗位 ${input.jobs_walk10 ?? '未获取'}，其余时段看居民与过路客`,
     `drive5 户密度 ${hhDensity == null ? '未获取' : Math.round(hhDensity) + ' 户/平方英里'}`,
     `L1 提供外卖比例 ${input.competitors.l1_delivery_share == null ? '未获取（中性）' : (input.competitors.l1_delivery_share * 100).toFixed(0) + '%'}`,
   ]);
@@ -197,13 +236,12 @@ export function scoreDimensions(input: ScoreInput): ReportModel['score']['dimens
 }
 
 /**
- * Verdict from the total score. With no rent provided the verdict is capped at
- * CONDITIONAL_GO — a GO that never saw the largest fixed cost is indefensible.
+ * Verdict from the total score. §4.5 单一结论源: the thresholds and the rule live
+ * once, in `lib/iq/conclusion/conclusion.ts` (fed by `defaults.yaml` → `verdict`);
+ * this is the thin engine-side call site, never a second threshold table.
  */
 export function verdictFor(total: number, rentMissing = false): ReportModel['score']['verdict'] {
-  const v = getDefaults().verdict;
-  const verdict = total >= v.go ? 'GO' : total >= v.conditional ? 'CONDITIONAL_GO' : 'NO_GO';
-  return rentMissing && verdict === 'GO' ? 'CONDITIONAL_GO' : verdict;
+  return verdictFromScore(total, { rentMissing });
 }
 
 /** The condition every no-rent report carries first: add the rent, regenerate, and here is the ceiling. */
@@ -215,6 +253,58 @@ export function rentNotProvidedCondition(captured_monthly_usd: number | null): R
     value: cap,
     text_zh: `补充实际月租后重新生成：本报告未假设任何租金，保本线不含租金${usd ? `；按 10% 占用成本，月租上限约 ${usd}` : ''}`,
     text_en: `Add the actual monthly rent and regenerate: this report assumes no rent, the break-even excludes rent${usd ? `; at 10% occupancy cost the rent ceiling is about ${usd}` : ''}`,
+  };
+}
+
+/**
+ * §4.3: the 场景与外卖 condition, written for the daypart the concept actually sells in.
+ *
+ * The 「午市偏弱：≤ $18 套餐 + 2 个外卖平台」 advice may fire ONLY when
+ *   (a) the concept's own 午市 share is ≥ 25 % — it is a lunch business at all — AND
+ *   (b) 午市 outweighs the concept's own 早市 + 午后 — lunch is where the format actually lives — AND
+ *   (c) the modelled 午市 capture share is below that own share — this site under-delivers it.
+ * An egg-tart bakery (35 / 25 / 30 / 10) fails (b) — 25 % vs 65 % — so it always gets
+ * morning / afternoon advice; a 茶餐厅 (15 / 40 / 15 / 30) passes (a) and (b) and can get it.
+ */
+export function daypartCondition(input: ScoreInput): ReportModel['score']['conditions'][number] {
+  const profile = cuisineById(input.cuisine).dayparts;
+  const modelledLunch = modelledDaypartShare(input.demand, 'lunch');
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  const dim = 'occasion_delivery';
+
+  const lunchLed = profile.lunch >= LUNCH_DEPENDENT_SHARE && profile.lunch >= profile.breakfast + profile.afternoon;
+  if (lunchLed && modelledLunch != null && modelledLunch < profile.lunch) {
+    return {
+      dimension: dim,
+      value: Math.round(modelledLunch * 100) / 100,
+      text_zh: `午市偏弱：该业态午市应占 ${pct(profile.lunch)}，模型只捕获到 ${pct(modelledLunch)}——设计 ≤ $18 套餐并接入 2 个外卖平台补足场景`,
+      text_en: `Weak lunch: this format should do ${pct(profile.lunch)} of its day at lunch but the model captures only ${pct(modelledLunch)} — add a ≤ $18 set menu and two delivery platforms`,
+    };
+  }
+
+  const dominant = dominantDaypart(profile);
+  const morning = profile.breakfast + profile.afternoon;
+  if (dominant === 'breakfast' || dominant === 'afternoon' || morning >= 0.5) {
+    return {
+      dimension: dim,
+      value: Math.round(morning * 100) / 100,
+      text_zh: `主力时段在早市与午后（合计 ${pct(morning)}）：把出炉与备货排在 7:00–10:00 与 14:00–16:00，做周末上午的采买高峰与整盒预订 / 外带，不要按午市套餐设计`,
+      text_en: `The day is front-loaded: mornings plus the afternoon are ${pct(morning)} of sales — time baking and restocking for 7:00–10:00 and 14:00–16:00, and build the weekend-morning buying peak with whole-box pre-orders and takeaway, not a lunch set menu`,
+    };
+  }
+  if (dominant === 'dinner') {
+    return {
+      dimension: dim,
+      value: Math.round(profile.dinner * 100) / 100,
+      text_zh: `主力时段在晚市（占 ${pct(profile.dinner)}）：把人手与备货压在晚市与周末，晚市翻台与等位管理决定营收，午市不必强开`,
+      text_en: `The day is dinner-led (${pct(profile.dinner)} of sales): staff and prep for the evening and weekends — evening turns and wait-list management drive revenue; there is no need to force a lunch service`,
+    };
+  }
+  return {
+    dimension: dim,
+    value: Math.round(profile.lunch * 100) / 100,
+    text_zh: `午市已是主力时段（占 ${pct(profile.lunch)}）：维持出餐速度与套餐结构，外卖用于填补午后与晚市的空档`,
+    text_en: `Lunch is already the main daypart (${pct(profile.lunch)} of sales): protect ticket times and the set-menu structure, and use delivery to fill the afternoon and evening gaps`,
   };
 }
 
@@ -280,7 +370,7 @@ export function buildConditions(dims: ReportModel['score']['dimensions'], input:
         out.push({ dimension: w.id, value: input.access.parking.spaces, text_zh: '核实停车位数量与晚市可用性；无轨道站时以车流客为主设计动线', text_en: 'Verify parking count and evening availability; design for drive-in guests when no rail is walkable' });
         break;
       case 'occasion_delivery':
-        out.push({ dimension: w.id, value: null, text_zh: '午市偏弱：设计 ≤ $18 套餐并接入 2 个外卖平台补足场景', text_en: 'Weak lunch: add a ≤ $18 set menu and two delivery platforms' });
+        out.push(daypartCondition(input));
         break;
     }
   }

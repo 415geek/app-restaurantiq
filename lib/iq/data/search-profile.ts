@@ -185,6 +185,51 @@ export function nameMatchesKeywords(name: string, keywords: string[]): boolean {
   return false;
 }
 
+/** How much text a §4.2 also-selling quote may carry (characters). */
+export const KEYWORD_QUOTE_MAX = 120;
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * §4.2 品类空白判定 text probe: does this free text (a review, an editorial
+ * summary or a menu blob) carry one of the concept's Layer-1 keywords, and what
+ * did it say? Same matching rule as `nameMatchesKeywords` (word-bounded for
+ * Latin, substring for CJK, single CJK characters need CJK context) so a store
+ * is never called "also selling" on weaker evidence than a name would need.
+ *
+ * Returns the quoted snippet around the first hit, or null when the text does
+ * not mention the concept. A caller that gets `null` for *every* text of a store
+ * knows the store does not mention it; a store with no text at all is `unknown`
+ * and must never be counted as "does not sell it".
+ */
+export function findKeywordQuote(text: string | null | undefined, keywords: string[]): string | null {
+  const raw = (text ?? '').replace(/\s+/g, ' ').trim();
+  if (!raw) return null;
+  const hay = raw.toLowerCase();
+  for (const kw of keywords) {
+    const k = kw.toLowerCase().trim();
+    if (!k) continue;
+    let at = -1;
+    if (CJK_RE.test(k)) {
+      if (k.length === 1 && !CJK_RE.test(hay)) continue;
+      at = hay.indexOf(k);
+    } else {
+      if (k.length < 3) continue;
+      const m = new RegExp(`(^|[^a-z0-9])${escapeRe(k)}([^a-z0-9]|$)`, 'i').exec(hay);
+      at = m ? m.index + m[1].length : -1;
+    }
+    if (at < 0) continue;
+    if (raw.length <= KEYWORD_QUOTE_MAX) return raw;
+    const pad = Math.max(0, Math.floor((KEYWORD_QUOTE_MAX - k.length) / 2));
+    const start = Math.max(0, at - pad);
+    const end = Math.min(raw.length, start + KEYWORD_QUOTE_MAX);
+    return `${start > 0 ? '…' : ''}${raw.slice(start, end).trim()}${end < raw.length ? '…' : ''}`;
+  }
+  return null;
+}
+
 export function typesMatch(types: Array<string | null | undefined>, wanted: string[]): boolean {
   if (!wanted.length) return false;
   const set = new Set(wanted.map((w) => w.toLowerCase()));

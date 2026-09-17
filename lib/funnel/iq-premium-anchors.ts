@@ -19,6 +19,7 @@ import {
   formatFinanceModelForAnchors,
   type DeterministicFinanceModel,
 } from '@/lib/funnel/iq-finance-model';
+import { formatConclusionForAnchors, parseConclusion } from '@/lib/iq/conclusion/conclusion';
 import {
   competitorClusterSummary,
   competitorGapsAndOpenings,
@@ -650,6 +651,13 @@ export function buildPremiumMarketDataSection(
     financeModelBlock = formatFinanceModelForAnchors(fm, lang);
   }
 
+  // §4.1 单一结论源 (P0-A): when the deterministic core has already run (it now runs
+  // BEFORE the draft), its conclusion is the last and strongest anchor block — the
+  // prose must not contradict the score, verdict, break-even or scenarios the page
+  // and the PDF will print. It deliberately comes after the finance model block.
+  const conclusion = parseConclusion(marketData?.conclusion);
+  const conclusionBlock = conclusion ? formatConclusionForAnchors(conclusion, lang) : '';
+
   // D-5: DeepSeek competitor insights block (per-comp + cluster + gaps).
   let competitorInsightsBlock = '';
   const ci = marketData?.competitor_insights as CompetitorInsights | undefined;
@@ -664,7 +672,7 @@ export function buildPremiumMarketDataSection(
   );
 
   if (!marketData || typeof marketData !== 'object') {
-    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${competitorInsightsBlock}${siteHistoryBlock}`;
+    return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${conclusionBlock}${competitorInsightsBlock}${siteHistoryBlock}`;
   }
 
   const mdForJson = { ...marketData };
@@ -720,5 +728,5 @@ export function buildPremiumMarketDataSection(
     zh: `${evidencePreamble}\n\n【市场数据 JSON${fullContext ? '（全文）' : ''}】\n${jsonPayload}`,
     es: `${evidencePreamble}\n\nJSON DE DATOS DE MERCADO${fullContext ? ' (completo)' : ''}:\n${jsonPayload}`,
   });
-  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${competitorInsightsBlock}${siteHistoryBlock}${jsonBlock}`;
+  return `${anchors}${acsAnchors}${deepResearchBlock}${webBlock}${caltransBlock}${listingsBlock}${brightdataBlock}${userInputsBlock}${financeModelBlock}${conclusionBlock}${competitorInsightsBlock}${siteHistoryBlock}${jsonBlock}`;
 }

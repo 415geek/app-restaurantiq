@@ -1,27 +1,45 @@
 /**
- * Deterministic restaurant break-even & safe-revenue model.
+ * Deterministic restaurant break-even & safe-revenue model (web standard report).
  *
- * Replaces the LLM's "guessed" `risk_audit.break_even_revenue_monthly_usd` and
- * `risk_audit.safe_revenue_monthly_usd` with a formula-driven calculation
- * grounded in:
- *   - user inputs (monthly rent, sqft) when provided
- *   - ACS county median household income (drives wage / rent tier when unknown)
- *   - commercial_listings median rent (LoopNet) when user didn't provide rent
- *   - cuisine archetype (food cost %, headcount, ticket band, prime cost target)
+ * 评审 Spec §4.1 单一结论源 (P0-A): this engine no longer owns any cost constant.
+ * Wages, the non-rent fixed budget and its utilities / insurance / POS / marketing
+ * / misc split all come from the ONE `cost_scale` table in
+ * lib/iq/params/defaults.yaml, through lib/iq/conclusion/cost-scale.ts — the same
+ * helpers the 360° engine (lib/iq/engines/finance.ts) calls. For the same concept
+ * and cost tier both engines now return identical cost rows; before P0-A they
+ * printed $1,920 and $1,260 of utilities for the same paid report.
+ *
+ * Rent is NEVER estimated (owner rule): when the customer gave no monthly rent the
+ * model is rent-excluded — `monthly_rent_usd` is 0, `rent_excluded` is true, and
+ * break-even / safe revenue / occupancy are computed and labelled without rent,
+ * exactly as the 360° engine does.
  *
  * Formula (industry-standard pre-lease P&L):
  *   fixed_total = rent + labor + utilities + insurance + pos + marketing + misc
  *   variable_rate = food_cost_pct + cc_fees_pct + delivery_blended_pct + paper_pct
  *   break_even_revenue = fixed_total / (1 - variable_rate)
- *   safe_revenue = break_even × 1.25  (covers ~5% owner takeout + 5% reinvest + 15% buffer)
+ *   safe_revenue = break_even × finance.safety_multiplier (defaults.yaml)
  *
  * Returns a structured model containing every assumption used, so the LLM and UI
  * can cite the numbers verbatim (no hallucinated cost tables).
  */
 import { type Locale, pick } from '@/lib/i18n/locale';
-import type { CommercialListingsResult } from '@/lib/funnel/external-data/commercial-listings';
 import { classifyConceptSync } from '@/lib/iq/concept/classify';
-import { cuisineById, type ConceptCategory } from '@/lib/iq/params';
+import {
+  archetypeIdFor,
+  costScaleNote,
+  costSplit,
+  costTierFor,
+  fixedCostScaleForArchetype,
+  headcountFor,
+  hoursPerFteMonth,
+  laborLoadFactor,
+  laborMonthlyUsd,
+  wageUsdPerHour,
+  type ArchetypeId,
+  type CostTier,
+} from '@/lib/iq/conclusion/cost-scale';
+import { cuisineById, getDefaults } from '@/lib/iq/params';
 
 export interface FinanceModelInputs {
   marketData: Record<string, unknown> | null | undefined;
@@ -29,15 +47,8 @@ export interface FinanceModelInputs {
   location: string;
 }
 
-export type CuisineArchetypeId =
-  | 'bubble_tea'
-  | 'coffee_bakery'
-  | 'qsr'
-  | 'fast_casual'
-  | 'pizza'
-  | 'asian_casual'
-  | 'casual_dining'
-  | 'fine_dining';
+/** The archetype ids of the shared `cost_scale` table (lib/iq/conclusion/cost-scale.ts). */
+export type CuisineArchetypeId = ArchetypeId;
 
 export interface CuisineArchetype {
   id: CuisineArchetypeId;
@@ -50,14 +61,8 @@ export interface CuisineArchetype {
   food_cost_pct: number;
   /** Paper goods / packaging as share of revenue. */
   paper_pct: number;
-  /** FTE-equivalent core headcount (manager + line). Hourly assumed. */
+  /** FTE-equivalent core headcount (taxonomy `fte_default`, else the cost_scale default). */
   headcount: number;
-  /** Avg shift hours/month per FTE (40 hr/wk × 4.33 ≈ 173). */
-  hours_per_fte_month: number;
-  /** Baseline non-rent fixed costs (utilities, insurance, POS, marketing, misc). */
-  baseline_other_fixed_usd: number;
-  /** Cuisine-specific safety-margin floor (for "safe revenue" multiplier). */
-  safe_revenue_multiplier: number;
 }
 
 export interface DeterministicFinanceModel {
@@ -72,10 +77,12 @@ export interface DeterministicFinanceModel {
   cuisine_archetype_label_es?: string;
   cuisine_match_reason: string;
 
-  /** Resolved rent USD/month + provenance trail. */
+  /** The customer's monthly rent, or 0 when none was given (rent is NEVER estimated). */
   monthly_rent_usd: number;
-  rent_source: 'user_input' | 'commercial_listings_median' | 'sqft_estimate' | 'tier_estimate';
+  rent_source: 'user_input' | 'not_provided';
   rent_evidence: string;
+  /** True when no rent was provided: fixed total, break-even, safe revenue and occupancy EXCLUDE rent. */
+  rent_excluded: boolean;
 
   /** Resolved labor USD/month. */
   monthly_labor_usd: number;
@@ -147,7 +154,10 @@ export function financeArchetypeLabel(fm: Pick<DeterministicFinanceModel, 'cuisi
 /*                       Cuisine archetype lookup table                       */
 /* ------------------------------------------------------------------------ */
 
-const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
+type ArchetypeBase = Omit<CuisineArchetype, 'headcount'>;
+
+/** Ticket band + variable-cost benchmarks. Headcount and every $ figure come from `cost_scale`. */
+const ARCHETYPES: Record<CuisineArchetypeId, ArchetypeBase> = {
   bubble_tea: {
     id: 'bubble_tea',
     label_en: 'Bubble tea / boba shop',
@@ -156,10 +166,6 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     avg_ticket_usd: 8.5,
     food_cost_pct: 0.28,
     paper_pct: 0.04,
-    headcount: 5,
-    hours_per_fte_month: 173,
-    baseline_other_fixed_usd: 4_500,
-    safe_revenue_multiplier: 1.25,
   },
   coffee_bakery: {
     id: 'coffee_bakery',
@@ -169,10 +175,6 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     avg_ticket_usd: 11,
     food_cost_pct: 0.30,
     paper_pct: 0.03,
-    headcount: 6,
-    hours_per_fte_month: 173,
-    baseline_other_fixed_usd: 4_800,
-    safe_revenue_multiplier: 1.25,
   },
   qsr: {
     id: 'qsr',
@@ -182,10 +184,6 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     avg_ticket_usd: 13,
     food_cost_pct: 0.30,
     paper_pct: 0.03,
-    headcount: 8,
-    hours_per_fte_month: 173,
-    baseline_other_fixed_usd: 6_000,
-    safe_revenue_multiplier: 1.28,
   },
   fast_casual: {
     id: 'fast_casual',
@@ -195,10 +193,6 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     avg_ticket_usd: 16,
     food_cost_pct: 0.31,
     paper_pct: 0.025,
-    headcount: 10,
-    hours_per_fte_month: 173,
-    baseline_other_fixed_usd: 7_200,
-    safe_revenue_multiplier: 1.28,
   },
   pizza: {
     id: 'pizza',
@@ -208,10 +202,6 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     avg_ticket_usd: 22,
     food_cost_pct: 0.30,
     paper_pct: 0.025,
-    headcount: 9,
-    hours_per_fte_month: 173,
-    baseline_other_fixed_usd: 6_500,
-    safe_revenue_multiplier: 1.28,
   },
   asian_casual: {
     id: 'asian_casual',
@@ -221,10 +211,6 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     avg_ticket_usd: 21,
     food_cost_pct: 0.32,
     paper_pct: 0.02,
-    headcount: 12,
-    hours_per_fte_month: 173,
-    baseline_other_fixed_usd: 7_800,
-    safe_revenue_multiplier: 1.30,
   },
   casual_dining: {
     id: 'casual_dining',
@@ -234,10 +220,6 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     avg_ticket_usd: 26,
     food_cost_pct: 0.32,
     paper_pct: 0.015,
-    headcount: 16,
-    hours_per_fte_month: 173,
-    baseline_other_fixed_usd: 9_000,
-    safe_revenue_multiplier: 1.30,
   },
   fine_dining: {
     id: 'fine_dining',
@@ -247,34 +229,19 @@ const ARCHETYPES: Record<CuisineArchetypeId, CuisineArchetype> = {
     avg_ticket_usd: 70,
     food_cost_pct: 0.35,
     paper_pct: 0.01,
-    headcount: 25,
-    hours_per_fte_month: 173,
-    baseline_other_fixed_usd: 14_000,
-    safe_revenue_multiplier: 1.35,
   },
 };
 
-/** §4.1 concept category → cost archetype (subtype exceptions handled in detectArchetype). */
-const CATEGORY_ARCHETYPE: Record<ConceptCategory, CuisineArchetypeId> = {
-  chinese_regional: 'asian_casual',
-  chinese_format: 'asian_casual',
-  asian_other: 'asian_casual',
-  bakery_dessert: 'coffee_bakery',
-  beverage: 'bubble_tea',
-  western_other: 'casual_dining',
-};
-const SUBTYPE_ARCHETYPE: Record<string, CuisineArchetypeId> = {
-  hot_pot: 'casual_dining',
-  skewers: 'casual_dining',
-  chinese_fast: 'qsr',
-  mala_tang: 'fast_casual',
-  roast: 'qsr',
-  noodles: 'fast_casual',
-  hk_cafe: 'fast_casual',
-  italian: 'pizza',
-  mexican: 'fast_casual',
-  middle_eastern: 'fast_casual',
-};
+/**
+ * §4.1 单一结论源: concept → archetype is resolved by the SHARED `archetypeIdFor`
+ * (lib/iq/conclusion/cost-scale.ts), so this engine and the 360° engine can never
+ * put the same concept in two different cost archetypes.
+ */
+
+/** An archetype row completed with the headcount the shared table (or the taxonomy) gives it. */
+function withHeadcount(base: ArchetypeBase, fteDefault?: number | null): CuisineArchetype {
+  return { ...base, headcount: fteDefault ?? headcountFor(base.id) };
+}
 
 /**
  * Tier 1/2 archetype: the §4.1 concept classifier first (category → archetype,
@@ -289,7 +256,7 @@ export function detectArchetype(businessType: string | null | undefined): {
   const raw = (businessType ?? '').toLowerCase().trim();
   if (!raw) {
     return {
-      archetype: ARCHETYPES.fast_casual,
+      archetype: withHeadcount(ARCHETYPES.fast_casual),
       reason_en: 'No cuisine specified → defaulted to fast_casual benchmarks.',
       reason_zh: '未指定业态 → 默认采用快休闲餐饮基准。',
     };
@@ -297,11 +264,9 @@ export function detectArchetype(businessType: string | null | undefined): {
   const concept = classifyConceptSync(businessType ?? '');
   if (!concept.needs_confirmation) {
     const entry = cuisineById(concept.id);
-    const id = SUBTYPE_ARCHETYPE[concept.id] ?? CATEGORY_ARCHETYPE[concept.category];
-    const base = ARCHETYPES[id];
+    const id = archetypeIdFor(entry);
     const archetype: CuisineArchetype = {
-      ...base,
-      headcount: entry.fte_default ?? base.headcount,
+      ...withHeadcount(ARCHETYPES[id], entry.fte_default),
       avg_ticket_usd: entry.ticket_in,
     };
     return {
@@ -362,57 +327,26 @@ export function detectArchetype(businessType: string | null | undefined): {
   ];
   for (const m of matchers) {
     if (m.test.test(raw)) {
-      return { archetype: ARCHETYPES[m.id], reason_en: m.reason_en, reason_zh: m.reason_zh };
+      return { archetype: withHeadcount(ARCHETYPES[m.id]), reason_en: m.reason_en, reason_zh: m.reason_zh };
     }
   }
   return {
-    archetype: ARCHETYPES.fast_casual,
+    archetype: withHeadcount(ARCHETYPES.fast_casual),
     reason_en: `Cuisine "${businessType}" did not match any archetype → defaulted to fast_casual.`,
     reason_zh: `业态「${businessType}」未匹配现有模型 → 默认采用快休闲餐饮基准。`,
   };
 }
 
 /* ------------------------------------------------------------------------ */
-/*                         Wage / rent tier resolution                        */
+/*                    Wage tier resolution (shared cost_scale)                */
 /* ------------------------------------------------------------------------ */
 
-type CostTier = 'hcol_metro' | 'hcol' | 'mcol' | 'lcol';
-
-interface TierBenchmarks {
-  hourly_wage_usd: number; // blended hourly wage (loaded includes payroll tax via labor_loading)
-  rent_psf_monthly_usd: number; // retail food space, NNN, per sqft per month
-  description_en: string;
-  description_zh: string;
-}
-
-const TIER_BENCHMARKS: Record<CostTier, TierBenchmarks> = {
-  hcol_metro: {
-    hourly_wage_usd: 22,
-    rent_psf_monthly_usd: 8.5,
-    description_en: 'Top-tier metro (SF/NYC/LA core; MHI ≥ $130k)',
-    description_zh: '顶级都会（旧金山/纽约/洛杉矶核心；中位家庭收入 ≥ $13万）',
-  },
-  hcol: {
-    hourly_wage_usd: 20,
-    rent_psf_monthly_usd: 6.5,
-    description_en: 'High cost-of-living (MHI $100k–$130k)',
-    description_zh: '高生活成本（中位家庭收入 $10–13万）',
-  },
-  mcol: {
-    hourly_wage_usd: 17,
-    rent_psf_monthly_usd: 4.5,
-    description_en: 'Medium cost-of-living (MHI $70k–$100k)',
-    description_zh: '中等生活成本（中位家庭收入 $7–10万）',
-  },
-  lcol: {
-    hourly_wage_usd: 14,
-    rent_psf_monthly_usd: 3.0,
-    description_en: 'Low cost-of-living (MHI < $70k)',
-    description_zh: '低生活成本（中位家庭收入 < $7万）',
-  },
-};
-
-const HCOL_METRO_STATES = new Set(['california', 'ca', 'new york', 'ny', 'massachusetts', 'ma']);
+/**
+ * §4.1 单一结论源: the tiers, their wages and their multipliers live in
+ * `cost_scale` (defaults.yaml). The fourth "hcol_metro" tier this engine used to
+ * carry is gone — it was the reason the same address produced a $20/hr wage here
+ * and $22/hr in the 360°. Rent $/sf benchmarks are gone too: rent is never estimated.
+ */
 
 function num(v: unknown): number | null {
   const n = Number(v);
@@ -437,44 +371,31 @@ function pickAcsTract(marketData: Record<string, unknown> | null | undefined) {
   return tract as Record<string, unknown>;
 }
 
+/** Two-letter state code out of whatever the market pack carries ("California", "CA, USA", …). */
+function stateCodeOf(marketData: Record<string, unknown> | null | undefined, county: Record<string, unknown> | null): string | null {
+  const raw = String(
+    (marketData?.geocode as Record<string, unknown> | undefined)?.state ?? (county?.name as string | undefined) ?? '',
+  ).trim();
+  if (!raw) return null;
+  const NAMES: Record<string, string> = { california: 'CA', 'new york': 'NY', washington: 'WA', massachusetts: 'MA', hawaii: 'HI', 'district of columbia': 'DC', 'new jersey': 'NJ' };
+  const lower = raw.toLowerCase();
+  for (const [name, code] of Object.entries(NAMES)) if (lower.includes(name)) return code;
+  const m = /\b([A-Z]{2})\b/.exec(raw.toUpperCase());
+  return m ? m[1] : null;
+}
+
 function resolveCostTier(marketData: Record<string, unknown> | null | undefined): {
   tier: CostTier;
-  benchmarks: TierBenchmarks;
   source_label: string;
   mhi_used_usd: number | null;
 } {
   const tract = pickAcsTract(marketData);
   const county = pickAcsCounty(marketData);
-
-  const tractMhi = num(tract?.median_household_income_usd);
-  const countyMhi = num(county?.median_household_income_usd);
-  const mhi = tractMhi ?? countyMhi;
-
-  const stateRaw =
-    (marketData?.geocode as Record<string, unknown> | undefined)?.state ??
-    (county?.name as string | undefined) ??
-    '';
-  const stateStr = String(stateRaw).toLowerCase();
-  const isHcolMetroState = [...HCOL_METRO_STATES].some((s) => stateStr.includes(s));
-
-  let tier: CostTier;
-  if (mhi == null) {
-    tier = isHcolMetroState ? 'hcol' : 'mcol';
-  } else if (mhi >= 130_000 && isHcolMetroState) {
-    tier = 'hcol_metro';
-  } else if (mhi >= 100_000) {
-    tier = 'hcol';
-  } else if (mhi >= 70_000) {
-    tier = 'mcol';
-  } else {
-    tier = 'lcol';
-  }
+  const mhi = num(tract?.median_household_income_usd) ?? num(county?.median_household_income_usd);
+  const tier = costTierFor(mhi, stateCodeOf(marketData, county));
   return {
     tier,
-    benchmarks: TIER_BENCHMARKS[tier],
-    source_label: mhi != null
-      ? `ACS county MHI=$${Math.round(mhi).toLocaleString('en-US')}`
-      : 'ACS unavailable; defaulted by state',
+    source_label: mhi != null ? `ACS MHI=$${Math.round(mhi).toLocaleString('en-US')}` : 'ACS unavailable; defaulted by state',
     mhi_used_usd: mhi ?? null,
   };
 }
@@ -482,23 +403,6 @@ function resolveCostTier(marketData: Record<string, unknown> | null | undefined)
 /* ------------------------------------------------------------------------ */
 /*                            Rent resolution                                */
 /* ------------------------------------------------------------------------ */
-
-function listingsMedianRent(marketData: Record<string, unknown> | null | undefined): {
-  median_usd: number | null;
-  sample_count: number;
-} {
-  const cl = marketData?.commercial_listings as CommercialListingsResult | undefined;
-  if (!cl || typeof cl !== 'object') return { median_usd: null, sample_count: 0 };
-  const rows = Array.isArray(cl.listings) ? cl.listings : [];
-  const rents = rows
-    .map((r) => num(r?.monthlyRent))
-    .filter((n): n is number => n != null && n > 1_000 && n < 60_000)
-    .sort((a, b) => a - b);
-  if (rents.length === 0) return { median_usd: null, sample_count: 0 };
-  const mid = Math.floor(rents.length / 2);
-  const median = rents.length % 2 === 0 ? (rents[mid - 1] + rents[mid]) / 2 : rents[mid];
-  return { median_usd: Math.round(median), sample_count: rents.length };
-}
 
 function pickUserInputs(marketData: Record<string, unknown> | null | undefined) {
   const ui = marketData?.user_inputs;
@@ -510,14 +414,19 @@ function pickUserInputs(marketData: Record<string, unknown> | null | undefined) 
   };
 }
 
-function resolveRent(
-  archetype: CuisineArchetype,
-  marketData: Record<string, unknown> | null | undefined,
-  tierResult: ReturnType<typeof resolveCostTier>,
-): {
+/**
+ * The customer's monthly rent — or nothing at all.
+ *
+ * No listings median, no $/sf × sqft, no tier estimate: a rent the customer never
+ * gave must not drive break-even, occupancy cost or the verdict (owner rule, and
+ * the rule the 360° engine already shipped). When it is missing the model is
+ * rent-excluded and says so everywhere.
+ */
+function resolveRent(marketData: Record<string, unknown> | null | undefined): {
   monthly_rent_usd: number;
   source: DeterministicFinanceModel['rent_source'];
   evidence: string;
+  excluded: boolean;
 } {
   const ui = pickUserInputs(marketData);
   if (ui.monthly_rent_usd != null && ui.monthly_rent_usd > 800) {
@@ -525,48 +434,14 @@ function resolveRent(
       monthly_rent_usd: Math.round(ui.monthly_rent_usd),
       source: 'user_input',
       evidence: `user_inputs.monthly_rent_usd=${ui.monthly_rent_usd}`,
+      excluded: false,
     };
   }
-
-  // Estimate sqft if not provided (archetype default footprint).
-  const defaultSqft: Record<CuisineArchetypeId, number> = {
-    bubble_tea: 700,
-    coffee_bakery: 900,
-    qsr: 1_200,
-    fast_casual: 1_800,
-    pizza: 1_500,
-    asian_casual: 2_200,
-    casual_dining: 2_800,
-    fine_dining: 3_500,
-  };
-  const sqftAssumed = ui.sqft != null && ui.sqft >= 300 ? ui.sqft : defaultSqft[archetype.id];
-
-  // If user gave sqft → tier × sqft is the most defensible estimate.
-  if (ui.sqft != null && ui.sqft >= 300) {
-    const r = Math.round(ui.sqft * tierResult.benchmarks.rent_psf_monthly_usd);
-    return {
-      monthly_rent_usd: r,
-      source: 'sqft_estimate',
-      evidence: `user sqft=${ui.sqft} × tier rent $${tierResult.benchmarks.rent_psf_monthly_usd}/sqft/mo (${tierResult.tier})`,
-    };
-  }
-
-  // Try commercial_listings median (LoopNet etc.)
-  const listings = listingsMedianRent(marketData);
-  if (listings.median_usd != null && listings.sample_count >= 2) {
-    return {
-      monthly_rent_usd: listings.median_usd,
-      source: 'commercial_listings_median',
-      evidence: `LoopNet/commercial_listings median rent (n=${listings.sample_count}) = $${listings.median_usd.toLocaleString('en-US')}/mo`,
-    };
-  }
-
-  // Final fallback: tier × archetype default sqft.
-  const r = Math.round(sqftAssumed * tierResult.benchmarks.rent_psf_monthly_usd);
   return {
-    monthly_rent_usd: r,
-    source: 'tier_estimate',
-    evidence: `archetype default ${sqftAssumed} sqft × ${tierResult.tier} tier $${tierResult.benchmarks.rent_psf_monthly_usd}/sqft/mo (${tierResult.source_label})`,
+    monthly_rent_usd: 0,
+    source: 'not_provided',
+    evidence: 'no monthly rent was provided — rent is never estimated; break-even and safe revenue EXCLUDE rent',
+    excluded: true,
   };
 }
 
@@ -574,53 +449,52 @@ function resolveRent(
 /*                              Labor calc                                   */
 /* ------------------------------------------------------------------------ */
 
+/** Labor from the shared formula — the same one lib/iq/engines/finance.ts calls. */
 function resolveLabor(
   archetype: CuisineArchetype,
   tierResult: ReturnType<typeof resolveCostTier>,
 ): { monthly_labor_usd: number; hourly_blended: number; evidence: string } {
-  const hourly = tierResult.benchmarks.hourly_wage_usd;
-  const LOAD_FACTOR = 1.18; // payroll tax + benefits
-  const monthly = archetype.headcount * hourly * archetype.hours_per_fte_month * LOAD_FACTOR;
-  const evidence = `${archetype.headcount} FTE × $${hourly}/hr × ${archetype.hours_per_fte_month} hrs/mo × ${LOAD_FACTOR}× payroll load (tier ${tierResult.tier}, ${tierResult.source_label})`;
-  return { monthly_labor_usd: Math.round(monthly), hourly_blended: hourly, evidence };
+  const hourly = wageUsdPerHour(tierResult.tier);
+  const hours = hoursPerFteMonth();
+  const load = laborLoadFactor();
+  const evidence = `${archetype.headcount} FTE × $${hourly}/hr × ${hours} hrs/mo × ${load}× payroll load (cost_scale tier ${tierResult.tier}, ${tierResult.source_label})`;
+  return { monthly_labor_usd: laborMonthlyUsd(archetype.headcount, tierResult.tier), hourly_blended: hourly, evidence };
 }
 
 /* ------------------------------------------------------------------------ */
 /*                              Main compute                                 */
 /* ------------------------------------------------------------------------ */
 
-const CC_FEES_PCT = 0.025;
-const DELIVERY_BLENDED_PCT = 0.07; // assume 25% revenue at 28% commission ≈ 7% of revenue blended
-const SAFETY_FLOOR = 1.20; // never drop safe-revenue multiplier below this
-
 export function computeFinanceModel(input: FinanceModelInputs): DeterministicFinanceModel {
   const { marketData, businessType, location } = input;
   void location;
+  // §4.1 单一结论源: every rate below comes from defaults.yaml, so the two engines
+  // share one contribution margin and one safety multiplier as well.
+  const d = getDefaults().finance;
+  const CC_FEES_PCT = d.cc_fees_pct;
+  const DELIVERY_BLENDED_PCT = d.delivery_blended_pct;
 
   const { archetype, reason_en, reason_zh } = detectArchetype(businessType);
   const tierResult = resolveCostTier(marketData);
-  const rent = resolveRent(archetype, marketData, tierResult);
+  const rent = resolveRent(marketData);
   const labor = resolveLabor(archetype, tierResult);
 
-  // Other fixed costs: 70% baseline + 30% tier-scaled
-  const tierScale = tierResult.tier === 'hcol_metro' ? 1.25 : tierResult.tier === 'hcol' ? 1.12 : tierResult.tier === 'lcol' ? 0.88 : 1.0;
-  const scaledOther = Math.round(archetype.baseline_other_fixed_usd * tierScale);
-  // Decompose for breakdown visibility (industry typical mix):
-  const utilities = Math.round(scaledOther * 0.32);
-  const insurance = Math.round(scaledOther * 0.16);
-  const pos = Math.round(scaledOther * 0.12);
-  const marketing = Math.round(scaledOther * 0.22);
-  const misc = scaledOther - utilities - insurance - pos - marketing;
+  // The five non-rent fixed rows — from the ONE cost_scale table.
+  const scale = fixedCostScaleForArchetype(archetype.id, tierResult.tier);
+  const split = costSplit();
+  const { utilities, insurance, pos, marketing, misc } = scale;
+  const scaledOther = scale.other_fixed_total;
 
+  // Excludes rent when the customer gave none (declared by rent_excluded, never silently).
   const fixed_total = rent.monthly_rent_usd + labor.monthly_labor_usd + utilities + insurance + pos + marketing + misc;
 
   const variable_rate = archetype.food_cost_pct + archetype.paper_pct + CC_FEES_PCT + DELIVERY_BLENDED_PCT;
   const contribution_margin = Math.max(0.15, 1 - variable_rate); // guardrail
   const break_even = Math.round(fixed_total / contribution_margin);
-  const safe_multiplier = Math.max(SAFETY_FLOOR, archetype.safe_revenue_multiplier);
+  const safe_multiplier = d.safety_multiplier;
   const safe = Math.round(break_even * safe_multiplier);
 
-  const days = 30;
+  const days = d.days_open_per_month;
   const breakEvenDaily = Math.round(break_even / days);
   const safeDaily = Math.round(safe / days);
   const breakEvenCovers = Math.max(1, Math.round(breakEvenDaily / archetype.avg_ticket_usd));
@@ -629,31 +503,24 @@ export function computeFinanceModel(input: FinanceModelInputs): DeterministicFin
   // Confidence: high when ≥3 of {user_rent, user_sqft, ACS, listings} confirmed
   const ui = pickUserInputs(marketData);
   const acs = !!pickAcsTract(marketData) || !!pickAcsCounty(marketData);
-  const haveListings = listingsMedianRent(marketData).sample_count >= 2;
-  const signals = [
-    ui.monthly_rent_usd != null,
-    ui.sqft != null,
-    acs,
-    haveListings,
-  ];
+  const signals = [ui.monthly_rent_usd != null, ui.sqft != null, acs];
   const positives = signals.filter(Boolean).length;
   const confidence: 'high' | 'medium' | 'low' = positives >= 3 ? 'high' : positives >= 2 ? 'medium' : 'low';
   const confidence_reasons: string[] = [];
   if (ui.monthly_rent_usd != null) confidence_reasons.push('user-provided monthly rent');
   if (ui.sqft != null) confidence_reasons.push('user-provided sqft');
   if (acs) confidence_reasons.push('ACS county/tract anchors');
-  if (haveListings) confidence_reasons.push('commercial-listings rent sample');
   if (confidence_reasons.length === 0) confidence_reasons.push('address + cuisine + tier defaults only');
 
   const cost_breakdown: DeterministicFinanceModel['cost_breakdown'] = [
     { item: 'Rent (NNN)', amount_usd: rent.monthly_rent_usd, note: rent.evidence },
     { item: 'Labor (loaded)', amount_usd: labor.monthly_labor_usd, note: labor.evidence },
-    { item: 'Utilities', amount_usd: utilities, note: `~32% of baseline non-rent fixed × tier scale ${tierScale.toFixed(2)}` },
-    { item: 'Insurance', amount_usd: insurance, note: `~16% of baseline non-rent fixed × tier scale ${tierScale.toFixed(2)}` },
-    { item: 'POS / software', amount_usd: pos, note: `~12% of baseline non-rent fixed × tier scale ${tierScale.toFixed(2)}` },
-    { item: 'Marketing / loyalty', amount_usd: marketing, note: `~22% of baseline non-rent fixed × tier scale ${tierScale.toFixed(2)}` },
-    { item: 'Misc / admin', amount_usd: misc, note: `~18% of baseline non-rent fixed × tier scale ${tierScale.toFixed(2)}` },
-    { item: 'Fixed total / mo', amount_usd: fixed_total, note: 'Sum of rent + labor + other fixed' },
+    { item: 'Utilities', amount_usd: utilities, note: costScaleNote(scale, split.utilities) },
+    { item: 'Insurance', amount_usd: insurance, note: costScaleNote(scale, split.insurance) },
+    { item: 'POS / software', amount_usd: pos, note: costScaleNote(scale, split.pos) },
+    { item: 'Marketing / loyalty', amount_usd: marketing, note: costScaleNote(scale, split.marketing) },
+    { item: 'Misc / admin', amount_usd: misc, note: costScaleNote(scale, split.misc) },
+    { item: 'Fixed total / mo', amount_usd: fixed_total, note: rent.excluded ? 'Sum of labor + other fixed — EXCLUDES rent (none was provided; rent is never estimated)' : 'Sum of rent + labor + other fixed' },
   ];
 
   const assumptions = [
@@ -664,7 +531,7 @@ export function computeFinanceModel(input: FinanceModelInputs): DeterministicFin
     `Contribution margin: ${(contribution_margin * 100).toFixed(1)}%`,
     `Rent: $${rent.monthly_rent_usd.toLocaleString('en-US')}/mo — ${rent.evidence}`,
     `Labor: $${labor.monthly_labor_usd.toLocaleString('en-US')}/mo — ${labor.evidence}`,
-    `Other fixed (utilities + insurance + POS + marketing + misc): $${scaledOther.toLocaleString('en-US')}/mo (baseline $${archetype.baseline_other_fixed_usd.toLocaleString('en-US')} × tier scale ${tierScale.toFixed(2)})`,
+    `Other fixed (utilities + insurance + POS + marketing + misc): $${scaledOther.toLocaleString('en-US')}/mo (cost_scale baseline $${scale.baseline_usd.toLocaleString('en-US')} × ${scale.tier} tier scale ${scale.multiplier.toFixed(2)})`,
     `Break-even revenue = fixed total ($${fixed_total.toLocaleString('en-US')}) / contribution margin (${(contribution_margin * 100).toFixed(1)}%) = $${break_even.toLocaleString('en-US')}/mo`,
     `Safe revenue = break-even × ${safe_multiplier.toFixed(2)} (cushion for owner takeout + reinvest + seasonality) = $${safe.toLocaleString('en-US')}/mo`,
     `Daily run-rate: break-even $${breakEvenDaily.toLocaleString('en-US')}/day (~${breakEvenCovers} covers @ $${archetype.avg_ticket_usd}); safe $${safeDaily.toLocaleString('en-US')}/day (~${safeCovers} covers).`,
@@ -674,7 +541,6 @@ export function computeFinanceModel(input: FinanceModelInputs): DeterministicFin
   if (ui.monthly_rent_usd != null) citations.push('[user-input rent]');
   if (ui.sqft != null) citations.push('[user-input sqft]');
   if (acs) citations.push('[ACS-2023]');
-  if (haveListings) citations.push('[commercial-listings]');
   citations.push('[industry-benchmark: prime-cost / contribution-margin]');
 
   return {
@@ -690,6 +556,7 @@ export function computeFinanceModel(input: FinanceModelInputs): DeterministicFin
     monthly_rent_usd: rent.monthly_rent_usd,
     rent_source: rent.source,
     rent_evidence: rent.evidence,
+    rent_excluded: rent.excluded,
 
     monthly_labor_usd: labor.monthly_labor_usd,
     labor_headcount: archetype.headcount,
@@ -727,9 +594,11 @@ export function computeFinanceModel(input: FinanceModelInputs): DeterministicFin
     assumptions,
     citations,
 
-    occupancy_cost_pct_at_safe: safe > 0 ? Math.round((rent.monthly_rent_usd / safe) * 1000) / 10 : 0,
+    // No rent → no occupancy cost. 0 here means "not computable", and every caller
+    // must show it as 未获取 rather than as a flattering 0 %.
+    occupancy_cost_pct_at_safe: !rent.excluded && safe > 0 ? Math.round((rent.monthly_rent_usd / safe) * 1000) / 10 : 0,
     occupancy_cost_pct_at_breakeven:
-      break_even > 0 ? Math.round((rent.monthly_rent_usd / break_even) * 1000) / 10 : 0,
+      !rent.excluded && break_even > 0 ? Math.round((rent.monthly_rent_usd / break_even) * 1000) / 10 : 0,
     occupancy_nra_benchmark_note_en:
       'NRA 2025 Restaurant Operations Data Abstract medians: full-service occupancy ~5.7% of revenue, limited-service ~5.2%, downtown ~6.0%; healthy band 5–8% (rent + CAM + tax + insurance + utilities as % of sales).',
     occupancy_nra_benchmark_note_zh:

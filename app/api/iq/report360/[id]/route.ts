@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { after } from 'next/server';
 import { iqGetReport, iqHasReportModelColumn } from '@/lib/funnel/iq-repository';
 import { verifyWorkerSecret } from '@/lib/funnel/iq-report-job';
-import { generateReport360ForRow } from '@/lib/iq/generate';
+import { generateReport360ForRow, generateReport360Narratives, needsNarrativePass } from '@/lib/iq/generate';
 import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 
 export const runtime = 'nodejs';
@@ -49,8 +49,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!r) return NextResponse.json({ error: 'not_found' }, { status: 404 });
     return NextResponse.json({ tier: r.model.meta.tier, total: r.model.score.total, verdict: r.model.score.verdict, cost_usd: r.cost_usd, elapsed_ms: r.elapsed_ms, persisted: r.persisted, gates: r.gates.failures });
   }
-  if (row.report_model_json && url.searchParams.get('force') !== '1') {
-    return NextResponse.json({ status: 'ready', tier: row.report_tier ?? null }, { status: 200 });
+  const force = url.searchParams.get('force') === '1';
+  // §4.1 单一结论源: the deterministic core already ran before the web draft, so a
+  // stored model here needs PROSE only — never a second run that would recompute
+  // the conclusion the customer has already been shown.
+  if (row.report_model_json && !force) {
+    if (!needsNarrativePass(row.report_model_json)) {
+      return NextResponse.json({ status: 'ready', tier: row.report_tier ?? null }, { status: 200 });
+    }
+    after(async () => {
+      try {
+        const r = await generateReport360Narratives(id);
+        console.log(`[iq360] report ${id}: narratives ${r ? `persisted=${r.persisted}` : 'skipped'}`);
+      } catch (e) {
+        console.error('[iq360] narrative pass failed', id, e);
+      }
+    });
+    return NextResponse.json({ status: 'running', phase: 'narrative' }, { status: 202 });
   }
   after(async () => {
     try {

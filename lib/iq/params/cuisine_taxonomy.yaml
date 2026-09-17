@@ -2,7 +2,15 @@
 #
 # 六个顶级类目（category）：chinese_regional · chinese_format · asian_other · bakery_dessert · beverage · western_other
 # 每条记录都带下游参数（按业态、不按面积）：audience（需求人群）、fte_default（默认人手）、takeout_share（外带占比）、
-# daypart_profile（营业时段）、search（三层竞品检索：Layer-1 关键词 + Places types + Layer-2 替代关键词）。
+# daypart_profile（营业时段）、dayparts（§4.3 时段需求分布）、search（三层竞品检索：Layer-1 关键词 + Places types + Layer-2 替代关键词）。
+#
+# dayparts（评审 Spec §4.3「daypart 按业态取值」）：breakfast 早市 / lunch 午市 / afternoon 午后 / dinner 晚市，
+#   四项之和必须为 1（±0.001，由 params/index.ts 的 zod 校验强制）。需求模型按此表拆分捕获需求，
+#   不再用「午市 = 上班人群、其余全算晚市」的正餐口径——烘焙店因此不会再打印「午市 0% / 晚市 100%」。
+#   Spec 给定值：bakery_dessert 35/25/30/10、beverage 15/25/40/20、hk_cafe 15/40/15/30、hot_pot 0/20/5/75。
+#   其余按类目推定：地方中餐 0/40/5/55、面食 5/50/10/35、烧腊 0/45/10/45、串烧 0/10/5/85、
+#   coffee 45/25/25/5、juice 20/30/35/15，asian_other / western_other 按子类型。
+#   dessert / ice_cream 是烘焙类目里的午后—晚间业态，不适用烘焙房的早市高峰，单独取值并在此注明。
 #
 # 字段约定：
 #   keywords  — 用户输入 / 店名的分类关键词（中 / 英 / 粤拼 / 西语）。最长优先，同长取文本中最先出现者。
@@ -26,6 +34,7 @@ cuisines:
     fte_default: 12
     takeout_share: 0.25
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 }
     search:
       keywords: [Cantonese, 粤菜, 广东菜, seafood restaurant, 海鲜酒家]
       types: [chinese_restaurant, seafood_restaurant]
@@ -44,6 +53,7 @@ cuisines:
     fte_default: 12
     takeout_share: 0.25
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 }
     search:
       keywords: [Sichuan, Szechuan, 川菜, Chengdu, Chongqing]
       types: [chinese_restaurant]
@@ -62,6 +72,7 @@ cuisines:
     fte_default: 12
     takeout_share: 0.25
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 }
     search:
       keywords: [Hunan, 湘菜, 湖南, Xiang]
       types: [chinese_restaurant]
@@ -80,6 +91,7 @@ cuisines:
     fte_default: 10
     takeout_share: 0.25
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 }
     search:
       keywords: [Dongbei, Northeastern Chinese, 东北菜, dumpling house, 饺子]
       types: [chinese_restaurant]
@@ -98,6 +110,7 @@ cuisines:
     fte_default: 12
     takeout_share: 0.25
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 }
     search:
       keywords: [Shanghai, Shanghainese, 上海菜, 本帮菜, xiao long bao, soup dumpling]
       types: [chinese_restaurant]
@@ -116,6 +129,7 @@ cuisines:
     fte_default: 10
     takeout_share: 0.3
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 }
     search:
       keywords: [Taiwanese, 台湾菜, 台菜, 卤肉饭, beef noodle]
       types: [taiwanese_restaurant, chinese_restaurant]
@@ -134,6 +148,7 @@ cuisines:
     fte_default: 10
     takeout_share: 0.25
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 }
     search:
       keywords: [Yunnan, Guizhou, 云南菜, 贵州菜, 过桥米线]
       types: [chinese_restaurant]
@@ -152,6 +167,7 @@ cuisines:
     fte_default: 10
     takeout_share: 0.25
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 }
     search:
       keywords: [Xinjiang, Uyghur, 新疆菜, 西北菜, Lanzhou]
       types: [chinese_restaurant]
@@ -170,6 +186,7 @@ cuisines:
     fte_default: 12
     takeout_share: 0.2
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 }
     search:
       keywords: [Teochew, Chaoshan, Chiu Chow, 潮汕, 潮州]
       types: [chinese_restaurant]
@@ -188,6 +205,7 @@ cuisines:
     fte_default: 12
     takeout_share: 0.25
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 }
     search:
       keywords: [Chinese restaurant, 中餐, 中餐厅]
       types: [chinese_restaurant]
@@ -207,6 +225,7 @@ cuisines:
     fte_default: 10
     takeout_share: 0.3
     daypart_profile: all_day
+    dayparts: { breakfast: 0.15, lunch: 0.4, afternoon: 0.15, dinner: 0.3 }
     search:
       keywords: [Hong Kong cafe, cha chaan teng, 茶餐厅, 冰室, HK style cafe]
       types: [hong_kong_style_cafe, chinese_restaurant, cafe]
@@ -225,6 +244,7 @@ cuisines:
     fte_default: 14
     takeout_share: 0.2
     daypart_profile: morning_afternoon
+    dayparts: { breakfast: 0.3, lunch: 0.45, afternoon: 0.15, dinner: 0.1 }
     search:
       keywords: [dim sum, 点心, 早茶, yum cha]
       types: [dim_sum_restaurant, chinese_restaurant]
@@ -243,6 +263,7 @@ cuisines:
     fte_default: 10
     takeout_share: 0.15
     daypart_profile: dinner
+    dayparts: { breakfast: 0, lunch: 0.2, afternoon: 0.05, dinner: 0.75 }
     search:
       keywords: [hot pot, hotpot, 火锅, shabu shabu, 麻辣锅]
       types: [hot_pot_restaurant]
@@ -261,6 +282,7 @@ cuisines:
     fte_default: 10
     takeout_share: 0.2
     daypart_profile: dinner
+    dayparts: { breakfast: 0, lunch: 0.1, afternoon: 0.05, dinner: 0.85 }
     search:
       keywords: [Chinese BBQ, skewers, 烧烤, 串串, chuan]
       types: [barbecue_restaurant, chinese_restaurant]
@@ -279,6 +301,7 @@ cuisines:
     fte_default: 9
     takeout_share: 0.35
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0.05, lunch: 0.5, afternoon: 0.1, dinner: 0.35 }
     search:
       keywords: [noodle house, 面馆, 拉面, 刀削面, rice noodle, 米线]
       types: [noodle_house, chinese_noodle_restaurant, chinese_restaurant]
@@ -297,6 +320,7 @@ cuisines:
     fte_default: 6
     takeout_share: 0.5
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0.05, lunch: 0.45, afternoon: 0.1, dinner: 0.4 }
     search:
       keywords: [malatang, 麻辣烫, 冒菜, mala soup]
       types: [chinese_restaurant]
@@ -310,11 +334,14 @@ cuisines:
     range_class: everyday
     price_tier: "$"
     ticket_in: 16
-    keywords: [烧腊, 烧味, 烧鹅, 烧鸭, 叉烧, 烧腊店, BBQ, Roast, Siu Mei, Char Siu, Roast Duck, Roast Goose]
+    # Bare "BBQ" / "Roast" are deliberately absent: they match Korean BBQ, American BBQ
+    # and coffee "Roastery". Only qualified forms identify Cantonese roast meats.
+    keywords: [烧腊, 烧味, 烧鹅, 烧鸭, 叉烧, 烧腊店, Siu Mei, Char Siu, Roast Duck, Roast Goose, Roast Pork, Cantonese BBQ, Chinese BBQ, BBQ Pork]
     mappings: []
     fte_default: 8
     takeout_share: 0.55
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.45, afternoon: 0.1, dinner: 0.45 }
     search:
       keywords: [Cantonese BBQ, 烧腊, 烧味, roast duck, char siu]
       types: [chinese_restaurant, barbecue_restaurant]
@@ -333,6 +360,7 @@ cuisines:
     fte_default: 8
     takeout_share: 0.6
     daypart_profile: all_day
+    dayparts: { breakfast: 0.05, lunch: 0.5, afternoon: 0.1, dinner: 0.35 }
     search:
       keywords: [Chinese fast food, Chinese takeout, 中式快餐, wok, express]
       types: [chinese_takeout, chinese_fast_food, chinese_restaurant]
@@ -352,6 +380,7 @@ cuisines:
     fte_default: 10
     takeout_share: 0.3
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 }
     search:
       keywords: [Japanese restaurant, sushi, ramen, izakaya, 日料]
       types: [japanese_restaurant, sushi_restaurant, ramen_restaurant]
@@ -370,6 +399,7 @@ cuisines:
     fte_default: 10
     takeout_share: 0.25
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.35, afternoon: 0.05, dinner: 0.6 }
     search:
       keywords: [Korean restaurant, Korean BBQ, KBBQ, 韩餐, 韩式]
       types: [korean_restaurant]
@@ -388,6 +418,7 @@ cuisines:
     fte_default: 8
     takeout_share: 0.4
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0.05, lunch: 0.5, afternoon: 0.1, dinner: 0.35 }
     search:
       keywords: [Vietnamese restaurant, pho, banh mi, 越南粉, 河粉]
       types: [vietnamese_restaurant]
@@ -406,6 +437,7 @@ cuisines:
     fte_default: 9
     takeout_share: 0.4
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.4, afternoon: 0.05, dinner: 0.55 }
     search:
       keywords: [Thai restaurant, Thai food, 泰餐, 泰式]
       types: [thai_restaurant]
@@ -424,6 +456,7 @@ cuisines:
     fte_default: 9
     takeout_share: 0.35
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.4, afternoon: 0.1, dinner: 0.5 }
     search:
       keywords: [Malaysian restaurant, Singaporean, laksa, 马来西亚, 新加坡]
       types: [malaysian_restaurant, singaporean_restaurant, indonesian_restaurant]
@@ -443,6 +476,7 @@ cuisines:
     fte_default: 4
     takeout_share: 0.75
     daypart_profile: morning_afternoon
+    dayparts: { breakfast: 0.35, lunch: 0.25, afternoon: 0.3, dinner: 0.1 }
     search:
       keywords: [egg tart, pastel de nata, 蛋挞, 葡挞, Portuguese bakery]
       types: [bakery, cafe]
@@ -461,6 +495,7 @@ cuisines:
     fte_default: 4
     takeout_share: 0.75
     daypart_profile: all_day
+    dayparts: { breakfast: 0.05, lunch: 0.15, afternoon: 0.4, dinner: 0.4 }
     search:
       keywords: [dessert shop, 甜品, 糖水, tong sui, sweets]
       types: [dessert_shop, dessert_restaurant, cafe]
@@ -479,6 +514,7 @@ cuisines:
     fte_default: 4
     takeout_share: 0.75
     daypart_profile: morning_afternoon
+    dayparts: { breakfast: 0.35, lunch: 0.25, afternoon: 0.3, dinner: 0.1 }
     search:
       keywords: [cake shop, patisserie, 蛋糕店, 西饼, cheesecake]
       types: [bakery, confectionery]
@@ -497,6 +533,7 @@ cuisines:
     fte_default: 3
     takeout_share: 0.75
     daypart_profile: all_day
+    dayparts: { breakfast: 0, lunch: 0.15, afternoon: 0.45, dinner: 0.4 }
     search:
       keywords: [ice cream, gelato, 冰淇淋, shaved ice, frozen yogurt]
       types: [ice_cream_shop]
@@ -515,6 +552,7 @@ cuisines:
     fte_default: 4
     takeout_share: 0.75
     daypart_profile: morning_afternoon
+    dayparts: { breakfast: 0.35, lunch: 0.25, afternoon: 0.3, dinner: 0.1 }
     search:
       keywords: [bakery, bread, 面包店, boulangerie, Chinese bakery]
       types: [bakery]
@@ -533,6 +571,7 @@ cuisines:
     fte_default: 4
     takeout_share: 0.75
     daypart_profile: morning_afternoon
+    dayparts: { breakfast: 0.35, lunch: 0.25, afternoon: 0.3, dinner: 0.1 }
     search:
       keywords: [pastry, croissant, cream puff, 可颂, 泡芙]
       types: [bakery, cafe]
@@ -554,6 +593,7 @@ cuisines:
     fte_default: 3
     takeout_share: 0.9
     daypart_profile: all_day
+    dayparts: { breakfast: 0.15, lunch: 0.25, afternoon: 0.4, dinner: 0.2 }
     search:
       keywords: [boba, bubble tea, milk tea, 奶茶, 茶饮]
       types: [bubble_tea_shop, tea_house, cafe]
@@ -572,6 +612,7 @@ cuisines:
     fte_default: 3
     takeout_share: 0.7
     daypart_profile: morning_afternoon
+    dayparts: { breakfast: 0.45, lunch: 0.25, afternoon: 0.25, dinner: 0.05 }
     search:
       keywords: [coffee shop, cafe, espresso, 咖啡]
       types: [coffee_shop, cafe]
@@ -590,6 +631,7 @@ cuisines:
     fte_default: 3
     takeout_share: 0.8
     daypart_profile: all_day
+    dayparts: { breakfast: 0.2, lunch: 0.3, afternoon: 0.35, dinner: 0.15 }
     search:
       keywords: [juice bar, smoothie, açaí, 果汁]
       types: [juice_shop, juice_bar]
@@ -609,6 +651,7 @@ cuisines:
     fte_default: 12
     takeout_share: 0.35
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0.1, lunch: 0.35, afternoon: 0.1, dinner: 0.45 }
     search:
       keywords: [American restaurant, burger, steakhouse, diner, brunch]
       types: [american_restaurant, hamburger_restaurant, steak_house, diner, breakfast_restaurant, brunch_restaurant, sandwich_shop]
@@ -627,6 +670,7 @@ cuisines:
     fte_default: 12
     takeout_share: 0.3
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0, lunch: 0.3, afternoon: 0.05, dinner: 0.65 }
     search:
       keywords: [Italian restaurant, pizza, pizzeria, pasta, trattoria]
       types: [italian_restaurant, pizza_restaurant]
@@ -645,6 +689,7 @@ cuisines:
     fte_default: 8
     takeout_share: 0.5
     daypart_profile: all_day
+    dayparts: { breakfast: 0.1, lunch: 0.4, afternoon: 0.1, dinner: 0.4 }
     search:
       keywords: [Mexican restaurant, taqueria, tacos, burrito]
       types: [mexican_restaurant]
@@ -663,6 +708,7 @@ cuisines:
     fte_default: 9
     takeout_share: 0.45
     daypart_profile: lunch_dinner
+    dayparts: { breakfast: 0.05, lunch: 0.4, afternoon: 0.1, dinner: 0.45 }
     search:
       keywords: [Middle Eastern restaurant, Mediterranean, kebab, shawarma, falafel]
       types: [middle_eastern_restaurant, mediterranean_restaurant, lebanese_restaurant, turkish_restaurant, greek_restaurant, afghani_restaurant]

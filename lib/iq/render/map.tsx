@@ -176,7 +176,7 @@ function legendItems(model: ReportModel, lang: Locale): LegendItem[] {
   const items: LegendItem[] = [
     { kind: 'dot', color: LAYER_COLOR.site, size: 12, text: M.site, glyph: 'S', glyphColor: PALETTE.navy }, // navy on coral ≥ 4.5:1
     { kind: 'dot', color: LAYER_COLOR.l1, size: 11, text: l1n > 0 ? fill(M.l1Numbered, { n: l1n }) : M.l1, glyph: '1' },
-    { kind: 'dot', color: LAYER_COLOR.l2, size: 8, text: fill(M.l2, { n: model.competitors.l2_count }) },
+    { kind: 'dot', color: LAYER_COLOR.l2, size: 8, text: fill(M.l2, { n: model.competitors.counts.same_category }) },
     { kind: 'dot', color: LAYER_COLOR.l4, size: 8, text: fill(M.l4, { n: model.competitors.l4.length }) },
     { kind: 'swatch', color: '#0B1220', fill: 'rgba(11,18,32,0.26)', size: 12, text: M.walk },
     { kind: 'swatch', color: '#4A5A85', fill: 'rgba(11,18,32,0.10)', size: 12, text: M.drives },
@@ -316,11 +316,11 @@ export function MapLegend({ model, lang = DEFAULT_LOCALE }: { model: ReportModel
         </div>
         <div className="legend-row">
           <span className="legend-dot" style={{ background: LAYER_COLOR.l1 }} />
-          <span>{fill(M.l1Numbered, { n: model.competitors.l1.length })}</span>
+          <span>{fill(M.l1Numbered, { n: model.competitors.counts.direct })}</span>
         </div>
         <div className="legend-row">
           <span className="legend-dot" style={{ background: LAYER_COLOR.l2, width: 7, height: 7 }} />
-          <span>{fill(M.l2, { n: model.competitors.l2_count })}</span>
+          <span>{fill(M.l2, { n: model.competitors.counts.same_category })}</span>
         </div>
         <div className="legend-row">
           <span className="legend-dot" style={{ background: LAYER_COLOR.l4, width: 7, height: 7 }} />

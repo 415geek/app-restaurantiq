@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { archetypeFor, computeFinance, rentForOccupancyTarget, scenarioRevenue, type FinanceInput } from './finance';
+import { computeFinanceModel } from '@/lib/funnel/iq-finance-model';
 
 const millbrae: FinanceInput = {
   cuisine: 'hunan',
@@ -133,4 +134,141 @@ test('§4.1: headcount, ticket, delivery share and dayparts come from the taxono
   assert.equal(h.scenarios[1].ticket_in, 24);
   assert.equal(h.scenarios[1].delivery_ratio, 0.25);
   assert.ok(h.inputs_missing.includes('delivery_ratio(默认 25%)'));
+});
+
+/**
+ * 评审 Spec §4.1 单一结论源 (P0-A): the two finance engines share ONE cost scale.
+ *
+ * Before P0-A the 360° engine split the non-rent fixed budget 30/12/8/25 % at a
+ * 22/18/15 wage while the web engine split a different baseline 32/16/12/22 % at
+ * 22/20/17/14 with a fourth tier — the same egg-tart report printed
+ * utilities $1,920 / insurance $960 / POS $720 on one surface and
+ * $1,260 / $504 / $336 on the other.
+ */
+test('§4.1: both finance engines produce the same utilities / insurance / POS for the same tier + concept', () => {
+  const concepts: Array<{ cuisine: string; businessType: string }> = [
+    { cuisine: 'hunan', businessType: '湘菜馆 Hunan restaurant' },
+    { cuisine: 'egg_tart', businessType: '蛋挞店 egg tart bakery' },
+    { cuisine: 'hot_pot', businessType: '火锅店 hot pot' },
+    { cuisine: 'boba', businessType: '奶茶店 bubble tea' },
+    { cuisine: 'noodles', businessType: '面馆 noodle shop' },
+  ];
+  const tiers: Array<{ label: string; income: number; state: string }> = [
+    { label: 'hcol', income: 150_000, state: 'CA' },
+    { label: 'mcol', income: 85_000, state: 'TX' },
+    { label: 'lcol', income: 45_000, state: 'OH' },
+  ];
+
+  for (const { cuisine, businessType } of concepts) {
+    for (const tier of tiers) {
+      const iq = computeFinance({
+        cuisine,
+        rent_usd: 9_000,
+        sqft: 1_800,
+        seats: 40,
+        capex_usd: null,
+        ticket_in: null,
+        ticket_delivery: null,
+        delivery_ratio: null,
+        median_income: tier.income,
+        state: tier.state,
+        captured_monthly_usd: null,
+      });
+      const web = computeFinanceModel({
+        businessType,
+        location: 'x',
+        marketData: {
+          geocode: { state: tier.state },
+          acs_context: { tract_data_available: true, tract: { median_household_income_usd: tier.income } },
+          user_inputs: { monthly_rent_usd: 9_000, sqft: 1_800 },
+        },
+      });
+      const where = `${cuisine} @ ${tier.label}`;
+      assert.equal(web.monthly_utilities_usd, iq.fixed_cost.utilities, `utilities ${where}`);
+      assert.equal(web.monthly_insurance_usd, iq.fixed_cost.insurance, `insurance ${where}`);
+      assert.equal(web.monthly_pos_software_usd, iq.fixed_cost.pos, `POS ${where}`);
+      assert.equal(web.monthly_marketing_usd, iq.fixed_cost.marketing, `marketing ${where}`);
+      assert.equal(web.monthly_misc_usd, iq.fixed_cost.misc, `misc ${where}`);
+      assert.equal(web.monthly_labor_usd, iq.fixed_cost.labor, `labor ${where}`);
+      assert.equal(web.monthly_rent_usd, iq.fixed_cost.rent, `rent ${where}`);
+      assert.equal(web.fixed_total_monthly_usd, iq.fixed_cost.total, `fixed total ${where}`);
+      // Break-even = fixed total ÷ contribution margin. The fixed total is now shared, so the
+      // two engines agree wherever they also share the food-cost benchmark. Where they do not
+      // (hot pot runs a 34 % food cost in the 360° engine, 32 % in the web archetype) the
+      // CONCLUSION decides: the stored 360° number is what both surfaces print.
+      if (Math.abs(web.total_variable_rate - iq.variable_rate!) < 1e-9) {
+        assert.equal(web.break_even_revenue_monthly_usd, iq.breakeven_monthly, `break-even ${where}`);
+        assert.equal(web.safe_revenue_monthly_usd, iq.safety_monthly, `safe revenue ${where}`);
+      }
+      assert.equal(
+        web.break_even_revenue_monthly_usd,
+        Math.round(web.fixed_total_monthly_usd / web.contribution_margin_rate),
+        `the web break-even is the shared fixed total ÷ its margin ${where}`,
+      );
+    }
+  }
+});
+
+test('§4.1: the web engine never estimates a rent either — no rent in, rent-excluded out', () => {
+  const web = computeFinanceModel({
+    businessType: '蛋挞店 egg tart bakery',
+    location: 'x',
+    // sqft and a listings sample used to be turned into a rent; they must not be.
+    marketData: {
+      geocode: { state: 'CA' },
+      acs_context: { tract_data_available: true, tract: { median_household_income_usd: 150_000 } },
+      user_inputs: { sqft: 1_200 },
+      commercial_listings: { listings: [{ monthlyRent: 9_000 }, { monthlyRent: 11_000 }, { monthlyRent: 13_000 }] },
+    },
+  });
+  assert.equal(web.rent_excluded, true);
+  assert.equal(web.rent_source, 'not_provided');
+  assert.equal(web.monthly_rent_usd, 0);
+  assert.equal(web.occupancy_cost_pct_at_safe, 0, 'no rent → no occupancy cost may be shown');
+  assert.equal(web.occupancy_cost_pct_at_breakeven, 0);
+  assert.ok(!JSON.stringify(web).includes('11,000'), 'the listings median must not leak in as a rent');
+  const iq = computeFinance({
+    cuisine: 'egg_tart',
+    rent_usd: null,
+    sqft: 1_200,
+    seats: null,
+    capex_usd: null,
+    ticket_in: null,
+    ticket_delivery: null,
+    delivery_ratio: null,
+    median_income: 150_000,
+    state: 'CA',
+    captured_monthly_usd: null,
+  });
+  assert.equal(iq.rent_excluded, true);
+  assert.equal(web.break_even_revenue_monthly_usd, iq.breakeven_monthly, 'the ex-rent break-even matches too');
+});
+
+test('§4.1: with no seats and no floor area the scenarios are anchored on captured demand, and say so', () => {
+  const noCapacity = {
+    cuisine: 'egg_tart',
+    rent_usd: 6_000,
+    sqft: null,
+    seats: null,
+    capex_usd: null,
+    ticket_in: null,
+    ticket_delivery: null,
+    delivery_ratio: null,
+    median_income: 150_000,
+    state: 'CA',
+  };
+  const f = computeFinance({ ...noCapacity, captured_monthly_usd: 90_000 });
+  assert.equal(f.revenue_basis, 'demand_capture');
+  const base = f.scenarios.find((s) => s.id === 'base')!;
+  assert.ok(Math.abs(base.monthly_revenue - 90_000) / 90_000 < 0.12, `base ${base.monthly_revenue} should track captured demand`);
+  // The table still reconciles: covers = seats × turns, revenue = orders × ticket.
+  for (const s of f.scenarios) {
+    assert.ok(Math.abs(s.dine_in_covers_day - s.seats * s.turns_per_day) < 0.11, `${s.id} covers`);
+    const fromOrders = (s.dine_in_covers_day * s.ticket_in + s.delivery_orders_day * s.ticket_delivery) * s.days_open;
+    assert.ok(Math.abs(fromOrders - s.monthly_revenue) < Math.max(1, s.monthly_revenue * 0.002), `${s.id} revenue`);
+  }
+  assert.ok(f.inputs_missing.some((x) => x.startsWith('seats/sqft')));
+  // A floor area is capacity: the basis stays seats × turns.
+  assert.equal(computeFinance({ ...noCapacity, sqft: 900, captured_monthly_usd: 90_000 }).revenue_basis, 'seats_turns');
+  assert.equal(computeFinance({ ...noCapacity, captured_monthly_usd: null }).revenue_basis, 'seats_turns');
 });

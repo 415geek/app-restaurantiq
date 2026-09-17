@@ -75,3 +75,67 @@ test('§4.1 general-audience concept: audience fit scores household density + in
   assert.ok(aud && /户密度 50 户/.test(aud.text_zh) && /Household density 50/.test(aud.text_en), JSON.stringify(conds));
   assert.ok(!conds.some((c) => /中餐|Chinese restaurants/.test(c.text_zh + c.text_en)));
 });
+
+/* §4.3 daypart-driven advice (P0-C) --------------------------------------- */
+
+const dayparts = (b: number, l: number, a: number, d: number) => [
+  { id: 'breakfast' as const, share: b, monthly_usd: Math.round(b * 100_000) },
+  { id: 'lunch' as const, share: l, monthly_usd: Math.round(l * 100_000) },
+  { id: 'afternoon' as const, share: a, monthly_usd: Math.round(a * 100_000) },
+  { id: 'dinner' as const, share: d, monthly_usd: Math.round(d * 100_000) },
+];
+
+/** The 场景与外卖 dimension forced to be the weakest, so its condition is always emitted. */
+function occasionCondition(cuisine: string, dp: ReturnType<typeof dayparts>) {
+  const input: ScoreInput = {
+    ...good,
+    cuisine,
+    competitors: { ...good.competitors, l1_delivery_share: 0 },
+    drive5: { hh: 300, area_sq_mi: 40 },
+    jobs_walk10: 100,
+    demand: { ...good.demand, dayparts: dp },
+  };
+  const conds = buildConditions(scoreDimensions(input), input);
+  return conds.find((c) => c.dimension === 'occasion_delivery');
+}
+
+test('§4.3 P0-C: the 午市套餐 + 外卖平台 advice never fires for a bakery; it gets morning / afternoon advice instead', () => {
+  // egg_tart is 35 / 25 / 30 / 10 and the modelled mix matches it, so the lunch trigger cannot fire.
+  const c = occasionCondition('egg_tart', dayparts(0.35, 0.25, 0.3, 0.1));
+  assert.ok(c, 'the occasion condition is emitted');
+  assert.doesNotMatch(c!.text_zh, /≤ \$18 套餐/, c!.text_zh);
+  assert.doesNotMatch(c!.text_en, /add a ≤ \$18 set menu/, c!.text_en);
+  assert.match(c!.text_zh, /早市与午后/);
+  assert.match(c!.text_en, /front-loaded/);
+  // Even when the site under-delivers the bakery's lunch, the format is not lunch-dependent enough to fire it.
+  const under = occasionCondition('egg_tart', dayparts(0.45, 0.15, 0.3, 0.1));
+  assert.doesNotMatch(under!.text_zh, /≤ \$18 套餐/, under!.text_zh);
+});
+
+test('§4.3 P0-C: a 茶餐厅 whose modelled lunch falls below its own 40 % DOES get the lunch-set advice', () => {
+  const c = occasionCondition('hk_cafe', dayparts(0.2, 0.28, 0.17, 0.35));
+  assert.ok(c);
+  assert.match(c!.text_zh, /午市偏弱[\s\S]*40%[\s\S]*28%[\s\S]*≤ \$18 套餐/, c!.text_zh);
+  assert.match(c!.text_en, /Weak lunch[\s\S]*40%[\s\S]*28%[\s\S]*set menu/, c!.text_en);
+  // ...and not when the site actually delivers that lunch.
+  const ok = occasionCondition('hk_cafe', dayparts(0.15, 0.45, 0.15, 0.25));
+  assert.doesNotMatch(ok!.text_zh, /午市偏弱/, ok!.text_zh);
+  assert.match(ok!.text_zh, /午市已是主力时段/);
+});
+
+test('§4.3: a dinner-led concept is told to staff the evening, not to build a lunch service', () => {
+  const c = occasionCondition('hot_pot', dayparts(0, 0.2, 0.05, 0.75));
+  assert.ok(c);
+  assert.doesNotMatch(c!.text_zh, /≤ \$18 套餐/);
+  assert.match(c!.text_zh, /主力时段在晚市/);
+  assert.match(c!.text_en, /dinner-led/);
+});
+
+test('§4.3: 场景与外卖 weights the site by the concept’s own dayparts — a bakery is not marked down for a 10 % evening', () => {
+  const site = { ...good, drive5: { hh: 9_000, area_sq_mi: 3.1 }, jobs_walk10: 500 };
+  const bakery = scoreDimensions({ ...site, cuisine: 'egg_tart', demand: { ...good.demand, dayparts: dayparts(0.35, 0.25, 0.3, 0.1) } }).find((d) => d.id === 'occasion_delivery')!;
+  const cafe = scoreDimensions({ ...site, cuisine: 'hk_cafe', demand: { ...good.demand, dayparts: dayparts(0.15, 0.4, 0.15, 0.3) } }).find((d) => d.id === 'occasion_delivery')!;
+  // Almost no walk-10 jobs: the lunch-heavy 茶餐厅 is the one that suffers, not the bakery.
+  assert.ok(bakery.score > cafe.score, `${bakery.score} vs ${cafe.score}`);
+  assert.match(bakery.drivers[0], /业态时段分布 早市 35% \/ 午市 25% \/ 午后 30% \/ 晚市 10%/);
+});

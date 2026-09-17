@@ -15,6 +15,7 @@ import { fetchGeocode } from './data/geocode';
 import { L1_RADIUS_FAR_M } from './data/google-places';
 import { normalizeUserInputs, type RawSiteInput } from './data/user-inputs';
 import type { FetchContext, Geometry, LatLng, SiteInput } from './data/types';
+import { conclusionFromModel } from './conclusion/conclusion';
 import { computeAudience } from './engines/audience';
 import {
   applyLlmClassifications,
@@ -179,6 +180,9 @@ function rawCandidatesFromBundle(bundle: DataBundle): CandidatePoi[] {
       operating_status: g.business_status ?? 'unknown',
       hours_per_week: g.opening_hours_weekday ? estimateHoursPerWeek(g.opening_hours_weekday) : null,
       layers: g.layers ?? [],
+      // §4.2 品类空白判定 text probe (D6 field mask `places.reviews` + any editorial summary).
+      review_texts: g.review_texts ?? null,
+      editorial_summary: g.editorial_summary ?? null,
     });
   }
   return out;
@@ -250,6 +254,21 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
   const county = {
     chinese_hh_share: acsCounty && acsCounty.chinese_speakers != null && (acsCounty.pop5plus ?? 0) > 0 ? acsCounty.chinese_speakers / acsCounty.pop5plus! : null,
     median_income: acsCounty?.median_income ?? null,
+  };
+  /**
+   * P1-i 客群指数: the county baseline the segment INDEX divides by. Same three
+   * structural shares the ring allocation uses (中文家庭 / 有孩家庭 / 25–44 岁),
+   * read off the county row with the identical definitions as engines/trade-area.ts
+   * (family_share = 有孩家庭 ÷ 家庭数, age_25_44_share = 25–44 人口 ÷ 常住人口).
+   * The county has no walk-10 workplace ring, so `jobs_per_pop` stays null and the
+   * commuter weight falls back to the same floor on both sides.
+   */
+  const audienceCountyBaseline = {
+    ...county,
+    family_share:
+      acsCounty && acsCounty.families_with_children != null && (acsCounty.households ?? 0) > 0 ? acsCounty.families_with_children / acsCounty.households! : null,
+    age_25_44_share: acsCounty && acsCounty.age_25_44 != null && (acsCounty.pop ?? 0) > 0 ? acsCounty.age_25_44 / acsCounty.pop! : null,
+    jobs_per_pop: null,
   };
 
   // Competitors first (cuisine_share needs the supply mix).
@@ -373,6 +392,8 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
     for (const id of [m.id, m.ids.google, m.ids.overture]) if (id) tradeAreaIds.add(id);
   }
   competitors.brand_anchors = selectBrandAnchors(siteLL, rawCandidatesFromBundle(bundle), site.cuisine, tradeAreaIds);
+  // §4.4: brand anchors are the last count to settle — they are reported, never inside `counts.total`.
+  competitors.counts = { ...competitors.counts, anchors: competitors.brand_anchors.length };
 
   // ── Demand (Phase 2.4) ──────────────────────────────────────────────────
   const lunchTicket = Math.round(ticketIn * 0.75);
@@ -385,6 +406,8 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
     seats: site.seats,
     walk10: ringGeom(rings, 'walk10'),
     lunch: { jobs_walk10: walk10.jobs, ...lunchAudienceFor(cu, { chinese_share: chineseShareOf(primary), asian_job_share, concept_share: share.share, ticket_lunch: lunchTicket }) },
+    // §4.3: the concept's own daypart table drives the split of the resident pool.
+    dayparts: cu.dayparts,
   });
 
   // ── Finance (Phase 4.5) ─────────────────────────────────────────────────
@@ -450,7 +473,7 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
         transit_commute_share: access.commute_mix.transit,
       },
       finance: { occupancy_cost_ratio: fin.occupancy_cost_ratio, rent: fin.fixed_cost.rent, breakeven_monthly: fin.breakeven_monthly, safety_monthly: fin.safety_monthly, base_revenue: fin.scenarios.find((s) => s.id === 'base')?.monthly_revenue ?? null },
-      demand: { captured_monthly_usd: hf.captured_monthly_usd, lunch_usd: hf.lunch_usd, dinner_usd: hf.dinner_usd },
+      demand: { captured_monthly_usd: hf.captured_monthly_usd, lunch_usd: hf.lunch_usd, dinner_usd: hf.dinner_usd, dayparts: hf.dayparts },
     };
   };
   const scoreInput = scoreInputFor(site.cuisine, primary, competitors, huff, finance, coverage_ratio);
@@ -481,6 +504,7 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
         seats: site.seats,
         walk10: ringGeom(rings, 'walk10'),
         lunch: { jobs_walk10: walk10.jobs, ...lunchAudienceFor(alt, { chinese_share: chineseShareOf(altPrimary), asian_job_share, concept_share: altShare.share, ticket_lunch: Math.round(alt.ticket_in * 0.75) }) },
+        dayparts: alt.dayparts,
       });
       const altFin = computeFinance({ cuisine: alt.id, rent_usd: site.rent_usd, sqft: site.sqft, seats: site.seats, capex_usd: site.capex_usd, ticket_in: null, ticket_delivery: null, delivery_ratio: site.delivery_ratio, median_income: altPrimary.median_income, state: geo.geography.state_abbr, captured_monthly_usd: altHuff.captured_monthly_usd });
       const altCov = altHuff.captured_monthly_usd != null && altFin.breakeven_monthly ? altHuff.captured_monthly_usd / altFin.breakeven_monthly : null;
@@ -538,7 +562,9 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
     if (!s || s.status !== 'ok') precheck_reasons.push(`${id} 状态 ${s?.status ?? '缺失'}：${s?.coverage_note ?? ''}`);
   }
 
-  const partial: Omit<ReportModel, 'risks'> = {
+  // `conclusion` is frozen after the model validates (see below) — it is derived
+  // from the very fields this literal builds.
+  const partial: Omit<ReportModel, 'risks' | 'conclusion'> = {
     meta: {
       report_id: site.report_id,
       generated_at: ctx.now().toISOString(),
@@ -585,7 +611,9 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
       metro: geo.metro,
     },
     trade_area: { primary_ring: tradeArea.primary_ring, rings: tradeArea.rings, county_benchmark: county, isochrone_method: isoMethod },
-    audience: computeAudience({ primary, walk10, county, lunch_usd: huff.lunch_usd, dinner_usd: huff.dinner_usd }),
+    // P1-i: share and index share ONE basis — the county baseline is the same allocation
+    // formula fed county values, so the ratio is like-for-like (engines/audience.ts).
+    audience: computeAudience({ primary, walk10, county: audienceCountyBaseline, lunch_usd: huff.lunch_usd, dinner_usd: huff.dinner_usd, dayparts: huff.dayparts }),
     competitors: {
       guard_passed: competitors.guard_passed,
       guard_notes: competitors.guard_notes,
@@ -612,12 +640,23 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
       brand_anchors: competitors.brand_anchors ?? [],
       l1_search_radius_m: competitors.l1_search_radius_m,
       l1_layers_tried: competitors.l1_layers_tried,
+      // §4.2 品类空白判定加硬约束 (P0-B).
+      category_gap: competitors.category_gap,
+      also_selling: competitors.also_selling,
+      also_selling_unknown_count: competitors.also_selling_unknown_count,
+      coverage_discount: competitors.coverage_discount,
+      coverage_adjustment: competitors.coverage_adjustment,
+      // §4.4 (P1-e): the competitive-strength number is READ from the six-dimension score, never recomputed.
+      competition_score: dims.find((d) => d.id === 'competitive_position')?.score ?? null,
+      // §4.4 (P1-a): the ONE set of counts every surface prints.
+      counts: competitors.counts,
     },
     demand: {
       captured_monthly_usd: huff.captured_monthly_usd,
       captured_covers_day,
       lunch_usd: huff.lunch_usd,
       dinner_usd: huff.dinner_usd,
+      dayparts: huff.dayparts,
       coverage_ratio,
       by_ring: huff.by_ring,
       cuisine_share: share.share,
@@ -633,6 +672,10 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
   };
   const risks = computeRisks({ ...partial, dev_projects: bundle.dev?.data?.projects.length ?? 0 });
   const model = parseReportModel({ ...partial, risks });
+  // §4.1 单一结论源 (P0-A): freeze THE conclusion on the model. Both the web
+  // standard report and the 360° PDF print this object — nothing re-derives a
+  // verdict or a break-even anywhere else.
+  model.conclusion = conclusionFromModel(model);
   return { model, bundle, ctx, intermediates: { trade_area: tradeArea, competitors, huff, cuisine_share: share } };
 }
 
@@ -689,7 +732,7 @@ export function rederiveWithoutRent(model: ReportModel): ReportModel {
       transit_commute_share: m.access.commute_mix.transit,
     },
     finance: { occupancy_cost_ratio: finance.occupancy_cost_ratio, rent: finance.fixed_cost.rent, breakeven_monthly: finance.breakeven_monthly, safety_monthly: finance.safety_monthly, base_revenue: finance.scenarios.find((s) => s.id === 'base')?.monthly_revenue ?? null },
-    demand: { captured_monthly_usd: captured, lunch_usd: m.demand.lunch_usd, dinner_usd: m.demand.dinner_usd },
+    demand: { captured_monthly_usd: captured, lunch_usd: m.demand.lunch_usd, dinner_usd: m.demand.dinner_usd, dayparts: m.demand.dayparts },
   };
   const cov = scoreDemandCoverage(coverage_ratio);
   const fin = scoreFinancialViability(scoreInput.finance, captured);
@@ -716,7 +759,13 @@ export function rederiveWithoutRent(model: ReportModel): ReportModel {
   m.risks = computeRisks({ ...m, dev_projects: dev ? Number(dev) : 0 });
   m.confidence = computeConfidence({ sources: statusMap, guard_passed: m.competitors.guard_passed, user: { rent_usd: null, sqft: m.input.sqft, seats: m.input.seats, capex_usd: m.input.capex_usd } });
   m.narrative = {};
-  return parseReportModel(m);
+  // The stored conclusion described the WITH-rent model; re-derive it from the
+  // re-derived numbers, otherwise the parse-time guard would put the old
+  // break-even and verdict straight back (§4.1 临时方案).
+  m.conclusion = null;
+  const rederived = parseReportModel(m);
+  rederived.conclusion = conclusionFromModel(rederived);
+  return rederived;
 }
 
 /** Which ring a point falls in (smallest first) — used by renderers. */

@@ -23,6 +23,27 @@ competitor_guard:
   min_metro_pois_for_zero_check: 10   # metro 内该子菜系 ≥ 10 家而 drive10 内 L1+L2 == 0 → 抓取异常
   min_food_pois_drive10: 15           # drive10 内餐饮 POI < 15 且人口 > 20,000 → 覆盖异常
   min_pop_for_poi_check: 20000
+# 评审 Spec §4.1 单一结论源（P0-A）：固定成本刻度表——唯一来源。
+# lib/iq/engines/finance.ts（360）与 lib/funnel/iq-finance-model.ts（标准版）都只读这里，
+# 代码里不得再出现任何水电/保险/POS/营销/杂项/工资的字面量。
+# 租金永远不估算：用户没填就按「不含租金」出结论（finance.rent_excluded）。
+cost_scale:
+  tiers:                          # 成本档位：时薪、非租金固定成本系数、判档用的家庭收入中位数下限
+    hcol: { wage_usd_per_hour: 22, other_fixed_multiplier: 1.12, min_median_income: 110000 }
+    mcol: { wage_usd_per_hour: 18, other_fixed_multiplier: 1.00, min_median_income: 70000 }
+    lcol: { wage_usd_per_hour: 15, other_fixed_multiplier: 0.88, min_median_income: 0 }
+  hcol_states: [CA, NY, WA, MA, HI, DC, NJ]   # 收入未知时按州兜底判 hcol，其余 mcol
+  labor: { hours_per_fte_month: 173, load_factor: 1.18 }
+  split: { utilities: 0.30, insurance: 0.12, pos: 0.08, marketing: 0.25 }   # 杂项 = 余数
+  concepts:                       # 业态原型 → mcol 档的基准非租金固定成本（$/月）与默认人手（taxonomy fte_default 优先）
+    bubble_tea:    { other_fixed_usd: 4500, headcount: 5 }
+    coffee_bakery: { other_fixed_usd: 4800, headcount: 5 }
+    qsr:           { other_fixed_usd: 6000, headcount: 8 }
+    fast_casual:   { other_fixed_usd: 7200, headcount: 9 }
+    pizza:         { other_fixed_usd: 6500, headcount: 9 }
+    asian_casual:  { other_fixed_usd: 7800, headcount: 11 }
+    casual_dining: { other_fixed_usd: 9000, headcount: 16 }
+    fine_dining:   { other_fixed_usd: 14000, headcount: 25 }
 finance:
   safety_multiplier: 1.28
   occupancy_cost_bands: [[0, 0.08, 90], [0.08, 0.10, 70], [0.10, 0.12, 50], [0.12, 1, 25]]
@@ -36,7 +57,9 @@ score:
   quality_gap: { low_rating: 4.0, high_rating: 4.4, bonus: 10 }
   closure_penalty: { threshold: 0.20, penalty: 15 }
 confidence_weights: { acs: 20, competitors: 25, traffic_proxy: 15, rent_comps: 15, daytime_pop: 10, transit: 5, dev_pipeline: 5, user_inputs: 5 }
-verdict: { go: 75, conditional: 60 }
+# §4.5：唯一一套结论阈值。≥ go → 可做 GO；≥ conditional → 有条件可做；否则不建议。
+# 网页版与 PDF 打印的规则文字都必须与这两个数字一致（lib/iq/conclusion/conclusion.ts 是唯一出口）。
+verdict: { go: 70, conditional: 55 }
 rent_comps:
   min_comps_for_premium: 3
 data_budget:

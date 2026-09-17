@@ -36,6 +36,21 @@ export const defaultsSchema = z.object({
     min_food_pois_drive10: z.number(),
     min_pop_for_poi_check: z.number(),
   }),
+  /**
+   * §4.1 单一结论源: the ONE fixed-cost scale both finance engines read
+   * (lib/iq/engines/finance.ts and lib/funnel/iq-finance-model.ts). Helpers live
+   * in lib/iq/conclusion/cost-scale.ts; no engine may carry its own literals.
+   */
+  cost_scale: z.object({
+    tiers: z.record(
+      z.enum(['hcol', 'mcol', 'lcol']),
+      z.object({ wage_usd_per_hour: z.number(), other_fixed_multiplier: z.number(), min_median_income: z.number() }),
+    ),
+    hcol_states: z.array(z.string()),
+    labor: z.object({ hours_per_fte_month: z.number(), load_factor: z.number() }),
+    split: z.object({ utilities: z.number(), insurance: z.number(), pos: z.number(), marketing: z.number() }),
+    concepts: z.record(z.string(), z.object({ other_fixed_usd: z.number(), headcount: z.number() })),
+  }),
   finance: z.object({
     safety_multiplier: z.number(),
     occupancy_cost_bands: z.array(band),
@@ -104,6 +119,28 @@ export type Audience = z.infer<typeof audienceSchema>;
 export const daypartProfileSchema = z.enum(['lunch_dinner', 'dinner', 'all_day', 'morning_afternoon']);
 export type DaypartProfile = z.infer<typeof daypartProfileSchema>;
 
+/**
+ * 评审 Spec §4.3 daypart 按业态取值 — the four dayparts every concept's demand is
+ * split across. Order is the clock: 早市 → 午市 → 午后 → 晚市.
+ */
+export const DAYPART_IDS = ['breakfast', 'lunch', 'afternoon', 'dinner'] as const;
+export type DaypartId = (typeof DAYPART_IDS)[number];
+
+/** 时段占比之和必须为 1（±0.001）；否则参数表拒绝加载。 */
+export const DAYPART_SUM_TOLERANCE = 0.001;
+
+export const daypartsSchema = z
+  .object({
+    breakfast: z.number().min(0).max(1),
+    lunch: z.number().min(0).max(1),
+    afternoon: z.number().min(0).max(1),
+    dinner: z.number().min(0).max(1),
+  })
+  .refine((d) => Math.abs(d.breakfast + d.lunch + d.afternoon + d.dinner - 1) <= DAYPART_SUM_TOLERANCE, {
+    message: `dayparts must sum to 1 ± ${DAYPART_SUM_TOLERANCE} (breakfast + lunch + afternoon + dinner)`,
+  });
+export type Dayparts = z.infer<typeof daypartsSchema>;
+
 export const cuisineSchema = z.object({
   id: z.string(),
   label_zh: z.string(),
@@ -122,6 +159,12 @@ export const cuisineSchema = z.object({
   /** Share of orders that are takeout / delivery (0–1). */
   takeout_share: z.number().min(0).max(1).optional(),
   daypart_profile: daypartProfileSchema.optional(),
+  /**
+   * §4.3: the concept's own daypart distribution (早市 / 午市 / 午后 / 晚市, summing to 1).
+   * THE demand model splits captured demand with this table — never with a
+   * full-service lunch/dinner assumption, so an egg-tart bakery never prints 午市 0%.
+   */
+  dayparts: daypartsSchema,
   /** Google Places search profile for the three-layer competitor retrieval (§4.2). */
   search: z
     .object({

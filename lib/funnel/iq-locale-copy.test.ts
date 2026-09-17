@@ -24,6 +24,7 @@ import {
   locationIqV2FreeSystem,
   locationIqV2FreeUser,
   locationIqV2PremiumSystem,
+  narrativeNumberAlignmentBlock,
   locationIqV2PremiumUser,
   outputLanguageBlock,
 } from './iq-prompts-locationiq-v2';
@@ -295,4 +296,22 @@ test('premium market-data section and free brief fall back gracefully in es', ()
   assert.ok(withData.includes('JSON DE DATOS DE MERCADO') && withData.includes('Renta mensual USD: 5000'));
   const langs: Locale[] = ['en', 'zh', 'es'];
   for (const l of langs) assert.ok(buildPremiumMarketDataSection({}, l).length > 100);
+});
+
+test('§4.5 P1-b: every premium system prompt carries the narrative / number alignment rule in its own language', () => {
+  for (const lang of LOCALES) {
+    const block = narrativeNumberAlignmentBlock(lang);
+    assert.ok(block.includes('12.5%'), `${lang} names the sensitivity trigger`);
+    assert.ok(locationIqV2PremiumSystem(lang).includes(block.trim()), `${lang} premium system carries the block`);
+  }
+  // the exact wording the spec asks for, per language
+  assert.match(narrativeNumberAlignmentBlock('zh'), /三档情景（保守 \/ 基准 \/ 乐观）营收均高于安全线时，\*\*不得\*\*出现「利润会被迅速侵蚀」/);
+  assert.match(narrativeNumberAlignmentBlock('zh'), /综合 ≥ 70 → 可做 \/ GO；55–69 → 有条件可做；< 55 → 不建议/);
+  assert.match(narrativeNumberAlignmentBlock('en'), /all three scenarios .*clear the safety line, do NOT write that profit "will be eroded quickly"/);
+  assert.match(narrativeNumberAlignmentBlock('en'), /≥ 70 → GO; 55–69 → CONDITIONAL GO; < 55 → NO GO/);
+  assert.match(narrativeNumberAlignmentBlock('es'), /los tres escenarios .*superan la línea de seguridad/);
+  assert.match(narrativeNumberAlignmentBlock('es'), /≥ 70 → VIABLE \/ GO; 55–69 → VIABLE CON CONDICIONES; < 55 → NO VIABLE/);
+  // Spanish and English blocks stay free of Chinese.
+  assert.ok(!CJK.test(narrativeNumberAlignmentBlock('en')));
+  assert.ok(!CJK.test(narrativeNumberAlignmentBlock('es')));
 });

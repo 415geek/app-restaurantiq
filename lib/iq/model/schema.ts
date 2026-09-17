@@ -8,6 +8,8 @@
  * - narrative is generated FROM this document and may only cite its fields
  */
 import { z } from 'zod';
+import { conclusionSchema } from '../conclusion/schema';
+import { reconcileModelToConclusion } from '../conclusion/reconcile';
 
 export const nullableNum = z.number().nullable();
 
@@ -105,7 +107,57 @@ export const brandAnchorSchema = z.object({
 });
 export type BrandAnchor = z.infer<typeof brandAnchorSchema>;
 
-export const reportModelSchema = z.object({
+/**
+ * 评审 Spec §4.4 计数单一化: the ONE set of competitor counts every surface
+ * prints (page 7 / 8, the dashboard, the confidence section, the provenance
+ * table, the funnel metrics digest). No module re-counts and no narrative may
+ * restate a competitor number that is not one of these fields.
+ *
+ * `total` = direct + same_category — the competitive set. Layer-3 occasion
+ * substitutes (`l3`) and city-wide brand anchors (`anchors`) are reported
+ * separately and are NEVER inside `total`.
+ */
+export const competitorCountsSchema = z.object({
+  total: z.number(),
+  direct: z.number(),
+  same_category: z.number(),
+  l3: z.number(),
+  anchors: z.number(),
+  by_source: z.object({ google: z.number(), yelp: z.number(), foursquare: z.number() }),
+});
+export type CompetitorCounts = z.infer<typeof competitorCountsSchema>;
+
+/** §4.2 品类空白判定: a same-category store whose menu / review / editorial text shows it also sells the concept. */
+export const alsoSellingSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  distance_mi: z.number(),
+  evidence: z.enum(['review', 'editorial', 'menu']),
+  quote: z.string().optional(),
+});
+export type AlsoSellingStore = z.infer<typeof alsoSellingSchema>;
+
+/** Counts for a model stored before §4.4 — derived once, here, so no surface ever counts for itself. */
+function backfillCounts(c: {
+  l1: Competitor[];
+  l2: Competitor[];
+  l2_count: number;
+  l3_count: number;
+  brand_anchors?: BrandAnchor[];
+}): CompetitorCounts {
+  const counted = [...c.l1, ...c.l2];
+  return {
+    total: c.l1.length + c.l2.length,
+    direct: c.l1.length,
+    same_category: c.l2.length || c.l2_count,
+    l3: c.l3_count,
+    anchors: c.brand_anchors?.length ?? 0,
+    by_source: { google: counted.filter((x) => x.source === 'google' || x.source === 'both').length, yelp: 0, foursquare: 0 },
+  };
+}
+
+/** The document shape. `reportModelSchema` below adds the single-conclusion guard. */
+const reportModelShape = z.object({
   meta: z.object({
     report_id: z.string(),
     generated_at: z.string(),
@@ -119,6 +171,13 @@ export const reportModelSchema = z.object({
     language: z.enum(['en', 'zh', 'es']),
     /** Language of the stored narrative_json when it differs from `language` (set by the loader from `narrative_json.__lang`). */
     narrative_language: z.enum(['en', 'zh', 'es']).optional(),
+    /**
+     * §4.1 ordering: 'template' when the deterministic core ran without prose (it now
+     * runs BEFORE the web draft), 'llm' once the narrative pass has written the pages.
+     * The 360° route uses it to run the prose pass exactly once, never recomputing
+     * the frozen numbers.
+     */
+    narrative_pass: z.enum(['template', 'llm']).optional(),
     precheck_reasons: z.array(z.string()),
     /** Declared fallbacks that keep the report deliverable (e.g. Overture not loaded → Google-only POI base). */
     degradations: z.array(z.string()),
@@ -166,6 +225,13 @@ export const reportModelSchema = z.object({
     isochrone_method: z.enum(['mapbox', 'radius']),
   }),
   audience: z.object({
+    /**
+     * P1-i 客群指数: `share` and `index` share ONE basis (engines/audience.ts).
+     * `share` is the segment's share of the primary ring's households — the four
+     * segments partition the ring and sum to 1 ± 0.02. `index` is that share ÷ the
+     * SAME segment's county share × 100 (100 = the county average), null when the
+     * county row is missing. `basis` names that denominator in the report.
+     */
     segments: z.array(
       z.object({
         id: z.enum(['chinese_family', 'commuter_professional', 'young_chinese', 'non_chinese_explorer']),
@@ -212,12 +278,41 @@ export const reportModelSchema = z.object({
     l1_search_radius_m: nullableNum.optional(),
     /** Layer-1 steps completed (e.g. ["direct@800", "direct@1600"]); a void claim requires both. */
     l1_layers_tried: z.array(z.string()).optional(),
-  }),
+    /**
+     * §4.2 品类空白判定加硬约束. 'true' only when the Layer-1 keyword search
+     * returned 0 hits at BOTH 0.5 and 1 mile AND no Layer-2 (same-category)
+     * store's menu / review / editorial text mentions the concept. 'unknown'
+     * when the text probe could not be completed — never a gap claim.
+     */
+    category_gap: z.enum(['true', 'false', 'unknown']).default('unknown'),
+    /** Same-category stores that also sell the concept ("无专营店，但 N 家兼售"). */
+    also_selling: z.array(alsoSellingSchema).default([]),
+    /** Same-category stores with no text at all: unverifiable, never counted as "does not sell it". */
+    also_selling_unknown_count: z.number().default(0),
+    /** §4.2 demand consequence: factor the demand coverage ratio must be multiplied by (0.8), or null. */
+    coverage_discount: nullableNum.default(null),
+    /** Why `coverage_discount` was applied; null when it was not. */
+    coverage_adjustment: z.string().nullable().default(null),
+    /** §4.4 P1-e: the ONE competitive-strength number — score.dimensions.competitive_position. Never recomputed. */
+    competition_score: nullableNum.default(null),
+    /** §4.4 P1-a: the ONE set of counts every surface prints. */
+    counts: competitorCountsSchema.optional(),
+  }).transform((c) => ({ ...c, counts: c.counts ?? backfillCounts(c) })),
   demand: z.object({
     captured_monthly_usd: nullableNum,
     captured_covers_day: nullableNum,
+    /** 午市 daypart total (resident 午市 slice + the walk10 workplace pool). */
     lunch_usd: nullableNum,
+    /** 晚市 daypart total. */
     dinner_usd: nullableNum,
+    /**
+     * §4.3 daypart 按业态取值 — captured demand split across 早市 / 午市 / 午后 / 晚市 by
+     * the concept's own taxonomy table, in clock order, `share` summing to 1. `[]` on a
+     * model stored before §4.3 (page 5 then falls back to lunch_usd / dinner_usd).
+     */
+    dayparts: z
+      .array(z.object({ id: z.enum(['breakfast', 'lunch', 'afternoon', 'dinner']), share: z.number(), monthly_usd: z.number() }))
+      .default([]),
     coverage_ratio: nullableNum,
     by_ring: z.array(z.object({ ring: ringIdSchema, monthly_usd: z.number(), share: z.number() })),
     cuisine_share: z.number(),
@@ -254,6 +349,12 @@ export const reportModelSchema = z.object({
     variable_rate: nullableNum,
     breakeven_monthly: nullableNum,
     safety_monthly: nullableNum,
+    /**
+     * §4.1 单一结论源: which basis produced `scenarios` — seats × turns (the
+     * default), or the modelled captured demand when the customer gave neither
+     * seats nor floor area. The conclusion prints it; there is never a second table.
+     */
+    revenue_basis: z.enum(['seats_turns', 'demand_capture']).default('seats_turns'),
     scenarios: z.array(
       z.object({
         id: z.enum(['pessimistic', 'base', 'optimistic']),
@@ -324,9 +425,25 @@ export const reportModelSchema = z.object({
     z.string(),
     z.object({ title: z.string(), body: z.string(), refs: z.array(z.string()), provider: z.string().optional(), guard: z.string().optional() }),
   ),
+  /**
+   * 评审 Spec §4.1 单一结论源 (P0-A): THE conclusion both surfaces print — score,
+   * verdict, break-even, safety line, fixed cost, occupancy, scenarios and the one
+   * data-confidence number. Derived by lib/iq/conclusion/conclusion.ts and nowhere
+   * else. `.default(null)` so models stored before P0-A (and qa/fixtures/*.json)
+   * still parse.
+   */
+  conclusion: conclusionSchema.nullable().default(null),
 });
 
-export type ReportModel = z.infer<typeof reportModelSchema>;
+export type ReportModel = z.infer<typeof reportModelShape>;
+
+/**
+ * 评审 Spec §4.1 临时方案 (interim safety net, kept permanently): every parse of a
+ * stored model — the print/PDF loader included — runs the conclusion guard, so a
+ * model that drifted from its stored conclusion is rendered with the CONCLUSION's
+ * numbers. The PDF can never print a recomputation the web page does not show.
+ */
+export const reportModelSchema = reportModelShape.transform((m): ReportModel => reconcileModelToConclusion(m));
 
 export const REPORT_ENGINE_VERSION = '360.1.0';
 

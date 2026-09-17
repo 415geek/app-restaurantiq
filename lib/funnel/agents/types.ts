@@ -67,7 +67,21 @@ export type SiteMetrics = {
 
   competition: {
     data_available: boolean;
+    /** 评审 Spec §4.4: always `counts.total` — no reader counts the sample for itself. */
     competitor_count: number;
+    /**
+     * §4.4 计数单一化: the ONE competitor count set (total / direct / same_category /
+     * l3 / anchors / by_source) every surface and every prompt quotes. Null when the
+     * snapshot carried no competitor data at all.
+     */
+    counts: {
+      total: number;
+      direct: number;
+      same_category: number;
+      l3: number;
+      anchors: number;
+      by_source: { google: number; yelp: number; foursquare: number };
+    } | null;
     avg_rating: number | null;
     avg_review_count: number | null;
     /** Restaurants per 1,000 residents in trade area vs ~2.2/1k US benchmark. */

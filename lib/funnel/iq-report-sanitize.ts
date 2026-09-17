@@ -1,7 +1,10 @@
 /**
- * Remove internal provider/model telemetry before persisting or returning reports.
+ * Remove internal provider/model telemetry before persisting or returning reports,
+ * and drop prose that came back structurally corrupted (评审 Spec v2 §4.6 P1-g:
+ * 「门店née点计数器」 reached a paying customer in v2 testing).
  */
 import type { IqReportWithGrounding } from '@/lib/funnel/iq-full-report-schema';
+import { formatTextQuality, scanTextQuality, scrubCorruptedSentences, type TextQualityReport } from '@/lib/funnel/iq-text-quality';
 
 const INTERNAL_KEYS = [
   '_generation_provider',
@@ -42,6 +45,50 @@ function scrubWarnings(warnings: unknown): string[] | undefined {
   return out.length > 0 ? out : undefined;
 }
 
+/** Longest strings first so one log line shows the worst offender. */
+const TEXT_SCAN_MIN_LENGTH = 12;
+
+/**
+ * Walk every string in the report, drop sentences with structural corruption and
+ * report what was seen. Rare-but-legitimate characters (a competitor's name) are
+ * only counted, never removed — `context` carries the report's own data so those
+ * characters are recognised.
+ */
+export function scrubCorruptedReportText(
+  report: IqReportWithGrounding,
+  opts: { context?: string } = {},
+): { report: IqReportWithGrounding; quality: TextQualityReport; removedSentences: number } {
+  const findings: TextQualityReport['findings'] = [];
+  let removedSentences = 0;
+
+  const walk = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      if (value.length < TEXT_SCAN_MIN_LENGTH) return value;
+      const scan = scanTextQuality(value, opts);
+      findings.push(...scan.findings);
+      if (scan.ok) return value;
+      const { text, removed } = scrubCorruptedSentences(value, opts);
+      removedSentences += removed;
+      // A field that is nothing but corruption becomes empty; keep the original
+      // rather than shipping an empty section the renderer would still print.
+      return text.trim() ? text : value;
+    }
+    if (Array.isArray(value)) return value.map(walk);
+    if (value && typeof value === 'object') {
+      const o: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) o[k] = walk(v);
+      return o;
+    }
+    return value;
+  };
+
+  const scrubbed = walk(report) as IqReportWithGrounding;
+  const corrupt = findings.filter((f) => f.severity === 'corrupt').length;
+  const quality: TextQualityReport = { findings, corrupt, suspect: findings.length - corrupt, ok: corrupt === 0 };
+  if (findings.length) console.warn(`[iq-report] ${formatTextQuality(quality)}`);
+  return { report: scrubbed, quality, removedSentences };
+}
+
 export function stripInternalIqReportFields(
   report: IqReportWithGrounding,
 ): IqReportWithGrounding {
@@ -68,5 +115,8 @@ export function stripInternalIqReportFields(
   if (scrubbedWarnings) out._warnings = scrubbedWarnings;
   else delete out._warnings;
 
-  return out as IqReportWithGrounding;
+  // Structural corruption is context-independent, so every caller gets the text
+  // guard without having to pass the report's own vocabulary; rare characters
+  // are only counted here (suspect findings never modify the text).
+  return scrubCorruptedReportText(out as IqReportWithGrounding).report;
 }

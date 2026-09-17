@@ -15,8 +15,12 @@
  *
  * Nearby is preferred wherever Table A types suffice (cheaper, no keyword). The
  * field mask stays on id / name / address / location / types / rating / count /
- * price / status / hours — reviews, atmosphere and editorial fields are never
- * requested. Each *network* call is charged to the ledger at
+ * price / status / hours, plus the ONE field §4.2 品类空白判定 needs —
+ * `places.reviews` — whose text is the only evidence that a same-category store
+ * (a Chinese bakery) also sells the concept (egg tarts). Review text is trimmed
+ * to `REVIEW_TEXTS_PER_PLACE` × `REVIEW_TEXT_MAX_CHARS` before it is cached or
+ * returned; no other atmosphere field is requested and no extra call is made.
+ * Each *network* call is charged to the ledger at
  * `data_budget.google_places_cost_usd_per_call` (cache hits are free) and cached
  * 30 days by (lat/lng@4dp, query or types, radius, restriction). Results are
  * deduped by place id across calls keeping the richer record and the union of
@@ -67,6 +71,14 @@ export interface GooglePlace {
   /** Walking leg from the site when the Distance Matrix ran for this place (fetchThreeLayerCompetitors). */
   walk_m?: number | null;
   walk_min?: number | null;
+  /**
+   * §4.2 category-gap text probe: up to REVIEW_TEXTS_PER_PLACE review snippets.
+   * An empty array means Google returned no review text for this place — the
+   * probe result is `unknown`, never "does not sell it".
+   */
+  review_texts: string[];
+  /** Editorial summary when Google carries one (some records only). */
+  editorial_summary: string | null;
 }
 
 export interface GooglePlacesData {
@@ -122,8 +134,11 @@ const CACHE_TTL_S = 30 * 24 * 3600;
 const NEARBY_URL = 'https://places.googleapis.com/v1/places:searchNearby';
 const TEXT_URL = 'https://places.googleapis.com/v1/places:searchText';
 const FIELD_MASK =
-  'places.id,places.displayName,places.formattedAddress,places.location,places.primaryType,places.types,places.rating,places.userRatingCount,places.priceLevel,places.businessStatus,places.regularOpeningHours';
-const LICENSE = 'Google Maps Platform ToS (Places API (New) Nearby / Text Search Pro SKU; no reviews/atmosphere fields)';
+  'places.id,places.displayName,places.formattedAddress,places.location,places.primaryType,places.types,places.rating,places.userRatingCount,places.priceLevel,places.businessStatus,places.regularOpeningHours,places.reviews';
+const LICENSE = 'Google Maps Platform ToS (Places API (New) Nearby / Text Search; Pro fields + places.reviews for the §4.2 category-gap text probe)';
+/** §4.2 text probe: how much review text is kept per place (the rest is dropped before caching). */
+export const REVIEW_TEXTS_PER_PLACE = 3;
+export const REVIEW_TEXT_MAX_CHARS = 240;
 const NO_KEY_NOTE = 'GOOGLE_MAPS_API_KEY 未设置：评分类指标标「未获取」';
 const ONE_MILE_M = 1609;
 const THREE_MILES_M = 4828;
@@ -186,10 +201,36 @@ interface RawPlace {
   priceLevel?: string;
   businessStatus?: string;
   regularOpeningHours?: { weekdayDescriptions?: string[] };
+  /** §4.2 text probe (field mask `places.reviews`); trimmed by `slimRawPlace` before caching. */
+  reviews?: Array<{ text?: { text?: string; languageCode?: string }; originalText?: { text?: string } }>;
+  /** Only present on records Google carries a summary for; never requested on its own. */
+  editorialSummary?: { text?: string };
 }
 interface NearbyResponse {
   places?: RawPlace[];
   error?: { code?: number; message?: string; status?: string };
+}
+
+/** Review texts a raw record carries, trimmed to the probe budget (original language preferred, then the translation). */
+export function reviewTextsOf(raw: RawPlace): string[] {
+  if (!Array.isArray(raw.reviews)) return [];
+  const out: string[] = [];
+  for (const r of raw.reviews) {
+    const t = (r?.originalText?.text ?? r?.text?.text ?? '').replace(/\s+/g, ' ').trim();
+    if (!t) continue;
+    out.push(t.slice(0, REVIEW_TEXT_MAX_CHARS));
+    if (out.length >= REVIEW_TEXTS_PER_PLACE) break;
+  }
+  return out;
+}
+
+/** Drop everything the report never reads before the raw response goes into the 30-day cache. */
+export function slimRawPlace(raw: RawPlace): RawPlace {
+  const texts = reviewTextsOf(raw);
+  const slim: RawPlace = { ...raw };
+  if (texts.length) slim.reviews = texts.map((t) => ({ text: { text: t } }));
+  else delete slim.reviews;
+  return slim;
 }
 
 export function toGooglePlace(raw: RawPlace, site: { lat: number; lng: number }, layers: PlaceLayer[] = []): GooglePlace | null {
@@ -211,6 +252,8 @@ export function toGooglePlace(raw: RawPlace, site: { lat: number; lng: number },
     formatted_address: typeof raw.formattedAddress === 'string' ? raw.formattedAddress : null,
     distance_m: Math.round(haversineM(site, { lat, lng })),
     layers: [...layers],
+    review_texts: reviewTextsOf(raw),
+    editorial_summary: raw.editorialSummary?.text?.trim() || null,
   };
 }
 
@@ -271,7 +314,7 @@ async function nearby(ctx: FetchContext, key: string, site: { lat: number; lng: 
     const status = json.error?.status ? `${json.error.status}: ${message}` : message;
     return { ok: false, status: res.status, message: status, fatal: res.status === 403 || res.status === 429 || res.status === 401 };
   }
-  const places = Array.isArray(json.places) ? json.places : [];
+  const places = (Array.isArray(json.places) ? json.places : []).map(slimRawPlace);
   await ctx.cache.set(CACHE_SOURCE, ck, { places }, CACHE_TTL_S);
   return { ok: true, places, cache: 'miss' };
 }
@@ -285,7 +328,15 @@ function mergePlace(byId: Map<string, GooglePlace>, p: GooglePlace): void {
   }
   const layers = [...new Set([...prev.layers, ...p.layers])];
   const richer = (prev.rating == null && p.rating != null) || p.types.length > prev.types.length ? p : prev;
-  byId.set(p.id, { ...richer, layers, formatted_address: richer.formatted_address ?? prev.formatted_address ?? p.formatted_address });
+  // §4.2 probe text is evidence: keep whichever call returned it (one call may omit reviews the other carried).
+  const review_texts = [...new Set([...prev.review_texts, ...p.review_texts])].slice(0, REVIEW_TEXTS_PER_PLACE);
+  byId.set(p.id, {
+    ...richer,
+    layers,
+    review_texts,
+    editorial_summary: richer.editorial_summary ?? prev.editorial_summary ?? p.editorial_summary,
+    formatted_address: richer.formatted_address ?? prev.formatted_address ?? p.formatted_address,
+  });
 }
 
 export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchContext): Promise<DataResult<GooglePlacesData>> {

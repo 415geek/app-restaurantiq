@@ -12,7 +12,8 @@ import { generateNarratives } from './narrative/generate';
 import { runQaGates, type GatesReport } from './qa/gates';
 import { runPendingMigrations } from './ops/migrate';
 import { runReport360, type Report360Options } from './pipeline';
-import type { ReportModel } from './model/schema';
+import type { FetchContext } from './data/types';
+import { reportModelSchema, type ReportModel } from './model/schema';
 
 export interface Generate360Result {
   model: ReportModel;
@@ -36,10 +37,14 @@ export async function generateReport360(
   if (opts.narrative !== false) {
     const { narrative, stats } = await generateNarratives(model, { cost: ctx.cost, env: ctx.env, language: input.language });
     model.narrative = narrative;
+    model.meta.narrative_pass = 'llm';
     ctx.log(`[iq360] narrative: llm=${stats.llm_pages} template=${stats.template_pages} regen=${stats.regenerated}`);
   } else {
+    // §4.1 ordering: the core runs first, with template prose only; the LLM pass
+    // follows and rewrites the pages around these same frozen numbers.
     const { PAGES, templateNarrative } = await import('./narrative/templates');
     for (const p of PAGES) model.narrative[p.id] = templateNarrative(model, p.id, input.language);
+    model.meta.narrative_pass = 'template';
   }
   model.meta.language = input.language;
   model.meta.narrative_language = input.language;
@@ -84,6 +89,60 @@ export async function generateReport360(
     await persistCostLog(input.reportId, ctx.cost);
   }
   return { model, gates, persisted, cost_usd: model.meta.cost_usd, elapsed_ms: model.meta.elapsed_ms };
+}
+
+/**
+ * §4.1 单一结论源 (P0-A) — the narrative pass.
+ *
+ * The deterministic core now runs BEFORE the web draft (lib/funnel/iq-report-job.ts),
+ * so by the time this runs `report_model_json` already holds the frozen conclusion.
+ * This pass therefore only writes prose: it re-parses the stored model (the parse
+ * applies the conclusion guard), generates the page narratives and persists them.
+ * It never recomputes finance or score — the customer's numbers are already fixed.
+ */
+export async function generateReport360Narratives(
+  reportId: string,
+  opts: { ctx?: FetchContext } = {},
+): Promise<{ model: ReportModel; persisted: boolean } | null> {
+  const row = await iqGetReport(reportId);
+  if (!row?.report_model_json) return null;
+  const parsed = reportModelSchema.safeParse(row.report_model_json);
+  if (!parsed.success) {
+    console.warn(`[iq360] narratives: stored model for ${reportId} failed validation`, parsed.error.issues.slice(0, 3));
+    return null;
+  }
+  const model = parsed.data;
+  const ctx = opts.ctx ?? createFetchContext({ budgetMs: 120_000 });
+  const language = toLocale(row.language, model.meta.language);
+  const { narrative, stats } = await generateNarratives(model, { cost: ctx.cost, env: ctx.env, language });
+  model.narrative = narrative;
+  model.meta.language = language;
+  model.meta.narrative_language = language;
+  model.meta.narrative_pass = 'llm';
+  ctx.log(`[iq360] narrative-only: llm=${stats.llm_pages} template=${stats.template_pages} regen=${stats.regenerated}`);
+  const { narrative: n, ...rest } = model;
+  let persisted = false;
+  try {
+    await iqSetReportModel({
+      reportId,
+      reportModelJson: rest as unknown as Record<string, unknown>,
+      narrativeJson: { ...n, __lang: language },
+      tier: model.meta.tier,
+      costUsd: model.meta.cost_usd,
+    });
+    persisted = true;
+  } catch (e) {
+    console.warn('[iq360] narrative-only persist failed', e);
+  }
+  return { model, persisted };
+}
+
+/** True when the stored model carries the frozen conclusion but its prose is still the template pass. */
+export function needsNarrativePass(reportModelJson: unknown): boolean {
+  if (!reportModelJson || typeof reportModelJson !== 'object') return false;
+  const m = reportModelJson as { conclusion?: unknown; meta?: { narrative_pass?: unknown } };
+  if (!m.conclusion) return false;
+  return m.meta?.narrative_pass !== 'llm';
 }
 
 /** Convenience for the API route: load the row, derive inputs, run. */

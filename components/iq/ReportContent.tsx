@@ -11,6 +11,7 @@ import { DataProvenance, ReportDataViz } from './ReportDataViz';
 import { verifiedListings } from '@/lib/funnel/iq-corridor-listings';
 import { normalizeConfidenceLevel } from '@/lib/funnel/iq-full-report-schema';
 import { normalizeRiskAuditFromFull, productPositioningLine } from '@/lib/funnel/iq-risk-audit-model';
+import { conclusionPendingNote, parseConclusion } from '@/lib/iq/conclusion/display';
 import { LOCALES, LOCALE_LABEL, type Locale } from '@/lib/i18n/locale';
 import { withLang } from '@/lib/i18n/resolve';
 import { persistLocale } from '@/lib/i18n/use-locale';
@@ -69,6 +70,9 @@ type Copy = {
   reportId: string;
   analyzeAnother: string;
   contentNote: string;
+  /** §4.1: the snapshot both surfaces print, and the date the data was frozen. */
+  snapshotId: string;
+  dataAsOfLabel: string;
   /** Name of a target language as this UI language calls it (for switch messages). */
   langName: Record<Locale, string>;
   generatingVersion: (name: string) => string;
@@ -159,6 +163,8 @@ const translations: Record<Locale, Copy> = {
     reportId: 'Report ID',
     analyzeAnother: 'Analyze another location',
     contentNote: '',
+    snapshotId: 'Conclusion snapshot',
+    dataAsOfLabel: 'Data as of',
     langName: { en: 'English', zh: 'Chinese', es: 'Spanish' },
     generatingVersion: (n) => `Generating the ${n} version…`,
     langSwitchError: (n) => `Could not generate the ${n} version. Please try again in a moment.`,
@@ -245,6 +251,8 @@ const translations: Record<Locale, Copy> = {
     reportId: '报告编号',
     analyzeAnother: '分析其他地址',
     contentNote: '（部分段落含 Markdown 表格）',
+    snapshotId: '结论快照',
+    dataAsOfLabel: '数据截至',
     langName: { en: '英文', zh: '中文', es: '西班牙文' },
     generatingVersion: (n) => `正在生成${n}版…`,
     langSwitchError: (n) => `无法生成${n}版，请稍后重试。`,
@@ -331,6 +339,8 @@ const translations: Record<Locale, Copy> = {
     reportId: 'ID del informe',
     analyzeAnother: 'Analizar otra ubicación',
     contentNote: '',
+    snapshotId: 'Snapshot de la conclusión',
+    dataAsOfLabel: 'Datos al',
     langName: { en: 'inglés', zh: 'chino', es: 'español' },
     generatingVersion: (n) => `Generando la versión en ${n}…`,
     langSwitchError: (n) => `No se pudo generar la versión en ${n}. Inténtalo de nuevo en un momento.`,
@@ -596,6 +606,11 @@ export function ReportContent({
     (x): x is string => typeof x === 'string',
   );
   const hasRiskAudit = Boolean(normalizeRiskAuditFromFull(fullView) ?? fullView.risk_audit);
+  // §4.1 单一结论源 (P0-A): the frozen conclusion the PDF prints as well. While it is
+  // missing the page shows ONE pending line, never a second set of numbers.
+  const conclusion = parseConclusion(fullView.conclusion);
+  const conclusionPending = fullView.conclusion_pending === true && !conclusion;
+  const asOf = conclusion?.data_as_of ?? dataAsOf;
 
   const showRevenueModelBlock =
     !!revenueModel &&
@@ -694,6 +709,12 @@ export function ReportContent({
       </div>
 
       {/* Header */}
+      {conclusionPending ? (
+        <div className="print-section rounded-2xl border border-amber-800/50 bg-amber-950/20 px-4 py-3 text-sm text-amber-200/90">
+          {conclusionPendingNote(lang)}
+        </div>
+      ) : null}
+
       <header className="print-section rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-8">
         <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">{t.fullReport}</div>
@@ -1280,6 +1301,18 @@ export function ReportContent({
         <p className="text-sm text-zinc-600">
           {t.generatedBy} • {t.reportId}: {report.id.slice(0, 8)}
         </p>
+        {/* §4.1 单一结论源: the snapshot id and the data-as-of date are printed here and
+            in the PDF footer, so a customer can tell at a glance that both surfaces
+            describe the same frozen set of numbers. */}
+        {conclusion ? (
+          <p className="mt-1 text-xs text-zinc-600">
+            {t.snapshotId}: {conclusion.snapshot_id} • {t.dataAsOfLabel}: {conclusion.data_as_of}
+          </p>
+        ) : asOf ? (
+          <p className="mt-1 text-xs text-zinc-600">
+            {t.dataAsOfLabel}: {asOf}
+          </p>
+        ) : null}
         <Link href={withLang('/iq', lang)} className="no-print mt-4 inline-block text-sm text-emerald-500/90 hover:text-emerald-400 hover:underline">
           ← {t.analyzeAnother}
         </Link>

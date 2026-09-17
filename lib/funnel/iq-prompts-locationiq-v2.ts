@@ -447,6 +447,54 @@ export function locationIqMcKinseyPremiumDensityBlock(lang: Locale): string {
   ].join('\n');
 }
 
+/**
+ * 评审 Spec §4.5 叙事与数字对齐 (P1-b) — the risk wording must point the same way as
+ * the scenario numbers, and the verdict wording comes from the score band, not the model.
+ *
+ * Symptom this block removes (report a7217ad7, 1115 Clement St): the conservative
+ * scenario was $72,019 — 1.39× break-even, all three scenarios above the safety line —
+ * while the prose said 「任何客流不及预期都会迅速侵蚀利润」 and the verdict read 有条件.
+ *
+ * The identical rule text is `RISK_WORDING_RULE` in lib/iq/narrative/templates.ts, which
+ * the deterministic templates obey and lib/iq/narrative/generate.ts hands to the 360° LLM.
+ */
+export function narrativeNumberAlignmentBlock(lang: Locale): string {
+  if (lang === 'zh') {
+    return [
+      '',
+      '【叙事与数字对齐（最高优先级，违反视为输出不合格）】',
+      '1. 风险措辞必须与情景数字方向一致：三档情景（保守 / 基准 / 乐观）营收均高于安全线时，**不得**出现「利润会被迅速侵蚀」「任何客流不及预期都会迅速侵蚀利润」「稍有闪失即亏损」这类表述。',
+      '2. 敏感性提示保留，但必须写明触发条件与量级：例如「客单价下滑 12.5% 时跌破保本线」「翻台 −0.5 次/天时现金流转负」，不得只写「对客流敏感」。',
+      '3. 结论措辞由评分分档决定，不由你判断：综合 ≥ 70 → 可做 / GO；55–69 → 有条件可做；< 55 → 不建议。给定 decision_tier / verdict 时必须与该分档一致。',
+      '4. 情景数字与措辞相互矛盾时，以数字为准，改措辞，不改数字。',
+      '5. 保守情景已高于保本线时，风险段落写的是「什么条件会让它跌回保本线」，不是「它随时会亏」。',
+      '',
+    ].join('\n');
+  }
+  if (lang === 'es') {
+    return [
+      '',
+      '[COHERENCIA ENTRE NARRATIVA Y CIFRAS (máxima prioridad)]',
+      '1. La redacción del riesgo debe apuntar en la misma dirección que las cifras: si los tres escenarios (conservador / base / optimista) superan la línea de seguridad, NO escribas que «la utilidad se erosionará rápidamente» ni que «cualquier caída de tráfico se come la utilidad».',
+      '2. Conserva el aviso de sensibilidad, pero indica el disparador y su magnitud: «cae bajo el equilibrio cuando el ticket medio baja un 12.5%», «el flujo de caja se vuelve negativo con −0.5 rotaciones/día»; nunca solo «es sensible al tráfico».',
+      '3. El veredicto lo fija la banda de puntuación, no tu criterio: ≥ 70 → VIABLE / GO; 55–69 → VIABLE CON CONDICIONES; < 55 → NO VIABLE. decision_tier y verdict deben coincidir con esa banda.',
+      '4. Si la redacción contradice las cifras de los escenarios, manda la cifra: cambia el texto, nunca el número.',
+      '5. Si el escenario conservador ya supera el punto de equilibrio, la sección de riesgo explica qué haría falta para volver a él, no que «puede perder dinero en cualquier momento».',
+      '',
+    ].join('\n');
+  }
+  return [
+    '',
+    '[NARRATIVE / NUMBER ALIGNMENT (highest priority)]',
+    '1. Risk wording must point the same way as the numbers: when all three scenarios (conservative / base / optimistic) clear the safety line, do NOT write that profit "will be eroded quickly" or that "any shortfall in traffic quickly eats the profit".',
+    '2. Keep the sensitivity warning, but state its trigger and size: "falls below break-even when the average ticket drops 12.5%", "cash flow turns negative at −0.5 turns/day" — never just "sensitive to traffic".',
+    '3. The verdict comes from the score band, not from your judgement: ≥ 70 → GO; 55–69 → CONDITIONAL GO; < 55 → NO GO. decision_tier and verdict must match that band.',
+    '4. When the wording contradicts the scenario numbers, the numbers win: change the wording, never the number.',
+    '5. When the conservative scenario already clears break-even, the risk section explains what it would take to fall back to it — not that the site "could lose money at any time".',
+    '',
+  ].join('\n');
+}
+
 export function locationIqV2FreeSystemZh(): string {
   const base = [
     '你是 LocationIQ 选址大师的分析引擎。角色：麦肯锡商业地产与餐饮选址合伙人，向华人餐饮老板做签租前汇报。',
@@ -644,7 +692,8 @@ export function locationIqV2PremiumSystemZh(): string {
     cuisineKnowledgeBlock('zh') +
     locationIqMcKinseyPartnerEvidenceBlock('zh') +
     locationIqMcKinseyPremiumDensityBlock('zh') +
-    locationIqV3PremiumExtensionsBlock('zh')
+    locationIqV3PremiumExtensionsBlock('zh') +
+    narrativeNumberAlignmentBlock('zh')
   );
 }
 
@@ -855,7 +904,8 @@ export function locationIqV2PremiumSystemEn(): string {
     cuisineKnowledgeBlock('en') +
     locationIqMcKinseyPartnerEvidenceBlock('en') +
     locationIqMcKinseyPremiumDensityBlock('en') +
-    locationIqV3PremiumExtensionsBlock('en')
+    locationIqV3PremiumExtensionsBlock('en') +
+    narrativeNumberAlignmentBlock('en')
   );
 }
 
@@ -1147,7 +1197,8 @@ export function locationIqV2PremiumSystemEs(): string {
     cuisineKnowledgeBlock('es') +
     locationIqMcKinseyPartnerEvidenceBlock('es') +
     locationIqMcKinseyPremiumDensityBlock('es') +
-    locationIqV3PremiumExtensionsBlock('es')
+    locationIqV3PremiumExtensionsBlock('es') +
+    narrativeNumberAlignmentBlock('es')
   );
 }
 

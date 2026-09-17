@@ -378,7 +378,7 @@ function Page1({ model, staticMaps, lang }: PageProps) {
         <div className="cover-map">
           <MapFigure model={m} staticMap={staticMaps?.thumb ?? null} variant="thumb" lang={c.lang} />
         </div>
-        <div className="cover-map-caption">{fill(S.p1.caption, { ring: S.ring[m.trade_area.primary_ring].label, l1: m.competitors.l1.length, l4: m.competitors.l4.length })}</div>
+        <div className="cover-map-caption">{fill(S.p1.caption, { ring: S.ring[m.trade_area.primary_ring].label, l1: m.competitors.counts.direct, l4: m.competitors.counts.anchors || m.competitors.l4.length })}</div>
       </div>
     </PageShell>
   );
@@ -453,7 +453,7 @@ function Page2({ model, lang }: PageProps) {
           </ol>
         </div>
       </div>
-      <XRef>{fill(S.p2.xref, { ring: S.ring[m.trade_area.primary_ring].label, l1: m.competitors.l1.length, l2: m.competitors.l2_count, be: F.usd(m.finance.breakeven_monthly), exRent: xr })}</XRef>
+      <XRef>{fill(S.p2.xref, { ring: S.ring[m.trade_area.primary_ring].label, l1: m.competitors.counts.direct, l2: m.competitors.counts.same_category, be: F.usd(m.finance.breakeven_monthly), exRent: xr })}</XRef>
     </PageShell>
   );
 }
@@ -475,7 +475,7 @@ function Page3({ model, staticMaps, lang }: PageProps) {
       <div className="map-facts">
         <KeyNumber label={S.p3.primary} value={S.ring[m.trade_area.primary_ring].label} sub={fill(S.p3.primarySub, { area: F.num(p?.area_sq_mi, 2), bg: p?.block_groups ?? 0 })} />
         <KeyNumber label={S.p3.method} value={m.trade_area.isochrone_method === 'mapbox' ? S.p3.methodMapbox : S.p3.methodRadius} sub={S.p3.methodSub} />
-        <KeyNumber label={S.p3.places} value={F.int(cc.candidates_total)} sub={fill(S.p3.placesSub, { l1: cc.l1.length, l2: cc.l2_count, l3: cc.l3_count, l4: cc.l4.length })} />
+        <KeyNumber label={S.p3.places} value={F.int(cc.candidates_total)} sub={fill(S.p3.placesSub, { l1: cc.counts.direct, l2: cc.counts.same_category, l3: cc.counts.l3, l4: cc.l4.length })} />
       </div>
       <XRef>{S.p3.xref}</XRef>
     </PageShell>
@@ -566,14 +566,43 @@ function Page5({ model, lang }: PageProps) {
   const m = model;
   const segs = m.audience.segments.map((s) => ({ ...s, label: segmentName(s.id, c.lang) }));
   const [lunch, dinner] = m.audience.lunch_dinner_split;
+  // §4.3: the four dayparts of THIS concept. A model stored before §4.3 has none and
+  // falls back to the old lunch / dinner bar — it is never re-derived here.
+  const dayparts = m.demand.dayparts ?? [];
   return (
     <PageShell c={c} model={m} pageId="page_5" chips={<SourceChips model={m} ids={['D2', 'D3']} model_labels={[S.p5.chipIndex, S.p5.chipSplit]} lang={c.lang} />}>
       <h2 className="h2">{S.p5.segments}</h2>
       <SegmentBars rows={segs.map((s) => ({ label: s.label, share: s.share, index: s.index }))} lang={c.lang} />
+      {/* P1-i 客群指数: share and index share ONE denominator — say which, in the report language. */}
+      <p className="table-note">{S.p5.indexBasis}</p>
       <div className="two-col">
         <div>
-          <h2 className="h2">{S.p5.daypart}</h2>
-          <SplitBar a={lunch} b={dinner} labelA={S.p5.lunch} labelB={S.p5.dinner} valueA={S.p5.lunchSub} valueB={S.p5.dinnerSub} />
+          <h2 className="h2">{dayparts.length ? S.p5.dayparts : S.p5.daypart}</h2>
+          {dayparts.length ? (
+            <>
+              <table className="data-table compact">
+                <thead>
+                  <tr>
+                    <th>{S.p5.daypartCol}</th>
+                    <th className="num">{S.p5.daypartShare}</th>
+                    <th className="num">{S.p5.daypartUsd}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dayparts.map((d) => (
+                    <tr key={d.id}>
+                      <th>{S.p5.daypartName[d.id]}</th>
+                      <Cell num na={S.na}>{F.pct(d.share, 0)}</Cell>
+                      <Cell num na={S.na}>{F.usd(d.monthly_usd)}</Cell>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="table-note">{S.p5.daypartNote}</p>
+            </>
+          ) : (
+            <SplitBar a={lunch} b={dinner} labelA={S.p5.lunch} labelB={S.p5.dinner} valueA={S.p5.lunchSub} valueB={S.p5.dinnerSub} />
+          )}
           <table className="data-table compact">
             <tbody>
               <tr>
@@ -642,12 +671,12 @@ function Page6({ model, lang }: PageProps) {
               </tr>
               <tr>
                 <th>{S.p6.l2}</th>
-                <Cell num na={na}>{F.int(cc.l2_count)}</Cell>
+                <Cell num na={na}>{F.int(cc.counts.same_category)}</Cell>
                 <Cell na={na}>{S.p6.l2Note}</Cell>
               </tr>
               <tr>
                 <th>{S.p6.l3}</th>
-                <Cell num na={na}>{F.int(cc.l3_count)}</Cell>
+                <Cell num na={na}>{F.int(cc.counts.l3)}</Cell>
                 <Cell na={na}>{S.p6.l3Note}</Cell>
               </tr>
               <tr>
@@ -746,13 +775,19 @@ function Page7({ model, lang }: PageProps) {
     .map((x) => ({ label: (c.lang === 'zh' ? x.name_zh || x.name : x.name).slice(0, 22), value: x.rating_count }));
   // §4.2: the void claim is only shown when both Layer-1 keyword radii (800 / 1600 m) were searched (guard) — say so.
   const bothRadii = ['direct@800', 'direct@1600'].every((l) => (m.competitors.l1_layers_tried ?? []).includes(l));
+  // §4.2 (P0-B): a gap may only be claimed when the text probe cleared the same-category stores too.
+  const gap = m.competitors.category_gap;
+  const alsoSelling = m.competitors.also_selling;
+  const cnt = m.competitors.counts;
   const anchors = m.competitors.brand_anchors ?? [];
   const anchorIds = new Set(anchors.map((a) => a.id));
   return (
     <PageShell c={c} model={m} pageId="page_7" chips={<SourceChips model={m} ids={['D5', 'D6', 'D7']} model_labels={[S.p7.chipShare]} lang={c.lang} />}>
       <div className="cards-grid">
         {cards.length === 0 ? (
-          m.competitors.guard_passed ? (
+          !m.competitors.guard_passed ? (
+            <div className="panel">{fill(S.p7.noData, { na })}</div>
+          ) : gap === 'true' ? (
             <div className="panel void-panel">
               <div className="panel-title">{S.p7.voidTitle}</div>
               <p>
@@ -762,8 +797,23 @@ function Page7({ model, lang }: PageProps) {
                 {S.p7.voidTail}
               </p>
             </div>
+          ) : alsoSelling.length > 0 ? (
+            // 无专营{concept}店，但 N 家兼售 — the void panel is replaced by the stores that also sell it.
+            <div className="panel void-panel">
+              <div className="panel-title">{fill(S.p7.gapAlsoTitle, { cuisine, n: alsoSelling.length })}</div>
+              <p>{fill(S.p7.gapAlsoBody, { cuisine })}</p>
+              {alsoSelling.slice(0, 4).map((a) => (
+                <p key={a.id}>
+                  <strong>{a.name}</strong> · {F.miles(a.distance_mi)} · {S.p8[`evidence${a.evidence === 'review' ? 'Review' : a.evidence === 'editorial' ? 'Editorial' : 'Menu'}` as const]}
+                  {a.quote ? ` — “${a.quote}”` : ''}
+                </p>
+              ))}
+            </div>
           ) : (
-            <div className="panel">{fill(S.p7.noData, { na })}</div>
+            <div className="panel void-panel">
+              <div className="panel-title">{S.p7.gapUnknownTitle}</div>
+              <p>{fill(S.p7.gapUnknownBody, { cuisine, n: m.competitors.also_selling_unknown_count })}</p>
+            </div>
           )
         ) : null}
         {cards.map((x, i) => (
@@ -800,6 +850,12 @@ function Page7({ model, lang }: PageProps) {
           </div>
         ))}
       </div>
+      {/* §4.4 (P1-a / P1-e): the one count set and the one competitive-strength number every surface reads. */}
+      <p className="table-note">
+        {fill(S.p7.counts, { total: cnt.total, direct: cnt.direct, same: cnt.same_category, google: cnt.by_source.google, l3: cnt.l3, anchors: cnt.anchors })}
+        {' '}
+        {fill(S.p7.strength, { value: m.competitors.competition_score == null ? na : F.int(m.competitors.competition_score) })}
+      </p>
       {anchors.length ? (
         <>
           <h2 className="h2">{S.p7.anchors}</h2>
@@ -869,6 +925,14 @@ function Page8({ model, lang }: PageProps) {
   ];
   const rankOf = (cuisine: string) => m.score.alternatives.findIndex((a) => a.cuisine === cuisine) + 1;
   const zh = c.lang === 'zh';
+  // §4.2 (P0-B): the hard constraint. A gap is only claimed when the keyword search came back empty at
+  // both radii AND no same-category store's menu / review / editorial text mentions the concept.
+  const gap = m.competitors.category_gap;
+  const alsoSelling = m.competitors.also_selling;
+  const cnt = m.competitors.counts;
+  const conceptName = zh ? m.input.cuisine_label_zh : cuisineName(m.input, c.lang);
+  const evidenceLabel = (e: ReportModel['competitors']['also_selling'][number]['evidence']) =>
+    e === 'review' ? S.p8.evidenceReview : e === 'editorial' ? S.p8.evidenceEditorial : S.p8.evidenceMenu;
   const altName = (a: ReportModel['score']['alternatives'][number]) => cuisineName(a, c.lang);
   return (
     <PageShell c={c} model={m} pageId="page_8" chips={<SourceChips model={m} ids={['D2', 'D5']} model_labels={[S.p8.chipGap, S.p8.chipAlt]} lang={c.lang} />}>
@@ -892,11 +956,50 @@ function Page8({ model, lang }: PageProps) {
           </ul>
           <div className="verdict-line">
             {S.p8.conclusion}
-            <strong>{v.is_void ? S.p8.isVoid : S.p8.notVoid}</strong>
+            {/* §4.2: the density test alone can never produce a gap claim — the text probe has to clear it too. */}
+            <strong>{v.is_void && gap === 'true' ? S.p8.isVoid : S.p8.notVoid}</strong>
             <span className="muted"> · {c.t(v.reason)}</span>
           </div>
         </div>
       </div>
+      {/* §4.2 品类空白判定加硬约束 (P0-B): who else sells it — the panel that replaces a bare void claim. */}
+      <h2 className="h2">{fill(S.p8.hardTitle, { cuisine: conceptName })}</h2>
+      <p className="table-note">
+        {gap === 'true'
+          ? fill(S.p8.hardTrue, { cuisine: conceptName })
+          : gap === 'unknown'
+            ? m.competitors.also_selling_unknown_count > 0
+              ? fill(S.p8.hardUnknown, { n: m.competitors.also_selling_unknown_count })
+              : S.p8.hardNotRun
+            : alsoSelling.length > 0
+              ? fill(S.p8.hardFalseAlso, { cuisine: conceptName, n: alsoSelling.length })
+              : fill(S.p8.hardFalseDirect, { cuisine: conceptName, n: cnt.direct })}
+        {m.competitors.coverage_discount != null
+          ? ` ${fill(S.p8.coverageDiscount, { factor: F.num(m.competitors.coverage_discount, 2), n: m.competitors.also_selling_unknown_count })}`
+          : ''}
+      </p>
+      {alsoSelling.length > 0 ? (
+        <table className="data-table compact">
+          <thead>
+            <tr>
+              <th>{S.p8.alsoName}</th>
+              <th className="num">{S.p8.alsoDistance}</th>
+              <th>{S.p8.alsoEvidence}</th>
+              <th>{S.p8.alsoQuote}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {alsoSelling.slice(0, 6).map((a) => (
+              <tr key={a.id}>
+                <Cell na={S.na}>{a.name}</Cell>
+                <Cell num na={S.na}>{F.miles(a.distance_mi)}</Cell>
+                <Cell na={S.na}>{evidenceLabel(a.evidence)}</Cell>
+                <Cell na={S.na}>{a.quote ?? null}</Cell>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
       <h2 className="h2">{S.p8.alternatives}</h2>
       <table className="data-table">
         <thead>
@@ -948,7 +1051,19 @@ function Page9({ model, lang }: PageProps) {
       <div className="two-col">
         <div>
           <h2 className="h2">{S.p9.daypart}</h2>
-          <SplitBar a={d.lunch_usd ?? 0} b={d.dinner_usd ?? 0} labelA={S.p9.lunch} labelB={S.p9.dinner} valueA={F.usd(d.lunch_usd)} valueB={F.usd(d.dinner_usd)} />
+          {/* 评审 Spec v2 §4.3: the four concept dayparts, not a lunch/dinner split — a
+              bakery's morning and afternoon are most of its day and used to vanish here. */}
+          {d.dayparts.length ? (
+            <HBars
+              rows={d.dayparts.map((p) => ({ label: S.p5.daypartName[p.id] ?? p.id, value: p.monthly_usd, sub: F.pct(p.share) }))}
+              valueLabel={(v) => F.usd(v)}
+              width={300}
+              labelWidth={72}
+              valueWidth={78}
+            />
+          ) : (
+            <SplitBar a={d.lunch_usd ?? 0} b={d.dinner_usd ?? 0} labelA={S.p9.lunch} labelB={S.p9.dinner} valueA={F.usd(d.lunch_usd)} valueB={F.usd(d.dinner_usd)} />
+          )}
           <table className="data-table compact">
             <tbody>
               <tr>

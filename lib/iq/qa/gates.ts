@@ -8,17 +8,19 @@
  *  4 reconciliation    finance scenarios re-derive; weights = 100; total = Σ w×s/100
  *  5 NumberGuard       every number in every narrative exists in its page fragment
  *  6 banned wording    零竞争 / 空白 (zero competition / white space …) only when void; 保守估计 / 大约 (approximately …) never — per report language
- *  7 visual regression lives in lib/iq/qa/visual-regression.ts (needs a browser)
- *  8 golden backtest   scripts/backtest-golden.ts (needs network)
+ *  7 text quality      no structural character corruption in any narrative (lib/funnel/iq-text-quality.ts)
+ *  8 visual regression lives in lib/iq/qa/visual-regression.ts (needs a browser)
+ *  9 golden backtest   scripts/backtest-golden.ts (needs network)
  */
 import { toLocale } from '@/lib/i18n/locale';
 import { reportModelSchema, type ReportModel } from '../model/schema';
 import { BANNED_WORDS, numberGuard } from '../narrative/number-guard';
 import { PAGES, pageFragment } from '../narrative/templates';
 import { scenarioRevenue } from '../engines/finance';
+import { scanTextQuality } from '@/lib/funnel/iq-text-quality';
 
 export interface GateResult {
-  id: 'schema' | 'integrity' | 'sanity' | 'reconciliation' | 'number_guard' | 'wording';
+  id: 'schema' | 'integrity' | 'sanity' | 'reconciliation' | 'number_guard' | 'wording' | 'text_quality';
   passed: boolean;
   details: string[];
 }
@@ -145,13 +147,44 @@ export function gateWording(m: ReportModel): GateResult {
   return { id: 'wording', passed: d.length === 0, details: d };
 }
 
+/**
+ * Gate 9 — text quality (评审 Spec v2 §4.6 P1-g). Structural corruption in a
+ * narrative ("门店née点计数器") fails the gate and demotes the report to
+ * 预检版 rather than reaching a paying reader. Rare characters that are merely
+ * out of our writing vocabulary are recorded as warnings: the report's own data
+ * (address, competitor names) is passed as context so real names never trip it.
+ */
+export function gateTextQuality(m: ReportModel): GateResult {
+  const d: string[] = [];
+  const context = [
+    m.input.address,
+    m.input.cuisine_label_zh,
+    m.input.cuisine_label_en,
+    ...m.competitors.l1.map((c) => c.name),
+    ...m.competitors.l2.map((c) => c.name),
+    ...m.competitors.l4.map((c) => c.name),
+  ]
+    .filter(Boolean)
+    .join(' ');
+  for (const p of PAGES) {
+    const n = m.narrative[p.id];
+    if (!n) continue;
+    const scan = scanTextQuality(`${n.title}\n${n.body}`, { context });
+    for (const f of scan.findings) {
+      if (f.severity !== 'corrupt') continue;
+      d.push(`${p.id} 文本损坏（${f.kind}）「${f.text}」：…${f.context}…`);
+    }
+  }
+  return { id: 'text_quality', passed: d.length === 0, details: d };
+}
+
 export function runQaGates(raw: unknown): GatesReport {
   const gates: GateResult[] = [];
   const schema = gateSchema(raw);
   gates.push(schema);
   if (!schema.passed) return { passed: false, tier: 'precheck', gates, failures: schema.details };
   const m = raw as ReportModel;
-  gates.push(gateIntegrity(m), gateSanity(m), gateReconciliation(m), gateNumberGuard(m), gateWording(m));
+  gates.push(gateIntegrity(m), gateSanity(m), gateReconciliation(m), gateNumberGuard(m), gateWording(m), gateTextQuality(m));
   const failures = gates.flatMap((g) => g.details.map((x) => `[${g.id}] ${x}`));
   const passed = gates.every((g) => g.passed);
   return { passed, tier: passed ? 'paid' : 'precheck', gates, failures };

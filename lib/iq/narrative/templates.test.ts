@@ -10,7 +10,7 @@ import { LOCALES } from '@/lib/i18n/locale';
 import type { ReportModel } from '../model/schema';
 import { numberGuard } from './number-guard';
 import { hasCjk, localizedField, plainEn, plainEs, plainZh } from './plain';
-import { PAGES, cuisineName, pageFragment, templateNarrative, verdictWord } from './templates';
+import { PAGES, RISK_WORDING_RULE, allScenariosAboveSafetyLine, cuisineName, pageFragment, templateNarrative, verdictWord } from './templates';
 
 const load = (): ReportModel => JSON.parse(readFileSync(join(process.cwd(), 'qa/fixtures/report_model_millbrae.json'), 'utf8')) as ReportModel;
 const prose = (s: string) => s.replace(/\s*\[src:[^\]]*\]/g, '');
@@ -105,4 +105,81 @@ test('plainEn / plainEs translate engine strings (drivers, triggers, inputs_miss
   assert.equal(localizedField('未知的引擎短语', 'Engine phrase', 'es'), 'Engine phrase');
   assert.equal(localizedField(m.risks[0].risk_zh, m.risks[0].risk_en, 'en'), m.risks[0].risk_en);
   assert.ok(!hasCjk(localizedField(m.risks[0].risk_zh, m.risks[0].risk_en, 'es')));
+});
+
+/* §4.5 叙事与数字对齐 (P1-b) ---------------------------------------------- */
+
+/** All three scenarios comfortably above the safety line, as in report a7217ad7. */
+function comfortable(m: ReportModel): ReportModel {
+  const x: ReportModel = JSON.parse(JSON.stringify(m));
+  x.finance.breakeven_monthly = 51_800;
+  x.finance.safety_monthly = 62_200;
+  const revenue = [72_019, 86_000, 104_000];
+  x.finance.scenarios = x.finance.scenarios.map((s, i) => ({ ...s, monthly_revenue: revenue[i] ?? 72_019, vs_breakeven: Math.round(((revenue[i] ?? 72_019) / 51_800) * 100) / 100 }));
+  return x;
+}
+
+/** Wording the numbers forbid once every scenario clears the safety line. */
+const FRAGILITY = {
+  zh: /迅速侵蚀|随时会亏|稍有(闪失|不及)|不堪一击/,
+  en: /erode[sd]? quickly|quickly erod|any shortfall in traffic (quickly )?eats|could lose money at any time|razor-thin/i,
+  es: /se erosionar|se come la utilidad|puede perder dinero en cualquier momento/i,
+} as const;
+
+test('§4.5 P1-b: with all three scenarios above the safety line no template writes fragility wording (zh / en / es)', () => {
+  const m = comfortable(load());
+  assert.equal(allScenariosAboveSafetyLine(m), true);
+  for (const lang of LOCALES) {
+    for (const p of PAGES) {
+      const t = templateNarrative(m, p.id, lang);
+      const text = prose(`${t.title} ${t.body}`);
+      assert.doesNotMatch(text, FRAGILITY[lang], `${lang} ${p.id}: ${text}`);
+      // still NumberGuard-clean with the alignment sentence in place
+      const g = numberGuard(`${t.title} ${t.body}`, pageFragment(m, p.id), { isVoid: m.competitors.void.is_void, lang });
+      assert.ok(g.ok, `${lang} ${p.id} fails guard: ${JSON.stringify(g)} :: ${text}`);
+    }
+    // the risk page says so positively, and keeps the sensitivity trigger
+    const risk = prose(templateNarrative(m, 'page_12', lang).body);
+    assert.match(risk, lang === 'zh' ? /安全线之上/ : lang === 'es' ? /línea de seguridad/ : /above the safety line/, `${lang}: ${risk}`);
+  }
+});
+
+test('§4.5 P1-b: a site whose scenarios fall below the safety line is NOT declared safe', () => {
+  const m = load();
+  const weak: ReportModel = JSON.parse(JSON.stringify(m));
+  weak.finance.safety_monthly = 500_000;
+  assert.equal(allScenariosAboveSafetyLine(weak), false);
+  for (const lang of LOCALES) {
+    const risk = prose(templateNarrative(weak, 'page_12', lang).body);
+    assert.doesNotMatch(risk, lang === 'zh' ? /安全线之上/ : lang === 'es' ? /por encima de la línea de seguridad/ : /above the safety line/, `${lang}: ${risk}`);
+  }
+});
+
+test('§4.5: the risk-wording rule exists in all three languages and names its trigger', () => {
+  for (const lang of LOCALES) assert.ok(RISK_WORDING_RULE[lang].length > 80, lang);
+  assert.match(RISK_WORDING_RULE.zh, /12\.5%/);
+  assert.match(RISK_WORDING_RULE.en, /12\.5%/);
+  assert.match(RISK_WORDING_RULE.es, /12\.5%/);
+  assert.match(RISK_WORDING_RULE.zh, /score\.verdict/);
+});
+
+test('§4.3: page 5 prints the four dayparts of the concept, never a 午市 0% pair', () => {
+  const m = load();
+  const bakery: ReportModel = JSON.parse(JSON.stringify(m));
+  bakery.demand.dayparts = [
+    { id: 'breakfast', share: 0.35, monthly_usd: 24_500 },
+    { id: 'lunch', share: 0.25, monthly_usd: 17_500 },
+    { id: 'afternoon', share: 0.3, monthly_usd: 21_000 },
+    { id: 'dinner', share: 0.1, monthly_usd: 7_000 },
+  ];
+  for (const lang of LOCALES) {
+    const t = templateNarrative(bakery, 'page_5', lang);
+    const text = prose(`${t.title} ${t.body}`);
+    assert.match(text, /35%/, `${lang}: ${text}`);
+    assert.match(text, /25%/, `${lang}: ${text}`);
+    assert.match(text, /30%/, `${lang}: ${text}`);
+    assert.match(text, /10%/, `${lang}: ${text}`);
+    const g = numberGuard(`${t.title} ${t.body}`, pageFragment(bakery, 'page_5'), { isVoid: bakery.competitors.void.is_void, lang });
+    assert.ok(g.ok, `${lang} page_5 guard: ${JSON.stringify(g)} :: ${text}`);
+  }
 });

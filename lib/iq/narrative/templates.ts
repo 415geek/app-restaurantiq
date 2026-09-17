@@ -12,6 +12,8 @@
  */
 import { toLocale, type Locale } from '@/lib/i18n/locale';
 import { CONCEPT_CATEGORY_LABELS } from '../concept/labels';
+import { VERDICT_COPY } from '../conclusion/conclusion';
+import type { DaypartId } from '../params';
 import type { ReportModel } from '../model/schema';
 import { localizedField, plainEn, plainEs, plainZh } from './plain';
 
@@ -24,14 +26,14 @@ export const PAGES: Array<{ id: PageId; n: number; zh: string; en: string; es: s
   { id: 'page_2', n: 2, zh: '执行摘要', en: 'Executive Summary', es: 'Resumen ejecutivo', fragment: ['score', 'demand', 'finance.breakeven_monthly', 'finance.safety_monthly', 'finance.rent_excluded', 'risks', 'competitors.l1', 'competitors.l2_count', 'trade_area.primary_ring'] },
   { id: 'page_3', n: 3, zh: '商圈地图', en: 'Trade Area Map', es: 'Mapa del área comercial', fragment: ['trade_area.primary_ring', 'trade_area.rings', 'competitors.l1', 'competitors.l2_count', 'competitors.l4', 'access.transit'] },
   { id: 'page_4', n: 4, zh: '商圈需求', en: 'Demand Coverage', es: 'Demanda del área', fragment: ['trade_area', 'demand.cuisine_share'] },
-  { id: 'page_5', n: 5, zh: '客群画像', en: 'Audience', es: 'Perfil de clientes', fragment: ['audience', 'trade_area.rings', 'demand.lunch_usd', 'demand.dinner_usd'] },
+  { id: 'page_5', n: 5, zh: '客群画像', en: 'Audience', es: 'Perfil de clientes', fragment: ['audience', 'trade_area.rings', 'demand.lunch_usd', 'demand.dinner_usd', 'demand.dayparts'] },
   { id: 'page_6', n: 6, zh: '竞争格局', en: 'Competitive Landscape', es: 'Panorama competitivo', fragment: ['competitors'] },
   { id: 'page_7', n: 7, zh: '直接竞品对标', en: 'Direct Competitors', es: 'Competidores directos', fragment: ['competitors.l1', 'competitors.benchmark_revenue_band', 'finance.breakeven_monthly', 'finance.rent_excluded', 'competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'competitors.guard_passed', 'competitors.l1_search_radius_m', 'competitors.l1_layers_tried', 'competitors.brand_anchors'] },
   { id: 'page_8', n: 8, zh: '品类缺口与替代菜系', en: 'Category Gap & Alternatives', es: 'Hueco de categoría y alternativas', fragment: ['competitors.void', 'competitors.density_per_10k_chinese', 'score.alternatives', 'score.user_cuisine_rank'] },
   { id: 'page_9', n: 9, zh: '需求捕获模型', en: 'Demand Capture', es: 'Captura de demanda', fragment: ['demand', 'finance.breakeven_monthly', 'finance.rent_excluded'] },
   { id: 'page_10', n: 10, zh: '财务模型', en: 'Financial Model', es: 'Modelo financiero', fragment: ['finance', 'input.rent_usd', 'input.seats'] },
   { id: 'page_11', n: 11, zh: '菜系匹配评分', en: 'Cuisine Fit Score', es: 'Puntuación de encaje', fragment: ['score.total', 'score.verdict', 'score.dimensions', 'score.conditions'] },
-  { id: 'page_12', n: 12, zh: '风险登记', en: 'Risk Register', es: 'Registro de riesgos', fragment: ['risks', 'finance.occupancy_cost_ratio', 'finance.rent_excluded', 'demand.coverage_ratio'] },
+  { id: 'page_12', n: 12, zh: '风险登记', en: 'Risk Register', es: 'Registro de riesgos', fragment: ['risks', 'finance.occupancy_cost_ratio', 'finance.rent_excluded', 'demand.coverage_ratio', 'finance.scenarios', 'finance.safety_monthly', 'finance.breakeven_monthly', 'finance.sensitivity'] },
   { id: 'page_13', n: 13, zh: '签约核查与 90 天计划', en: 'Pre-lease Checklist & 90-day Plan', es: 'Lista previa al contrato y plan de 90 días', fragment: ['score.conditions', 'finance.inputs_missing', 'input'] },
   { id: 'page_14', n: 14, zh: '方法与数据来源', en: 'Method & Sources', es: 'Método y fuentes', fragment: ['sources', 'meta', 'confidence', 'demand.cuisine_share_method', 'finance.method'] },
   { id: 'page_15', n: 15, zh: '总结与建议', en: 'Summary', es: 'Conclusiones y recomendaciones', fragment: ['score', 'demand.coverage_ratio', 'demand.captured_monthly_usd', 'finance.breakeven_monthly', 'finance.occupancy_cost_ratio', 'finance.rent_excluded', 'finance.max_rent_for_10pct_usd', 'finance.inputs_missing', 'risks', 'input'] },
@@ -68,7 +70,16 @@ export function ringZh(m: ReportModel, id: string): string {
   return ringLabel(m, id, 'zh');
 }
 
-export const VERDICT_ZH: Record<ReportModel['score']['verdict'], string> = { GO: '可做', CONDITIONAL_GO: '有条件可做', NO_GO: '不建议' };
+/**
+ * §4.5 结论措辞由分档决定，不由 LLM 决定 — the words come from `score.verdict`,
+ * which `lib/iq/conclusion/conclusion.ts#verdictFromScore` derives from the score
+ * bands in `defaults.yaml`. Nothing here owns a threshold.
+ */
+export const VERDICT_ZH: Record<ReportModel['score']['verdict'], string> = {
+  GO: VERDICT_COPY.GO.zh.label,
+  CONDITIONAL_GO: VERDICT_COPY.CONDITIONAL_GO.zh.label,
+  NO_GO: VERDICT_COPY.NO_GO.zh.label,
+};
 export const VERDICT_WORD: Record<Locale, Record<ReportModel['score']['verdict'], string>> = {
   zh: VERDICT_ZH,
   en: { GO: 'GO', CONDITIONAL_GO: 'CONDITIONAL GO', NO_GO: 'NO GO' },
@@ -79,6 +90,62 @@ export const VERDICT_WORD: Record<Locale, Record<ReportModel['score']['verdict']
 export function verdictWord(v: string, lang: Locale): string {
   return VERDICT_WORD[lang][v as ReportModel['score']['verdict']] ?? v;
 }
+
+/* ------------------------------------------------------------------ */
+/* §4.3 dayparts · §4.5 风险措辞与情景数字对齐                            */
+/* ------------------------------------------------------------------ */
+
+/** The four dayparts in plain words, in clock order. */
+export const DAYPART_NAME: Record<Locale, Record<DaypartId, string>> = {
+  zh: { breakfast: '早市', lunch: '午市', afternoon: '午后', dinner: '晚市' },
+  en: { breakfast: 'morning', lunch: 'lunch', afternoon: 'afternoon', dinner: 'evening' },
+  es: { breakfast: 'mañana', lunch: 'almuerzo', afternoon: 'tarde', dinner: 'noche' },
+};
+
+export function daypartName(id: string, lang: Locale): string {
+  return DAYPART_NAME[lang][id as DaypartId] ?? id;
+}
+
+/**
+ * "早市 35% / 午市 25% / 午后 30% / 晚市 10%" — the §4.3 four-daypart line every
+ * page-5 narrative prints instead of a lunch/dinner pair. `null` on a model
+ * stored before §4.3 (the caller then falls back to lunch_dinner_split).
+ */
+export function daypartLine(m: ReportModel, lang: Locale): string | null {
+  const dp = m.demand.dayparts ?? [];
+  if (!dp.length) return null;
+  return dp.map((x) => `${daypartName(x.id, lang)} ${(x.share * 100).toFixed(0)}%`).join(' / ');
+}
+
+/** The daypart the model says carries most of the day; `null` without a daypart split. */
+export function dominantDaypartOf(m: ReportModel): { id: DaypartId; share: number } | null {
+  const dp = m.demand.dayparts ?? [];
+  if (!dp.length) return null;
+  const top = [...dp].sort((a, b) => b.share - a.share)[0];
+  return { id: top.id as DaypartId, share: top.share };
+}
+
+/**
+ * §4.5 (P1-b) — true when ALL THREE scenarios clear the safety line. The risk
+ * narrative must then not call the site fragile: the correct wording is the
+ * sensitivity trigger ("客单价下滑 12.5% 时"), not 「利润会被迅速侵蚀」.
+ */
+export function allScenariosAboveSafetyLine(m: ReportModel): boolean {
+  const safety = m.finance.safety_monthly;
+  if (safety == null || m.finance.scenarios.length < 3) return false;
+  return m.finance.scenarios.every((s) => s.monthly_revenue >= safety);
+}
+
+/**
+ * The rule the deterministic templates obey and every LLM prompt carries
+ * (评审 Spec §4.5 叙事与数字对齐). Kept as one string so the wording cannot drift
+ * between the templates, `lib/iq/narrative/generate.ts` and the funnel prompts.
+ */
+export const RISK_WORDING_RULE: Record<Locale, string> = {
+  zh: '风险措辞必须与情景数字方向一致：三档情景均高于安全线时不得写「利润会被迅速侵蚀」「任何客流不及预期都会迅速侵蚀利润」这类表述；敏感性提示保留，但必须指明触发条件（例如客单价下滑 12.5% 时）。结论措辞由评分分档决定（score.verdict），不得自行改写。',
+  en: 'Risk wording must point the same way as the scenario numbers: when all three scenarios clear the safety line, never write that profit "will be eroded quickly" or that "any shortfall in traffic quickly eats the profit". Keep the sensitivity warning, but state its trigger (e.g. when the average ticket drops 12.5%). The verdict wording comes from the score band (score.verdict) and must not be rewritten.',
+  es: 'La redacción del riesgo debe apuntar en la misma dirección que las cifras de los escenarios: si los tres escenarios superan la línea de seguridad, nunca escribas que la utilidad «se erosionará rápidamente» ni que «cualquier caída de tráfico se come la utilidad». Conserva el aviso de sensibilidad, pero indica su disparador (por ejemplo, cuando el ticket medio cae un 12.5%). El veredicto proviene de la banda de puntuación (score.verdict) y no se reescribe.',
+};
 
 const SEGMENT_NAME: Record<Locale, Record<string, string>> = {
   zh: { chinese_family: '华人家庭', commuter_professional: '通勤白领', young_chinese: '年轻华人', non_chinese_explorer: '非华裔尝鲜' },
@@ -244,10 +311,16 @@ function templateZh(m: ReportModel, page: PageId): Narrative {
       };
     case 'page_5': {
       const label = segmentName(f.seg.id, 'zh');
+      // §4.3: the four dayparts of this concept, never a full-service 午市 / 晚市 pair.
+      const dpLine = daypartLine(m, 'zh');
+      const top = dominantDaypartOf(m);
+      const dpBody = dpLine
+        ? `全天时段：${dpLine} [src:demand.dayparts]`
+        : `午市 / 晚市 = ${fmtPct(m.audience.lunch_dinner_split[0])} / ${fmtPct(m.audience.lunch_dinner_split[1])} [src:audience.lunch_dinner_split]`;
       return {
-        title: `${label}占 ${fmtPct(f.seg.share)}，午市占比 ${fmtPct(m.audience.lunch_dinner_split[0])}`,
-        body: `主要客群是${label}，占 ${fmtPct(f.seg.share)} [src:audience.segments.0.share]；午市 / 晚市 = ${fmtPct(m.audience.lunch_dinner_split[0])} / ${fmtPct(m.audience.lunch_dinner_split[1])} [src:audience.lunch_dinner_split]；午市客源主要靠${ringZh(m, 'walk10')}内的 ${fmtInt(m.trade_area.rings[0]?.jobs)} 个上班岗位 [src:trade_area.rings.0.jobs]。`,
-        refs: ['audience.segments', 'audience.lunch_dinner_split', 'trade_area.rings.0.jobs'],
+        title: top ? `${label}占 ${fmtPct(f.seg.share)}，主力时段是${daypartName(top.id, 'zh')}` : `${label}占 ${fmtPct(f.seg.share)}，午市占比 ${fmtPct(m.audience.lunch_dinner_split[0])}`,
+        body: `主要客群是${label}，占 ${fmtPct(f.seg.share)} [src:audience.segments.0.share]（占比指该客群占主商圈家庭数的比例，指数用同一口径与全县对比）；${dpBody}；午市客源主要靠${ringZh(m, 'walk10')}内的 ${fmtInt(m.trade_area.rings[0]?.jobs)} 个上班岗位 [src:trade_area.rings.0.jobs]。`,
+        refs: ['audience.segments', dpLine ? 'demand.dayparts' : 'audience.lunch_dinner_split', 'trade_area.rings.0.jobs'],
       };
     }
     case 'page_6': {
@@ -315,10 +388,15 @@ function templateZh(m: ReportModel, page: PageId): Narrative {
     }
     case 'page_12': {
       const high = f.high;
+      // §4.5 叙事与数字对齐: when all three scenarios clear the safety line the page states
+      // that, and the sensitivity warning names its trigger instead of calling the site fragile.
+      const safe = allScenariosAboveSafetyLine(m);
+      const trigger = f.breaking ? `真正的触发条件是${sensitivityName(f.breaking, 'zh')} [src:finance.sensitivity]` : null;
+      const alignment = safe ? `三档情景营收都在安全线之上 [src:finance.scenarios]，风险集中在明确的触发条件上${trigger ? `：${trigger}` : ''}。` : '';
       return {
-        title: high.length ? `${high.length} 项高概率风险：${high.map((r) => plainZh(r.risk_zh).split('，')[0]).slice(0, 2).join('；')}` : `${m.risks.length} 项风险都能靠经营手段对冲`,
-        body: m.risks.slice(0, 5).map((r, i) => `${plainZh(r.risk_zh)}（概率${r.prob === 'high' ? '高' : r.prob === 'medium' ? '中' : '低'}） [src:risks.${i}]`).join('；') + '。',
-        refs: m.risks.slice(0, 5).map((_, i) => `risks.${i}`),
+        title: safe && !high.length ? `三档情景都高于安全线，${m.risks.length} 项风险都能靠经营手段对冲` : high.length ? `${high.length} 项高概率风险：${high.map((r) => plainZh(r.risk_zh).split('，')[0]).slice(0, 2).join('；')}` : `${m.risks.length} 项风险都能靠经营手段对冲`,
+        body: m.risks.slice(0, 5).map((r, i) => `${plainZh(r.risk_zh)}（概率${r.prob === 'high' ? '高' : r.prob === 'medium' ? '中' : '低'}） [src:risks.${i}]`).join('；') + '。' + alignment,
+        refs: [...m.risks.slice(0, 5).map((_, i) => `risks.${i}`), ...(safe ? ['finance.scenarios', 'finance.sensitivity'] : [])],
       };
     }
     case 'page_13': {
@@ -409,10 +487,15 @@ function templateEn(m: ReportModel, page: PageId): Narrative {
       };
     case 'page_5': {
       const label = segmentName(f.seg.id, 'en');
+      const dpLine = daypartLine(m, 'en');
+      const top = dominantDaypartOf(m);
+      const dpBody = dpLine
+        ? `across the day: ${dpLine} [src:demand.dayparts]`
+        : `lunch / dinner = ${fmtPct(m.audience.lunch_dinner_split[0])} / ${fmtPct(m.audience.lunch_dinner_split[1])} [src:audience.lunch_dinner_split]`;
       return {
-        title: `${label} are ${fmtPct(f.seg.share)} of guests; lunch is ${fmtPct(m.audience.lunch_dinner_split[0])}`,
-        body: `The largest segment is ${label} at ${fmtPct(f.seg.share)} [src:audience.segments.0.share]; lunch / dinner = ${fmtPct(m.audience.lunch_dinner_split[0])} / ${fmtPct(m.audience.lunch_dinner_split[1])} [src:audience.lunch_dinner_split]; lunch relies on the ${fmtInt(m.trade_area.rings[0]?.jobs)} jobs inside the ${ringL('walk10')} [src:trade_area.rings.0.jobs].`,
-        refs: ['audience.segments', 'audience.lunch_dinner_split', 'trade_area.rings.0.jobs'],
+        title: top ? `${label} are ${fmtPct(f.seg.share)} of guests; the ${daypartName(top.id, 'en')} carries the day` : `${label} are ${fmtPct(f.seg.share)} of guests; lunch is ${fmtPct(m.audience.lunch_dinner_split[0])}`,
+        body: `The largest segment is ${label} at ${fmtPct(f.seg.share)} [src:audience.segments.0.share] (a share of the households in the primary trade area; the index compares that same share with the county); ${dpBody}; lunch relies on the ${fmtInt(m.trade_area.rings[0]?.jobs)} jobs inside the ${ringL('walk10')} [src:trade_area.rings.0.jobs].`,
+        refs: ['audience.segments', dpLine ? 'demand.dayparts' : 'audience.lunch_dinner_split', 'trade_area.rings.0.jobs'],
       };
     }
     case 'page_6': {
@@ -478,10 +561,13 @@ function templateEn(m: ReportModel, page: PageId): Narrative {
     case 'page_12': {
       const high = f.high;
       const prob = (x: string) => (x === 'high' ? 'high' : x === 'medium' ? 'medium' : 'low');
+      const safe = allScenariosAboveSafetyLine(m);
+      const trigger = f.breaking ? `the real trigger is ${sensitivityName(f.breaking, 'en')} [src:finance.sensitivity]` : null;
+      const alignment = safe ? ` All three scenarios sit above the safety line [src:finance.scenarios]; the exposure sits in a named trigger${trigger ? `, and ${trigger}` : ''}.` : '';
       return {
-        title: high.length ? `${high.length} high-probability risks: ${high.map((r) => plainEn(r.risk_en).split(/[,:;]/)[0]).slice(0, 2).join('; ')}` : `All ${m.risks.length} risks can be hedged operationally`,
-        body: m.risks.slice(0, 5).map((r, i) => `${plainEn(r.risk_en)} (probability ${prob(r.prob)}) [src:risks.${i}]`).join('; ') + '.',
-        refs: m.risks.slice(0, 5).map((_, i) => `risks.${i}`),
+        title: safe && !high.length ? `All three scenarios clear the safety line; all ${m.risks.length} risks can be hedged operationally` : high.length ? `${high.length} high-probability risks: ${high.map((r) => plainEn(r.risk_en).split(/[,:;]/)[0]).slice(0, 2).join('; ')}` : `All ${m.risks.length} risks can be hedged operationally`,
+        body: m.risks.slice(0, 5).map((r, i) => `${plainEn(r.risk_en)} (probability ${prob(r.prob)}) [src:risks.${i}]`).join('; ') + '.' + alignment,
+        refs: [...m.risks.slice(0, 5).map((_, i) => `risks.${i}`), ...(safe ? ['finance.scenarios', 'finance.sensitivity'] : [])],
       };
     }
     case 'page_13': {
@@ -571,10 +657,15 @@ function templateEs(m: ReportModel, page: PageId): Narrative {
       };
     case 'page_5': {
       const label = segmentName(f.seg.id, 'es');
+      const dpLine = daypartLine(m, 'es');
+      const top = dominantDaypartOf(m);
+      const dpBody = dpLine
+        ? `reparto del día: ${dpLine} [src:demand.dayparts]`
+        : `almuerzo / cena = ${fmtPct(m.audience.lunch_dinner_split[0])} / ${fmtPct(m.audience.lunch_dinner_split[1])} [src:audience.lunch_dinner_split]`;
       return {
-        title: `${label}: ${fmtPct(f.seg.share)} de los clientes; el almuerzo es el ${fmtPct(m.audience.lunch_dinner_split[0])}`,
-        body: `El segmento principal es ${label}, con el ${fmtPct(f.seg.share)} [src:audience.segments.0.share]; almuerzo / cena = ${fmtPct(m.audience.lunch_dinner_split[0])} / ${fmtPct(m.audience.lunch_dinner_split[1])} [src:audience.lunch_dinner_split]; el almuerzo depende de los ${fmtInt(m.trade_area.rings[0]?.jobs)} empleos dentro del ${ringL('walk10')} [src:trade_area.rings.0.jobs].`,
-        refs: ['audience.segments', 'audience.lunch_dinner_split', 'trade_area.rings.0.jobs'],
+        title: top ? `${label}: ${fmtPct(f.seg.share)} de los clientes; manda la franja de ${daypartName(top.id, 'es')}` : `${label}: ${fmtPct(f.seg.share)} de los clientes; el almuerzo es el ${fmtPct(m.audience.lunch_dinner_split[0])}`,
+        body: `El segmento principal es ${label}, con el ${fmtPct(f.seg.share)} [src:audience.segments.0.share] (cuota sobre los hogares de la zona principal; el índice compara esa misma cuota con la del condado); ${dpBody}; el almuerzo depende de los ${fmtInt(m.trade_area.rings[0]?.jobs)} empleos dentro del ${ringL('walk10')} [src:trade_area.rings.0.jobs].`,
+        refs: ['audience.segments', dpLine ? 'demand.dayparts' : 'audience.lunch_dinner_split', 'trade_area.rings.0.jobs'],
       };
     }
     case 'page_6': {
@@ -647,10 +738,13 @@ function templateEs(m: ReportModel, page: PageId): Narrative {
       const high = f.high;
       const prob = (x: string) => (x === 'high' ? 'alta' : x === 'medium' ? 'media' : 'baja');
       const risk = (r: ReportModel['risks'][number]) => localizedField(r.risk_zh, r.risk_en, 'es');
+      const safe = allScenariosAboveSafetyLine(m);
+      const trigger = f.breaking ? `el disparador real es ${sensitivityName(f.breaking, 'es')} [src:finance.sensitivity]` : null;
+      const alignment = safe ? ` Los tres escenarios quedan por encima de la línea de seguridad [src:finance.scenarios]; la exposición está en un disparador concreto${trigger ? `, y ${trigger}` : ''}.` : '';
       return {
-        title: high.length ? `${high.length} riesgos de alta probabilidad: ${high.map((r) => risk(r).split(/[,:;]/)[0]).slice(0, 2).join('; ')}` : `Los ${m.risks.length} riesgos se pueden cubrir con la operación`,
-        body: m.risks.slice(0, 5).map((r, i) => `${risk(r)} (probabilidad ${prob(r.prob)}) [src:risks.${i}]`).join('; ') + '.',
-        refs: m.risks.slice(0, 5).map((_, i) => `risks.${i}`),
+        title: safe && !high.length ? `Los tres escenarios superan la línea de seguridad; los ${m.risks.length} riesgos se pueden cubrir con la operación` : high.length ? `${high.length} riesgos de alta probabilidad: ${high.map((r) => risk(r).split(/[,:;]/)[0]).slice(0, 2).join('; ')}` : `Los ${m.risks.length} riesgos se pueden cubrir con la operación`,
+        body: m.risks.slice(0, 5).map((r, i) => `${risk(r)} (probabilidad ${prob(r.prob)}) [src:risks.${i}]`).join('; ') + '.' + alignment,
+        refs: [...m.risks.slice(0, 5).map((_, i) => `risks.${i}`), ...(safe ? ['finance.scenarios', 'finance.sensitivity'] : [])],
       };
     }
     case 'page_13': {

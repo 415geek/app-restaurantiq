@@ -107,7 +107,9 @@ test('D6 ok: layered plan, Pro field mask, restricted Text Search, cost accounti
   assert.equal(texts[2].body.locationBias?.circle.radius, 8000);
   for (const q of ctx.reqs) {
     assert.equal(q.headers['X-Goog-Api-Key'], 'AIza-test');
-    assert.ok(!/reviews|atmosphere|editorial/i.test(q.headers['X-Goog-FieldMask']));
+    // §4.2 品类空白判定 needs review text — exactly ONE atmosphere field is requested, nothing else.
+    assert.ok(!/atmosphere|editorial|photos|contactless/i.test(q.headers['X-Goog-FieldMask']));
+    assert.ok(q.headers['X-Goog-FieldMask'].includes('places.reviews'));
     assert.ok(q.headers['X-Goog-FieldMask'].includes('places.userRatingCount'));
     assert.equal(q.body.maxResultCount, 20);
   }
