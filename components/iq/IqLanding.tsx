@@ -383,7 +383,9 @@ function HeroTitle({ headlines }: { headlines: string[] }) {
   return (
     <h1 className="font-cjk-serif text-[clamp(1.6rem,4.6vw,3.15rem)] font-black leading-[1.25] text-white">
       <span className="sr-only">{headlines[0]}</span>
-      <span className="grid text-left md:whitespace-nowrap" aria-hidden>
+      {/* No whitespace-nowrap: long EN headlines must wrap. Parent section is
+          overflow-hidden (glow clip), so nowrap was cutting "Know whether…" on both sides. */}
+      <span className="grid text-center" aria-hidden>
         <span className="invisible col-start-1 row-start-1" aria-hidden>
           {longest}
         </span>

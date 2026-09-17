@@ -327,9 +327,10 @@ export function isLayer1(m: Pick<MergedPoi, 'name' | 'name_zh' | 'categories' | 
   // A category-mapping rule is not: a `bakery`-typed record maps to the sibling `bakery` id, which says nothing
   // about whether the Layer-1 keyword query that returned it was right — the profile match below decides.
   if (specific && specific !== profile.id && m.classified_by !== 'rule') return false;
-  // A name carrying the concept's own keywords ("Golden Gate Egg Tart") is self-sufficient
-  // evidence: it stands whether or not the Layer-1 query returned this record, and outranks
-  // a category-mapping rule that only saw a generic `bakery` type.
+  // The POI keyword layer (§3.3) is Chinese-only, so egg_tart / korean / … never get a classified id from
+  // classifyCandidate. A name that still carries this concept's Layer-1 keywords stays Layer 1 even when
+  // the query-hit path is off (alternative-cuisine runs). Types alone do not count here — "bakery" would
+  // otherwise pull every bakery into egg_tart without a Layer-1 query.
   if (nameMatchesKeywords(`${m.name} ${m.name_zh ?? ''}`, profile.keywords)) return true;
   if (!queryHitsEnabled || !m.layers.includes('direct')) return false;
   return matchesLayer1(`${m.name} ${m.name_zh ?? ''}`, [m.primary_category, ...m.categories], profile);
