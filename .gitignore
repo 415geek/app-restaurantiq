@@ -79,5 +79,8 @@ workflows/**/.n8n-sync-events.jsonl
 supabase/.temp/
 
 # Optional: put n8n API key here and keep it local
-.vscode/settings.local.jsonqa/out/
+.vscode/settings.local.json
+
+# Print smoke output (the golden PDFs and page PNGs already tracked here stay tracked)
+qa/out/
 qa/fixtures/report_model_prod.json
