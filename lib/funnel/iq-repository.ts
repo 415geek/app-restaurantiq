@@ -415,6 +415,44 @@ export async function iqUpdateReportGeneration(
   if (error) throw error;
 }
 
+/**
+ * §4.7 分档 ETA: wall-clock durations (ms) of the most recent completed runs of
+ * one tier, newest first.
+ *
+ * The tier lives inside the checkpoint rather than in a column, so it is
+ * filtered with a JSON path (same shape as the analyze-key lookup) — one
+ * indexed-by-nothing scan of at most `limit` rows, which is cheap enough for a
+ * value the job caches for minutes. `generation_started_at` → `generation_updated_at`
+ * is exactly the span the visitor waits; the caller drops implausible samples.
+ * Returns [] on an un-migrated database instead of throwing: a missing ETA
+ * history must never break the status poll.
+ */
+export async function iqRecentGenerationDurationsMs(mode: string, limit = 30): Promise<number[]> {
+  const sb = supabaseAdmin();
+  try {
+    const { data, error } = await sb
+      .from(TABLE)
+      .select('generation_started_at, generation_updated_at')
+      .eq('generation_status', 'done')
+      .eq('generation_state_json->>mode', mode)
+      .not('generation_started_at', 'is', null)
+      .order('generation_updated_at', { ascending: false })
+      .limit(Math.min(Math.max(limit, 1), 200));
+    if (error) throw error;
+    const out: number[] = [];
+    for (const row of (data ?? []) as { generation_started_at?: string | null; generation_updated_at?: string | null }[]) {
+      const start = row.generation_started_at ? Date.parse(row.generation_started_at) : NaN;
+      const end = row.generation_updated_at ? Date.parse(row.generation_updated_at) : NaN;
+      if (Number.isFinite(start) && Number.isFinite(end) && end > start) out.push(end - start);
+    }
+    return out;
+  } catch (e) {
+    if (isMissingColumnError(e)) return [];
+    console.warn('[iq-repository] generation duration history unavailable:', e);
+    return [];
+  }
+}
+
 export async function iqSetReportNotifyEmail(reportId: string, email: string): Promise<void> {
   const sb = supabaseAdmin();
   const { error } = await sb

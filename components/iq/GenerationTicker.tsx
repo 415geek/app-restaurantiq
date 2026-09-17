@@ -10,9 +10,12 @@
  *    line borrows from the neighbouring phases so a long stage never loops the
  *    same two sentences.
  *  - After a short grace period a countdown appears ("About 3:30 to go"),
- *    anchored on the middle of the typical 3–5 minute run. It only ever goes
- *    down: under a minute it switches to a coarse "under a minute", and past
- *    the anchor it says "taking a little longer" instead of jumping back up.
+ *    anchored on the tier's ETA (评审 Spec §4.7 分档 ETA: ~4 min standard,
+ *    ~12 min professional, refined by the P50 of recent runs). It only ever
+ *    goes down — the remaining seconds are clamped monotonically, so a longer
+ *    ETA arriving mid-run can pull the number down but never back up — under a
+ *    minute it switches to a coarse "under a minute", and past the anchor it
+ *    says "taking a little longer" instead of restarting.
  *  - When the server reports the real stage (评审 Spec §4.6) the wording
  *    follows that stage instead of guessing a phase from the percentage.
  */
@@ -216,10 +219,12 @@ export function tickerMessages(lang: Locale, location: string): string[][] {
   ];
 }
 
-/** Middle of the "usually 3–5 minutes" band shown on the wait screen. */
+/** Anchor when the server has not reported a tier ETA yet (the standard tier's ~4 min). */
 const TYPICAL_SEC = 240;
 const COUNTDOWN_AFTER_SEC = 15;
 const ROTATE_EVERY_SEC = 5;
+/** Borrow from neighbouring phases until the rotation has at least this many wordings. */
+const MIN_POOL = 12;
 
 function fmtRemaining(lang: Locale, sec: number): string {
   const m = Math.floor(sec / 60);
@@ -230,18 +235,25 @@ function fmtRemaining(lang: Locale, sec: number): string {
 
 /**
  * Countdown copy for the current second, or null while still in the grace period.
- * Monotonic by construction: the remaining time is `TYPICAL - elapsed`, so it can
- * only fall; under a minute it becomes a coarse label, past the anchor it becomes
- * "taking a little longer" instead of resetting to a bigger number.
+ *
+ * The remaining time is `totalSec - elapsed` (the tier ETA, §4.7) unless the
+ * caller passes an already-clamped `remainingSec`. Either way it only falls:
+ * under a minute it becomes a coarse label, past the anchor it becomes "taking
+ * a little longer" instead of resetting to a bigger number.
  */
-export function etaLabel(lang: Locale, elapsedSec: number, percent: number): string | null {
+export function etaLabel(
+  lang: Locale,
+  elapsedSec: number,
+  percent: number,
+  opts?: { totalSec?: number; remainingSec?: number },
+): string | null {
   if (elapsedSec < COUNTDOWN_AFTER_SEC) return null;
   if (percent >= 90) {
     if (lang === 'zh') return '正在收尾，马上就好';
     if (lang === 'es') return 'Terminando; ya casi está';
     return 'Finishing up — almost there';
   }
-  const remaining = TYPICAL_SEC - elapsedSec;
+  const remaining = opts?.remainingSec ?? (opts?.totalSec ?? TYPICAL_SEC) - elapsedSec;
   if (remaining <= 0) {
     if (lang === 'zh') return '比平时慢一些，正在收尾…';
     if (lang === 'es') return 'Está tardando un poco más de lo normal; terminando…';
@@ -275,14 +287,15 @@ export function tickerPhaseForStage(stageIndex: number, phases: number): number 
 
 /**
  * Message to show at rotation tick `tick` while in `phase`. Runs through the
- * phase's own wordings first, then borrows from the next phase (and the one
- * after) so a stage that stays on screen for a minute or more keeps saying new
- * things; never the same line twice in a row.
+ * phase's own wordings first, then borrows from the next phases and — for the
+ * late phases, which have nothing after them — from the earlier ones, until the
+ * pool holds at least `MIN_POOL` lines (§4.7: a stage that stalls for minutes
+ * must never visibly cycle between two sentences). Never repeats twice in a row.
  */
 export function pickMessage(groups: string[][], phase: number, tick: number): string {
-  const own = groups[phase] ?? [];
-  const pool = [...own];
+  const pool = [...(groups[phase] ?? [])];
   for (let i = 1; i <= 2 && phase + i < groups.length; i++) pool.push(...groups[phase + i]);
+  for (let i = 1; pool.length < MIN_POOL && phase - i >= 0; i++) pool.push(...groups[phase - i]);
   if (pool.length === 0) return '';
   return pool[tick % pool.length];
 }
@@ -293,6 +306,8 @@ export function GenerationTicker({
   elapsedSec,
   percent,
   stageIndex,
+  etaSeconds,
+  remainingSec,
 }: {
   lang: Locale;
   location: string;
@@ -300,6 +315,10 @@ export function GenerationTicker({
   percent: number;
   /** Real active stage from the status endpoint; when absent the phase is guessed from `percent`. */
   stageIndex?: number | null;
+  /** Tier ETA from the status endpoint (§4.7); the standard-tier anchor until it arrives. */
+  etaSeconds?: number | null;
+  /** Already clamped by the wait screen (§4.7 monotonic); unset before the first tick. */
+  remainingSec?: number | null;
 }) {
   const groups = useMemo(() => tickerMessages(lang, location), [lang, location]);
   const phase =
@@ -319,7 +338,13 @@ export function GenerationTicker({
     return () => window.clearInterval(t);
   }, []);
   const message = pickMessage(groups, phase, tick);
-  const eta = etaLabel(lang, elapsedSec, percent);
+  // §4.7 monotonic countdown: the wait screen owns the clamp (it also owns the
+  // clock); until its first tick the tier anchor alone drives the number.
+  const total = typeof etaSeconds === 'number' && etaSeconds > 0 ? etaSeconds : TYPICAL_SEC;
+  const eta = etaLabel(lang, elapsedSec, percent, {
+    totalSec: total,
+    remainingSec: typeof remainingSec === 'number' ? remainingSec : undefined,
+  });
   return (
     <div className="flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between" aria-live="polite">
       <span className="inline-flex min-w-0 items-center gap-2 text-zinc-300">

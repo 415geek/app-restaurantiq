@@ -404,6 +404,13 @@ const reportModelShape = z.object({
     user_cuisine_rank: z.number(),
     cannibalization: z.array(z.object({ store: z.string(), diverted_share: z.number() })),
   }),
+  /**
+   * 评审 Spec §4.6 (P1-c): every risk carries EITHER a monthly `impact_usd` with
+   * the formula that produced it, OR the reason no amount exists. The renderer
+   * puts the first kind in the register table (whose total is therefore never $0)
+   * and folds the second kind into the pre-lease checklist prose.
+   * The four `*_zh / *_en` fields default to null so models stored before §4.6 parse.
+   */
   risks: z.array(
     z.object({
       id: z.number(),
@@ -411,6 +418,12 @@ const reportModelShape = z.object({
       risk_en: z.string(),
       prob: z.enum(['low', 'medium', 'high']),
       impact_usd: nullableNum,
+      /** The arithmetic behind `impact_usd`, in plain words and model numbers; null when there is no amount. */
+      impact_formula_zh: z.string().nullable().default(null),
+      impact_formula_en: z.string().nullable().default(null),
+      /** Why this risk carries no amount; null when it does. */
+      unquantified_zh: z.string().nullable().default(null),
+      unquantified_en: z.string().nullable().default(null),
       trigger: z.string(),
       hedge: z.string(),
     }),

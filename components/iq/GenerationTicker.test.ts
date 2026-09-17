@@ -41,9 +41,15 @@ test('a long phase keeps saying new things and never repeats the previous line',
   for (let i = 1; i < seen.length; i++) assert.notEqual(seen[i], seen[i - 1]);
   // Starts with the phase's own first wording.
   assert.equal(seen[0], groups[phase][0]);
-  // The last phase still rotates (no next phase to borrow from).
+  // §4.7: the last phase has nothing after it, so it borrows backwards instead
+  // of cycling through its own five lines — a stalled stage must never look like
+  // it only knows two sentences.
   const last = groups.length - 1;
-  assert.equal(pickMessage(groups, last, 7), groups[last][7 % groups[last].length]);
+  const tail: string[] = [];
+  for (let tick = 0; tick < 12; tick++) tail.push(pickMessage(groups, last, tick));
+  assert.ok(new Set(tail).size >= 12, `last phase only rotates ${new Set(tail).size} lines`);
+  for (let i = 1; i < tail.length; i++) assert.notEqual(tail[i], tail[i - 1]);
+  assert.equal(tail[0], groups[last][0], 'the last phase still leads with its own wording');
 });
 
 test('eta: hidden during grace, counts down from the 3–5 min midpoint and never goes back up', () => {

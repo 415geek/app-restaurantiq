@@ -11,6 +11,7 @@
 import { DEFAULT_LOCALE, type Locale } from '@/lib/i18n/locale';
 import { enrichMarketDataWithAcs } from '@/lib/funnel/iq-acs-enrichment';
 import { enrichMarketDataWithSiteHistory } from '@/lib/funnel/external-data/site-history';
+import { enrichMarketDataWithJurisdiction } from '@/lib/iq/jurisdiction';
 import { enrichMarketDataWithDemographicNarrative } from '@/lib/funnel/iq-demographic-narrative';
 import { enrichMarketDataWithCompetitorInsights } from '@/lib/funnel/iq-deepseek-competitor-insights';
 import { computeFinanceModel } from '@/lib/funnel/iq-finance-model';
@@ -161,6 +162,13 @@ export async function resolveMarketDataForIqReport(input: {
     } catch (err) {
       console.warn('[resolve-market-data] site history enrichment failed', err);
     }
+
+    // 评审 Spec v2 §4.8 辖区数据代理 — property & permit facts for THIS storefront
+    // (prior food use, hood / grease permits, assessor use code), resolved from
+    // the jurisdiction registry. Runs after site_history because the E3 rung of
+    // the evidence ladder is the prior tenant's concept. An unregistered
+    // jurisdiction returns coverage 0 immediately — no live discovery, ever.
+    base = await enrichMarketDataWithJurisdiction(base, { address: location, lang });
   }
 
   if (isPremium && !leanResolve) {
@@ -252,12 +260,11 @@ export async function resolveMarketDataForIqReport(input: {
           location,
           businessType: businessType || 'restaurant',
         });
-        if (bdResearch.search_results.length > 0 || bdResearch.competitor_reviews || bdResearch.real_estate_data) {
+        if (bdResearch.search_results.length > 0 || bdResearch.competitor_reviews) {
           base = { ...base, brightdata_research: bdResearch };
-          console.log('[resolve-market-data] Bright Data research:', 
+          console.log('[resolve-market-data] Bright Data research:',
             bdResearch.search_results.length, 'search results,',
             bdResearch.competitor_reviews ? '1 competitor review set' : 'no reviews',
-            bdResearch.real_estate_data?.length || 0, 'real estate listings'
           );
         }
       } catch (e) {

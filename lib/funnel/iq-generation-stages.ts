@@ -27,7 +27,23 @@ export type UiStage = {
   state: UiStageState;
   startedAt?: string;
   finishedAt?: string;
+  /** §4.7: current for longer than `STAGE_STALL_MS` — the job is retrying it, and the UI says so. */
+  stalled?: boolean;
 };
+
+/**
+ * §4.7 stage-stall threshold. A stage's own budget is ~250s, so a row that is
+ * still current after five minutes means the invocation died between
+ * checkpoints: the status endpoint re-kicks the worker and the checklist says
+ * "retrying" instead of spinning silently.
+ */
+export const STAGE_STALL_MS = 5 * 60_000;
+
+/** True when the last checkpoint (`heartbeatIso`) is older than the stall threshold. */
+export function isStageStalled(heartbeatIso: string | null | undefined, now: number = Date.now()): boolean {
+  const t = heartbeatIso ? Date.parse(heartbeatIso) : NaN;
+  return Number.isFinite(t) && now - t > STAGE_STALL_MS;
+}
 
 export type StepTimes = Partial<Record<UiStageId, { startedAt?: string; finishedAt?: string }>>;
 
@@ -71,7 +87,7 @@ export function deriveUiStages(input: {
   status?: 'idle' | 'running' | 'done' | 'failed' | string | null;
   /** When the job-level stage started (fallback `startedAt` for the active stage). */
   updatedAt?: string | null;
-}): UiStage[] {
+}, now: number = Date.now()): UiStage[] {
   const steps = input.steps ?? {};
   const status = input.status ?? 'idle';
   if (status === 'done') {
@@ -103,17 +119,26 @@ export function deriveUiStages(input: {
       else state = 'pending';
     } else state = 'pending';
     if (state === 'active') activeAssigned = true;
+    const startedAt = st?.startedAt ?? (state === 'active' ? input.updatedAt ?? undefined : undefined);
     out.push({
       id: spec.id,
       label_key: spec.id,
       state,
-      startedAt: st?.startedAt ?? (state === 'active' ? input.updatedAt ?? undefined : undefined),
+      startedAt,
       finishedAt: st?.finishedAt,
+      // Stall is read off the job heartbeat, not off `startedAt`: a UI row like
+      // "write" legitimately spans two invocations (draft + verify), but each of
+      // them checkpoints, so a heartbeat older than the threshold means the
+      // invocation itself died mid-stage.
+      ...(state === 'active' && isStageStalled(input.updatedAt, now) ? { stalled: true } : {}),
     });
   }
-  // A failed job keeps its done stages and shows nothing active.
+  // A failed job keeps its done stages and shows nothing active (nor stalled).
   if (status !== 'running') {
-    for (const s of out) if (s.state === 'active') s.state = 'pending';
+    for (const s of out) {
+      if (s.state === 'active') s.state = 'pending';
+      delete s.stalled;
+    }
   }
   return out;
 }

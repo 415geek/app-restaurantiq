@@ -40,7 +40,9 @@ export type MarketCacheSource =
   | 'iq360_aadt'
   | 'iq360_dev_pipeline'
   | 'iq360_hub_density'
-  | 'iq360_cuisine_share';
+  | 'iq360_cuisine_share'
+  // 评审 Spec v2 §4.8 辖区数据代理 — open-data permit / assessor adapter responses
+  | 'iq360_jurisdiction';
 
 export interface MarketCacheKeyInput {
   source: MarketCacheSource;

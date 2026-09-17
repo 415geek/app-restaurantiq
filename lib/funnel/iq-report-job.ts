@@ -41,10 +41,12 @@ import {
   computeStageProgress,
   deriveUiStages,
   stageCeiling,
+  STAGE_STALL_MS,
   type StepTimes,
   type UiStage,
   type UiStageId,
 } from '@/lib/funnel/iq-generation-stages';
+import { tierEtaFromHistory, type EtaSource, type TierEta } from '@/lib/funnel/iq-eta';
 import { runFullPremiumReport } from '@/lib/funnel/iq-llm';
 import { resolveMarketDataForIqReport, type MarketResolveStep } from '@/lib/funnel/iq-market-data-resolve';
 import { extractCompetitorWhitelist } from '@/lib/funnel/iq-market-signals';
@@ -53,6 +55,7 @@ import {
   iqClaimReportGeneration,
   iqGetReport,
   iqMarkReportNotified,
+  iqRecentGenerationDurationsMs,
   iqSetFullReport,
   iqSetReportNotifyEmail,
   iqUpdateMarketDataJson,
@@ -92,6 +95,8 @@ export type GenerationState = {
   autoUpgradeKicked?: boolean;
   /** §4.1 单一结论源: the deterministic core did not land before the draft — the body is marked preliminary. */
   conclusionPending?: boolean;
+  /** §4.7 stage-stall: stages the job gave up on and walked past instead of failing the run. */
+  degraded?: GenerationStage[];
   log: string[];
 };
 
@@ -106,6 +111,11 @@ export type GenerationStatusView = {
   activeIndex: number;
   /** The five real stages with their live state. */
   stages: UiStage[];
+  /** §4.7: the stage that has been current past `STAGE_STALL_MS` and is being retried. */
+  stalledStage: UiStageId | null;
+  /** §4.7 分档 ETA: typical total wait for this tier, and where the figure came from. */
+  etaSeconds: number;
+  etaSource: EtaSource;
   /** A standard-tier body is already stored (the professional pass replaces it later). */
   standardReady: boolean;
   updatedAt: string | null;
@@ -115,7 +125,10 @@ export type GenerationStatusView = {
   generationTier: string | null;
   notifyEmail: string | null;
   notified: boolean;
+  /** §4.7: capture is always on — the address is stored whether or not sending is configured. */
   emailEnabled: boolean;
+  /** Whether a mail can actually go out (RESEND_API_KEY), so the UI never promises one that cannot. */
+  emailWillSend: boolean;
 };
 
 function nowIso(): string {
@@ -615,6 +628,52 @@ function nextStage(stage: GenerationStage): GenerationStage {
 }
 
 /**
+ * §4.7 stage-stall: a stage that hangs past its own budget is cut off rather
+ * than left to burn the whole invocation. The underlying promise is abandoned,
+ * not cancelled — the invocation is about to end anyway, and the stage is
+ * re-entered from its last checkpoint on the retry.
+ *
+ * It must stay comfortably under `STAGE_STALL_MS` (5 min): the watchdog firing
+ * writes a checkpoint, so a job that has been silent for the stall window is
+ * a dead invocation rather than a slow one, and the status endpoint can re-kick
+ * it without racing a live worker.
+ */
+const STAGE_WATCHDOG_MS = STAGE_BUDGET_MS + 15_000;
+
+function withStageTimeout<T>(stage: GenerationStage, ms: number, run: () => Promise<T>): Promise<T> {
+  return Promise.race([
+    run(),
+    new Promise<never>((_, reject) => {
+      const t = setTimeout(() => reject(new Error(`stage ${stage} timed out after ${Math.round(ms / 1000)}s`)), ms);
+      t.unref?.();
+    }),
+  ]);
+}
+
+/**
+ * §4.7 degradation: which stages the job may walk past once its attempts are
+ * spent, instead of failing the whole run.
+ *
+ *   enrich  → the stored market pack is stale but usable
+ *   verify  → an unverified draft is still a report (it is a quality pass)
+ *   draft   → only when an earlier attempt already checkpointed one
+ *   finalize→ nothing to degrade to: without it there is no stored report
+ */
+export function canDegradeStage(stage: GenerationStage, state: Pick<GenerationState, 'draft'>): boolean {
+  if (stage === 'enrich' || stage === 'verify') return true;
+  if (stage === 'draft') return state.draft != null;
+  return false;
+}
+
+/** Close the UI-checklist rows a job stage owns (shared by the success and degrade paths). */
+function closeStageSteps(state: GenerationState, stage: GenerationStage): void {
+  if (stage === 'enrich') {
+    for (const id of ['competitors', 'demographics', 'finance'] as const) markStep(state, id, 'done');
+  }
+  if (stage === 'verify') markStep(state, 'write', 'done');
+}
+
+/**
  * Execute exactly one stage for the report, checkpoint, and chain the next
  * worker invocation. Safe to call repeatedly: a finished or foreign job no-ops.
  */
@@ -653,16 +712,17 @@ export async function runReportGenerationStage(reportId: string): Promise<void> 
   const ctx: StageCtx = { row, state, deadline, language, professional };
   const t0 = Date.now();
   try {
-    if (stage === 'enrich') await stageEnrich(ctx);
-    else if (stage === 'draft') await stageDraft(ctx);
-    else if (stage === 'verify') await stageVerify(ctx);
-    else if (stage === 'finalize') await stageFinalize(ctx);
+    // §4.7: no stage may hang forever — the watchdog turns a hang into a normal
+    // stage failure, which then retries and finally degrades.
+    await withStageTimeout(stage, STAGE_WATCHDOG_MS, async () => {
+      if (stage === 'enrich') await stageEnrich(ctx);
+      else if (stage === 'draft') await stageDraft(ctx);
+      else if (stage === 'verify') await stageVerify(ctx);
+      else if (stage === 'finalize') await stageFinalize(ctx);
+    });
     state.timingsMs[stage] = Date.now() - t0;
-    if (stage === 'enrich') {
-      // Whatever the resolver reported, the three enrich sub-stages are over now.
-      for (const id of ['competitors', 'demographics', 'finance'] as const) markStep(state, id, 'done');
-    }
-    if (stage === 'verify') markStep(state, 'write', 'done');
+    // Whatever the resolver reported, the rows this stage owns are over now.
+    closeStageSteps(state, stage);
 
     const next = nextStage(stage);
     if (next === 'done') {
@@ -686,6 +746,18 @@ export async function runReportGenerationStage(reportId: string): Promise<void> 
       await scheduleReportWorker(reportId);
       return;
     }
+    // §4.7: attempts spent — walk past the stage when the run can survive
+    // without it, rather than hanging the visitor on a failed screen.
+    if (canDegradeStage(stage, state)) {
+      state.degraded = [...(state.degraded ?? []), stage];
+      closeStageSteps(state, stage);
+      pushLog(state, `${stage} degraded after ${attempt} attempts — continuing without it`);
+      const next = nextStage(stage);
+      await iqUpdateReportGeneration(reportId, { stage: next, stateJson: state, error: null });
+      console.warn(`[iq-report-job] ${reportId}: ${stage} degraded → ${next}`);
+      await scheduleReportWorker(reportId);
+      return;
+    }
     await iqUpdateReportGeneration(reportId, { status: 'failed', stage, stateJson: state, error: msg });
   }
 }
@@ -693,6 +765,28 @@ export async function runReportGenerationStage(reportId: string): Promise<void> 
 // ---------------------------------------------------------------------------
 // Status (polled by the browser) + email opt-in
 // ---------------------------------------------------------------------------
+
+/**
+ * §4.7 分档 ETA. The median of 30 runs moves by minutes per week, not per poll,
+ * so it is computed once per tier and held for ten minutes — the status endpoint
+ * is hit every 3 s per open wait screen and must stay a single row read.
+ */
+const ETA_CACHE_MS = 10 * 60_000;
+const etaCache = new Map<GenerationMode, { at: number; eta: TierEta }>();
+
+export async function tierEta(mode: GenerationMode): Promise<TierEta> {
+  const hit = etaCache.get(mode);
+  if (hit && Date.now() - hit.at < ETA_CACHE_MS) return hit.eta;
+  let durations: number[] = [];
+  try {
+    durations = await iqRecentGenerationDurationsMs(mode, 30);
+  } catch (e) {
+    console.warn('[iq-report-job] ETA history unavailable, using the static default:', shortErr(e));
+  }
+  const eta = tierEtaFromHistory(mode, durations);
+  etaCache.set(mode, { at: Date.now(), eta });
+  return eta;
+}
 
 export async function getReportGenerationStatus(
   reportId: string,
@@ -707,11 +801,13 @@ export async function getReportGenerationStatus(
   const state = readState(row);
   const updatedAt = row.generation_updated_at ?? null;
 
-  // Self-heal: a running job whose worker died (cold-start failure, crash) is
-  // re-kicked from its last checkpoint the next time anyone asks.
+  // Self-heal (§4.7 stage-stall): a stage with no checkpoint for STAGE_STALL_MS
+  // is a dead invocation — its own budget is only ~250s. Re-kick it from the
+  // last checkpoint the next time anyone asks, so the "retrying" the checklist
+  // shows is a real retry and not a spinner.
   let status = statusRaw;
-  if (status === 'running' && updatedAt && Date.now() - Date.parse(updatedAt) > STALE_CLAIM_MS) {
-    console.warn(`[iq-report-job] ${reportId}: stale claim at ${stage}, re-kicking worker`);
+  if (status === 'running' && updatedAt && Date.now() - Date.parse(updatedAt) > STAGE_STALL_MS) {
+    console.warn(`[iq-report-job] ${reportId}: stalled at ${stage}, re-kicking worker`);
     await iqUpdateReportGeneration(reportId, { stage: stage ?? 'enrich' });
     await scheduleReportWorker(reportId);
   }
@@ -724,6 +820,10 @@ export async function getReportGenerationStatus(
     status === 'done' ? 100 : Math.min(computeStageProgress(stages), Math.max(0, stageCeiling(stages) - 1));
 
   const tier = storedTier(row);
+  // §4.7 分档 ETA: the tier being generated decides the figure (the standard
+  // pass is ~4 min, the professional one ~12), so an unknown mode reads as standard.
+  const eta = await tierEta(state?.mode ?? 'standard');
+  const stalled = stages.find((s) => s.stalled)?.id ?? null;
 
   return {
     legacy: false,
@@ -733,6 +833,9 @@ export async function getReportGenerationStatus(
     progress,
     activeIndex: Math.min(stages.length - 1, activeStageIndex(stages)),
     stages,
+    stalledStage: stalled,
+    etaSeconds: eta.seconds,
+    etaSource: eta.source,
     standardReady: tier === 'standard',
     updatedAt,
     startedAt: row.generation_started_at ?? null,
@@ -741,7 +844,10 @@ export async function getReportGenerationStatus(
     generationTier: tier,
     notifyEmail: row.notify_email ?? null,
     notified: Boolean(row.notified_at),
-    emailEnabled: isReportEmailConfigured(),
+    // §4.7 P1-f: capture is always offered — the address is stored on the row
+    // either way, and `emailWillSend` tells the UI what to promise.
+    emailEnabled: true,
+    emailWillSend: isReportEmailConfigured(),
   };
 }
 

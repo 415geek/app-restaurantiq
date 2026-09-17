@@ -3,12 +3,18 @@
  * 
  * Provides enhanced web scraping and structured data extraction for:
  * - Google search results (SERP)
- * - Zillow real estate listings
  * - Google Maps reviews
  * - LinkedIn company profiles
  * - Crunchbase company data
  * - General web scraping as markdown
  * 
+ * 评审 Spec v2 §4.8.1: the Zillow residential-listing path was REMOVED. It fed
+ * the report the specs of the flats upstairs ("1912 年建、8 卧 6 卫
+ * Multi-Family、4,685 sqft") and invited the false inference "old building →
+ * probably no Type I hood". Prior food use, hoods and grease interceptors are
+ * now answered by lib/iq/jurisdiction (evidence ladder E1 → E4); nothing in
+ * this module may write into `property_facts`.
+ *
  * @see https://docs.brightdata.com/mcp-server/tools
  */
 import { DEFAULT_LOCALE, type Locale, pick } from '@/lib/i18n/locale';
@@ -20,7 +26,6 @@ type BrightDataTool =
   | 'scrape_as_markdown'
   | 'scrape_batch'
   | 'extract'
-  | 'web_data_zillow_properties_listing'
   | 'web_data_google_maps_reviews'
   | 'web_data_linkedin_company_profile'
   | 'web_data_crunchbase_company'
@@ -128,45 +133,6 @@ export async function scrapeBatch(urls: string[]): Promise<Array<{ url: string; 
     url: r.url || '',
     content: r.content || '',
   }));
-}
-
-// ============ Zillow Real Estate ============
-
-export interface ZillowListing {
-  address: string;
-  price: number | null;
-  sqft: number | null;
-  bedrooms: number | null;
-  bathrooms: number | null;
-  property_type: string;
-  zestimate: number | null;
-  url: string;
-}
-
-export async function fetchZillowListing(url: string): Promise<ZillowListing | null> {
-  const res = await callBrightDataTool<{
-    address?: string;
-    price?: number;
-    livingArea?: number;
-    bedrooms?: number;
-    bathrooms?: number;
-    homeType?: string;
-    zestimate?: number;
-    url?: string;
-  }>('web_data_zillow_properties_listing', { url });
-
-  if (!res.success || !res.data) return null;
-  const d = res.data;
-  return {
-    address: d.address || '',
-    price: d.price || null,
-    sqft: d.livingArea || null,
-    bedrooms: d.bedrooms || null,
-    bathrooms: d.bathrooms || null,
-    property_type: d.homeType || 'unknown',
-    zestimate: d.zestimate || null,
-    url: d.url || url,
-  };
 }
 
 // ============ Google Maps Reviews ============
@@ -357,7 +323,6 @@ export async function extractStructuredData<T = Record<string, unknown>>(
 export interface MarketResearchResult {
   search_results: GoogleSearchResult[];
   competitor_reviews?: GoogleMapsReviewsResponse;
-  real_estate_data?: ZillowListing[];
   web_content?: string;
 }
 
@@ -368,7 +333,6 @@ export async function conductMarketResearch(input: {
   location: string;
   businessType: string;
   competitorUrls?: string[];
-  zillowUrls?: string[];
 }): Promise<MarketResearchResult> {
   const result: MarketResearchResult = { search_results: [] };
 
@@ -387,18 +351,6 @@ export async function conductMarketResearch(input: {
       if (reviews) {
         result.competitor_reviews = reviews;
       }
-    }
-  }
-
-  // 3. Fetch Zillow data if URLs provided
-  if (input.zillowUrls?.length) {
-    const listings: ZillowListing[] = [];
-    for (const url of input.zillowUrls.slice(0, 3)) {
-      const listing = await fetchZillowListing(url);
-      if (listing) listings.push(listing);
-    }
-    if (listings.length) {
-      result.real_estate_data = listings;
     }
   }
 
@@ -448,22 +400,6 @@ export function formatBrightDataForAnchors(
         lines.push(`- "${r.text.slice(0, 100)}${r.text.length > 100 ? '...' : ''}" — ${r.author}, ${r.rating}⭐`);
       });
     }
-    lines.push('');
-  }
-
-  if (data.real_estate_data?.length) {
-    lines.push(
-      pick(lang, {
-        en: '### Real Estate Data [BrightData/Zillow]',
-        zh: '### 房产数据 [BrightData/Zillow]',
-        es: '### Datos inmobiliarios [BrightData/Zillow]',
-      }),
-    );
-    data.real_estate_data.forEach((l) => {
-      const price = l.price ? `$${l.price.toLocaleString()}` : 'N/A';
-      const sqft = l.sqft ? `${l.sqft.toLocaleString()} sqft` : 'N/A';
-      lines.push(`- **${l.address}**: ${price}, ${sqft}, ${l.property_type}`);
-    });
     lines.push('');
   }
 

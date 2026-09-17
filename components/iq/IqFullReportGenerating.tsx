@@ -5,11 +5,14 @@
  *
  *  - The five checklist rows and the percentage come from the status endpoint
  *    (`stages` / `progress`): a row is ticked only when that work actually
- *    finished; nothing is time-eased.
- *  - "Usually 3–5 minutes" + a live elapsed clock.
- *  - After 6 minutes the "email me when it's done" form is shown regardless of
- *    whether sending is configured; the address is stored either way and the
- *    copy says whether a mail will actually go out.
+ *    finished; nothing is time-eased. A row that has been current past the
+ *    stall threshold says it is being retried (§4.7).
+ *  - A tier-specific ETA ("About 4 minutes" standard, "About 12 minutes" for the
+ *    360° pass — the P50 of recent runs once there is enough history, §4.7
+ *    分档 ETA) + a live elapsed clock.
+ *  - The "email me when it's done" form is always offered; past 5 minutes the
+ *    copy switches to an active prompt. The address is stored whether or not
+ *    sending is configured, and the copy says whether a mail will go out.
  *  - After 10 minutes a support link is added. (A stored standard-tier body
  *    reloads into the report page as soon as it exists — the in-depth edition
  *    then replaces it automatically, see ReportContent.)
@@ -25,6 +28,7 @@ import {
   progressFromElapsed,
 } from '@/components/iq/IqAnalysisProgress';
 import type { UiStage } from '@/lib/funnel/iq-generation-stages';
+import { ETA_DEFAULT_MINUTES, etaSubtitle, monotonicRemainingSec } from '@/lib/funnel/iq-eta';
 import type { Locale } from '@/lib/i18n/locale';
 import { withLang } from '@/lib/i18n/resolve';
 
@@ -49,11 +53,13 @@ type StatusView = {
   notifyEmail?: string | null;
   notified?: boolean;
   emailEnabled?: boolean;
+  emailWillSend?: boolean;
+  etaSeconds?: number;
 };
 
 const POLL_MS = 3_000;
-/** Show the email form to everyone after this long (§4.6 b). */
-const EMAIL_AFTER_SEC = 6 * 60;
+/** Past this wait the email prompt stops being an aside and asks for the address (§4.7 P1-f). */
+const EMAIL_AFTER_SEC = 5 * 60;
 /** Add the support handoff after this long (§4.6 c). */
 const SUPPORT_AFTER_SEC = 10 * 60;
 
@@ -63,7 +69,6 @@ const COPY: Record<
     genericError: string;
     timeoutError: string;
     title: string;
-    usually: string;
     elapsed: (mmss: string) => string;
     willEmail: (email: string) => string;
     savedNoSend: (email: string) => string;
@@ -85,12 +90,11 @@ const COPY: Record<
     genericError: 'Full report generation failed. Tap Retry or refresh later.',
     timeoutError: 'Generation timed out. Tap Retry below to try again.',
     title: 'Generating your full risk audit…',
-    usually: 'Usually 3–5 minutes',
     elapsed: (m) => `${m} elapsed`,
     willEmail: (e) => `✓ We’ll email ${e} when the report is ready — you can leave this page.`,
     savedNoSend: (e) => `✓ ${e} is saved with this report. Email sending is not switched on yet, so the link will go out once it is — keep this page or come back to it later.`,
     emailPrompt: 'Rather not wait? Email me when it’s ready:',
-    emailPromptLate: 'This one is taking longer than usual. Leave an email and we’ll send the report when it’s done:',
+    emailPromptLate: 'Leave your email and we’ll send the PDF when it’s ready — you don’t have to wait on this page:',
     emailPlaceholder: 'you@example.com',
     saving: 'Saving…',
     emailMe: 'Email me',
@@ -106,12 +110,11 @@ const COPY: Record<
     genericError: '完整报告生成失败，请点击「重试生成」或稍后刷新。',
     timeoutError: '生成时间较长已超时，请点击下方「重试生成」再试一次。',
     title: '正在生成完整风险审计…',
-    usually: '通常 3–5 分钟',
     elapsed: (m) => `已用时 ${m}`,
     willEmail: (e) => `✓ 报告完成后会发送到 ${e}，您现在可以离开此页。`,
     savedNoSend: (e) => `✓ ${e} 已保存到这份报告。邮件发送功能尚未开通，开通后会自动发出链接——请保留本页或稍后回来查看。`,
     emailPrompt: '不想等待？报告生成后发送到邮箱：',
-    emailPromptLate: '这次比平时慢一些。留下邮箱，完成后我们发送报告：',
+    emailPromptLate: '留个邮箱，完成后把 PDF 发给你——不用守在这个页面：',
     emailPlaceholder: 'you@example.com',
     saving: '保存中…',
     emailMe: '发送到邮箱',
@@ -127,12 +130,11 @@ const COPY: Record<
     genericError: 'No se pudo generar el informe completo. Toca Reintentar o actualiza la página más tarde.',
     timeoutError: 'La generación tardó demasiado. Toca Reintentar abajo para volver a intentarlo.',
     title: 'Generando tu auditoría de riesgo completa…',
-    usually: 'Normalmente tarda de 3 a 5 minutos',
     elapsed: (m) => `${m} transcurridos`,
     willEmail: (e) => `✓ Enviaremos el informe a ${e} cuando esté listo; puedes salir de esta página.`,
     savedNoSend: (e) => `✓ ${e} quedó guardado con este informe. El envío de correos aún no está activado; el enlace saldrá cuando lo esté. Conserva esta página o vuelve más tarde.`,
     emailPrompt: '¿Prefieres no esperar? Te avisamos por correo cuando esté listo:',
-    emailPromptLate: 'Esta vez está tardando más de lo normal. Déjanos un correo y te enviamos el informe al terminar:',
+    emailPromptLate: 'Déjanos tu correo y te enviamos el PDF cuando esté listo; no hace falta que esperes en esta página:',
     emailPlaceholder: 'tu@correo.com',
     saving: 'Guardando…',
     emailMe: 'Enviarme por correo',
@@ -251,8 +253,16 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
   const [email, setEmail] = useState('');
   const [emailState, setEmailState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [emailWillSend, setEmailWillSend] = useState<boolean | null>(null);
+  const [remainingSec, setRemainingSec] = useState<number | null>(null);
   const runningRef = useRef(false);
   const stoppedRef = useRef(false);
+
+  // §4.7 分档 ETA: the server's tier figure once the first poll lands; the
+  // standard-tier default until then (every run starts on the standard pass).
+  const etaSeconds =
+    typeof serverStatus?.etaSeconds === 'number' && serverStatus.etaSeconds > 0
+      ? serverStatus.etaSeconds
+      : ETA_DEFAULT_MINUTES.standard * 60;
 
   const live = Boolean(serverStatus && !serverStatus.legacy);
   const stages = useMemo(() => getFullReportStages(lang, live ? serverStatus?.stages : null), [lang, live, serverStatus?.stages]);
@@ -309,6 +319,7 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
     setError(null);
     setDone(false);
     setServerProgress(0);
+    setRemainingSec(null); // a retry restarts the clock, so it restarts the countdown's ceiling too
 
     const result = await startGeneration(reportId, lang);
     if (stoppedRef.current) return;
@@ -331,10 +342,15 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
   useEffect(() => {
     const tick = window.setInterval(() => {
       if (!startRef.current || (!runningRef.current && (error || done))) return;
-      setElapsedSec(Math.max(0, Math.floor((Date.now() - startRef.current) / 1000)));
+      const sec = Math.max(0, Math.floor((Date.now() - startRef.current) / 1000));
+      setElapsedSec(sec);
+      // §4.7 monotonic countdown: the last value shown is the ceiling for the
+      // next one, so a longer tier ETA arriving mid-run can only pull the
+      // remaining time down — it can never climb back up.
+      setRemainingSec((prev) => monotonicRemainingSec({ totalSec: etaSeconds, elapsedSec: sec, previous: prev }));
     }, 1000);
     return () => window.clearInterval(tick);
-  }, [error, done]);
+  }, [error, done, etaSeconds]);
 
   // The server's own start time wins when it is earlier (another tab / a reload after the local clock expired).
   useEffect(() => {
@@ -386,9 +402,9 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
   const showEmailForm = !error && (emailEnabled || late);
   const savedEmail =
     emailState === 'saved' ? email.trim() : serverStatus?.notifyEmail && !serverStatus.notified ? serverStatus.notifyEmail : null;
-  const savedWillSend = emailState === 'saved' ? emailWillSend !== false : emailEnabled;
+  const savedWillSend = emailState === 'saved' ? emailWillSend !== false : Boolean(serverStatus?.emailWillSend);
 
-  const subtitle = `${headline} · ${t.usually} · ${t.elapsed(mmss(elapsedSec))}`;
+  const subtitle = `${headline} · ${etaSubtitle(lang, etaSeconds / 60)} · ${t.elapsed(mmss(elapsedSec))}`;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6 py-16">
@@ -404,13 +420,26 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
           activeIndex={activeIndex ?? undefined}
           statusLine={
             !error && !done ? (
-              <GenerationTicker lang={lang} location={location} elapsedSec={elapsedSec} percent={percent} stageIndex={activeIndex} />
+              <GenerationTicker
+                lang={lang}
+                location={location}
+                elapsedSec={elapsedSec}
+                percent={percent}
+                stageIndex={activeIndex}
+                etaSeconds={etaSeconds}
+                remainingSec={remainingSec}
+              />
             ) : undefined
           }
         />
 
         {showEmailForm ? (
-          <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4" data-testid="notify-form">
+          <div
+            // §4.7: past five minutes the capture stops being an aside and asks.
+            className={`mt-6 rounded-xl border p-4 ${late && !savedEmail ? 'border-emerald-700/70 bg-emerald-950/20' : 'border-zinc-800 bg-zinc-950/60'}`}
+            data-testid="notify-form"
+            data-prompt={late ? 'active' : 'passive'}
+          >
             {savedEmail ? (
               <p className={`text-sm ${savedWillSend ? 'text-emerald-400' : 'text-amber-300'}`}>
                 {savedWillSend ? t.willEmail(savedEmail) : t.savedNoSend(savedEmail)}

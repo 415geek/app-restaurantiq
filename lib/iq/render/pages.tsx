@@ -57,6 +57,7 @@ import {
 import { PALETTE, dataNotes, fmtDate, makeFormatters, nameKey, precheckReasons, probColor, ring, scoreColor, stripCitations, verdictLabel, type Formatters } from './format';
 import { conceptStrings, fill, strings, type ConceptWording, type ReportStrings } from './i18n';
 import { MapFigure } from './map';
+import { collapseIfSparse, keepPopulated } from './sparse';
 import type { StaticMaps } from './static-map';
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string; 'aria-hidden'?: boolean }>;
@@ -769,10 +770,23 @@ function Page7({ model, lang }: PageProps) {
   const near = m.competitors.l1_nearest_outside_pool;
   // §4.8: without a peer revenue median the band table is meaningless — show the
   // Layer-1 review-count distribution (raw platform values, top 8) instead.
-  const reviewRows = uniqueCompetitors([...m.competitors.l1].sort((a, b2) => (b2.rating_count ?? 0) - (a.rating_count ?? 0)))
-    .filter((x) => x.rating_count != null && x.rating_count > 0)
-    .slice(0, 8)
-    .map((x) => ({ label: (c.lang === 'zh' ? x.name_zh || x.name : x.name).slice(0, 22), value: x.rating_count }));
+  // §4.6 (P1-d): and when more than half of those stores carry no review count the
+  // distribution collapses entirely rather than printing a chart of 「未获取」 bars.
+  const reviewCount = (x: Competitor) => (x.rating_count != null && x.rating_count > 0 ? x.rating_count : null);
+  const l1Ranked = uniqueCompetitors([...m.competitors.l1].sort((a, b2) => (b2.rating_count ?? 0) - (a.rating_count ?? 0)));
+  const reviewRows = keepPopulated(l1Ranked.slice(0, 8), (x) => [reviewCount(x)]).map((x) => ({
+    label: (c.lang === 'zh' ? x.name_zh || x.name : x.name).slice(0, 22),
+    value: reviewCount(x),
+  }));
+  // §4.6 (P1-d): with fewer than four same-cuisine peers the page has a hole where the
+  // benchmark should be. The nearby Chinese restaurants are the honest stand-in — a
+  // top-N by review count, every row complete, collapsed when it cannot be filled.
+  const ratedL2 = m.competitors.l2.filter((x) => reviewCount(x) != null);
+  const otherChinese = collapseIfSparse(
+    [...ratedL2].sort((a, b2) => (b2.rating_count ?? 0) - (a.rating_count ?? 0)).slice(0, 6),
+    (x) => [x.rating, reviewCount(x), x.distance_mi],
+    { minRows: 3 },
+  );
   // §4.2: the void claim is only shown when both Layer-1 keyword radii (800 / 1600 m) were searched (guard) — say so.
   const bothRadii = ['direct@800', 'direct@1600'].every((l) => (m.competitors.l1_layers_tried ?? []).includes(l));
   // §4.2 (P0-B): a gap may only be claimed when the text probe cleared the same-category stores too.
@@ -781,6 +795,8 @@ function Page7({ model, lang }: PageProps) {
   const cnt = m.competitors.counts;
   const anchors = m.competitors.brand_anchors ?? [];
   const anchorIds = new Set(anchors.map((a) => a.id));
+  // §4.6 (P1-d): a brand-anchor table whose ratings / review counts are more than half missing collapses.
+  const anchorRows = collapseIfSparse(anchors, (a) => [a.rating, a.rating_count, a.distance_mi]);
   return (
     <PageShell c={c} model={m} pageId="page_7" chips={<SourceChips model={m} ids={['D5', 'D6', 'D7']} model_labels={[S.p7.chipShare]} lang={c.lang} />}>
       <div className="cards-grid">
@@ -856,7 +872,38 @@ function Page7({ model, lang }: PageProps) {
         {' '}
         {fill(S.p7.strength, { value: m.competitors.competition_score == null ? na : F.int(m.competitors.competition_score) })}
       </p>
-      {anchors.length ? (
+      {/* §4.6 (P1-d): the nearby-Chinese fallback benchmark fills the hole a thin direct-competitor set leaves. */}
+      {cards.length < 4 && otherChinese.length > 0 ? (
+        <>
+          <h2 className="h2">{S.p7.otherChinese}</h2>
+          <table className="data-table compact">
+            <thead>
+              <tr>
+                <th>{S.p7.anchorName}</th>
+                <th className="num">{S.p7.anchorDistance}</th>
+                <th className="num">{S.p7.anchorRating}</th>
+                <th className="num">{S.p7.anchorReviews}</th>
+                <th className="num">{S.p7.price}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {otherChinese.map((x) => (
+                <tr key={x.id}>
+                  <td>
+                    <CompetitorName c={x} lang={c.lang} />
+                  </td>
+                  <Cell num na={S.na}>{F.miles(x.distance_mi)}</Cell>
+                  <Cell num na={S.na}>{F.num(x.rating, 1)}</Cell>
+                  <Cell num na={S.na}>{F.int(x.rating_count)}</Cell>
+                  <Cell num na={S.na}>{F.price(x.price_level)}</Cell>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="table-note">{fill(S.p7.otherChineseNote, { l1: cards.length, total: m.competitors.l2.length, rated: ratedL2.length, n: otherChinese.length })}</p>
+        </>
+      ) : null}
+      {anchorRows.length ? (
         <>
           <h2 className="h2">{S.p7.anchors}</h2>
           <table className="data-table compact">
@@ -870,7 +917,7 @@ function Page7({ model, lang }: PageProps) {
               </tr>
             </thead>
             <tbody>
-              {anchors.map((a) => (
+              {anchorRows.map((a) => (
                 <tr key={a.id}>
                   <td>
                     <CompetitorName c={a} lang={c.lang} />
@@ -889,13 +936,18 @@ function Page7({ model, lang }: PageProps) {
       {/* §4.8: fixed-height footnote area (.p7-band) so the band + note can never run into the summary paragraph. */}
       {b.median == null ? (
         <div className="p7-band">
-          <h2 className="h2">{P7_REVIEW_DIST[c.lang].title}</h2>
+          {/* §4.6 (P1-d): the distribution collapses to its one explanatory line when the review counts are more than half missing. */}
           {reviewRows.length > 0 ? (
-            <HBars rows={reviewRows} valueLabel={(v) => F.int(v)} labelWidth={c.lang === 'zh' ? 110 : 150} valueWidth={60} height={11} gap={3} />
+            <>
+              <h2 className="h2">{P7_REVIEW_DIST[c.lang].title}</h2>
+              <HBars rows={reviewRows} valueLabel={(v) => F.int(v)} labelWidth={c.lang === 'zh' ? 110 : 150} valueWidth={60} height={11} gap={3} />
+              <p className="table-note">{fill(P7_REVIEW_DIST[c.lang].note, { method: S.bandMethod[b.method] ?? c.t(b.method) })}</p>
+            </>
           ) : (
-            <p className="table-note">{fill(S.p7.noData, { na })}</p>
+            <p className="table-note">
+              {fill(S.p7.bandNote, { method: S.bandMethod[b.method] ?? c.t(b.method), onlyBreakeven: S.p7.bandOnlyBreakeven })} {S.sparse}
+            </p>
           )}
-          <p className="table-note">{fill(P7_REVIEW_DIST[c.lang].note, { method: S.bandMethod[b.method] ?? c.t(b.method) })}</p>
         </div>
       ) : (
         <div className="p7-band">
@@ -916,7 +968,6 @@ function Page8({ model, lang }: PageProps) {
   const { S, F } = c;
   const m = model;
   const v = m.competitors.void;
-  const alts = m.score.alternatives.filter((a) => a.cuisine !== m.input.cuisine).slice(0, 3);
   const mine = m.score.alternatives.find((a) => a.cuisine === m.input.cuisine);
   const conds = [
     { ok: v.conditions.chinese_pop_ok, label: S.p8.condPop, en: 'Chinese population' },
@@ -929,6 +980,11 @@ function Page8({ model, lang }: PageProps) {
   // both radii AND no same-category store's menu / review / editorial text mentions the concept.
   const gap = m.competitors.category_gap;
   const alsoSelling = m.competitors.also_selling;
+  // §4.6 (P1-d): the "who else sells it" table collapses when more than half its evidence is missing…
+  const alsoRows = collapseIfSparse(alsoSelling.slice(0, 6), (a) => [a.name, a.distance_mi, a.evidence]);
+  // …and the alternatives ranking expands from the top 3 to the top 8 to carry the page when it does,
+  // instead of leaving the bottom half of the page white (the full ranking is already computed).
+  const alts = m.score.alternatives.filter((a) => a.cuisine !== m.input.cuisine).slice(0, alsoRows.length > 0 ? 3 : 8);
   const cnt = m.competitors.counts;
   const conceptName = zh ? m.input.cuisine_label_zh : cuisineName(m.input, c.lang);
   const evidenceLabel = (e: ReportModel['competitors']['also_selling'][number]['evidence']) =>
@@ -978,7 +1034,7 @@ function Page8({ model, lang }: PageProps) {
           ? ` ${fill(S.p8.coverageDiscount, { factor: F.num(m.competitors.coverage_discount, 2), n: m.competitors.also_selling_unknown_count })}`
           : ''}
       </p>
-      {alsoSelling.length > 0 ? (
+      {alsoRows.length > 0 ? (
         <table className="data-table compact">
           <thead>
             <tr>
@@ -989,7 +1045,7 @@ function Page8({ model, lang }: PageProps) {
             </tr>
           </thead>
           <tbody>
-            {alsoSelling.slice(0, 6).map((a) => (
+            {alsoRows.map((a) => (
               <tr key={a.id}>
                 <Cell na={S.na}>{a.name}</Cell>
                 <Cell num na={S.na}>{F.miles(a.distance_mi)}</Cell>
@@ -1366,16 +1422,22 @@ function Page12({ model, lang }: PageProps) {
   const c = ctxOf(model, lang);
   const { S, F } = c;
   const risks = model.risks;
+  // §4.6 (P1-c): only risks with a derived amount belong in a table whose header promises money.
+  // The rest are written out as prose on page 13 (unquantifiedRisks), so this total is never $0.
+  const priced = risks.filter((r) => r.impact_usd != null);
+  const unpriced = risks.filter((r) => r.impact_usd == null);
+  const total = priced.reduce((a, r) => a + (r.impact_usd ?? 0), 0);
+  const largest = priced.reduce<(typeof priced)[number] | null>((a, r) => (a == null || (r.impact_usd ?? 0) > (a.impact_usd ?? 0) ? r : a), null);
   return (
-    <PageShell c={c} model={model} pageId="page_12" chips={<SourceChips model={model} ids={['D11', 'D12']} model_labels={[S.p12.chipRisk]} lang={c.lang} />}>
+    <PageShell c={c} model={model} pageId="page_12" chips={<SourceChips model={model} ids={['D11', 'D12']} model_labels={[S.p12.chipRisk, S.p12.impactSum]} lang={c.lang} />}>
       <h2 className="h2">{S.p12.matrix}</h2>
       <div className="risk-matrix-wrap">
         <RiskMatrix risks={risks} lang={c.lang} />
       </div>
       <div className="key-row three">
         <KeyNumber label={S.p12.highCount} value={fill(S.p12.items, { n: F.int(risks.filter((r) => r.prob === 'high').length) })} sub={fill(S.p12.ofTotal, { n: risks.length })} />
-        <KeyNumber label={S.p12.impactSum} value={F.usd(risks.reduce((a, r) => a + (r.impact_usd ?? 0), 0))} sub={fill(S.p12.impactSumSub, { n: risks.filter((r) => r.impact_usd != null).length })} />
-        <KeyNumber label={S.p12.unquantified} value={fill(S.p12.items, { n: F.int(risks.filter((r) => r.impact_usd == null).length) })} sub={S.p12.unquantifiedSub} />
+        <KeyNumber label={S.p12.impactSum} value={priced.length ? F.usd(total) : S.na} sub={fill(S.p12.impactSumSub, { n: priced.length })} />
+        <KeyNumber label={S.p12.largest} value={largest ? F.usd(largest.impact_usd) : S.na} sub={largest ? c.field(largest.risk_zh, largest.risk_en) : S.na} />
       </div>
       <table className="data-table risk-table">
         <thead>
@@ -1389,7 +1451,7 @@ function Page12({ model, lang }: PageProps) {
           </tr>
         </thead>
         <tbody>
-          {risks.length === 0 ? (
+          {priced.length === 0 ? (
             <tr>
               <Cell num na={S.na}>—</Cell>
               <Cell na={S.na}>{S.na}</Cell>
@@ -1399,23 +1461,33 @@ function Page12({ model, lang }: PageProps) {
               <Cell na={S.na}>{S.na}</Cell>
             </tr>
           ) : null}
-          {risks.map((r) => (
+          {priced.map((r) => (
             <tr key={r.id}>
               <Cell num na={S.na}>{r.id}</Cell>
               <Cell na={S.na}>{c.field(r.risk_zh, r.risk_en)}</Cell>
               <td>
                 <span className="dot" style={{ background: probColor(r.prob) }} /> {S.prob[r.prob]}
               </td>
-              <Cell num na={S.na}>{F.usd(r.impact_usd)}</Cell>
+              <td className="num">
+                {F.usd(r.impact_usd)}
+                {/* §4.6: the arithmetic travels with the amount, so the reader (and the number guard) can check it. */}
+                {r.impact_formula_zh || r.impact_formula_en ? <span className="cell-formula">{c.field(r.impact_formula_zh, r.impact_formula_en)}</span> : null}
+              </td>
               <Cell na={S.na}>{r.trigger && r.trigger !== '—' ? c.t(r.trigger) : S.na}</Cell>
               <Cell na={S.na}>{c.t(r.hedge) || S.na}</Cell>
             </tr>
           ))}
         </tbody>
       </table>
+      {unpriced.length ? <p className="table-note">{fill(S.p12.unquantifiedNote, { n: unpriced.length, ids: unpriced.map((r) => `#${r.id}`).join(c.lang === 'zh' ? '、' : ', ') })}</p> : null}
       <XRef>{S.p12.xref}</XRef>
     </PageShell>
   );
+}
+
+/** §4.6 (P1-c): the risks that carry no derivable amount — prose on the checklist page, never a blank table row. */
+function unquantifiedRisks(m: ReportModel) {
+  return m.risks.filter((r) => r.impact_usd == null && (r.unquantified_zh || r.unquantified_en));
 }
 
 /* ------------------------------------------------------------------ */
@@ -1448,7 +1520,21 @@ function Page13({ model, lang }: PageProps) {
                 </span>
               </li>
             ))}
-            {m.score.conditions.length === 0 && missing.length === 0 ? (
+            {/* §4.6 (P1-c): a risk with no derivable amount is settled here in words rather than shown as a $0 table row. */}
+            {unquantifiedRisks(m).map((r) => (
+              <li key={`r${r.id}`} className="risk-item">
+                <span className="box" />
+                <span>
+                  <strong>{S.p13.riskNoAmount}</strong>{' '}
+                  {fill(S.p13.riskNoAmountLine, {
+                    risk: c.field(r.risk_zh, r.risk_en),
+                    reason: c.field(r.unquantified_zh, r.unquantified_en),
+                    hedge: c.t(r.hedge),
+                  })}
+                </span>
+              </li>
+            ))}
+            {m.score.conditions.length === 0 && missing.length === 0 && unquantifiedRisks(m).length === 0 ? (
               <li>
                 <span className="box" />
                 <span>{S.p13.nothing}</span>

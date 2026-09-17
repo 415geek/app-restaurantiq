@@ -62,6 +62,7 @@ async function main() {
     '0009_iq_360_data_layer.sql',
     '0010_iq_settings.sql',
     '0011_iq_source_candidates.sql',
+    '0012_jurisdiction_registry.sql',
   ];
 
   const client = new Client({

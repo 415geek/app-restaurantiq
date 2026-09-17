@@ -474,6 +474,159 @@ export async function enrichMarketDataWithSiteHistory(
 }
 
 // ---------------------------------------------------------------------------
+// E3 · prior-tenant concept → prior_food_facility (评审 Spec v2 §4.8.1)
+//
+// The zero-cost half of §4.8. This module already knows who ran the box; the
+// v2 report threw that away and inferred "1912 building → probably no Type I
+// hood" from a *residential* Zillow record while the same report named Ah Ma's
+// Kitchen, a hot-kitchen HK café, as the operator. That is a logic hole, not a
+// data gap. From here on the hood conclusion depends on the evidence level and
+// never on `year_built`.
+// ---------------------------------------------------------------------------
+
+/**
+ * hot_kitchen   — the predecessor cooked (fryer / wok / grill / oven): a
+ *                 commercial kitchen with a Type I hood is very likely.
+ * limited_food  — food business, but beverage / prepackaged / unclear concept:
+ *                 proves nothing about a hood.
+ * non_food      — retail, office, salon…: no food-use signal.
+ */
+export type PriorTenantConcept = 'hot_kitchen' | 'limited_food' | 'non_food';
+
+export interface PriorTenantSignal {
+  prior_business_name: string | null;
+  concept: PriorTenantConcept;
+  status: SiteBusinessStatus;
+  /** Category / name tokens that drove the classification — quoted, never invented. */
+  matched_terms: string[];
+  /** Human-readable provenance, e.g. "Google Places + Yelp · 该地址商家记录". */
+  source: string;
+  detail: string;
+}
+
+/** Cooking-implies-hood tokens, matched against categories AND the business name. */
+const HOT_KITCHEN_TERMS = [
+  'restaurant',
+  'meal_takeaway',
+  'meal_delivery',
+  'kitchen',
+  'grill',
+  'bbq',
+  'barbecue',
+  'wok',
+  'noodle',
+  'ramen',
+  'pho',
+  'dim sum',
+  'hot pot',
+  'hotpot',
+  'szechuan',
+  'sichuan',
+  'cantonese',
+  'hong kong',
+  'cha chaan',
+  'teriyaki',
+  'curry',
+  'thai',
+  'indian',
+  'korean',
+  'japanese',
+  'sushi',
+  'ramen',
+  'pizza',
+  'pizzeria',
+  'taqueria',
+  'taco',
+  'burrito',
+  'burger',
+  'fried',
+  'fry',
+  'chicken',
+  'steak',
+  'seafood',
+  'diner',
+  'cafeteria',
+  'buffet',
+  'bakery',
+  'bakeries',
+  'brunch',
+  'breakfast',
+  'dumpling',
+  'bistro',
+  'eatery',
+  'grill house',
+];
+
+/** Food businesses that do not imply a cooking line. */
+const LIMITED_FOOD_TERMS = [
+  'coffee',
+  'tea',
+  'boba',
+  'bubble tea',
+  'juice',
+  'smoothie',
+  'ice cream',
+  'gelato',
+  'frozen yogurt',
+  'candy',
+  'chocolate',
+  'convenience',
+  'grocery',
+  'liquor',
+  'wine',
+  'bar',
+  'pub',
+  'cafe',
+  'café',
+  'food',
+  'snack',
+  'deli',
+];
+
+function conceptTokens(b: SiteHistoryBusiness): string {
+  return [b.name, ...b.categories].join(' ').toLowerCase().replace(/[_-]+/g, ' ');
+}
+
+function classifyConcept(b: SiteHistoryBusiness): { concept: PriorTenantConcept; matched: string[] } {
+  const text = conceptTokens(b);
+  const hot = HOT_KITCHEN_TERMS.filter((t) => text.includes(t.replace(/_/g, ' ')));
+  if (hot.length) return { concept: 'hot_kitchen', matched: [...new Set(hot)].slice(0, 5) };
+  const limited = LIMITED_FOOD_TERMS.filter((t) => text.includes(t));
+  if (limited.length || b.is_food) return { concept: 'limited_food', matched: [...new Set(limited)].slice(0, 5) };
+  return { concept: 'non_food', matched: [] };
+}
+
+/**
+ * E3 signal for the jurisdiction layer: the strongest prior-tenant concept at
+ * the address. Returns null when nothing was found at the address — absent data
+ * stays absent (never "probably no restaurant").
+ */
+export function priorTenantSignal(pack: SiteHistoryPack | null | undefined): PriorTenantSignal | null {
+  if (!pack || typeof pack !== 'object' || !Array.isArray(pack.businesses) || pack.businesses.length === 0) return null;
+  const scored = pack.businesses
+    .map((b) => ({ b, ...classifyConcept(b) }))
+    .sort((x, y) => {
+      const rank = (c: PriorTenantConcept) => (c === 'hot_kitchen' ? 0 : c === 'limited_food' ? 1 : 2);
+      const byConcept = rank(x.concept) - rank(y.concept);
+      if (byConcept !== 0) return byConcept;
+      return (y.b.review_count ?? 0) - (x.b.review_count ?? 0);
+    });
+  const top = scored[0];
+  if (!top) return null;
+  const sources = [...new Set(pack.businesses.map((b) => (b.source === 'google' ? 'Google Places' : 'Yelp')))];
+  const conceptLabel =
+    top.concept === 'hot_kitchen' ? '热厨餐饮' : top.concept === 'limited_food' ? '轻食/饮品/预包装' : '非餐饮';
+  return {
+    prior_business_name: top.b.name || null,
+    concept: top.concept,
+    status: top.b.status,
+    matched_terms: top.matched,
+    source: `${sources.join(' + ')} · 该地址商家记录（${pack.match_radius_m}m）`,
+    detail: `前租户「${top.b.name || '未具名'}」（${conceptLabel}${top.matched.length ? `：${top.matched.join('/')}` : ''}，${top.b.status}）`,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Prompt anchors
 // ---------------------------------------------------------------------------
 

@@ -1863,6 +1863,10 @@
       "risk_en": "Rent is 55.3% of captured revenue, above the 10% line",
       "prob": "high",
       "impact_usd": 13928,
+      "impact_formula_zh": "月租 $17,000 − 参照营收 $30,725 × 10% = 每月多付 $13,928",
+      "impact_formula_en": "Monthly rent $17,000 − reference revenue $30,725 × 10% = $13,928 paid over the line each month",
+      "unquantified_zh": null,
+      "unquantified_en": null,
       "trigger": "签约租金高于本报告条件页给出的上限",
       "hedge": "争取免租期 / 阶梯租金 / 百分比租金条款"
     },
@@ -1872,6 +1876,10 @@
       "risk_en": "A 12.5% ticket drop breaks even (base ticket $24)",
       "prob": "medium",
       "impact_usd": 15000,
+      "impact_formula_zh": "客单价 −12.5%：基准月营收 $120,000 → 每月少收 $15,000",
+      "impact_formula_en": "Ticket −12.5%: base monthly revenue $120,000 → $15,000 less each month",
+      "unquantified_zh": null,
+      "unquantified_en": null,
       "trigger": "开业 3 个月后实际客单价 < 基准 × 0.9",
       "hedge": "设计套餐锚定客单价；控制折扣渠道占比"
     },
@@ -1881,6 +1889,10 @@
       "risk_en": "Captured demand covers only 22% of break-even",
       "prob": "high",
       "impact_usd": 108555,
+      "impact_formula_zh": "保本线 $139,280 − 捕获月需求 $30,725 = 每月差 $108,555",
+      "impact_formula_en": "Break-even $139,280 − captured monthly demand $30,725 = $108,555 short each month",
+      "unquantified_zh": null,
+      "unquantified_en": null,
       "trigger": "开业 6 个月月营收 < 保本线",
       "hedge": "压缩座位 / 面积以降低固定成本；先做外卖验证需求"
     },
@@ -1890,6 +1902,10 @@
       "risk_en": "6 nearby projects under construction / approved: construction-period disruption, upside on delivery (excluded from current demand)",
       "prob": "medium",
       "impact_usd": null,
+      "impact_formula_zh": null,
+      "impact_formula_en": null,
+      "unquantified_zh": "施工的工期与围挡范围未获取，客流影响的幅度算不出来",
+      "unquantified_en": "Neither the construction schedule nor the hoarding footprint is available, so the size of the traffic disruption cannot be derived",
       "trigger": "施工围挡影响门面 / 停车",
       "hedge": "租约加入施工期租金减免条款"
     },
@@ -1899,6 +1915,10 @@
       "risk_en": "CapEx not provided: payback cannot be assessed",
       "prob": "medium",
       "impact_usd": null,
+      "impact_formula_zh": null,
+      "impact_formula_en": null,
+      "unquantified_zh": "未提供装修与设备投入，回收期和投入金额都算不出来",
+      "unquantified_en": "No build-out or equipment budget was provided, so neither the payback nor the amount at stake can be derived",
       "trigger": "—",
       "hedge": "取得装修 / 设备报价后重跑报告"
     }

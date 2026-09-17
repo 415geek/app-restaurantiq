@@ -4,6 +4,8 @@
  *   - exactly 15 h1.action-title (plus an unnumbered cover page → 16 PDF pages)
  *   - no text node with contrast < 4.5:1 against its effective background
  *   - no empty <td>
+ *   - no page more than half white space (评审 Spec §4.6 P1-d: a module whose data is
+ *     > 50 % missing collapses entirely instead of printing a page of 「未获取」)
  *   - PDF between 50 KB and 5 MB
  *
  *   - the page is monolingual: no CJK on English / Spanish pages, no untranslated
@@ -40,6 +42,8 @@ const EX_RENT_LABEL: Record<typeof LANG, string> = { zh: '（不含租金）', e
 const MAX_RENT_LABEL: Record<typeof LANG, string> = { zh: '租金上限', en: 'Max rent', es: 'Renta máxima' };
 /** Localized kicker of page 15 (总结与建议 / Summary / Conclusiones y recomendaciones). */
 const SUMMARY_KICKER: Record<typeof LANG, RegExp> = { zh: /总结与建议/, en: /\bSummary\b/, es: /Conclusiones y recomendaciones/ };
+/** §4.6 (P1-d): a page whose content covers less of the page box than this is a page of white space. */
+const MIN_PAGE_FILL_PCT = 50;
 /** 14 analysis pages + 总结与建议 (page 15). */
 const EXPECTED_PAGES = 15; // numbered analysis pages (h1.action-title)
 const EXPECTED_PDF_PAGES = EXPECTED_PAGES + 1; // + unnumbered cover page
@@ -170,6 +174,23 @@ const PAGE_OVERFLOW_JS = `Array.from(document.querySelectorAll('section.page')).
   return { page: i + 1, overflow: Math.round(Math.max(p.scrollHeight - p.clientHeight, bodyOver)) };
 }).filter((x) => x.overflow > 1)`;
 const PAGE_FILL_JS = `Array.from(document.querySelectorAll('section.page')).map((p, i) => { const b = p.querySelector('.page-body'); return 'p' + (i + 1) + ':' + (b ? Math.round((b.scrollHeight / b.clientHeight) * 100) : 0) + '%'; }).join(' ')`;
+/* 评审 Spec §4.6 (P1-d): .page-body is a flex child that always fills the box, so scrollHeight says
+ * nothing about white space. Measure the bottom of the lowest painted element inside it instead:
+ * a page whose content stops above half the box is the blank page the spec forbids. */
+const PAGE_INK_JS = `Array.from(document.querySelectorAll('section.page')).map((p, i) => {
+  const b = p.querySelector('.page-body');
+  if (!b) return { page: i + 1, id: p.className, fill: 100 };
+  const top = b.getBoundingClientRect().top;
+  const avail = b.clientHeight || 1;
+  let bottom = top;
+  for (const el of b.querySelectorAll('*')) {
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    const r = el.getBoundingClientRect();
+    if (r.height > 0 && r.width > 0 && r.bottom > bottom) bottom = r.bottom;
+  }
+  return { page: i + 1, id: p.className.replace('page page-', ''), fill: Math.round(((bottom - top) / avail) * 100) };
+})`;
 
 async function main() {
   await fs.mkdir(OUT, { recursive: true });
@@ -283,6 +304,16 @@ async function main() {
     const overflow = (await page.evaluate(PAGE_OVERFLOW_JS)) as Array<{ page: number; overflow: number }>;
     assert('no_page_overflow', overflow.length === 0, overflow.length ? overflow.map((o) => `p${o.page} +${o.overflow}px`).join(', ') : `cover + all ${EXPECTED_PAGES} pages fit the 243 mm box`);
     console.log(`[smoke-print] body fill (content ÷ available): ${await page.evaluate(PAGE_FILL_JS)}`);
+
+    // 4c) §4.6 (P1-d): no page may be more than half white space
+    const ink = (await page.evaluate(PAGE_INK_JS)) as Array<{ page: number; id: string; fill: number }>;
+    const blank = ink.filter((x) => x.fill < MIN_PAGE_FILL_PCT);
+    console.log(`[smoke-print] ink height (content ÷ page box): ${ink.map((x) => `p${x.page}:${x.fill}%`).join(' ')}`);
+    assert(
+      'no_blank_page',
+      blank.length === 0,
+      blank.length ? blank.map((b) => `p${b.page} (${b.id}) only ${b.fill}% filled`).join(', ') : `every page is at least ${MIN_PAGE_FILL_PCT}% filled (min ${Math.min(...ink.map((x) => x.fill))}%)`,
+    );
 
     // 5) screenshots per page
     await page.emulateMediaType('screen');

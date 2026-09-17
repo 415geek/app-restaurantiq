@@ -4,6 +4,8 @@ import {
   activeStageIndex,
   computeStageProgress,
   deriveUiStages,
+  isStageStalled,
+  STAGE_STALL_MS,
   stageCeiling,
   UI_STAGE_IDS,
   UI_STAGE_SPECS,
@@ -43,6 +45,44 @@ test('deriveUiStages: older checkpoints without step timestamps fall back to the
   // A failed job shows nothing active.
   assert.deepEqual(deriveUiStages({ status: 'failed', jobStage: 'draft', steps: { write: { startedAt: iso(0) } } }).map((s) => s.state), ['done', 'done', 'done', 'pending', 'pending']);
   assert.deepEqual(deriveUiStages({ status: 'idle' }).map((s) => s.state), ['pending', 'pending', 'pending', 'pending', 'pending']);
+});
+
+test('stage-stall (§4.7): five minutes without a checkpoint marks the current row as retrying', () => {
+  assert.equal(STAGE_STALL_MS, 5 * 60_000);
+  assert.equal(isStageStalled(null, T0), false, 'an unknown heartbeat is not a stall');
+  assert.equal(isStageStalled(iso(0), T0 + STAGE_STALL_MS), false, 'exactly at the threshold is not yet stalled');
+  assert.equal(isStageStalled(iso(0), T0 + STAGE_STALL_MS + 1_000), true);
+
+  const input = {
+    status: 'running' as const,
+    jobStage: 'draft',
+    steps: {
+      competitors: { startedAt: iso(0), finishedAt: iso(20_000) },
+      demographics: { startedAt: iso(20_000), finishedAt: iso(28_000) },
+      finance: { startedAt: iso(28_000), finishedAt: iso(29_000) },
+      write: { startedAt: iso(29_000) },
+    },
+    updatedAt: iso(29_000),
+  };
+  // Inside the threshold: the write row is simply active.
+  const healthy = deriveUiStages(input, T0 + 29_000 + 4 * 60_000);
+  assert.deepEqual(healthy.map((s) => s.state), ['done', 'done', 'done', 'active', 'pending']);
+  assert.ok(healthy.every((s) => !s.stalled));
+
+  // Past it: exactly one row is flagged, and it is the active one.
+  const stalled = deriveUiStages(input, T0 + 29_000 + STAGE_STALL_MS + 1_000);
+  assert.deepEqual(stalled.filter((s) => s.stalled).map((s) => s.id), ['write']);
+  assert.equal(stalled[3].state, 'active');
+
+  // A long stage that keeps checkpointing is NOT a stall: `write` legitimately
+  // spans draft + verify on the professional tier, and each leg heartbeats.
+  const heartbeat = deriveUiStages({ ...input, updatedAt: iso(29_000 + 8 * 60_000) }, T0 + 29_000 + 9 * 60_000);
+  assert.ok(heartbeat.every((s) => !s.stalled));
+
+  // A failed or finished job never shows a stalled row.
+  const failed = deriveUiStages({ ...input, status: 'failed' }, T0 + 60 * 60_000);
+  assert.ok(failed.every((s) => !s.stalled && s.state !== 'active'));
+  assert.ok(deriveUiStages({ status: 'done', jobStage: 'done', updatedAt: iso(0) }, T0 + 60 * 60_000).every((s) => !s.stalled));
 });
 
 test('computeStageProgress: completed weight + capped in-stage creep, never past the stage end', () => {

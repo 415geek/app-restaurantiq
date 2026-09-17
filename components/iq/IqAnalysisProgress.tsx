@@ -11,6 +11,8 @@ export type AnalysisProgressStage = {
   label: string;
   /** Live state from the server (评审 Spec §4.6); when present it wins over the percent-derived guess. */
   state?: 'done' | 'active' | 'pending';
+  /** §4.7: current past the stall threshold — the row says it is being retried instead of spinning. */
+  stalled?: boolean;
 };
 
 type PhaseTarget = { atSec: number; pct: number };
@@ -122,6 +124,13 @@ const BAR_COPY: Record<Locale, { progress: string; elapsed: (sec: number) => str
   es: { progress: 'Progreso del análisis', elapsed: (s) => `${s} s transcurridos` },
 };
 
+/** §4.7 stage-stall: what a row says once it has been current for more than five minutes. */
+export const STAGE_RETRY_COPY: Record<Locale, string> = {
+  en: 'This step stalled — retrying it automatically',
+  zh: '这一步超时，正在自动重试',
+  es: 'Este paso se atascó; lo estamos reintentando automáticamente',
+};
+
 /**
  * Five-row checklist for the paid report. With the server's live `stages`
  * the rows carry their real state; without it (legacy synchronous path) they
@@ -134,6 +143,7 @@ export function getFullReportStages(lang: Locale, serverStages?: UiStage[] | nul
       id: s.id,
       label: l[(s.label_key as UiStageId) in l ? (s.label_key as UiStageId) : s.id] ?? s.id,
       state: s.state,
+      stalled: s.stalled,
     }));
   }
   return UI_STAGE_IDS.map((id) => ({ id, label: l[id] }));
@@ -220,11 +230,13 @@ export function IqAnalysisProgressBar({
             ? stage.state === 'done' || pct >= 100
             : i < activeIdx || (i === activeIdx && pct >= 100);
           const current = hasLiveStates ? stage.state === 'active' && pct < 100 : i === activeIdx && pct < 100;
+          const stalled = Boolean(stage.stalled) && current;
           return (
             <li
               key={stage.id}
               data-stage={stage.id}
               data-state={done ? 'done' : current ? 'active' : 'pending'}
+              data-stalled={stalled ? 'true' : undefined}
               className={`flex items-start gap-2.5 text-sm transition-opacity duration-500 ${
                 done || current ? 'opacity-100' : 'opacity-35'
               }`}
@@ -233,15 +245,24 @@ export function IqAnalysisProgressBar({
                 className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
                   done
                     ? 'bg-emerald-500/20 text-emerald-400'
-                    : current
-                      ? 'animate-pulse bg-emerald-500/30 text-emerald-300'
-                      : 'bg-zinc-800 text-zinc-600'
+                    : stalled
+                      ? 'animate-pulse bg-amber-500/25 text-amber-300'
+                      : current
+                        ? 'animate-pulse bg-emerald-500/30 text-emerald-300'
+                        : 'bg-zinc-800 text-zinc-600'
                 }`}
                 aria-hidden
               >
-                {done ? '✓' : current ? '…' : i + 1}
+                {done ? '✓' : stalled ? '↻' : current ? '…' : i + 1}
               </span>
-              <span className={current ? 'text-zinc-200' : 'text-zinc-400'}>{stage.label}</span>
+              <span className={current ? 'text-zinc-200' : 'text-zinc-400'}>
+                {stage.label}
+                {stalled ? (
+                  <span className="mt-0.5 block text-xs text-amber-300" data-testid="stage-retrying">
+                    {STAGE_RETRY_COPY[lang]}
+                  </span>
+                ) : null}
+              </span>
             </li>
           );
         })}

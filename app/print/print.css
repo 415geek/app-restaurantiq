@@ -444,6 +444,21 @@ strong {
 .risk-table td {
   font-size: 9pt;
 }
+/* §4.6 (P1-c): the arithmetic behind an amount, printed under the amount so the reader can check it.
+   .num cells are nowrap — the formula has to wrap, so it opts out. */
+.cell-formula {
+  display: block;
+  margin-top: 1.5pt;
+  font-size: 7.5pt;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--muted);
+  white-space: normal;
+}
+.risk-table th:nth-child(4),
+.risk-table td:nth-child(4) {
+  width: 26%;
+}
 .sources-table {
   font-size: 7pt;
   line-height: 1.3;
@@ -607,6 +622,17 @@ strong {
   height: 10px;
   border: 1.5px solid var(--navy);
   margin-top: 3pt;
+}
+/* §4.6 (P1-c): the pre-lease checklist also carries the risks that have no derivable
+   amount (they are not shown as blank rows on the register page). Those lines are the
+   longest on the page, so they set in the footnote size and the panel keeps its box. */
+.check-list li.risk-item {
+  font-size: 8.5pt;
+  line-height: 1.35;
+  padding: 2.5pt 0;
+}
+.check-list li.risk-item .box {
+  margin-top: 2pt;
 }
 .verdict-line {
   margin-top: 6pt;
@@ -1092,6 +1118,13 @@ strong {
 .report[data-lang='es'] .check-list li {
   padding: 2.5pt 0;
 }
+/* the folded-in risk lines are longer in the Latin editions than in Chinese (§4.6 P1-c) */
+.report[data-lang='en'] .check-list li.risk-item,
+.report[data-lang='es'] .check-list li.risk-item {
+  font-size: 7.5pt;
+  line-height: 1.3;
+  padding: 2pt 0;
+}
 .report[data-lang='en'] .map-facts .key-label,
 .report[data-lang='es'] .map-facts .key-label {
   font-size: 8pt;
@@ -1167,6 +1200,10 @@ strong {
 .report[data-lang='es'] .risk-table thead th {
   font-size: 8pt;
   padding: 2.5pt 4pt;
+}
+.report[data-lang='en'] .cell-formula,
+.report[data-lang='es'] .cell-formula {
+  font-size: 7pt;
 }
 .report[data-lang='en'] .page-6 .page-body > svg,
 .report[data-lang='es'] .page-6 .page-body > svg {
