@@ -783,7 +783,7 @@ function Page7({ model, lang }: PageProps) {
   // top-N by review count, every row complete, collapsed when it cannot be filled.
   const ratedL2 = m.competitors.l2.filter((x) => reviewCount(x) != null);
   const otherChinese = collapseIfSparse(
-    [...ratedL2].sort((a, b2) => (b2.rating_count ?? 0) - (a.rating_count ?? 0)).slice(0, 6),
+    [...ratedL2].sort((a, b2) => (b2.rating_count ?? 0) - (a.rating_count ?? 0)).slice(0, 5),
     (x) => [x.rating, reviewCount(x), x.distance_mi],
     { minRows: 3 },
   );

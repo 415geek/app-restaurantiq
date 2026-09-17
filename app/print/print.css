@@ -1122,8 +1122,15 @@ strong {
 .report[data-lang='en'] .check-list li.risk-item,
 .report[data-lang='es'] .check-list li.risk-item {
   font-size: 7.5pt;
-  line-height: 1.3;
-  padding: 2pt 0;
+  line-height: 1.25;
+  padding: 1.5pt 0;
+}
+/* §4.6 (P1-d): page 7 also carries the nearby-Chinese fallback benchmark now; the Latin
+   editions set wider, so the fixed footnote band gives the table the room it needs. */
+.report[data-lang='en'] .p7-band,
+.report[data-lang='es'] .p7-band {
+  height: 106pt;
+  max-height: 106pt;
 }
 .report[data-lang='en'] .map-facts .key-label,
 .report[data-lang='es'] .map-facts .key-label {
