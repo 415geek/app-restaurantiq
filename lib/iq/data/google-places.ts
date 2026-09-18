@@ -424,12 +424,21 @@ export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchCont
   const truncated = new Set<string>();
   let refineBudget = Math.max(0, maxCalls - plan.length);
 
+  // 先近后远 decisions, one per (layer, radius). The widening question is "did the
+  // near radius come back thin", so it is answered once, before any call at the
+  // wider radius runs. Re-asking it per call would let the first alias's hits
+  // cancel the other aliases — which is exactly the multilingual recall §3.2 adds.
+  const widen = new Map<string, boolean>();
+
   while (queue.length) {
     const { call, centre, depth } = queue.shift() as { call: PlaceCall; centre: { lat: number; lng: number }; depth: number };
-    // 先近后远: the wider Layer-1 radius runs only when the near one came back thin.
-    if (call.only_if_fewer_than != null && call.layer && layerCount(call.layer) >= call.only_if_fewer_than) {
-      outcomes.push({ ...call, cache: 'skipped', results: 0 });
-      continue;
+    if (call.only_if_fewer_than != null && call.layer) {
+      const gateKey = `${call.layer}@${call.radiusM}`;
+      if (!widen.has(gateKey)) widen.set(gateKey, layerCount(call.layer) < call.only_if_fewer_than);
+      if (!widen.get(gateKey)) {
+        outcomes.push({ ...call, cache: 'skipped', results: 0 });
+        continue;
+      }
     }
     const r = await nearby(ctx, key, centre, call);
     if (r.ok) {
