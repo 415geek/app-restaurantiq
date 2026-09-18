@@ -134,3 +134,19 @@ test('§3.2 the plan issues one Layer-1 call per alias at each radius', () => {
   assert.ok(far.every((c) => c.only_if_fewer_than === 5));
   assert.ok(near.every((c) => c.only_if_fewer_than == null));
 });
+
+test('§3.1 Layer 2 searches the near ring before widening', () => {
+  // Measured at 1115 Clement St: a plain 800 m bakery Nearby returns Breadbelly
+  // (426 m) and Schubert's (406 m) — and returns exactly 20, i.e. truncated.
+  // Layer 2 used to start at 1600 m, four times the area, so it truncated and
+  // cut the nearest same-category stores. The near ring is never gated: it is
+  // the ring the customer actually walks.
+  const plan = buildCallPlanForProfile(conceptSearchProfile('egg_tart'), 99);
+  const subs = plan.filter((c) => c.layer === 'substitute' && !c.textQuery);
+  assert.ok(subs.length >= 2, `expected a near and a wide substitute pass: ${subs.map((c) => c.label).join(',')}`);
+  assert.equal(subs[0].radiusM, 800);
+  assert.equal(subs[1].radiusM, 1600);
+  assert.ok(subs.every((c) => c.only_if_fewer_than == null));
+  // Both passes look for the same Table A types.
+  assert.deepEqual(subs[0].includedTypes, subs[1].includedTypes);
+});

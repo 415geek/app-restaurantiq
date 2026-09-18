@@ -188,7 +188,16 @@ export function buildCallPlanForProfile(p: ConceptSearchProfile, maxCalls?: numb
   for (const q of p.queries) {
     plan.push({ includedTypes: p.types, radiusM: L1_RADIUS_FAR_M, label: `direct@${L1_RADIUS_FAR_M}:${q}`, textQuery: q, layer: 'direct', restrict: true, only_if_fewer_than: L1_MIN_HITS_BEFORE_WIDENING });
   }
-  if (p.substitute_types.length) plan.push({ includedTypes: p.substitute_types, radiusM: L2_RADIUS_M, label: `substitute@${L2_RADIUS_M}`, layer: 'substitute' });
+  if (p.substitute_types.length) {
+    // 底层重构 §3.1: Layer 2 used to start at 1600 m, four times the area of the
+    // near ring, so in a dense market it came back at the per-call cap and the
+    // nearest same-category stores were the ones cut. Measured at 1115 Clement
+    // St: the 1600 m pass lost Breadbelly (426 m) and Schubert's (406 m), while
+    // a plain 800 m bakery search returns both. The near ring runs first and is
+    // never gated — it is the ring the customer actually walks.
+    plan.push({ includedTypes: p.substitute_types, radiusM: L1_RADIUS_NEAR_M, label: `substitute@${L1_RADIUS_NEAR_M}`, layer: 'substitute' });
+    plan.push({ includedTypes: p.substitute_types, radiusM: L2_RADIUS_M, label: `substitute@${L2_RADIUS_M}`, layer: 'substitute' });
+  }
   if (p.substitute_terms.length) plan.push({ includedTypes: [], radiusM: L2_RADIUS_M, label: `substitute:text@${L2_RADIUS_M}`, textQuery: p.substitute_terms[0], layer: 'substitute', restrict: true });
   plan.push({ includedTypes: p.types, radiusM: BRAND_ANCHOR_BIAS_M, label: `brand_anchor@${BRAND_ANCHOR_BIAS_M}`, textQuery: p.query, layer: 'brand_anchor' });
   plan.push({ includedTypes: ['restaurant'], radiusM: ONE_MILE_M, label: 'restaurant @1mi', layer: 'l3' });

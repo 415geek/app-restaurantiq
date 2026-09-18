@@ -464,3 +464,8 @@
 - **实测根因**：在 900 Grant Ave（旧金山唐人街）以 800 m 偏置实测 Google Text Search —— `"egg tart"` 返回 **0** 条，`"蛋挞"` 返回 **11** 条且 Golden Gate Bakery **排第一**，`"pastel de nata"` 返回 6 条。Text Search 匹配的是店名、并且按语言匹配；Golden Gate Bakery 的店名里没有任何蛋挞字样的英文，所以英文关键词永远找不到它。此前 `latinQueryWord()` 只取第一个拉丁关键词作为 Layer 1 查询，这就是「1 英里内 0 家葡挞店」的真正成因——不是分类器错，也不是半径错（`葡挞、甜点` 正确归到 `egg_tart`，两级半径也确实被执行）。
 - **修复（§3.2 step 1）**：`conceptQueries()` 给出中英双脚本别名集（最多 3 条，中文受众概念以中文打头），`ConceptSearchProfile.queries` 承载；Layer 1 改为「每别名 × 每半径」各发一次检索，`direct@800:蛋挞` 这样的标签记录实际搜了哪条别名。`google_places_max_calls` 由 8 提到 14 以容纳新的直接层。
 - **GF-001 实测通过**：Golden Gate Bakery 距站点 194 m，`layers=[direct, substitute]`，直接竞品数由 **0 → 14**。同一次运行里 §3.1 截断检测也确认了 spec 的判断：11 个子检索在四象限细分后仍触顶（唐人街的 Layer 2 / L3 范围确实无法用单次调用穷尽）。
+
+## 底层重构 · GF-002 实测：Layer 2 先近后远（2026-09-18）
+- **实测缺陷**：在 1115 Clement St 跑 GF-002，Breadbelly 与 Schubert's Bakery **不在竞品池里**——而对同一坐标做一次朴素的 800 m `bakery` Nearby 检索，两家都返回（426 m / 406 m），且该次检索**恰好返回 20 条，即触顶**。原因是 Layer 2 直接从 1600 m 起步，面积是近圈的 4 倍，在密集商圈必然触顶，被裁掉的恰恰是最近的同品类门店。
+- **修复**：Layer 2 与 Layer 1 一样先近后远——先跑 800 m 近圈（不设 `only_if_fewer_than` 门槛，因为这是客人真正会走到的一圈），再跑 1600 m。修复后 Breadbelly 进入竞品池（426 m，`layers=[substitute, l3]`，属同品类而非专营店，符合 §3.2 的定位）。
+- **仍未解决**：即便加了四象限细分，密集商圈仍有调用触顶（唐人街 13 个、Clement 8 个）。`pool_truncated` 会如实标记、INV-1 因此不会出「品类空白」的断言，但**召回率仍然不足**——细分层数（2 层）与调用预算需要继续提高，或改用 §3.1 所说的网格检索。

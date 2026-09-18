@@ -70,14 +70,17 @@ test('D6 call plan (§4.2): direct 800 → 1600 (conditional), substitute, brand
   assert.deepEqual(hunan.slice(0, 3).map((c) => c.textQuery), ['湘菜', 'Hunan', '湖南']);
   assert.ok(hunan.slice(0, 3).every((c) => c.radiusM === L1_RADIUS_NEAR_M && c.only_if_fewer_than == null));
   assert.ok(hunan.slice(3, 6).every((c) => c.radiusM === L1_RADIUS_FAR_M && c.only_if_fewer_than === 5));
-  assert.deepEqual(hunan[6], { includedTypes: ['chinese_restaurant'], radiusM: 1600, label: 'substitute@1600', layer: 'substitute' });
-  assert.equal(hunan[7].layer, 'brand_anchor');
-  assert.equal(hunan[7].radiusM, 8000);
-  assert.equal(hunan[7].restrict, undefined, 'brand anchors are biased city-wide, not restricted');
+  // §3.1: Layer 2 searches the near ring first — at 1600 m alone a dense market
+  // returns 20 and drops the nearest same-category stores.
+  assert.deepEqual(hunan[6], { includedTypes: ['chinese_restaurant'], radiusM: 800, label: 'substitute@800', layer: 'substitute' });
+  assert.deepEqual(hunan[7], { includedTypes: ['chinese_restaurant'], radiusM: 1600, label: 'substitute@1600', layer: 'substitute' });
+  assert.equal(hunan[8].layer, 'brand_anchor');
+  assert.equal(hunan[8].radiusM, 8000);
+  assert.equal(hunan[8].restrict, undefined, 'brand anchors are biased city-wide, not restricted');
   assert.deepEqual(hunan.map((c) => c.label), [
     'direct@800:湘菜', 'direct@800:Hunan', 'direct@800:湖南',
     'direct@1600:湘菜', 'direct@1600:Hunan', 'direct@1600:湖南',
-    'substitute@1600', 'brand_anchor@8000', 'restaurant @1mi', 'grocery @1mi', 'tea/dessert @1mi', 'chinese_restaurant @3mi',
+    'substitute@800', 'substitute@1600', 'brand_anchor@8000', 'restaurant @1mi', 'grocery @1mi', 'tea/dessert @1mi', 'chinese_restaurant @3mi',
   ]);
   // Nearby wherever Table A types suffice: only the keyword layers and brand anchors are Text Searches.
   assert.equal(hunan.filter((c) => c.textQuery).length, 7);
@@ -126,7 +129,7 @@ test('D6 ok: layered plan, Pro field mask, restricted Text Search, cost accounti
   }
   assert.deepEqual(
     ctx.reqs.filter((q) => q.body.includedTypes).map((q) => `${(q.body.includedTypes ?? []).join('+')}@${q.body.locationRestriction!.circle!.radius}`),
-    ['chinese_restaurant@1600', 'restaurant@1609', 'asian_grocery_store+supermarket@1609', 'dessert_shop+tea_house@1609'.replace('dessert_shop+tea_house', 'tea_house+dessert_shop'), 'chinese_restaurant@4828'],
+    ['chinese_restaurant@800', 'chinese_restaurant@1600', 'restaurant@1609', 'asian_grocery_store+supermarket@1609', 'dessert_shop+tea_house@1609'.replace('dessert_shop+tea_house', 'tea_house+dessert_shop'), 'chinese_restaurant@4828'],
   );
   // Cost: one per-call price per network call, attributed to D6.
   assert.equal(r.cost_usd, Math.round(planned * COST * 10_000) / 10_000);

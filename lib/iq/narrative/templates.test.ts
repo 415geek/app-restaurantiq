@@ -6,7 +6,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { plainEs } from './plain';
 import { LOCALES } from '@/lib/i18n/locale';
 import type { ReportModel } from '../model/schema';
 import { numberGuard } from './number-guard';
