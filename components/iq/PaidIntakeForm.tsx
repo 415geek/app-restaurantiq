@@ -504,17 +504,30 @@ export function PaidIntakeForm({
 
       {collapsibleExtras ? (
         <div>
+          {/* A bare link in white/60 read as caption text, not a control, so the
+              optional fields went unnoticed. It is a full-width bordered row now:
+              the border gives it an edge to be clicked, and the chevron sits on
+              the right where a disclosure is expected. */}
           <button
             type="button"
             onClick={() => setExtrasOpen((o) => !o)}
             aria-expanded={extrasOpen}
             aria-controls="paid-intake-extras"
-            className="inline-flex items-start gap-1.5 text-left text-sm text-white/60 underline-offset-4 transition hover:text-white hover:underline"
+            className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/20 bg-white/5 px-3.5 py-3 text-left text-sm font-medium text-white/90 transition hover:border-white/35 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
           >
-            <span aria-hidden className="shrink-0 text-white/40">
-              {extrasOpen ? '▴' : '▾'}
-            </span>
             <span>{extrasOpen ? t.moreOptionalHide : t.moreOptional}</span>
+            <svg
+              aria-hidden
+              viewBox="0 0 20 20"
+              className={`h-4 w-4 shrink-0 text-white/70 transition-transform ${extrasOpen ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M5 7.5 10 12.5 15 7.5" />
+            </svg>
           </button>
           {extrasOpen ? (
             <div id="paid-intake-extras" className="mt-3 border-t border-white/10 pt-4">
