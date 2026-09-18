@@ -495,4 +495,5 @@
 - **测量发现**：跑 16 个真实地址(唐人街 / Clement / Sunset / 圣盖博谷 / Rowland Heights / Arcadia / 法拉盛 / 布鲁克林日落公园 / 曼哈顿唐人街 / 库比蒂诺 / 菲利蒙 / Bellevue / 休斯顿等),**D2 对全部 16 个地址失败**。ACS 占完整度 20%,且不依赖 Supabase。
 - **根因**：`api.census.gov` 现在对无 key 请求返回 302 → `/data/missing_key.html`。代码里 `CENSUS_API_KEY` 是可选的(`if (key) ...`),而 Census 已把它变成必须。**生产环境若未设此 key,每份报告都少 20% 完整度,并且失去全部人口与收入基础数据**——客群契合、需求覆盖两个维度会退回中性 50。
 - **修复**：检测该重定向并单独报错,给出免费申请地址。此前它落在「county XXX 在 ACS 均无 block group 行」这条信息上,读起来像「这个县没有数据」,会把排查引向完全错误的方向。
+- **补充**：用户提供的 key 被 `api.census.gov` 判为 `invalid_key`——Census 新发的 key 需要先点击邮件里的激活链接才生效。诊断已区分 `missing_key`(未设置)与 `invalid_key`(未激活/无效)两种情况，分别给出该做什么。
 - **测量本身的限制**：本次环境缺 Supabase,D5(Overture 底图,占竞品项 60%)与 D3(LODES)对每个地址都失败,D8/D11 缺 search key。所以测得的完整度 21–25 是**下限**,不代表生产分布;要得到真实分布,需在配齐 CENSUS_API_KEY + Supabase + search key 后重跑。

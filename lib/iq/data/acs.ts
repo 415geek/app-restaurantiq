@@ -47,6 +47,8 @@ import {
 export const ACS_YEARS = [2023, 2022] as const;
 /** api.census.gov redirects keyless requests here; free key at https://api.census.gov/data/key_signup.html */
 export const MISSING_KEY_ERROR = 'CENSUS_API_KEY 未设置：api.census.gov 已强制要求 API key，人口与收入数据全部未获取（免费申请：https://api.census.gov/data/key_signup.html）';
+/** A key that exists but was never activated redirects here — Census emails an activation link that must be clicked. */
+export const INVALID_KEY_ERROR = 'CENSUS_API_KEY 被 api.census.gov 拒绝为无效：新申请的 key 需要先点击 Census 发来的邮件激活链接才会生效，人口与收入数据全部未获取';
 /** Census API hard limit is 50 variables per call; keep headroom for geo columns. */
 export const ACS_MAX_VARS_PER_CALL = 45;
 /** 12 months — ACS vintages are annual. */
@@ -340,9 +342,10 @@ async function censusQuery(
     // /data/missing_key.html, which fetch follows into an HTML page. Without
     // this check that lands as "this county has no block group rows", sending
     // whoever reads it hunting for a geography problem that does not exist.
-    if (/\/missing_key\.html$/.test(res.url)) {
-      ctx.log(`[D2] ACS ${year} ${forClause} → missing_key redirect`);
-      return { ok: false, status: res.status, rows: [], error: MISSING_KEY_ERROR };
+    if (/\/(missing|invalid)_key\.html$/.test(res.url)) {
+      const invalid = /invalid_key/.test(res.url);
+      ctx.log(`[D2] ACS ${year} ${forClause} → ${invalid ? 'invalid' : 'missing'}_key redirect`);
+      return { ok: false, status: res.status, rows: [], error: invalid ? INVALID_KEY_ERROR : MISSING_KEY_ERROR };
     }
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -577,12 +580,12 @@ export async function fetchAcs(input: AcsInput, ctx: FetchContext, opts: AcsOpti
   if (!bgPayload) {
     // A missing key looks nothing like a missing county, and saying the wrong one
     // costs whoever reads it an afternoon.
-    const missingKey = yearErrors.some((e) => e.includes(MISSING_KEY_ERROR));
+    const keyError = [INVALID_KEY_ERROR, MISSING_KEY_ERROR].find((m) => yearErrors.some((e) => e.includes(m)));
     return failed('D2', ctx, {
       source: source(null),
       license: LICENSE,
-      note: missingKey
-        ? MISSING_KEY_ERROR
+      note: keyError
+        ? keyError
         : `county ${state}${county} 在 ACS ${ACS_YEARS.join('/')} 均无 block group 行 → D2 failed（地理来自 D1 tract ${geography.tract}，未按 ZIP 查询）`,
       error: yearErrors.join('; '),
     });
