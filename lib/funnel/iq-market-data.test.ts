@@ -93,7 +93,9 @@ test('tier 2 market data (§4.2): three-layer Google plan replaces the metro-wid
   const anchors = summary.sample_brand_anchors_google as Array<{ name: string; layer: string }>;
   assert.equal(anchors[0].name, 'Tartine Manufactory');
   assert.ok(anchors.every((a) => a.layer === 'brand_anchor'));
-  assert.deepEqual(summary.l1_layers_tried, ['direct@800', 'direct@1600']);
+  // §3.2: the label carries the alias that was searched, so both radii are
+  // present once per alias — assert the radii, which is what the void guard reads.
+  assert.deepEqual([...new Set((summary.l1_layers_tried as string[]).map((l) => l.split(':')[0]))], ['direct@800', 'direct@1600']);
   assert.equal(summary.places_status, 'OK');
   assert.equal((summary.concept as { id: string }).id, 'egg_tart');
   // Legacy readers still find the rows under google_raw.textsearch.results, now tagged.

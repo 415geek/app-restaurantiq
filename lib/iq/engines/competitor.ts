@@ -675,7 +675,9 @@ export function computeCompetitors(input: CompetitorEngineInput): CompetitorEngi
   if (input.candidates.length === 0) guard_notes.push('候选池为空：Overture 与 Google 均未返回记录');
   // §4.2 void guard: "no direct competitor" may only be claimed after both keyword radii were searched.
   const tried = input.l1_query?.layers_tried ?? [];
-  const bothRadii = L1_VOID_RADII_LABELS.every((l) => tried.includes(l));
+  // §3.2: labels now carry the alias that was searched (`direct@800:蛋挞`), so a
+  // radius counts as searched when any alias at that radius completed.
+  const bothRadii = L1_VOID_RADII_LABELS.every((l) => tried.some((t) => t === l || t.startsWith(`${l}:`)));
   if (queryHits && l1.length === 0 && !bothRadii) {
     guard_notes.push(`直接竞品关键词检索未完成 0.5 / 1 英里两级（已完成：${tried.join('、') || '无'}），不能判定为空档`);
   }

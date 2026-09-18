@@ -63,21 +63,28 @@ function ctxWith(opts: { key?: string | null; respond?: (req: Req, n: number) =>
 
 test('D6 call plan (§4.2): direct 800 → 1600 (conditional), substitute, brand anchor, L3 / L4, ≤ yaml cap', () => {
   const hunan = buildCallPlan('hunan');
-  assert.equal(hunan.length, CAP);
-  assert.deepEqual(hunan[0], { includedTypes: ['chinese_restaurant'], radiusM: L1_RADIUS_NEAR_M, label: 'direct@800', textQuery: 'Hunan', layer: 'direct', restrict: true });
-  assert.equal(hunan[1].radiusM, L1_RADIUS_FAR_M);
-  assert.equal(hunan[1].only_if_fewer_than, 5);
-  assert.deepEqual(hunan[2], { includedTypes: ['chinese_restaurant'], radiusM: 1600, label: 'substitute@1600', layer: 'substitute' });
-  assert.equal(hunan[3].layer, 'brand_anchor');
-  assert.equal(hunan[3].radiusM, 8000);
-  assert.equal(hunan[3].restrict, undefined, 'brand anchors are biased city-wide, not restricted');
-  assert.deepEqual(hunan.map((c) => c.label), ['direct@800', 'direct@1600', 'substitute@1600', 'brand_anchor@8000', 'restaurant @1mi', 'grocery @1mi', 'tea/dessert @1mi', 'chinese_restaurant @3mi']);
+  assert.ok(hunan.length <= CAP, `${hunan.length} <= ${CAP}`);
+  // 底层重构 §3.2: Layer 1 runs once per alias per radius — 湘菜 and "Hunan" are
+  // different searches to Google and return different shops in the same block.
+  assert.deepEqual(hunan[0], { includedTypes: ['chinese_restaurant'], radiusM: L1_RADIUS_NEAR_M, label: 'direct@800:湘菜', textQuery: '湘菜', layer: 'direct', restrict: true });
+  assert.deepEqual(hunan.slice(0, 3).map((c) => c.textQuery), ['湘菜', 'Hunan', '湖南']);
+  assert.ok(hunan.slice(0, 3).every((c) => c.radiusM === L1_RADIUS_NEAR_M && c.only_if_fewer_than == null));
+  assert.ok(hunan.slice(3, 6).every((c) => c.radiusM === L1_RADIUS_FAR_M && c.only_if_fewer_than === 5));
+  assert.deepEqual(hunan[6], { includedTypes: ['chinese_restaurant'], radiusM: 1600, label: 'substitute@1600', layer: 'substitute' });
+  assert.equal(hunan[7].layer, 'brand_anchor');
+  assert.equal(hunan[7].radiusM, 8000);
+  assert.equal(hunan[7].restrict, undefined, 'brand anchors are biased city-wide, not restricted');
+  assert.deepEqual(hunan.map((c) => c.label), [
+    'direct@800:湘菜', 'direct@800:Hunan', 'direct@800:湖南',
+    'direct@1600:湘菜', 'direct@1600:Hunan', 'direct@1600:湖南',
+    'substitute@1600', 'brand_anchor@8000', 'restaurant @1mi', 'grocery @1mi', 'tea/dessert @1mi', 'chinese_restaurant @3mi',
+  ]);
   // Nearby wherever Table A types suffice: only the keyword layers and brand anchors are Text Searches.
-  assert.equal(hunan.filter((c) => c.textQuery).length, 3);
+  assert.equal(hunan.filter((c) => c.textQuery).length, 7);
   // Every Chinese concept uses the same Table-A-valid steps; caps are respected.
-  assert.equal(buildCallPlan('other_chinese').length, CAP);
+  assert.ok(buildCallPlan('other_chinese').length <= CAP);
   assert.equal(buildCallPlan('hunan', 3).length, 3);
-  assert.equal(buildCallPlan('hunan', 99).length, CAP);
+  assert.ok(buildCallPlan('hunan', 99).length <= CAP);
 
   // A general-audience concept (egg tart) gets general anchors instead of Chinese grocers / tea houses.
   const egg = buildCallPlan('egg_tart');
@@ -85,6 +92,8 @@ test('D6 call plan (§4.2): direct 800 → 1600 (conditional), substitute, brand
   assert.ok(labels.includes('anchors:general @1mi'), labels.join(','));
   assert.ok(!labels.includes('grocery @1mi') && !labels.includes('tea/dessert @1mi') && !labels.includes('chinese_restaurant @3mi'));
   assert.equal(egg[0].textQuery, 'egg tart');
+  // The measured fix: "蛋挞" is what actually returns Golden Gate Bakery.
+  assert.ok(egg.some((c) => c.textQuery === '蛋挞'), egg.map((c) => c.textQuery).join(','));
   assert.deepEqual(egg[0].includedTypes, ['bakery', 'cafe']);
   const sub = egg.find((c) => c.label === 'substitute@1600')!;
   assert.ok(sub.includedTypes.includes('dessert_shop') && sub.includedTypes.includes('bakery'), sub.includedTypes.join(','));
@@ -95,16 +104,18 @@ test('D6 ok: layered plan, Pro field mask, restricted Text Search, cost accounti
   const ctx = ctxWith({});
   const r = await fetchGooglePlaces({ ...millbrae, cuisineId: 'hunan' }, ctx);
   assert.equal(r.status, 'ok', r.coverage_note);
-  assert.equal(ctx.reqs.length, CAP);
-  assert.equal(r.data!.calls_made, CAP);
+  const planned = buildCallPlan('hunan').length;
+  assert.equal(ctx.reqs.length, planned);
+  assert.equal(r.data!.calls_made, planned);
   assert.equal(r.data!.api_status, 'ok');
   const texts = ctx.reqs.filter((q) => q.url.endsWith(':searchText'));
-  assert.equal(texts.length, 3, 'direct ×2 + brand anchor');
-  assert.equal(texts[0].body.textQuery, 'Hunan');
+  assert.equal(texts.length, 7, '§3.2: direct 3 aliases × 2 radii + brand anchor');
+  assert.equal(texts[0].body.textQuery, '湘菜');
   assert.equal(texts[0].body.includedType, 'chinese_restaurant');
-  assert.equal(radiusOf(texts[0]), 800);
-  assert.equal(radiusOf(texts[1]), 1600, 'widened because the 800 m search came back with < 5 hits');
-  assert.equal(texts[2].body.locationBias?.circle.radius, 8000);
+  assert.deepEqual(texts.slice(0, 3).map((q) => q.body.textQuery), ['湘菜', 'Hunan', '湖南']);
+  assert.ok(texts.slice(0, 3).every((q) => radiusOf(q) === 800));
+  assert.ok(texts.slice(3, 6).every((q) => radiusOf(q) === 1600), 'widened because the 800 m searches came back with < 5 hits');
+  assert.equal(texts[6].body.locationBias?.circle.radius, 8000);
   for (const q of ctx.reqs) {
     assert.equal(q.headers['X-Goog-Api-Key'], 'AIza-test');
     // §4.2 品类空白判定 needs review text — exactly ONE atmosphere field is requested, nothing else.
@@ -118,9 +129,9 @@ test('D6 ok: layered plan, Pro field mask, restricted Text Search, cost accounti
     ['chinese_restaurant@1600', 'restaurant@1609', 'asian_grocery_store+supermarket@1609', 'dessert_shop+tea_house@1609'.replace('dessert_shop+tea_house', 'tea_house+dessert_shop'), 'chinese_restaurant@4828'],
   );
   // Cost: one per-call price per network call, attributed to D6.
-  assert.equal(r.cost_usd, Math.round(CAP * COST * 10_000) / 10_000);
+  assert.equal(r.cost_usd, Math.round(planned * COST * 10_000) / 10_000);
   assert.equal(ctx.cost.bySource().D6, r.cost_usd);
-  assert.equal(ctx.cost.entries().length, CAP);
+  assert.equal(ctx.cost.entries().length, planned);
   // Dedupe: chinese fixture (14) served twice + restaurant fixture (10, of which 4 overlap) → 20 unique.
   const places = r.data!.places;
   assert.equal(places.length, 20);
@@ -137,12 +148,12 @@ test('D6 ok: layered plan, Pro field mask, restricted Text Search, cost accounti
   assert.ok(places.some((p) => p.price_level === 3));
   assert.ok(r.coverage_note.includes('永久关闭 2'));
   // §4.2 provenance for the void guard.
-  assert.deepEqual(r.data!.l1_layers_tried, ['direct@800', 'direct@1600']);
+  assert.deepEqual([...new Set(r.data!.l1_layers_tried.map((l) => l.split(':')[0]))], ['direct@800', 'direct@1600']);
   assert.equal(r.data!.l1_search_radius_m, 1600);
 
   // Cached per call (lat/lng@4dp + query/types + radius): a nearby re-run makes no network calls and costs nothing.
   const again = await fetchGooglePlaces({ lat: 37.59851, lng: -122.38722, cuisineId: 'hunan' }, ctx);
-  assert.equal(ctx.reqs.length, CAP);
+  assert.equal(ctx.reqs.length, buildCallPlan('hunan').length);
   assert.equal(again.cache, 'hit');
   assert.equal(again.data!.calls_made, 0);
   assert.equal(again.cost_usd, 0);
@@ -151,11 +162,13 @@ test('D6 ok: layered plan, Pro field mask, restricted Text Search, cost accounti
 
 test('D6 maxCalls caps the plan', async () => {
   const ctx = ctxWith({});
-  const r = await fetchGooglePlaces({ ...millbrae, cuisineId: 'sichuan', maxCalls: 3 }, ctx);
-  assert.equal(ctx.reqs.length, 3);
-  assert.equal(r.data!.calls_made, 3);
-  assert.equal(r.cost_usd, Math.round(3 * COST * 10_000) / 10_000);
-  assert.equal(r.data!.places.length, 14, 'direct ×2 (empty) + substitute Nearby (chinese fixture)');
+  // §3.2: the direct layer is now 3 aliases × 2 radii, so the cap has to clear
+  // all six before the substitute Nearby is reached.
+  const r = await fetchGooglePlaces({ ...millbrae, cuisineId: 'sichuan', maxCalls: 7 }, ctx);
+  assert.equal(ctx.reqs.length, 7);
+  assert.equal(r.data!.calls_made, 7);
+  assert.equal(r.cost_usd, Math.round(7 * COST * 10_000) / 10_000);
+  assert.equal(r.data!.places.length, 14, 'direct aliases (empty) + substitute Nearby (chinese fixture)');
 });
 
 test('D6 no key → failed with the 未获取 note, no calls', async () => {
@@ -197,7 +210,9 @@ test('D6 429 after two successes → partial, keeps places, notes the gap', asyn
   // is a 1-mi Nearby pull, so the client-side circle keeps only the places inside 800 m; the 1600 m step then runs.
   assert.equal(ctx.reqs.length, 3);
   assert.equal(r.data!.api_status, 'partial');
-  assert.equal(r.data!.places.length, 14);
+  // Two 800 m aliases succeeded before the quota error; the circle filter keeps
+  // the 7 fixture rows inside 800 m.
+  assert.equal(r.data!.places.length, 7);
   assert.equal(r.data!.calls_made, 3);
   assert.ok(r.coverage_note.includes('RESOURCE_EXHAUSTED'));
   assert.ok(r.coverage_note.includes('不做补估'));
@@ -262,6 +277,9 @@ function eggTartCtx(textPool: Raw[]) {
 }
 const ALL = [BREADBELLY, SCHUBERTS, ARSICAULT, CINDERELLA, TARTINE, BOHO];
 
+/** §3.2: labels carry the alias (`direct@800:蛋挞`), so compare the radii searched. */
+const radiiTried = (labels: string[]): string[] => [...new Set(labels.map((l) => l.split(':')[0]))];
+
 test('§4.2 egg tart @ Clement St: Layer 1 = the four bakeries, Tartine only a brand anchor, Boho excluded, Cinderella walks 0.55–0.7 mi', async () => {
   const ctx = eggTartCtx(ALL);
   const r = await fetchThreeLayerCompetitors({ ...CLEMENT, conceptId: 'egg_tart' }, ctx);
@@ -279,8 +297,8 @@ test('§4.2 egg tart @ Clement St: Layer 1 = the four bakeries, Tartine only a b
   assert.deepEqual(names(r.substitute), ['Toy Boat Dessert Cafe'], 'substitute Nearby hit that is not Layer 1');
   // 先近后远: 800 m returned 2 (< 5) so the 1600 m step ran.
   const direct = r.calls.filter((c) => c.layer === 'direct');
-  assert.deepEqual(direct.map((c) => `${c.label}:${c.cache}:${c.results}`), ['direct@800:miss:2', 'direct@1600:miss:4']);
-  assert.deepEqual(r.l1_layers_tried, ['direct@800', 'direct@1600']);
+  assert.deepEqual(radiiTried(direct.map((c) => c.label)), ['direct@800', 'direct@1600']);
+  assert.deepEqual(radiiTried(r.l1_layers_tried), ['direct@800', 'direct@1600']);
   assert.equal(r.l1_search_radius_m, 1600);
   // Walking legs via Distance Matrix for Layer 1 + 2 (5 destinations → one call).
   const cinderella = r.direct.find((p) => p.name.startsWith('Cinderella'))!;
@@ -304,19 +322,19 @@ test('§4.2 先近后远: Layer 1 = 0 at 800 m but > 0 at 1600 m → the second 
   const ctx = eggTartCtx([ARSICAULT, CINDERELLA, TARTINE, BOHO]);
   const r = await fetchThreeLayerCompetitors({ ...CLEMENT, conceptId: 'egg_tart' }, ctx);
   const direct = r.calls.filter((c) => c.layer === 'direct');
-  assert.deepEqual(direct.map((c) => `${c.label}:${c.cache}:${c.results}`), ['direct@800:miss:0', 'direct@1600:miss:2']);
+  assert.deepEqual(radiiTried(direct.map((c) => c.label)), ['direct@800', 'direct@1600'], 'nothing at 800 m → the wider radius runs');
   assert.deepEqual(r.direct.map((p) => p.name).sort(), ['Arsicault Bakery', 'Cinderella Bakery & Cafe']);
-  assert.deepEqual(r.l1_layers_tried, ['direct@800', 'direct@1600']);
+  assert.deepEqual(radiiTried(r.l1_layers_tried), ['direct@800', 'direct@1600']);
 });
 
 test('§4.2 void: Layer 1 = 0 at both radii → both steps recorded, radius 1600, brand anchors still reported', async () => {
   const ctx = eggTartCtx([TARTINE, BOHO]);
   const r = await fetchThreeLayerCompetitors({ ...CLEMENT, conceptId: 'egg_tart' }, ctx);
   assert.equal(r.direct.length, 0);
-  assert.deepEqual(r.l1_layers_tried, ['direct@800', 'direct@1600']);
+  assert.deepEqual(radiiTried(r.l1_layers_tried), ['direct@800', 'direct@1600'], 'a void claim still needs both radii');
   assert.equal(r.l1_search_radius_m, 1600);
   assert.deepEqual(r.brand_anchors.map((p) => p.name), ['Tartine Manufactory']);
-  assert.equal(r.calls.filter((c) => c.layer === 'direct' && c.results === 0).length, 2);
+  assert.ok(r.calls.filter((c) => c.layer === 'direct').every((c) => c.results === 0));
 });
 
 test('§4.2 near radius already rich (≥ 5 hits) → the 1600 m step is skipped and not charged', async () => {
@@ -324,8 +342,10 @@ test('§4.2 near radius already rich (≥ 5 hits) → the 1600 m step is skipped
   const ctx = eggTartCtx(five);
   const r = await fetchThreeLayerCompetitors({ ...CLEMENT, conceptId: 'egg_tart', walking: false }, ctx);
   const direct = r.calls.filter((c) => c.layer === 'direct');
-  assert.deepEqual(direct.map((c) => `${c.label}:${c.cache}`), ['direct@800:miss', 'direct@1600:skipped']);
-  assert.deepEqual(r.l1_layers_tried, ['direct@800']);
+  // §3.2: every 800 m alias runs; once 5 hits exist no 1600 m alias is charged.
+  assert.ok(direct.filter((c) => c.label.startsWith('direct@800')).every((c) => c.cache === 'miss'));
+  assert.ok(direct.filter((c) => c.label.startsWith('direct@1600')).every((c) => c.cache === 'skipped'));
+  assert.deepEqual(radiiTried(r.l1_layers_tried), ['direct@800']);
   assert.equal(r.l1_search_radius_m, 800);
   assert.equal(r.direct.length, 5);
   assert.equal(Object.keys(r.walk).length, 0, 'walking disabled');

@@ -63,7 +63,10 @@ verdict: { go: 70, conditional: 55 }
 rent_comps:
   min_comps_for_premium: 3
 data_budget:
-  google_places_max_calls: 8      # §4.2 三层检索：直接竞品 0.5/1 英里 + 替代 + 品牌锚点 + L3/L4 锚点
+  # 底层重构 §3.2: Layer 1 searches one alias per script (≤3) at each of the two
+  # radii, because Text Search matches names per language — so the direct layer
+  # alone can be 6 calls before Layer 2, the anchors and any §3.1 refinement.
+  google_places_max_calls: 14     # §4.2 三层检索：直接竞品 0.5/1 英里 × 别名 + 替代 + 品牌锚点 + L3/L4 锚点
   google_places_cost_usd_per_call: 0.032
   distance_matrix_max_calls: 4    # 步行距离（Distance Matrix，每次 ≤ 25 个目的地）
   distance_matrix_cost_usd_per_element: 0.005

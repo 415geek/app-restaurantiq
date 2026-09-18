@@ -10,10 +10,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { PLACES_PER_CALL_CAP, subdivideCall, type PlaceCall } from './google-places';
+import { buildCallPlanForProfile, PLACES_PER_CALL_CAP, subdivideCall, type PlaceCall } from './google-places';
 import { assessCategoryGap } from '../engines/competitor';
 import { computeConfidence } from '../engines/confidence';
-import { conceptSearchProfile } from './search-profile';
+import { conceptSearchProfile, L1_QUERY_ALIASES } from './search-profile';
 import { verdictCap, verdictFromScore } from '../conclusion/conclusion';
 import { haversineM } from '../geo';
 
@@ -100,4 +100,37 @@ test('§4.3 the cap clamps a verdict down and never lifts one up', () => {
 test('§3.1 the per-call cap constant is what the request actually asks for', () => {
   // If these ever diverge, truncation detection silently stops firing.
   assert.equal(PLACES_PER_CALL_CAP, 20, 'Places (New) maxResultCount ceiling');
+});
+
+test('§3.2 Layer 1 searches both scripts, because Text Search matches names per language', () => {
+  // Measured live at 900 Grant Ave, San Francisco (800 m bias):
+  //   "egg tart"       →  0 results
+  //   "蛋挞"            → 11 results, Golden Gate Bakery ranked first
+  //   "pastel de nata" →  6 results
+  // Searching only the first Latin keyword is what made the best known egg tart
+  // shop in the city invisible to an egg tart report 194 m away.
+  const egg = conceptSearchProfile('egg_tart');
+  assert.ok(egg.queries.includes('蛋挞'), `CJK alias missing: ${egg.queries.join(',')}`);
+  assert.ok(egg.queries.some((q) => /[a-z]{3,}/i.test(q)), 'a Latin alias is still searched');
+  assert.ok(egg.queries.length > 1 && egg.queries.length <= L1_QUERY_ALIASES);
+
+  // A Chinese-audience concept leads with its Chinese alias.
+  const hunan = conceptSearchProfile('hunan');
+  assert.equal(hunan.queries[0], '湘菜');
+  assert.ok(hunan.queries.includes('Hunan'));
+
+  // `query` stays the first alias, so single-query callers are unchanged.
+  assert.equal(egg.query, egg.queries[0]);
+});
+
+test('§3.2 the plan issues one Layer-1 call per alias at each radius', () => {
+  const plan = buildCallPlanForProfile(conceptSearchProfile('egg_tart'), 99);
+  const direct = plan.filter((c) => c.layer === 'direct');
+  const near = direct.filter((c) => c.radiusM === 800);
+  const far = direct.filter((c) => c.radiusM === 1600);
+  assert.equal(near.length, conceptSearchProfile('egg_tart').queries.length);
+  assert.deepEqual(near.map((c) => c.textQuery), conceptSearchProfile('egg_tart').queries);
+  // The wider radius still only runs when the near one came back thin.
+  assert.ok(far.every((c) => c.only_if_fewer_than === 5));
+  assert.ok(near.every((c) => c.only_if_fewer_than == null));
 });

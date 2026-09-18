@@ -62,19 +62,23 @@ test('D6 request: no known competitors → historical request (yaml cap, no expl
 });
 
 test('D6 request: known competitors append ≤ 3 Text Searches and raise the cap by exactly that many', () => {
+  // The base plan is whatever the §4.2 layers need for this concept (§3.2 made
+  // the direct layer one call per alias); the user's names are appended to it.
+  const base = buildCallPlan('sichuan').length;
   const two = buildGooglePlacesRequest({ cuisine: 'sichuan', known_competitors: ['Hunan Home Kitchen', '湘水缘'] }, 1, 2);
   assert.equal(two.maxCalls, CAP + 2);
-  assert.equal(two.plan!.length, CAP + 2);
-  assert.deepEqual(two.plan!.slice(0, CAP), buildCallPlan('sichuan'));
-  assert.deepEqual(two.plan![CAP], { includedTypes: ['restaurant'], radiusM: 8047, label: 'text:user:Hunan Home Kitchen', textQuery: 'Hunan Home Kitchen', layer: 'user' });
-  assert.deepEqual(two.plan![CAP + 1], { includedTypes: ['restaurant'], radiusM: 8047, label: 'text:user:湘水缘', textQuery: '湘水缘', layer: 'user' });
+  assert.equal(two.plan!.length, base + 2);
+  assert.deepEqual(two.plan!.slice(0, base), buildCallPlan('sichuan'));
+  assert.deepEqual(two.plan![base], { includedTypes: ['restaurant'], radiusM: 8047, label: 'text:user:Hunan Home Kitchen', textQuery: 'Hunan Home Kitchen', layer: 'user' });
+  assert.deepEqual(two.plan![base + 1], { includedTypes: ['restaurant'], radiusM: 8047, label: 'text:user:湘水缘', textQuery: '湘水缘', layer: 'user' });
 
   const five = buildGooglePlacesRequest({ cuisine: 'hunan', known_competitors: ['a', 'b', 'c', 'd', 'e'] }, 1, 2);
   assert.equal(KNOWN_COMPETITOR_MAX_CALLS, 3);
+  const hunanBase = buildCallPlan('hunan').length;
   assert.equal(five.maxCalls, CAP + 3);
-  assert.equal(five.plan!.length, CAP + 3);
-  assert.deepEqual(five.plan!.slice(CAP).map((p) => p.textQuery), ['a', 'b', 'c']);
-  assert.ok(five.plan!.slice(CAP).every((p) => p.label.startsWith('text:user:')));
+  assert.equal(five.plan!.length, hunanBase + 3);
+  assert.deepEqual(five.plan!.slice(hunanBase).map((p) => p.textQuery), ['a', 'b', 'c']);
+  assert.ok(five.plan!.slice(hunanBase).every((p) => p.label.startsWith('text:user:')));
 });
 
 test('fetchAllData passes the raised plan / cap to the Google fetcher (stubbed, offline)', async () => {
@@ -88,12 +92,12 @@ test('fetchAllData passes the raised plan / cap to the Google fetcher (stubbed, 
   assert.equal(req.cuisineId, 'hunan');
   assert.equal(req.lat, GEO.lat);
   assert.equal(req.maxCalls, CAP + 3, 'defaults + min(known, 3)');
-  assert.equal(req.plan!.length, CAP + 3);
+  assert.equal(req.plan!.length, buildCallPlan('hunan').length + 3);
   assert.deepEqual(
     req.plan!.filter((p) => p.label.startsWith('text:user:')).map((p) => p.textQuery),
     ['Hunan Home Kitchen', '湘水缘', 'Golden Dragon'],
   );
-  assert.ok(req.plan!.slice(CAP).every((p) => p.radiusM === 8047 && p.includedTypes.length === 1 && p.includedTypes[0] === 'restaurant'));
+  assert.ok(req.plan!.filter((p) => p.layer === 'user').every((p) => p.radiusM === 8047 && p.includedTypes.length === 1 && p.includedTypes[0] === 'restaurant'));
   assert.equal(bundle.google?.status, 'ok');
 
   // Without known competitors the request is unchanged.

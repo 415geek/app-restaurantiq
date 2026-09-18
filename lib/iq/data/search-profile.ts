@@ -63,8 +63,10 @@ export interface ConceptSearchProfile {
   audience: Audience;
   label_en: string;
   label_zh: string;
-  /** Layer-1 Text Search query (first Latin keyword ≥ 3 letters, else the English label). */
+  /** Layer-1 Text Search query (the first of `queries`); kept for callers that want one string. */
   query: string;
+  /** 底层重构 §3.2: the multilingual alias set Layer 1 searches, best first. */
+  queries: string[];
   /** Every Layer-1 keyword (search.keywords ∪ keywords), for name matching. */
   keywords: string[];
   /** Layer-1 Table A types (Text Search `includedType` when exactly one). */
@@ -84,6 +86,33 @@ export interface ConceptSearchProfile {
 function latinQueryWord(keywords: string[], fallback: string): string {
   const hit = keywords.find((k) => /[a-z]{3,}/i.test(k));
   return (hit ?? fallback).trim();
+}
+
+/** 底层重构 §3.2: how many aliases Layer 1 searches for. */
+export const L1_QUERY_ALIASES = 3;
+
+/**
+ * 底层重构 §3.2 step 1 — the multilingual alias set Layer 1 searches, best first.
+ *
+ * Text Search matches what a business is *called*, not what it sells, and it does
+ * so per language. Measured at 900 Grant Ave, San Francisco with an 800 m bias:
+ * "egg tart" returned 1 result and not the shop everyone means, while "蛋挞"
+ * returned 11 with Golden Gate Bakery ranked first. Searching one Latin keyword
+ * is what made the most famous egg tart shop in the city invisible to a report
+ * about egg tarts, so both scripts go in, CJK first for a Chinese-audience
+ * concept. The category term ("Chinese bakery") is the third net: it catches
+ * shops whose name says neither.
+ */
+export function conceptQueries(c: Pick<CuisineDef, 'keywords' | 'label_en' | 'label_zh' | 'search' | 'audience'>): string[] {
+  const kws = [...new Set([...(c.search?.keywords ?? []), ...c.keywords].map((k) => k.trim()).filter(Boolean))];
+  const cjk = kws.filter((k) => /[一-鿿]/.test(k));
+  const latin = kws.filter((k) => /[a-z]{3,}/i.test(k));
+  const preferCjk = c.audience === 'chinese';
+  const ordered = preferCjk ? [...cjk, ...latin] : [...latin, ...cjk];
+  // A general-audience concept in a Chinese trade area still needs its CJK alias,
+  // so always keep the best of each script before falling back to the rest.
+  const seeded = [...new Set([ordered[0], preferCjk ? latin[0] : cjk[0], ...ordered].filter((x): x is string => Boolean(x)))];
+  return seeded.length ? seeded.slice(0, L1_QUERY_ALIASES) : [latinQueryWord(kws, c.label_en)];
 }
 
 /** Build the profile for a taxonomy entry (id or definition). */
@@ -132,7 +161,8 @@ export function conceptSearchProfile(idOrDef: string | CuisineDef): ConceptSearc
     audience: c.audience,
     label_en: c.label_en,
     label_zh: c.label_zh,
-    query: latinQueryWord(s?.keywords ?? c.keywords, c.label_en),
+    query: conceptQueries(c)[0],
+    queries: conceptQueries(c),
     keywords,
     types: types.length ? types : chinese ? ['chinese_restaurant'] : ['restaurant'],
     match_types,
@@ -155,6 +185,7 @@ export function textSearchProfile(text: string): ConceptSearchProfile {
     label_en: q,
     label_zh: q,
     query: q || 'restaurant',
+    queries: [q || 'restaurant'],
     keywords: [q, ...words],
     types: [ty ?? 'restaurant'],
     match_types: ty && !GENERIC_PLACE_TYPES.has(ty) ? [ty] : [],

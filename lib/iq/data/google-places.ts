@@ -177,10 +177,17 @@ export function buildCallPlanForProfile(p: ConceptSearchProfile, maxCalls?: numb
   const cap = Math.max(0, Math.min(maxCalls ?? Infinity, getDefaults().data_budget.google_places_max_calls));
   const anchors = getTaxonomy().l4_anchors;
   const chinese = isChineseCategory(p.category);
-  const plan: PlaceCall[] = [
-    { includedTypes: p.types, radiusM: L1_RADIUS_NEAR_M, label: `direct@${L1_RADIUS_NEAR_M}`, textQuery: p.query, layer: 'direct', restrict: true },
-    { includedTypes: p.types, radiusM: L1_RADIUS_FAR_M, label: `direct@${L1_RADIUS_FAR_M}`, textQuery: p.query, layer: 'direct', restrict: true, only_if_fewer_than: L1_MIN_HITS_BEFORE_WIDENING },
-  ];
+  // 底层重构 §3.2 step 1: one Layer-1 search per alias, not one per radius. Text
+  // Search matches names, per language, so "egg tart" and "蛋挞" return different
+  // shops in the same block — searching only the Latin one is what hid Golden
+  // Gate Bakery from an egg tart report 194 m away.
+  const plan: PlaceCall[] = [];
+  for (const q of p.queries) {
+    plan.push({ includedTypes: p.types, radiusM: L1_RADIUS_NEAR_M, label: `direct@${L1_RADIUS_NEAR_M}:${q}`, textQuery: q, layer: 'direct', restrict: true });
+  }
+  for (const q of p.queries) {
+    plan.push({ includedTypes: p.types, radiusM: L1_RADIUS_FAR_M, label: `direct@${L1_RADIUS_FAR_M}:${q}`, textQuery: q, layer: 'direct', restrict: true, only_if_fewer_than: L1_MIN_HITS_BEFORE_WIDENING });
+  }
   if (p.substitute_types.length) plan.push({ includedTypes: p.substitute_types, radiusM: L2_RADIUS_M, label: `substitute@${L2_RADIUS_M}`, layer: 'substitute' });
   if (p.substitute_terms.length) plan.push({ includedTypes: [], radiusM: L2_RADIUS_M, label: `substitute:text@${L2_RADIUS_M}`, textQuery: p.substitute_terms[0], layer: 'substitute', restrict: true });
   plan.push({ includedTypes: p.types, radiusM: BRAND_ANCHOR_BIAS_M, label: `brand_anchor@${BRAND_ANCHOR_BIAS_M}`, textQuery: p.query, layer: 'brand_anchor' });

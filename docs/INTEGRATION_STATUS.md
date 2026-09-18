@@ -164,8 +164,8 @@ Market Scan Request → Nova Act Adapter → Nova Act API
 
 ```bash
 # Weather & Maps ✅ Configured
-OPENWEATHER_API_KEY=3aee6da4d2ab2c87611624e5358f14c2
-GOOGLE_MAPS_API_KEY=AIzaSyA3WFleYvgmKWAR93UGcQBeYdZmJ4uYIEM
+OPENWEATHER_API_KEY=<redacted — see the password manager>
+GOOGLE_MAPS_API_KEY=<redacted — see the password manager>
 
 # AI ✅ Configured
 OPENAI_API_KEY=sk-proj-...

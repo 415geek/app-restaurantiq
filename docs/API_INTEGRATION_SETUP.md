@@ -86,13 +86,13 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_USE_MOCK_DATA=false
 
 # OpenWeather API
-OPENWEATHER_API_KEY=3aee6da4d2ab2c87611624e5358f14c2
+OPENWEATHER_API_KEY=<redacted — see the password manager>
 
 # Google Maps API
-GOOGLE_MAPS_API_KEY=AIzaSyA3WFleYvgmKWAR93UGcQBeYdZmJ4uYIEM
+GOOGLE_MAPS_API_KEY=<redacted — see the password manager>
 
 # OpenAI API
-OPENAI_API_KEY=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
+OPENAI_API_KEY=<redacted — see the password manager>
 
 # Uber Eats (choose one mode)
 UBEREATS_CLIENT_ID=your_client_id

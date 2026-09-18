@@ -83,7 +83,9 @@ test('Phase 3: layers populated for Millbrae; guard trips when the POI pipeline 
   assert.ok(model.competitors.l4.length >= 1, 'L4 anchor (99 Ranch)');
   assert.ok(model.competitors.l4.some((c) => /boba/i.test(c.name)), 'boba shops are L4 anchors for a Chinese concept');
   // §4.2 provenance: both Layer-1 keyword radii ran (the fixture router answers Text Searches with nothing).
-  assert.deepEqual(model.competitors.l1_layers_tried, ['direct@800', 'direct@1600']);
+  // §3.2: the label carries the alias that was searched, so both radii are
+  // present once per alias — assert the radii, which is what the void guard reads.
+  assert.deepEqual([...new Set((model.competitors.l1_layers_tried ?? []).map((l) => l.split(':')[0]))], ['direct@800', 'direct@1600']);
   assert.equal(model.competitors.l1_search_radius_m, 1600);
   assert.deepEqual(model.competitors.brand_anchors, []);
   assert.equal(model.competitors.guard_passed, true, model.competitors.guard_notes.join('; '));
