@@ -45,6 +45,8 @@ import {
 } from './types';
 
 export const ACS_YEARS = [2023, 2022] as const;
+/** api.census.gov redirects keyless requests here; free key at https://api.census.gov/data/key_signup.html */
+export const MISSING_KEY_ERROR = 'CENSUS_API_KEY 未设置：api.census.gov 已强制要求 API key，人口与收入数据全部未获取（免费申请：https://api.census.gov/data/key_signup.html）';
 /** Census API hard limit is 50 variables per call; keep headroom for geo columns. */
 export const ACS_MAX_VARS_PER_CALL = 45;
 /** 12 months — ACS vintages are annual. */
@@ -334,6 +336,14 @@ async function censusQuery(
   try {
     const res = await fetchWithTimeout(ctx, url, { timeoutMs: ACS_TIMEOUT_MS });
     if (res.status === 204) return { ok: true, status: 204, rows: [], error: null };
+    // The Census API now requires a key: a keyless request 302s to
+    // /data/missing_key.html, which fetch follows into an HTML page. Without
+    // this check that lands as "this county has no block group rows", sending
+    // whoever reads it hunting for a geography problem that does not exist.
+    if (/\/missing_key\.html$/.test(res.url)) {
+      ctx.log(`[D2] ACS ${year} ${forClause} → missing_key redirect`);
+      return { ok: false, status: res.status, rows: [], error: MISSING_KEY_ERROR };
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       ctx.log(`[D2] ACS ${year} ${forClause} HTTP ${res.status}`, text.slice(0, 200));
@@ -565,10 +575,15 @@ export async function fetchAcs(input: AcsInput, ctx: FetchContext, opts: AcsOpti
     yearErrors.push(`${year}: ${r.error ?? 'unknown'}`);
   }
   if (!bgPayload) {
+    // A missing key looks nothing like a missing county, and saying the wrong one
+    // costs whoever reads it an afternoon.
+    const missingKey = yearErrors.some((e) => e.includes(MISSING_KEY_ERROR));
     return failed('D2', ctx, {
       source: source(null),
       license: LICENSE,
-      note: `county ${state}${county} 在 ACS ${ACS_YEARS.join('/')} 均无 block group 行 → D2 failed（地理来自 D1 tract ${geography.tract}，未按 ZIP 查询）`,
+      note: missingKey
+        ? MISSING_KEY_ERROR
+        : `county ${state}${county} 在 ACS ${ACS_YEARS.join('/')} 均无 block group 行 → D2 failed（地理来自 D1 tract ${geography.tract}，未按 ZIP 查询）`,
       error: yearErrors.join('; '),
     });
   }
