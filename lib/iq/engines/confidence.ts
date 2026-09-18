@@ -24,23 +24,46 @@ type DataStatusLike = Pick<DataResult<unknown>, 'status' | 'coverage_note'>;
 const BASEMAP_WEIGHT = 0.6;
 const PLACES_WEIGHT = 0.4;
 
+/**
+ * 底层重构 §3.1: what a truncated pool costs.
+ *
+ * Zeroing the component was disproportionate. In Chinatown, the San Gabriel
+ * Valley and Flushing — the markets this product exists for — a search is
+ * truncated as a matter of course, so scoring 156 found competitors as
+ * zero-quality data meant no address in the core market could ever reach GO.
+ *
+ * The harm from truncation is "we may have missed some", and that matters most
+ * when we found few. So a substantive pool is discounted, and only a thin one
+ * that is ALSO unexhausted is treated as unknown: there, the shops we missed
+ * could be the ones that decide the answer.
+ */
+export const TRUNCATION_DISCOUNT = 0.6;
+/** Competitors (direct + same category) above which a truncated pool still counts. */
+export const TRUNCATION_SUBSTANTIVE_COUNT = 12;
+
 export function computeConfidence(input: {
   sources: SourceStatusMap;
   guard_passed: boolean;
   user: Pick<SiteInput, 'rent_usd' | 'sqft' | 'seats' | 'capex_usd'>;
-  /** §3.1: a pool with a call still at the API's per-call cap is not a pool. */
+  /** §3.1: a search was still at the API's per-call cap when it stopped. */
   pool_truncated?: boolean;
+  /** Competitors actually found (direct + same category) — a truncated pool of 150 is not a truncated pool of 2. */
+  competitor_count?: number;
 }): ReportModel['confidence'] {
   const w = getDefaults().confidence_weights;
   const s = input.sources;
   const comp = (status: number, note: string) => ({ quality: status, note });
 
-  const compQ = !input.guard_passed || input.pool_truncated ? 0 : BASEMAP_WEIGHT * q(s.D5) + PLACES_WEIGHT * q(s.D6);
+  const sourceQ = BASEMAP_WEIGHT * q(s.D5) + PLACES_WEIGHT * q(s.D6);
+  const substantive = (input.competitor_count ?? 0) >= TRUNCATION_SUBSTANTIVE_COUNT;
+  const compQ = !input.guard_passed ? 0 : !input.pool_truncated ? sourceQ : substantive ? sourceQ * TRUNCATION_DISCOUNT : 0;
   const compNote = !input.guard_passed
     ? '竞品守卫未通过'
-    : input.pool_truncated
-      ? '竞品检索触及单次返回上限，范围未穷尽'
-      : `D5 ${s.D5?.status ?? '—'} / D6 ${s.D6?.status ?? '—'}`;
+    : !input.pool_truncated
+      ? `D5 ${s.D5?.status ?? '—'} / D6 ${s.D6?.status ?? '—'}`
+      : substantive
+        ? `竞品检索触及单次返回上限（已找到 ${input.competitor_count} 家，按 ${TRUNCATION_DISCOUNT} 折算）`
+        : `竞品检索触及单次返回上限，且已找到的门店过少（${input.competitor_count ?? 0} 家），范围未穷尽`;
   const provided = [input.user.rent_usd, input.user.sqft, input.user.seats].filter((x) => x != null).length;
   const userQ = provided >= 3 ? 1 : provided >= 1 ? 0.5 : 0;
 

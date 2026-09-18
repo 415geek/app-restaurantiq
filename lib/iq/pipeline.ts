@@ -561,7 +561,14 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
   const sources = sourcesFromResults(bundle.results);
   const statusMap: SourceStatusMap = {};
   for (const r of bundle.results) statusMap[r.id] = { status: r.status, coverage_note: r.coverage_note };
-  const confidence = computeConfidence({ sources: statusMap, guard_passed: competitors.guard_passed, user: site, pool_truncated: googleData?.pool_truncated === true });
+  const confidence = computeConfidence({
+    sources: statusMap,
+    guard_passed: competitors.guard_passed,
+    user: site,
+    pool_truncated: googleData?.pool_truncated === true,
+    // §3.1: a truncated pool of 150 competitors is not a truncated pool of 2.
+    competitor_count: competitors.l1.length + competitors.l2.length,
+  });
   const precheck_reasons: string[] = [];
   if (!competitors.guard_passed) precheck_reasons.push(...competitors.guard_notes);
   if (confidence.total < 60) precheck_reasons.push(`置信度 ${confidence.total} < 60`);
@@ -778,7 +785,13 @@ export function rederiveWithoutRent(model: ReportModel): ReportModel {
     user_cuisine_rank: Math.max(1, alternatives.findIndex((a) => a.cuisine === m.input.cuisine) + 1),
   };
   m.risks = computeRisks({ ...m, dev_projects: dev ? Number(dev) : 0 });
-  m.confidence = computeConfidence({ sources: statusMap, guard_passed: m.competitors.guard_passed, user: { rent_usd: null, sqft: m.input.sqft, seats: m.input.seats, capex_usd: m.input.capex_usd } });
+  m.confidence = computeConfidence({
+    sources: statusMap,
+    guard_passed: m.competitors.guard_passed,
+    user: { rent_usd: null, sqft: m.input.sqft, seats: m.input.seats, capex_usd: m.input.capex_usd },
+    pool_truncated: m.competitors.pool_truncated === true,
+    competitor_count: m.competitors.l1.length + m.competitors.l2.length,
+  });
   m.narrative = {};
   // The stored conclusion described the WITH-rent model; re-derive it from the
   // re-derived numbers, otherwise the parse-time guard would put the old

@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 
 import { buildCallPlan, buildCallPlanForProfile, PLACES_PER_CALL_CAP, subdivideCall, type PlaceCall } from './google-places';
 import { assessCategoryGap } from '../engines/competitor';
-import { computeConfidence } from '../engines/confidence';
+import { computeConfidence, TRUNCATION_DISCOUNT } from '../engines/confidence';
 import { conceptSearchProfile, L1_QUERY_ALIASES } from './search-profile';
 import { verdictCap, verdictFromScore } from '../conclusion/conclusion';
 import { haversineM } from '../geo';
@@ -75,11 +75,23 @@ test('INV-2 a failed basemap can no longer take full marks for competitor data',
   assert.ok(basemapFailed.total < basemapOk.total);
 });
 
-test('INV-2 a truncated pool zeroes the competitor component whatever the sources say', () => {
+test('§3.1 truncation costs in proportion to what was actually found', () => {
+  // Zeroing the component for any truncation was disproportionate: a Chinatown
+  // search is truncated as a matter of course, so 156 found competitors scored
+  // as zero-quality data and no core-market address could ever reach GO. The
+  // harm is "we may have missed some", which matters most when we found few.
   const user = { rent_usd: null, sqft: null, seats: null, capex_usd: null };
-  const c = computeConfidence({ sources: { D5: { status: 'ok' as const, coverage_note: '' }, D6: { status: 'ok' as const, coverage_note: '' } }, guard_passed: true, user, pool_truncated: true });
-  assert.equal(c.components.competitors.quality, 0);
-  assert.match(c.components.competitors.note, /上限/);
+  const sources = { D5: { status: 'ok' as const, coverage_note: '' }, D6: { status: 'ok' as const, coverage_note: '' } };
+  const rich = computeConfidence({ sources, guard_passed: true, user, pool_truncated: true, competitor_count: 156 });
+  const thin = computeConfidence({ sources, guard_passed: true, user, pool_truncated: true, competitor_count: 3 });
+  const clean = computeConfidence({ sources, guard_passed: true, user, competitor_count: 156 });
+
+  assert.equal(clean.components.competitors.quality, 1);
+  assert.equal(Math.round(rich.components.competitors.quality * 100), Math.round(TRUNCATION_DISCOUNT * 100), 'a substantive pool is discounted');
+  assert.equal(thin.components.competitors.quality, 0, 'a thin AND unexhausted pool is genuinely unknown');
+  assert.ok(rich.total > thin.total && rich.total < clean.total);
+  assert.match(rich.components.competitors.note, /156/);
+  assert.match(thin.components.competitors.note, /过少/);
 });
 
 test('§4.3 the evidence cap: completeness and truncation bound the verdict', () => {
@@ -89,13 +101,16 @@ test('§4.3 the evidence cap: completeness and truncation bound the verdict', ()
   assert.equal(verdictCap({ completeness: 75 }), 'CONDITIONAL_GO');
   assert.equal(verdictCap({ completeness: 90, coreSourceDegraded: true }), 'CONDITIONAL_GO');
   assert.equal(verdictCap({ completeness: 54 }), null, 'below 55 no verdict is supported');
-  assert.equal(verdictCap({ completeness: 95, poolTruncated: true }), null, 'an unexhausted search supports no verdict');
+  // Truncation is NOT a separate cap: it is already paid for inside completeness.
+  // Capping again made GO unreachable in every dense Chinese trade area, which is
+  // the market this product exists for.
+  assert.equal(verdictCap({ completeness: 95, poolTruncated: true }), 'GO', 'truncation is priced in completeness, not capped twice');
 });
 
 test('§4.3 the cap clamps a verdict down and never lifts one up', () => {
   assert.equal(verdictFromScore(95, { rentMissing: false }), 'GO', 'no completeness given → the pure score path is unchanged');
   assert.equal(verdictFromScore(95, { rentMissing: false, completeness: 75 }), 'CONDITIONAL_GO');
-  assert.equal(verdictFromScore(95, { rentMissing: false, completeness: 95, poolTruncated: true }), 'CONDITIONAL_GO');
+  assert.equal(verdictFromScore(95, { rentMissing: false, completeness: 95, poolTruncated: true }), 'GO', 'a rich but unexhausted pool still supports a verdict');
   assert.equal(verdictFromScore(30, { rentMissing: false, completeness: 95 }), 'NO_GO', 'good data never rescues bad numbers');
   assert.equal(verdictFromScore(30, { rentMissing: false, completeness: 20 }), 'NO_GO', 'and poor data never softens them either');
 });

@@ -43,7 +43,11 @@ export const CONDITIONAL_MIN_COMPLETENESS = 55;
 export interface VerdictCapInput {
   /** `confidence.total` — the weighted data completeness, 0–100. */
   completeness?: number | null;
-  /** §3.1: a competitor search still at the API's per-call cap. */
+  /**
+   * §3.1: a competitor search still at the API's per-call cap. Kept for callers
+   * and tests; the cost of truncation is carried by `completeness`, not by an
+   * extra cap here.
+   */
   poolTruncated?: boolean;
   /** Any core source that came back degraded. */
   coreSourceDegraded?: boolean;
@@ -61,7 +65,11 @@ export interface VerdictCapInput {
  * caller must say so instead of guessing.
  */
 export function verdictCap(input: VerdictCapInput): Verdict | null {
-  if (input.poolTruncated) return null;
+  // Truncation is NOT capped separately: it already costs the competitor
+  // component of `completeness` (zeroed when the pool is also thin, discounted
+  // when it is substantive). Capping again on top double-counted it, and since
+  // a dense Chinese trade area is truncated as a matter of course, that made GO
+  // unreachable in precisely the markets this product is for.
   // Completeness omitted means the caller is not the one that knows the evidence
   // (the pure score → verdict path); only an explicit number can clamp.
   if (input.completeness == null) return input.coreSourceDegraded ? 'CONDITIONAL_GO' : 'GO';
