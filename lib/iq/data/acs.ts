@@ -33,6 +33,7 @@
  */
 import { bboxAround, type BBox } from '@/lib/iq/geo';
 import { fetchWithTimeout } from './context';
+import { fetchMirrorGeometry } from './geometry-mirror';
 import {
   DATA_SOURCE_NAMES,
   failed,
@@ -416,11 +417,45 @@ function isGeometry(g: unknown): g is Geometry {
   return (t === 'Polygon' || t === 'MultiPolygon') && Array.isArray(c);
 }
 
+/** Keep only the boundaries that touch the envelope D2 asked about. */
+function featuresInBbox(features: GeomCachePayload['features'], bbox: BBox): GeomCachePayload['features'] {
+  const out: GeomCachePayload['features'] = [];
+  for (const f of features) {
+    let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+    const rings = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    for (const poly of rings as number[][][][]) {
+      for (const ring of poly) {
+        for (const [lng, lat] of ring) {
+          if (lng < minLng) minLng = lng;
+          if (lng > maxLng) maxLng = lng;
+          if (lat < minLat) minLat = lat;
+          if (lat > maxLat) maxLat = lat;
+        }
+      }
+    }
+    if (maxLng < bbox.minLng || minLng > bbox.maxLng || maxLat < bbox.minLat || minLat > bbox.maxLat) continue;
+    out.push(f);
+  }
+  return out;
+}
+
 async function fetchTigerweb(
   ctx: FetchContext,
   layer: number,
   bbox: BBox,
-): Promise<{ features: GeomCachePayload['features'] | null; cache: 'hit' | 'miss'; error: string | null }> {
+  /** County FIPS, so the boundary mirror can be tried before the live service. */
+  county?: string,
+): Promise<{ features: GeomCachePayload['features'] | null; cache: 'hit' | 'miss'; error: string | null; source?: 'mirror' | 'tigerweb' }> {
+  // The mirror is preferred: TIGERweb is a per-report dependency on a service we
+  // do not control, and losing it silently costs the report its demographics.
+  if (county) {
+    const m = await fetchMirrorGeometry(ctx, layer === TIGERWEB_BG_LAYER ? 'bg' : 'tract', county);
+    if (m.file) {
+      const features = featuresInBbox(m.file.features, bbox);
+      if (features.length) return { features, cache: m.cache === 'hit' ? 'hit' : 'miss', error: null, source: 'mirror' };
+    }
+    if (m.error) ctx.log(`[D2] geometry mirror ${county}: ${m.error}`);
+  }
   const cacheKey = `${layer}:${roundBbox(bbox)}`;
   const cached = await ctx.cache.get<GeomCachePayload>(CACHE_GEOM, cacheKey);
   if (cached && Array.isArray(cached.features)) return { features: cached.features, cache: 'hit', error: null };
@@ -624,13 +659,13 @@ export async function fetchAcs(input: AcsInput, ctx: FetchContext, opts: AcsOpti
 
   // c) geometries
   const bbox = bboxAround({ lat: input.lat, lng: input.lng }, Math.max(100, input.radiusM));
-  const bgGeom = await fetchTigerweb(ctx, TIGERWEB_BG_LAYER, bbox);
+  const bgGeom = await fetchTigerweb(ctx, TIGERWEB_BG_LAYER, bbox, `${state}${county}`);
   const geomMap = new Map<string, Geometry>();
   for (const f of bgGeom.features ?? []) geomMap.set(f.geoid, f.geometry);
   let tractGeomCount = 0;
   if (!bgGeom.features) {
     status = 'partial';
-    const tractGeom = await fetchTigerweb(ctx, TIGERWEB_TRACT_LAYER, bbox);
+    const tractGeom = await fetchTigerweb(ctx, TIGERWEB_TRACT_LAYER, bbox, `${state}${county}`);
     for (const f of tractGeom.features ?? []) {
       const t = tractMap.get(f.geoid);
       if (t) {

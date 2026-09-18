@@ -497,3 +497,9 @@
 - **修复**：检测该重定向并单独报错,给出免费申请地址。此前它落在「county XXX 在 ACS 均无 block group 行」这条信息上,读起来像「这个县没有数据」,会把排查引向完全错误的方向。
 - **补充**：用户提供的 key 被 `api.census.gov` 判为 `invalid_key`——Census 新发的 key 需要先点击邮件里的激活链接才生效。诊断已区分 `missing_key`(未设置)与 `invalid_key`(未激活/无效)两种情况，分别给出该做什么。
 - **测量本身的限制**：本次环境缺 Supabase,D5(Overture 底图,占竞品项 60%)与 D3(LODES)对每个地址都失败,D8/D11 缺 search key。所以测得的完整度 21–25 是**下限**,不代表生产分布;要得到真实分布,需在配齐 CENSUS_API_KEY + Supabase + search key 后重跑。
+
+## 分区边界改用自有镜像（2026-09-18）
+- **问题**：D2 每份报告都去 `tigerweb.geo.census.gov` 拉 block group / tract 的多边形边界。这是一个我们不控制的单点依赖——它不可达时，ACS 人口行照常返回，但没有边界就无法分配进圈层，商圈里没有人口，需求覆盖与客群契合双双退回中性 50。报告看起来完整，背后没有人口数据。实测中该域名被网络策略拒绝，这个形态就复现了。
+- **改法**：`lib/iq/data/geometry-mirror.ts` 优先从自有镜像读，按 `{IQ_GEOMETRY_MIRROR_URL}/{bg|tract}/{county}.json` 一县一文件，取到后按县缓存 30 天——同县的后续报告全部命中缓存，而不是把「每份报告一次请求」换个域名继续。未配置镜像或该县尚未镜像时，原样回退到 TIGERweb，行为不变。
+- **准备脚本**：`scripts/build-geometry-mirror.ts --counties 06075,06081`，在任何能访问 TIGERweb 的机器上跑（本机即可），输出目录上传到任意静态托管（Supabase Storage / R2 / GitHub release），再把 `IQ_GEOMETRY_MIRROR_URL` 指过去。坐标保留 5 位小数（约 1 米，远超圈层分配所需精度），文件通常因此减半。脚本按 `resultOffset` 分页直到返回不足一页——ArcGIS 同样有单次返回上限，把首页当成全县是 §3.1 已经修过的同一个错误。
+- **为什么这是正解而不是权宜**：普查边界一年才变一次。每份付费报告去政府 ArcGIS 实时拉一次年度静态参考数据，本身就是脆弱设计；这次被策略拒绝只是把这个脆弱点暴露出来。
