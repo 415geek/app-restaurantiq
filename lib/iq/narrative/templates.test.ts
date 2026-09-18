@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { plainEs } from './plain';
 import { LOCALES } from '@/lib/i18n/locale';
 import type { ReportModel } from '../model/schema';
 import { numberGuard } from './number-guard';
@@ -182,4 +183,35 @@ test('§4.3: page 5 prints the four dayparts of the concept, never a 午市 0% p
     const g = numberGuard(`${t.title} ${t.body}`, pageFragment(bakery, 'page_5'), { isVoid: bakery.competitors.void.is_void, lang });
     assert.ok(g.ok, `${lang} page_5 guard: ${JSON.stringify(g)} :: ${text}`);
   }
+});
+
+test('§4.6 risk amounts and their missing-amount reasons are translated, not left in English', () => {
+  // The Spanish edition printed "Neither the construction schedule nor the
+  // hoarding footprint is available…" mid-paragraph on page 13, because the
+  // §4.6 strings were added in zh/en only and localizedField falls back to
+  // English when the phrase table leaves Chinese behind.
+  const zhStrings = [
+    '既没有月租，也没有捕获月需求，算不出可承受的租金上限',
+    '缺少月租或参照营收，算不出超出警戒线的金额',
+    '缺少月固定成本，算不出空置一个月的金额',
+    '缺少基准情景月营收，算不出冷启动缺口',
+    '缺少客单价敏感度测算，算不出价格战的金额',
+    '缺少翻台敏感度测算，算不出评分不达标的金额',
+    '缺少保本线或捕获月需求，算不出缺口金额',
+    '未提供装修与设备投入，回收期和投入金额都算不出来',
+    '施工的工期与围挡范围未获取，客流影响的幅度算不出来',
+    '等时圈未获取，没有第二套边界可以对比，高估了多少无法算出',
+    '捕获月需求 $12,000 × 10% = 可承受月租上限 $1,200；这笔月度占用成本目前完全未知',
+    '月租 $17,000 − 参照营收 $120,000 × 10% = 每月多付 $5,000',
+    '客单价 −12.5%：基准月营收 $100,000 → 每月少收 $12,500',
+    '关店率 20% × 月固定成本 $80,000 = $16,000：空置一个月就要照付的固定成本敞口',
+    '保本线 $140,000 − 捕获月需求 $60,000 = 每月差 $80,000',
+  ];
+  for (const zh of zhStrings) {
+    const es = plainEs(zh);
+    assert.ok(!/[一-鿿]/.test(es), `left in Chinese: ${zh} → ${es}`);
+    assert.ok(es.length > 0);
+  }
+  // The numbers inside a formula are copied through untouched.
+  assert.match(plainEs('保本线 $140,000 − 捕获月需求 $60,000 = 每月差 $80,000'), /\$140,000.*\$60,000.*\$80,000/);
 });

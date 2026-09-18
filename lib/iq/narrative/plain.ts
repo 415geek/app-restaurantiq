@@ -87,6 +87,27 @@ const parkingSource = (v: string, lang: 'en' | 'es') =>
  * captured numbers, which are copied verbatim.
  */
 const ENGINE_PHRASES: Rule[] = [
+  // ---- 评审 Spec v2 §4.6 (P1-c) risk amounts and the reasons an amount is missing.
+  // These are engine-written Chinese sentences, so without a rule here the Spanish
+  // edition falls back to the English field and prints English mid-paragraph.
+  { re: /捕获月需求 (\S+) × (\S+) = 可承受月租上限 (\S+)；这笔月度占用成本目前完全未知/g, en: 'Captured monthly demand $1 × $2 = $3 affordable monthly rent — a monthly occupancy cost that is currently unknown', es: 'Demanda captada $1 × $2 = $3 de alquiler mensual asumible: un coste de ocupación mensual hoy desconocido' },
+  { re: /月租 (\S+) − 参照营收 (\S+) × (\S+) = 每月多付 (\S+)/g, en: 'Rent $1 − reference revenue $2 × $3 = $4 more each month', es: 'Alquiler $1 − ingresos de referencia $2 × $3 = $4 de más al mes' },
+  { re: /客单价 −12\.5%：基准月营收 (\S+) → 每月少收 (\S+)/g, en: 'Ticket −12.5%: base monthly revenue $1 → $2 less each month', es: 'Ticket −12,5%: ingresos mensuales base $1 → $2 menos al mes' },
+  { re: /饱和区价格战按客单价 −12\.5% 计：基准月营收 (\S+) → 每月少收 (\S+)/g, en: 'A price war in a saturated cluster priced as a 12.5% ticket drop: base monthly revenue $1 → $2 less each month', es: 'Guerra de precios en zona saturada valorada como una caída del ticket del 12,5%: ingresos mensuales base $1 → $2 menos al mes' },
+  { re: /出品追不上均分按翻台 −0\.5 计：基准月营收 (\S+) → 每月少收 (\S+)/g, en: 'Falling short of the rating bar priced as −0.5 turns: base monthly revenue $1 → $2 less each month', es: 'No alcanzar el listón de valoración valorado como −0,5 rotaciones: ingresos mensuales base $1 → $2 menos al mes' },
+  { re: /关店率 (\S+) × 月固定成本 (\S+) = (\S+)：空置一个月就要照付的固定成本敞口/g, en: 'Closure rate $1 × monthly fixed cost $2 = $3 — the fixed cost still owed for a vacant month', es: 'Tasa de cierre $1 × coste fijo mensual $2 = $3: el coste fijo que se sigue pagando un mes vacío' },
+  { re: /冷启动按首月只做到基准情景 (\S+) 计：基准月营收 (\S+) × (\S+) = 每月缺口 (\S+)/g, en: 'Cold start priced at $1 of the base scenario in month one: base monthly revenue $2 × $3 = $4 short each month', es: 'Arranque en frío valorado en $1 del escenario base el primer mes: ingresos mensuales base $2 × $3 = $4 de déficit al mes' },
+  { re: /保本线 (\S+) − 捕获月需求 (\S+) = 每月差 (\S+)/g, en: 'Break-even $1 − captured monthly demand $2 = $3 short each month', es: 'Punto de equilibrio $1 − demanda captada $2 = $3 de déficit al mes' },
+  { re: /既没有月租，也没有捕获月需求，算不出可承受的租金上限/g, en: 'Neither a monthly rent nor a captured monthly demand is available, so no affordable-rent ceiling can be derived', es: 'No hay alquiler mensual ni demanda captada, así que no puede calcularse un tope de alquiler asumible' },
+  { re: /缺少月租或参照营收，算不出超出警戒线的金额/g, en: 'Without the monthly rent or the reference revenue the excess over the line cannot be derived', es: 'Sin el alquiler mensual ni los ingresos de referencia no puede calcularse el exceso sobre el umbral' },
+  { re: /缺少月固定成本，算不出空置一个月的金额/g, en: 'Without the monthly fixed cost the cost of a vacant month cannot be derived', es: 'Sin el coste fijo mensual no puede calcularse el coste de un mes vacío' },
+  { re: /缺少基准情景月营收，算不出冷启动缺口/g, en: 'Without the base-scenario monthly revenue the cold-start shortfall cannot be derived', es: 'Sin los ingresos mensuales del escenario base no puede calcularse el déficit de arranque' },
+  { re: /缺少客单价敏感度测算，算不出价格战的金额/g, en: 'Without the ticket-sensitivity run the cost of a price war cannot be derived', es: 'Sin el análisis de sensibilidad del ticket no puede calcularse el coste de una guerra de precios' },
+  { re: /缺少翻台敏感度测算，算不出评分不达标的金额/g, en: 'Without the turns-sensitivity run the cost of missing the rating bar cannot be derived', es: 'Sin el análisis de sensibilidad de rotaciones no puede calcularse el coste de no alcanzar el listón de valoración' },
+  { re: /缺少保本线或捕获月需求，算不出缺口金额/g, en: 'Without the break-even line or the captured monthly demand the shortfall cannot be derived', es: 'Sin el punto de equilibrio ni la demanda captada no puede calcularse el déficit' },
+  { re: /未提供装修与设备投入，回收期和投入金额都算不出来/g, en: 'No build-out or equipment budget was provided, so neither the payback nor the amount at stake can be derived', es: 'No se indicó la inversión en obra y equipamiento, así que no pueden calcularse ni la recuperación ni el importe en juego' },
+  { re: /施工的工期与围挡范围未获取，客流影响的幅度算不出来/g, en: 'Neither the construction schedule nor the hoarding footprint is available, so the size of the traffic disruption cannot be derived', es: 'No se obtuvieron ni el calendario de obra ni el perímetro del vallado, así que no puede calcularse la magnitud del impacto en el tráfico' },
+  { re: /等时圈未获取，没有第二套边界可以对比，高估了多少无法算出/g, en: 'No isochrone boundary was retrieved, so there is no second boundary to compare against and the overstatement cannot be sized', es: 'No se obtuvo el área isócrona, así que no hay una segunda frontera con la que comparar y no puede cuantificarse la sobreestimación' },
   // ---- score drivers (engines/cuisine-fit.ts)
   { re: /coverage_ratio 未知（需求或保本线缺失）→ 中性 50/g, en: 'Demand coverage unknown (demand or break-even missing) → neutral 50', es: 'Cobertura de demanda desconocida (falta demanda o punto de equilibrio) → neutral 50' },
   { re: /中文家庭占比 (\S+) vs 阈值 (\S+)/g, en: 'Chinese-speaking households $1 vs $2 threshold', es: 'Hogares de habla china $1 vs umbral $2' },
