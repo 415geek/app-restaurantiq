@@ -16,6 +16,7 @@ import { fetchIsochrones, type IsochroneData } from './isochrone';
 import { fetchLodes, type LodesData } from './lodes';
 import { fetchOverturePois, type OverturePoiData } from './overture';
 import { fetchRentComps, type RentCompsData } from './rent-comps';
+import { fetchYelpCompetitors, type YelpData } from './yelp';
 import { fetchTrafficProxy, type TrafficProxyData } from './traffic-proxy';
 import { fetchTransit, type TransitData } from './transit';
 import type { DataResult, DataSourceId, FetchContext, SiteInput } from './types';
@@ -34,6 +35,8 @@ export interface DataBundle {
   transit: DataResult<TransitData> | null;
   cex: DataResult<CexTable> | null;
   dev: DataResult<DevPipelineData> | null;
+  /** §3.2: the independent second retrieval source; null when YELP_API_KEY is unset. */
+  yelp: DataResult<YelpData> | null;
   user: DataResult<SiteInput>;
   results: DataResult<unknown>[];
   elapsed_ms: number;
@@ -53,6 +56,7 @@ export type Fetchers = {
   transit: typeof fetchTransit;
   cex: typeof fetchCex;
   dev: typeof fetchDevPipeline;
+  yelp: typeof fetchYelpCompetitors;
   /** §4.2 walking legs (Distance Matrix) — run by the pipeline once Layer 1 / 2 are known. */
   walking: typeof fetchWalkingDistances;
 };
@@ -69,6 +73,7 @@ export const defaultFetchers: Fetchers = {
   transit: fetchTransit,
   cex: fetchCex,
   dev: fetchDevPipeline,
+  yelp: fetchYelpCompetitors,
   walking: fetchWalkingDistances,
 };
 
@@ -147,6 +152,7 @@ export async function fetchAllData(
     transit: null,
     cex: null,
     dev: null,
+    yelp: null,
     user: userResult,
     results: [userResult, geocode],
     elapsed_ms: 0,
@@ -164,7 +170,7 @@ export async function fetchAllData(
   const walkRadius = 800;
   void bboxAround; // geometry envelope is computed inside D2 from radiusM
 
-  const [acs, isochrones, overture, google, rent, transit, cex, dev] = await Promise.all([
+  const [acs, isochrones, overture, google, rent, transit, cex, dev, yelp] = await Promise.all([
     settle(F.acs({ geography: g.geography, lat: g.lat, lng: g.lng, radiusM: RADIUS_DRIVE15_M * 1.2 }, ctx), 'D2', 'ACS', ctx),
     settle(F.isochrones({ lat: g.lat, lng: g.lng }, ctx), 'D4', 'Isochrones', ctx),
     settle(F.overture({ lat: g.lat, lng: g.lng, radiusM: Math.max(3 * 1_609.344, RADIUS_DRIVE15_M), metro }, ctx), 'D5', 'Overture', ctx),
@@ -178,6 +184,9 @@ export async function fetchAllData(
     settle(F.transit({ lat: g.lat, lng: g.lng, stateAbbr: state, walkRadiusM: walkRadius }, ctx), 'D9', 'Transit', ctx),
     settle(F.cex(undefined, ctx), 'D10', 'CEX', ctx),
     settle(F.dev({ city, state: state ?? '', address: site.address }, ctx), 'D11', 'Dev pipeline', ctx),
+    // §3.2: the second retrieval source runs beside Google, not after it — a
+    // negative claim has to survive both engines before it may be printed.
+    settle(F.yelp({ lat: g.lat, lng: g.lng, cuisineId: site.cuisine }, ctx), 'D13', 'Yelp', ctx),
   ]);
 
   // D3 needs the tracts in the trade area (from D2); D7 needs Google place ids (from D6).
@@ -190,12 +199,12 @@ export async function fetchAllData(
     settle(F.traffic({ placeIds, metro, currentCounts }, ctx), 'D7', 'Traffic proxy', ctx),
   ]);
 
-  const results: DataResult<unknown>[] = [userResult, geocode, acs, lodes, isochrones, overture, google, traffic, rent, transit, cex, dev];
-  return { ...base, acs, lodes, isochrones, overture, google, traffic, rent, transit, cex, dev, results, elapsed_ms: Date.now() - t0 };
+  const results: DataResult<unknown>[] = [userResult, geocode, acs, lodes, isochrones, overture, google, traffic, rent, transit, cex, dev, yelp];
+  return { ...base, acs, lodes, isochrones, overture, google, traffic, rent, transit, cex, dev, yelp, results, elapsed_ms: Date.now() - t0 };
 }
 
 export function sourcesFromResults(results: DataResult<unknown>[]): SourceRow[] {
-  const order: DataSourceId[] = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11', 'D12'];
+  const order: DataSourceId[] = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11', 'D12', 'D13'];
   return order
     .map((id) => results.find((r) => r.id === id))
     .filter((r): r is DataResult<unknown> => Boolean(r))

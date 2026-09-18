@@ -80,7 +80,8 @@ export const competitorSchema = z.object({
   monthly_review_growth: nullableNum,
   huff_share: nullableNum,
   operating_status: z.string(),
-  source: z.enum(['overture', 'google', 'both']),
+  // 'both' predates the third source; 'multi' is two or more of overture / google / yelp.
+  source: z.enum(['overture', 'google', 'yelp', 'both', 'multi']),
   hours_per_week: nullableNum,
   offers_delivery: z.boolean().nullable(),
   /** §4.2 walking network distance (Distance Matrix), metres; when present `distance_mi` is the walking distance. */
@@ -152,7 +153,11 @@ function backfillCounts(c: {
     same_category: c.l2.length || c.l2_count,
     l3: c.l3_count,
     anchors: c.brand_anchors?.length ?? 0,
-    by_source: { google: counted.filter((x) => x.source === 'google' || x.source === 'both').length, yelp: 0, foursquare: 0 },
+    by_source: {
+      google: counted.filter((x) => x.source === 'google' || x.source === 'both' || x.source === 'multi').length,
+      yelp: counted.filter((x) => x.source === 'yelp' || x.source === 'multi').length,
+      foursquare: 0,
+    },
   };
 }
 

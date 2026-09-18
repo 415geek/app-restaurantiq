@@ -147,6 +147,26 @@ function nearestSameCuisineOutsidePool(bundle: DataBundle, site: { lat: number; 
 
 function rawCandidatesFromBundle(bundle: DataBundle): CandidatePoi[] {
   const out: CandidatePoi[] = [];
+  // §3.2: Yelp's hits join the same pool and go through the same classifier and
+  // the same dedupe. It matches what a shop sells rather than what it is called,
+  // so it reaches businesses no Google alias returns; dedupeCandidates merges
+  // them onto the Google record when both engines saw the same shop.
+  for (const p of bundle.yelp?.data?.places ?? []) {
+    out.push({
+      id: `yelp:${p.id}`,
+      source: 'yelp',
+      name: p.name,
+      name_zh: null,
+      lat: p.lat,
+      lng: p.lng,
+      categories: p.categories,
+      primary_category: p.categories[0] ?? null,
+      rating: p.rating,
+      rating_count: p.review_count,
+      price_level: p.price_level,
+      operating_status: p.is_closed ? 'closed_permanently' : 'open',
+    });
+  }
   for (const p of bundle.overture?.data?.pois ?? []) {
     out.push({
       id: p.id,

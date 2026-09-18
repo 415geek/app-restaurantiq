@@ -30,7 +30,7 @@ export type CandidateLayer = 'direct' | 'substitute' | 'brand_anchor' | 'l3' | '
 
 export interface CandidatePoi {
   id: string;
-  source: 'overture' | 'google';
+  source: 'overture' | 'google' | 'yelp';
   name: string;
   name_zh?: string | null;
   lat: number;
@@ -63,8 +63,8 @@ export interface CandidatePoi {
 }
 
 export interface MergedPoi extends CandidatePoi {
-  ids: { overture: string | null; google: string | null };
-  sources: Array<'overture' | 'google'>;
+  ids: { overture: string | null; google: string | null; yelp: string | null };
+  sources: Array<'overture' | 'google' | 'yelp'>;
   is_chinese: boolean;
   is_food: boolean;
   classified_by: 'rule' | 'keyword' | 'llm' | 'unclassified';
@@ -236,8 +236,10 @@ export function dedupeCandidates(site: LatLng, candidates: CandidatePoi[]): Merg
       return false;
     });
     if (existing) {
-      if (c.source === 'google') existing.ids.google = c.id;
-      else existing.ids.overture = c.id;
+      // Provenance is per source: writing a Yelp id into the Overture slot would
+      // make the record claim a base-map sighting it never had, and would leave
+      // by_source.yelp at zero.
+      existing.ids[c.source] = c.id;
       if (!existing.sources.includes(c.source)) existing.sources.push(c.source);
       for (const l of c.layers ?? []) if (!existing.layers.includes(l)) existing.layers.push(l);
       // §4.2 probe text is evidence: one source may carry reviews the other lacks — keep the union.
@@ -270,7 +272,7 @@ export function dedupeCandidates(site: LatLng, candidates: CandidatePoi[]): Merg
     merged.push({
       ...c,
       sub_cuisine: cls.sub_cuisine,
-      ids: { overture: c.source === 'overture' ? c.id : null, google: c.source === 'google' ? c.id : null },
+      ids: { overture: c.source === 'overture' ? c.id : null, google: c.source === 'google' ? c.id : null, yelp: c.source === 'yelp' ? c.id : null },
       sources: [c.source],
       is_chinese: cls.is_chinese,
       is_food: cls.is_food,
@@ -423,7 +425,8 @@ function toCompetitor(m: MergedPoi, layer: Competitor['layer'], traffic: Competi
     monthly_review_growth: tr?.monthly_review_growth ?? null,
     huff_share: null,
     operating_status: m.operating_status,
-    source: m.sources.length === 2 ? 'both' : m.sources[0],
+    // Two sources is the long-standing 'both'; three is 'multi'.
+    source: m.sources.length === 2 ? 'both' : m.sources.length > 2 ? 'multi' : m.sources[0],
     hours_per_week: m.hours_per_week ?? null,
     offers_delivery: null,
     walk_m: null,
@@ -697,7 +700,7 @@ export function computeCompetitors(input: CompetitorEngineInput): CompetitorEngi
     same_category: l2.length,
     l3: l3m.length,
     anchors: 0,
-    by_source: { google: countedMerged.filter((m) => m.ids.google != null).length, yelp: 0, foursquare: 0 },
+    by_source: { google: countedMerged.filter((m) => m.ids.google != null).length, yelp: countedMerged.filter((m) => m.ids.yelp != null).length, foursquare: 0 },
   };
 
   return {

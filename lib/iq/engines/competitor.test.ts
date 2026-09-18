@@ -34,7 +34,7 @@ test('dedupe merges Overture + Google within 100 m, keeps both ids, Google fresh
   const g = poi('g1', 'Hunan Home', 0, 230, { source: 'google', rating: 4.4, rating_count: 900, operating_status: 'OPERATIONAL' });
   const m = dedupeCandidates(site, [o, g]);
   assert.equal(m.length, 1);
-  assert.deepEqual(m[0].ids, { overture: 'ov1', google: 'g1' });
+  assert.deepEqual(m[0].ids, { overture: 'ov1', google: 'g1', yelp: null });
   assert.equal(m[0].rating_count, 900);
 });
 
@@ -99,7 +99,7 @@ test('dedupe: Overture 湘园 + Google "Xiang Yuan Hunan Cuisine" at the same sp
   const g = poi('ChIJ-link', 'Old Beijing Restaurant', 120, 1400, { source: 'google', rating: 4.1, rating_count: 90 });
   const m2 = dedupeCandidates(site, [linked, g]);
   assert.equal(m2.length, 1);
-  assert.deepEqual(m2[0].ids, { overture: 'ov3', google: 'ChIJ-link' });
+  assert.deepEqual(m2[0].ids, { overture: 'ov3', google: 'ChIJ-link', yelp: null });
   // two different Chinese-named restaurants 300 m apart stay separate
   const a = poi('a', '川味观', 0, 200);
   const b = poi('b', 'Sichuan House', 0, 500, { source: 'google' });

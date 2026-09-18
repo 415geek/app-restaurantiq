@@ -129,7 +129,8 @@ test('Phase 4: single score(), reconciliation, hidden payback, alternatives', as
   assert.equal(model.input.audience, 'chinese');
   assert.equal(model.score.conditions.length, 2);
   assert.ok(model.confidence.total > 0 && model.confidence.total <= 100);
-  assert.equal(model.sources.length, 12);
+  // D1–D13: §3.2 added Yelp as the second competitor retrieval source.
+  assert.equal(model.sources.length, 13);
   assert.ok(model.meta.cost_usd <= 0.5);
   assert.ok(model.risks.length >= 1);
   // R6: no KPI without an input behind it

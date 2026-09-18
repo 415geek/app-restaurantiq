@@ -20,7 +20,8 @@ export type DataSourceId =
   | 'D9' // transit + AADT
   | 'D10' // BLS CEX food-away-from-home
   | 'D11' // development pipeline
-  | 'D12'; // user inputs
+  | 'D12' // user inputs
+  | 'D13'; // Yelp Fusion — the independent second retrieval source (底层重构 §3.2)
 
 export type DataStatus = 'ok' | 'partial' | 'failed';
 
@@ -135,6 +136,7 @@ export const DATA_SOURCE_NAMES: Record<DataSourceId, string> = {
   D10: 'BLS Consumer Expenditure Survey',
   D11: 'Development pipeline',
   D12: 'User inputs',
+  D13: 'Yelp Fusion (second competitor retrieval source)',
 };
 
 export function nowIso(ctx: Pick<FetchContext, 'now'>): string {

@@ -65,7 +65,8 @@ test('Phase 1 acceptance: Millbrae data bundle', async () => {
 
   // sources[] complete with statuses
   const sources = sourcesFromResults(bundle.results);
-  assert.equal(sources.length, 12, sources.map((s) => s.id).join(','));
+  // D1–D13: §3.2 added Yelp as the second competitor retrieval source.
+  assert.equal(sources.length, 13, sources.map((s) => s.id).join(','));
   for (const s of sources) assert.ok(['ok', 'partial', 'failed'].includes(s.status), `${s.id} has status`);
   assert.ok(sources.every((s) => s.coverage_note.length > 0));
 

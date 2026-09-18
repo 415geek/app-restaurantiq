@@ -500,7 +500,7 @@ const fakeResult = (p: OpsParams, budgetMs: number): SourceGapAgentResult => ({
   reason: null,
   metro: p.metro,
   reports_scanned: 3,
-  gaps: { D1: 0, D2: 0, D3: 1, D4: 0, D5: 0, D6: 0, D7: 0, D8: 2, D9: 0, D10: 0, D11: 0, D12: 0 },
+  gaps: { D1: 0, D2: 0, D3: 1, D4: 0, D5: 0, D6: 0, D7: 0, D8: 2, D9: 0, D10: 0, D11: 0, D12: 0, D13: 0 },
   table_counts: null,
   regenerated: [],
   improved: [],
