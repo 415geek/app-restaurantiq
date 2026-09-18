@@ -2,8 +2,8 @@
  * Build the block-group / tract boundary mirror that D2 reads instead of
  * querying TIGERweb per report (lib/iq/data/geometry-mirror.ts).
  *
- *   npx tsx scripts/build-geometry-mirror.ts --counties 06075,06081,06037 [--out qa/out/geometry-mirror]
- *   npx tsx scripts/build-geometry-mirror.ts --states 06,36 --layer bg
+ *   npx tsx scripts/build-geometry-mirror.ts --counties 06075,06081,06037
+ *   npx tsx scripts/build-geometry-mirror.ts --counties 06037 --layer bg --out qa/out/geometry-mirror
  *
  * Run it anywhere that can reach tigerweb.geo.census.gov — a laptop is fine —
  * then upload the `out` directory to any static host and point
@@ -17,7 +17,7 @@
  * roughly a metre — far finer than a trade-area ring needs — and typically halves
  * the file size.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const TIGERWEB_BASE = 'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer';
@@ -63,9 +63,9 @@ async function fetchLayer(layer: Layer, county: string): Promise<Feature[]> {
     url.searchParams.set('f', 'geojson');
 
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`${county} ${layer}: HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = (await res.json()) as { features?: unknown[]; error?: { message?: string } };
-    if (json.error) throw new Error(`${county} ${layer}: ${json.error.message ?? 'arcgis error'}`);
+    if (json.error) throw new Error(json.error.message ?? 'arcgis error');
     const page = Array.isArray(json.features) ? json.features : [];
     for (const f of page) {
       const props = (f as { properties?: Record<string, unknown> }).properties ?? {};
@@ -89,30 +89,55 @@ async function main() {
   const outDir = resolve(arg('out') ?? 'qa/out/geometry-mirror');
   const year = Number(arg('year') ?? new Date().getFullYear() - 2);
 
+  const failures: string[] = [];
+  let written = 0;
+  let bytes = 0;
+
   for (const layer of layers) {
     mkdirSync(resolve(outDir, layer), { recursive: true });
     for (const county of counties) {
       if (!/^\d{5}$/.test(county)) {
+        failures.push(`${county}: not a 5-digit county FIPS`);
         console.error(`skip ${county}: not a 5-digit county FIPS`);
+        continue;
+      }
+      const file = resolve(outDir, layer, `${county}.json`);
+      // Resumable: a long run that dies partway should not re-download what it
+      // already has. Delete the file to force a refresh.
+      if (existsSync(file) && !process.argv.includes('--force')) {
+        console.log(`${layer}/${county}.json  (exists, skipped — pass --force to refetch)`);
         continue;
       }
       try {
         const features = await fetchLayer(layer, county);
         if (!features.length) {
-          console.error(`skip ${county} ${layer}: no features returned`);
+          failures.push(`${county} ${layer}: no features returned`);
+          console.error(`FAILED ${county} ${layer}: no features returned`);
           continue;
         }
-        const file = resolve(outDir, layer, `${county}.json`);
         const body = JSON.stringify({ year, layer, county, features });
         writeFileSync(file, body);
+        written++;
+        bytes += body.length;
         console.log(`${layer}/${county}.json  ${features.length} features  ${(body.length / 1_048_576).toFixed(1)} MB`);
       } catch (e) {
+        failures.push(`${county} ${layer}: ${(e as Error).message}`);
         console.error(`FAILED ${county} ${layer}: ${(e as Error).message}`);
-        process.exitCode = 1;
       }
     }
   }
-  console.log(`\nwrote ${outDir}\nupload it, then set IQ_GEOMETRY_MIRROR_URL to the base that serves <layer>/<county>.json`);
+
+  console.log(`\n${written} file(s), ${(bytes / 1_048_576).toFixed(1)} MB total → ${outDir}`);
+  if (failures.length) {
+    // Never end on "upload it" when the directory is incomplete: a half-mirror
+    // silently falls back to TIGERweb for the counties it is missing, which is
+    // the dependency this whole thing exists to remove.
+    console.error(`\n${failures.length} FAILED — the mirror is incomplete, fix these before uploading:`);
+    for (const f of failures) console.error(`  ${f}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log('upload it, then set IQ_GEOMETRY_MIRROR_URL to the base that serves <layer>/<county>.json');
 }
 
 void main();
