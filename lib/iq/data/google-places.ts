@@ -115,6 +115,8 @@ export interface GooglePlacesInput {
   maxCalls?: number;
   /** Override the default plan (used by scripts/snapshot-reviews.ts and user-named competitors). */
   plan?: PlaceCall[];
+  /** §3.1 refinement budget for this request; defaults to data_budget.google_places_max_refine_calls. */
+  maxRefineCalls?: number;
 }
 
 export interface PlaceCall {
@@ -429,9 +431,18 @@ export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchCont
   // per-call cap is re-run over four sub-cells, and those may refine again while
   // budget lasts. `centre` is the cell's own centre; distances stay measured from
   // the real site so a sub-cell hit still reports its true distance.
-  const queue: Array<{ call: PlaceCall; centre: { lat: number; lng: number }; depth: number }> = plan.map((call) => ({ call, centre: site, depth: 0 }));
+  type Cell = { call: PlaceCall; centre: { lat: number; lng: number }; depth: number };
+  const queue: Cell[] = plan.map((call) => ({ call, centre: site, depth: 0 }));
   const truncated = new Set<string>();
-  let refineBudget = Math.max(0, maxCalls - plan.length);
+  // Refinement gets its OWN budget. Scavenging it from the plan cap meant a
+  // 12-step plan under a cap of 14 left 2 calls, and a split needs 4 — so in the
+  // shipped config §3.1 detected truncation and then never refined it.
+  let refineBudget = input.maxRefineCalls ?? getDefaults().data_budget.google_places_max_refine_calls;
+  const costCap = getDefaults().data_budget.data_cost_cap_usd;
+  // Competitor recall first: an unexhausted Layer 1 / 2 hides a rival the customer
+  // will compete with, while an unexhausted anchor ring only blurs a context count.
+  const refinePriority: Record<string, number> = { direct: 0, substitute: 1, brand_anchor: 2, l3: 3, l4: 4, user: 5 };
+  const pending: Cell[] = [];
 
   // 先近后远 decisions, one per (layer, radius). The widening question is "did the
   // near radius come back thin", so it is answered once, before any call at the
@@ -439,8 +450,27 @@ export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchCont
   // cancel the other aliases — which is exactly the multilingual recall §3.2 adds.
   const widen = new Map<string, boolean>();
 
-  while (queue.length) {
-    const { call, centre, depth } = queue.shift() as { call: PlaceCall; centre: { lat: number; lng: number }; depth: number };
+  while (queue.length || pending.length) {
+    if (!queue.length) {
+      // The plan is done; spend what is left on the most valuable truncated cell.
+      pending.sort((a, b) => (refinePriority[a.call.layer ?? 'user'] ?? 9) - (refinePriority[b.call.layer ?? 'user'] ?? 9) || a.depth - b.depth);
+      const next = pending.shift() as Cell;
+      // Refinement is the only unbounded part of the plan, so it is also the part
+      // that has to respect the wallet: `data_cost_cap_usd` is what a report may
+      // spend on data. While Places sits inside Google's free allowance
+      // `perCallCost` is 0 and this never binds; once GOOGLE_PLACES_BILLED=1 it
+      // stops refining at the cap and the rest is reported as unexhausted rather
+      // than quietly overspent.
+      const splitCost = SUBDIVISION * perCallCost(ctx);
+      if (refineBudget < SUBDIVISION || (splitCost > 0 && ctx.cost.total() + splitCost > costCap)) {
+        truncated.add(next.call.label);
+        continue;
+      }
+      refineBudget -= SUBDIVISION;
+      for (const c of subdivideCall(next.call, next.centre)) queue.push({ ...c, depth: next.depth + 1 });
+      continue;
+    }
+    const { call, centre, depth } = queue.shift() as Cell;
     if (call.only_if_fewer_than != null && call.layer) {
       const gateKey = `${call.layer}@${call.radiusM}`;
       if (!widen.has(gateKey)) widen.set(gateKey, layerCount(call.layer) < call.only_if_fewer_than);
@@ -464,10 +494,10 @@ export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchCont
         mergePlace(byId, p);
       }
       const atCap = r.places.length >= PLACES_PER_CALL_CAP;
-      const cells = atCap && depth < MAX_REFINE_DEPTH && refineBudget >= SUBDIVISION ? subdivideCall(call, centre) : [];
-      if (cells.length) {
-        refineBudget -= cells.length;
-        for (const c of cells) queue.push({ ...c, depth: depth + 1 });
+      if (atCap && depth < MAX_REFINE_DEPTH) {
+        // Queued, not split on the spot: the whole plan runs first so the budget
+        // can be spent on the layers that matter rather than on whatever ran first.
+        pending.push({ call, centre, depth });
       } else if (atCap) {
         truncated.add(call.label);
       }
@@ -486,6 +516,8 @@ export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchCont
       break;
     }
   }
+  // A fatal error can leave cells unexamined: they are unexhausted, so say so.
+  for (const c of pending) truncated.add(c.call.label);
 
   const places = [...byId.values()].sort((a, b) => a.distance_m - b.distance_m);
   const costUsd = Math.round(networkCalls * perCallCost(ctx) * 10_000) / 10_000;

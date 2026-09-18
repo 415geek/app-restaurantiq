@@ -86,6 +86,8 @@ export const defaultsSchema = z.object({
   rent_comps: z.object({ min_comps_for_premium: z.number() }),
   data_budget: z.object({
     google_places_max_calls: z.number(),
+    /** 底层重构 §3.1: separate budget for truncation refinement (see defaults.yaml). */
+    google_places_max_refine_calls: z.number().default(0),
     google_places_cost_usd_per_call: z.number(),
     /** §4.2 walking distance: Distance Matrix calls per report (≤ 25 destinations each). */
     distance_matrix_max_calls: z.number().default(4),

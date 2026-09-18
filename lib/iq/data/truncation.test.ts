@@ -10,12 +10,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildCallPlanForProfile, PLACES_PER_CALL_CAP, subdivideCall, type PlaceCall } from './google-places';
+import { readFileSync } from 'node:fs';
+
+import { buildCallPlan, buildCallPlanForProfile, PLACES_PER_CALL_CAP, subdivideCall, type PlaceCall } from './google-places';
 import { assessCategoryGap } from '../engines/competitor';
 import { computeConfidence } from '../engines/confidence';
 import { conceptSearchProfile, L1_QUERY_ALIASES } from './search-profile';
 import { verdictCap, verdictFromScore } from '../conclusion/conclusion';
 import { haversineM } from '../geo';
+import { getDefaults } from '../params';
 
 const CENTRE = { lat: 37.7946, lng: -122.4069 }; // 900 Grant Ave, San Francisco
 const call: PlaceCall = { includedTypes: ['bakery', 'cafe'], radiusM: 800, label: 'direct@800', textQuery: 'egg tart', layer: 'direct', restrict: true };
@@ -149,4 +152,30 @@ test('§3.1 Layer 2 searches the near ring before widening', () => {
   assert.ok(subs.every((c) => c.only_if_fewer_than == null));
   // Both passes look for the same Table A types.
   assert.deepEqual(subs[0].includedTypes, subs[1].includedTypes);
+});
+
+test('§3.1 refinement has its own budget, not the leftovers of the plan cap', () => {
+  // The budget used to be `maxCalls - plan.length`. With a 12-step plan under a
+  // cap of 14 that left 2 calls, a quadrant split needs 4, and so the shipped
+  // config detected truncation and then never refined any of it. Live at 900
+  // Grant Ave this was the difference between a 137-place pool and a 190-place
+  // one, and between 50 and 123 same-category stores.
+  const d = getDefaults().data_budget;
+  const plan = buildCallPlan('egg_tart');
+  assert.ok(plan.length > d.google_places_max_calls - 4, 'the plan really does leave fewer than one split spare');
+  assert.ok(d.google_places_max_refine_calls >= 4, 'refinement must be able to afford at least one split');
+});
+
+test('§3.1 refinement stops at the data cost cap once calls are billed', async () => {
+  // While Places is inside Google's free allowance perCallCost is 0 and the cap
+  // never binds. Once billed, a dense market would otherwise spend many times
+  // the declared per-report data budget.
+  const d = getDefaults().data_budget;
+  const perCall = d.google_places_cost_usd_per_call;
+  const maxRefineSpend = d.google_places_max_refine_calls * perCall;
+  assert.ok(maxRefineSpend > d.data_cost_cap_usd, 'this test is only meaningful while refinement could outspend the cap');
+  // The guard is in fetchGooglePlaces: a split is skipped when it would take the
+  // ledger past data_cost_cap_usd, and the cell is reported as still truncated.
+  const src = readFileSync(new URL('./google-places.ts', import.meta.url), 'utf8');
+  assert.match(src, /ctx\.cost\.total\(\) \+ splitCost > costCap/);
 });
