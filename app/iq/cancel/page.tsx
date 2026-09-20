@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { LOCALE_TAG, type Locale } from '@/lib/i18n/locale';
 import { withLang } from '@/lib/i18n/resolve';
 import { resolveServerLocale } from '@/lib/i18n/server-locale';
+import { ui } from '@/components/iq/ui';
 
 type Props = {
   searchParams?: Promise<{ lang?: string; reportId?: string }>;
@@ -19,10 +20,10 @@ export default async function IqCancelPage({ searchParams }: Props) {
   const t = COPY[locale];
   return (
     <main lang={LOCALE_TAG[locale]} className="flex min-h-screen items-center justify-center px-6">
-      <div className="max-w-md text-center">
-        <h1 className="mb-4 text-3xl font-bold">{t.title}</h1>
-        <p className="mb-8 text-white/70">{t.body}</p>
-        <Link href={withLang('/iq', locale)} className="text-emerald-400 underline">
+      <div className={`${ui.card} w-full max-w-md p-8 text-center`}>
+        <h1 className="mb-3 text-2xl font-semibold tracking-tight text-brand-navy">{t.title}</h1>
+        <p className="mb-6 text-sm text-zinc-600">{t.body}</p>
+        <Link href={withLang('/iq', locale)} className={ui.btnPrimary}>
           {t.back}
         </Link>
       </div>

@@ -24,9 +24,9 @@ const copy: Record<Locale, { share: string }> = {
 };
 
 const variants = {
-  primary: 'bg-emerald-500 text-white hover:bg-emerald-400',
-  secondary: 'bg-zinc-800 text-white hover:bg-zinc-700 border border-zinc-700',
-  ghost: 'bg-transparent text-gray-400 hover:text-white hover:bg-zinc-800',
+  primary: 'bg-brand-navy text-white hover:bg-[#1B2537]',
+  secondary: 'border border-zinc-300 bg-white text-brand-navy hover:bg-zinc-50',
+  ghost: 'bg-transparent text-zinc-600 hover:bg-zinc-100 hover:text-brand-navy',
 };
 
 const sizes = {
@@ -69,7 +69,9 @@ export function ShareButton({
         onClick={() => setIsOpen(true)}
         className={`inline-flex items-center gap-2 rounded-xl font-medium transition ${variants[variant]} ${sizes[size]} ${className}`}
       >
-        <span>📤</span>
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7M16 6l-4-4-4 4M12 2v13" />
+        </svg>
         <span>{t.share}</span>
       </button>
 

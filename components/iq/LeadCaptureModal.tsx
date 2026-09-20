@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { Locale } from '@/lib/i18n/locale';
+import { ui } from '@/components/iq/ui';
 
 export type LeadCaptureSubmit = {
   email: string;
@@ -216,8 +217,7 @@ export function LeadCaptureModal({
     });
   }
 
-  const inputCls =
-    'mt-1 w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-sm text-white placeholder-white/35 outline-none focus:border-emerald-400/60 focus:bg-white/15';
+  const inputCls = `mt-1 ${ui.input}`;
 
   return (
     <div
@@ -227,12 +227,12 @@ export function LeadCaptureModal({
       <section
         role="dialog"
         aria-labelledby="lead-sheet-headline"
-        className="pointer-events-auto w-full max-w-lg rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-950 p-5 shadow-2xl shadow-black/60"
+        className={`pointer-events-auto w-full max-w-lg ${ui.card} p-5 shadow-[0_24px_60px_-24px_rgba(11,18,32,0.45)]`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-wider text-emerald-300/80">{t.locationLabel}</div>
-            <div className="truncate text-xs text-white/60" title={location}>
+            <div className={ui.kicker}>{t.locationLabel}</div>
+            <div className="truncate text-xs text-zinc-600" title={location}>
               {location || '—'}
             </div>
           </div>
@@ -240,7 +240,7 @@ export function LeadCaptureModal({
             <button
               type="button"
               onClick={onDismiss}
-              className="shrink-0 rounded-lg px-2 py-1 text-xs text-white/60 underline underline-offset-4 transition hover:text-white"
+              className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-zinc-500 underline decoration-zinc-300 underline-offset-4 transition hover:text-brand-navy"
               data-testid="lead-sheet-dismiss"
             >
               {t.notNow}
@@ -248,15 +248,15 @@ export function LeadCaptureModal({
           ) : null}
         </div>
 
-        <h2 id="lead-sheet-headline" className="mt-2 text-lg font-semibold text-white">
+        <h2 id="lead-sheet-headline" className="mt-2 text-lg font-semibold tracking-tight text-brand-navy">
           {t.headline}
         </h2>
-        <p className="mt-1 text-xs text-white/60">{t.subhead}</p>
+        <p className="mt-1 text-xs leading-relaxed text-zinc-600">{t.subhead}</p>
 
         <form onSubmit={handleSubmit} className="mt-3 space-y-2.5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <label className="block min-w-0 flex-1">
-              <span className="block text-xs font-medium text-white/55">{t.emailLabel}</span>
+              <span className="block text-xs font-medium text-zinc-600">{t.emailLabel}</span>
               <input
                 ref={emailRef}
                 type="email"
@@ -271,7 +271,7 @@ export function LeadCaptureModal({
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+              className={`${ui.btnPrimary} py-2.5`}
             >
               {submitting ? t.submitting : t.cta}
             </button>
@@ -280,35 +280,31 @@ export function LeadCaptureModal({
           {showMore ? (
             <div className="grid gap-2.5 sm:grid-cols-3">
               <label className="block">
-                <span className="block text-xs font-medium text-white/55">{t.nameLabel}</span>
+                <span className="block text-xs font-medium text-zinc-600">{t.nameLabel}</span>
                 <input type="text" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t.namePlaceholder} className={inputCls} />
               </label>
               <label className="block">
-                <span className="block text-xs font-medium text-white/55">{t.cuisineLabel}</span>
+                <span className="block text-xs font-medium text-zinc-600">{t.cuisineLabel}</span>
                 <input type="text" value={cuisine} onChange={(e) => setCuisine(e.target.value)} placeholder={t.cuisinePlaceholder} className={inputCls} />
               </label>
               <label className="block">
-                <span className="block text-xs font-medium text-white/55">{t.phoneLabel}</span>
+                <span className="block text-xs font-medium text-zinc-600">{t.phoneLabel}</span>
                 <input type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.phonePlaceholder} className={inputCls} />
               </label>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => setShowMore(true)}
-              className="text-xs text-white/50 underline underline-offset-4 transition hover:text-white/80"
-            >
+            <button type="button" onClick={() => setShowMore(true)} className={`${ui.btnLink} text-xs`}>
               {t.moreFields}
             </button>
           )}
 
           {error ? (
-            <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+            <div role="alert" className={ui.error}>
               {error}
             </div>
           ) : null}
 
-          <p className="text-[11px] text-white/40">{t.privacy}</p>
+          <p className="text-[11px] text-zinc-500">{t.privacy}</p>
         </form>
       </section>
     </div>

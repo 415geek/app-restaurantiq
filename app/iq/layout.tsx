@@ -10,7 +10,7 @@ const FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@4
 
 export default function IqLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-brand-navy text-zinc-50 antialiased">
+    <div className="font-cjk-sans min-h-screen bg-[#F6F6F2] text-brand-navy antialiased">
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link rel="stylesheet" href={FONTS_HREF} />

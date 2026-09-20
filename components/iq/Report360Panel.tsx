@@ -13,6 +13,7 @@
 import { useCallback } from 'react';
 import type { Locale } from '@/lib/i18n/locale';
 import { useReport360Generation } from '@/components/iq/useReport360Generation';
+import { ui } from '@/components/iq/ui';
 
 type Copy = {
   title: string;
@@ -99,26 +100,26 @@ export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; la
   const printUrl = `/print/${encodeURIComponent(reportId)}?lang=${lang}`;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-      <h3 className="mb-1 text-lg font-semibold text-white">{t.title}</h3>
-      <p className="mb-4 text-sm text-zinc-300">{t.desc}</p>
+    <div className={`${ui.card} p-6`}>
+      <h3 className="mb-1 text-lg font-semibold tracking-tight text-brand-navy">{t.title}</h3>
+      <p className="mb-4 text-sm text-zinc-600">{t.desc}</p>
       {status?.migration_needed ? (
-        <p className="text-xs text-amber-300/90" role="alert">
+        <p className="text-xs text-amber-800" role="alert">
           {t.migration}
         </p>
       ) : status?.ready ? (
         /* Reached only when the reload guard tripped: the stored model exists but this page could not render it. */
         <div className="flex flex-wrap items-center gap-3">
-          <span className="rounded-full border border-emerald-700/60 bg-emerald-900/40 px-2 py-0.5 text-xs text-white">{t.ready}</span>
-          <a href={pdfUrl} className="rounded-xl bg-brand-green px-5 py-2.5 text-sm font-semibold text-brand-navy transition hover:bg-emerald-400">
+          <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${ui.pill.green}`}>{t.ready}</span>
+          <a href={pdfUrl} className={`${ui.btnPrimary} py-2.5`}>
             {t.download}
           </a>
-          <a href={printUrl} target="_blank" rel="noopener" className="rounded-xl border border-white/20 px-5 py-2.5 text-sm text-white transition hover:bg-white/10">
+          <a href={printUrl} target="_blank" rel="noopener" className={`${ui.btnSecondary} py-2.5`}>
             {t.preview}
           </a>
         </div>
       ) : (
-        <div className="flex items-center gap-3 text-sm text-zinc-300">
+        <div className="flex items-center gap-3 text-sm text-zinc-600">
           <svg className="h-4 w-4 shrink-0 animate-spin" viewBox="0 0 24 24" aria-hidden>
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -127,7 +128,7 @@ export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; la
         </div>
       )}
       {error ? (
-        <p className="mt-3 text-xs text-amber-400/90" role="alert">
+        <p className="mt-3 text-xs text-rose-700" role="alert">
           {error}
         </p>
       ) : null}

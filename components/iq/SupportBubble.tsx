@@ -274,27 +274,27 @@ export function SupportBubble() {
   return (
     <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3 print:hidden" data-support-bubble>
       {open ? (
-        <div className="flex h-[min(560px,calc(100vh-7rem))] w-[min(360px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-brand-navy text-white shadow-2xl ring-1 ring-black/30" role="dialog" aria-label={t.title}>
-          <div className="flex items-start justify-between gap-3 border-b border-white/10 bg-white/5 px-4 py-3">
+        <div className="flex h-[min(560px,calc(100vh-7rem))] w-[min(360px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white text-brand-navy shadow-[0_24px_60px_-24px_rgba(11,18,32,0.45)]" role="dialog" aria-label={t.title}>
+          <div className="flex items-start justify-between gap-3 border-b border-zinc-200 bg-[#FAFAF8] px-4 py-3">
             <div>
               <div className="text-sm font-bold">{t.title}</div>
-              <div className="text-[11px] text-zinc-400">{t.sub}</div>
+              <div className="text-[11px] text-zinc-500">{t.sub}</div>
             </div>
             <div className="flex items-center gap-1">
-              <div className="inline-flex rounded-full border border-white/15 p-0.5" role="group" aria-label="Language">
+              <div className="inline-flex rounded-full border border-zinc-200 bg-white p-0.5" role="group" aria-label="Language">
                 {LOCALES.map((l) => (
                   <button
                     key={l}
                     type="button"
                     onClick={() => switchLang(l)}
                     aria-pressed={l === lang}
-                    className={`rounded-full px-1.5 py-0.5 text-[11px] ${l === lang ? 'bg-white/15 text-white' : 'text-zinc-400 hover:text-white'}`}
+                    className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${l === lang ? 'bg-brand-navy text-white' : 'text-zinc-500 hover:text-brand-navy'}`}
                   >
                     {SHORT_LABEL[l]}
                   </button>
                 ))}
               </div>
-              <button type="button" onClick={() => setOpen(false)} aria-label={t.close} className="rounded-full p-1 text-zinc-300 hover:bg-white/10">
+              <button type="button" onClick={() => setOpen(false)} aria-label={t.close} className="rounded-full p-1 text-zinc-500 hover:bg-zinc-100">
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" /></svg>
               </button>
             </div>
@@ -303,17 +303,17 @@ export function SupportBubble() {
           <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3 text-sm">
             {msgs.map((m, i) => (
               <div key={i} className={m.from === 'me' ? 'flex justify-end' : 'flex justify-start'}>
-                <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 leading-relaxed ${m.from === 'me' ? 'bg-brand-green text-brand-navy' : 'bg-white/8 text-zinc-100'}`}>
+                <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 leading-relaxed ${m.from === 'me' ? 'bg-brand-navy text-white' : 'bg-zinc-100 text-zinc-800'}`}>
                   {m.text}
                   {m.links?.length ? (
                     <ul className="mt-2 space-y-2">
                       {m.links.map((r) => (
-                        <li key={r.id} className="rounded-xl bg-brand-navy/60 p-2.5 ring-1 ring-white/10">
-                          <div className="text-xs text-zinc-300">{r.location}</div>
-                          <div className="mt-0.5 text-[11px] text-zinc-400">
+                        <li key={r.id} className="rounded-xl bg-white p-2.5 ring-1 ring-zinc-200">
+                          <div className="text-xs text-zinc-700">{r.location}</div>
+                          <div className="mt-0.5 text-[11px] text-zinc-500">
                             {r.status === 'ready' ? t.status_ready : t.status_generating} · {r.id.slice(0, 8)}
                           </div>
-                          <a href={r.url} className="mt-2 inline-flex rounded-lg bg-brand-green px-3 py-1.5 text-xs font-bold text-brand-navy hover:bg-emerald-400">
+                          <a href={r.url} className="mt-2 inline-flex rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-[#1B2537]">
                             {t.go} →
                           </a>
                         </li>
@@ -328,8 +328,8 @@ export function SupportBubble() {
                         onEmail();
                       }}
                     >
-                      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.email_ph} className="h-9 min-w-0 flex-1 rounded-lg bg-white px-2.5 text-sm text-brand-navy outline-none ring-1 ring-white/20 focus:ring-2 focus:ring-brand-green" autoComplete="email" />
-                      <button type="submit" disabled={busy || !email.trim()} className="h-9 rounded-lg bg-brand-green px-3 text-xs font-bold text-brand-navy disabled:opacity-50">
+                      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.email_ph} className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-2.5 text-sm text-brand-navy outline-none focus:border-brand-navy" autoComplete="email" />
+                      <button type="submit" disabled={busy || !email.trim()} className="h-9 rounded-lg bg-brand-navy px-3 text-xs font-bold text-white disabled:opacity-50">
                         {t.email_btn}
                       </button>
                     </form>
@@ -339,23 +339,23 @@ export function SupportBubble() {
             ))}
           </div>
 
-          <div className="border-t border-white/10 px-3 py-2.5">
+          <div className="border-t border-zinc-200 px-3 py-2.5">
             <div className="flex flex-wrap gap-1.5">
-              <button type="button" onClick={onLost} disabled={busy} className="rounded-full border border-brand-green/50 bg-brand-green/10 px-3 py-1 text-xs font-semibold text-emerald-300 hover:bg-brand-green/20 disabled:opacity-50">{t.q_lost}</button>
-              <button type="button" onClick={() => push({ from: 'me', text: t.q_time }, { from: 'bot', text: t.a_time })} className="rounded-full border border-white/15 px-3 py-1 text-xs text-zinc-200 hover:bg-white/10">{t.q_time}</button>
-              <button type="button" onClick={() => push({ from: 'me', text: t.q_pdf }, { from: 'bot', text: t.a_pdf })} className="rounded-full border border-white/15 px-3 py-1 text-xs text-zinc-200 hover:bg-white/10">{t.q_pdf}</button>
-              <button type="button" onClick={() => push({ from: 'me', text: t.q_refund }, { from: 'bot', text: t.a_refund })} className="rounded-full border border-white/15 px-3 py-1 text-xs text-zinc-200 hover:bg-white/10">{t.q_refund}</button>
+              <button type="button" onClick={onLost} disabled={busy} className="rounded-full border border-brand-navy bg-brand-navy px-3 py-1 text-xs font-semibold text-white hover:bg-[#1B2537] disabled:opacity-50">{t.q_lost}</button>
+              <button type="button" onClick={() => push({ from: 'me', text: t.q_time }, { from: 'bot', text: t.a_time })} className="rounded-full border border-zinc-300 px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-50">{t.q_time}</button>
+              <button type="button" onClick={() => push({ from: 'me', text: t.q_pdf }, { from: 'bot', text: t.a_pdf })} className="rounded-full border border-zinc-300 px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-50">{t.q_pdf}</button>
+              <button type="button" onClick={() => push({ from: 'me', text: t.q_refund }, { from: 'bot', text: t.a_refund })} className="rounded-full border border-zinc-300 px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-50">{t.q_refund}</button>
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
               {humanHref ? (
-                <a href={humanHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-white/15">
-                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-emerald-300" fill="currentColor" aria-hidden><path d="M12 2a10 10 0 00-8.6 15.1L2 22l5-1.3A10 10 0 1012 2zm0 18.2a8.2 8.2 0 01-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1112 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.6.8-.8 1-.3.2-.5.1a6.7 6.7 0 01-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 00-.7.3 3 3 0 00-.9 2.2 5.2 5.2 0 001.1 2.7 11.8 11.8 0 004.5 4c.6.3 1.1.4 1.5.5a3.6 3.6 0 001.6.1 2.7 2.7 0 001.8-1.3 2.2 2.2 0 00.2-1.3c-.1-.1-.3-.2-.5-.3z" /></svg>
+                <a href={humanHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-2.5 py-1.5 text-xs font-semibold text-brand-navy hover:bg-zinc-200">
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-emerald-600" fill="currentColor" aria-hidden><path d="M12 2a10 10 0 00-8.6 15.1L2 22l5-1.3A10 10 0 1012 2zm0 18.2a8.2 8.2 0 01-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1112 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.6.8-.8 1-.3.2-.5.1a6.7 6.7 0 01-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 00-.7.3 3 3 0 00-.9 2.2 5.2 5.2 0 001.1 2.7 11.8 11.8 0 004.5 4c.6.3 1.1.4 1.5.5a3.6 3.6 0 001.6.1 2.7 2.7 0 001.8-1.3 2.2 2.2 0 00.2-1.3c-.1-.1-.3-.2-.5-.3z" /></svg>
                   {contact?.whatsapp ? t.human : t.human_mail}
                 </a>
               ) : (
                 <span className="text-[11px] text-zinc-500">{contact ? t.human_none : '…'}</span>
               )}
-              <button type="button" onClick={reset} className="text-[11px] text-zinc-400 underline-offset-2 hover:underline">{t.back}</button>
+              <button type="button" onClick={reset} className="text-[11px] text-zinc-500 underline-offset-2 hover:underline">{t.back}</button>
             </div>
           </div>
         </div>
@@ -366,7 +366,7 @@ export function SupportBubble() {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-label={t.open}
-        className="inline-flex h-12 items-center gap-2 rounded-full bg-brand-green pl-3.5 pr-4 text-sm font-bold text-brand-navy shadow-lg shadow-emerald-500/30 ring-2 ring-white/70 transition hover:bg-emerald-400"
+        className="inline-flex h-12 items-center gap-2 rounded-full bg-brand-navy pl-3.5 pr-4 text-sm font-semibold text-white shadow-[0_10px_30px_-10px_rgba(11,18,32,0.5)] transition hover:bg-[#1B2537]"
       >
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16v11H8l-4 4V5z" />

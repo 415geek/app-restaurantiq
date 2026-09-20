@@ -4,6 +4,7 @@ import { iqGetUserPaidReports } from '@/lib/funnel/iq-repository';
 import { LOCALE_TAG, type Locale } from '@/lib/i18n/locale';
 import { withLang } from '@/lib/i18n/resolve';
 import { resolveServerLocale } from '@/lib/i18n/server-locale';
+import { tierPill, ui } from '@/components/iq/ui';
 
 const isClerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY);
 
@@ -103,28 +104,21 @@ export default async function IqDashboardPage({ searchParams }: Props) {
     <main lang={LOCALE_TAG[locale]} className="min-h-screen px-6 py-12">
       <div className="mx-auto max-w-4xl">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white">{t.title}</h1>
-            <p className="mt-1 text-white/60">{t.sub}</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-brand-navy sm:text-3xl">{t.title}</h1>
+            <p className="mt-1 text-sm text-zinc-600">{t.sub}</p>
           </div>
-          <Link
-            href={home}
-            className="rounded-xl bg-emerald-500 px-5 py-2.5 font-medium text-black transition hover:bg-emerald-400"
-          >
+          <Link href={home} className={`${ui.btnPrimary} py-2.5`}>
             {t.newAnalysis}
           </Link>
         </div>
 
         {reports.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-12 text-center">
-            <div className="mb-4 text-5xl">📊</div>
-            <h2 className="mb-2 text-xl font-semibold text-white">{t.emptyTitle}</h2>
-            <p className="mb-6 text-white/60">{t.emptyBody}</p>
-            <Link
-              href={home}
-              className="inline-block rounded-xl bg-emerald-500 px-6 py-3 font-medium text-black transition hover:bg-emerald-400"
-            >
+          <div className={`${ui.card} p-12 text-center`}>
+            <h2 className="mb-2 text-xl font-semibold tracking-tight text-brand-navy">{t.emptyTitle}</h2>
+            <p className="mb-6 text-sm text-zinc-600">{t.emptyBody}</p>
+            <Link href={home} className={ui.btnPrimary}>
               {t.emptyCta}
             </Link>
           </div>
@@ -170,42 +164,33 @@ function ReportCard({
   report: { id: string; location: string; business_type: string | null; headline: string; verdict: string; created_at?: string };
   locale: Locale;
 }) {
-  const verdictColors: Record<string, string> = {
-    go: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    caution: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-    no: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
-  };
-
   const key = report.verdict?.toLowerCase();
-  const verdictColor = verdictColors[key] || 'bg-white/10 text-white/60 border-white/20';
+  const verdictColor = tierPill[key] ?? ui.pill.neutral;
   const verdictLabel = (key === 'go' || key === 'caution' || key === 'no' ? COPY[locale].verdict[key] : null) || report.verdict;
   const date = report.created_at ? new Date(report.created_at).toLocaleDateString(LOCALE_TAG[locale]) : '';
 
   return (
-    <Link
-      href={withLang(`/iq/report/${report.id}`, locale)}
-      className="block rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:border-emerald-500/30 hover:bg-white/10"
-    >
+    <Link href={withLang(`/iq/report/${report.id}`, locale)} className={`block ${ui.card} p-6 transition hover:border-zinc-400`}>
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="mb-2 flex items-center gap-3">
-            <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium uppercase ${verdictColor}`}>
+            <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${verdictColor}`}>
               {verdictLabel}
             </span>
             {report.business_type && (
-              <span className="text-xs text-white/40">{report.business_type}</span>
+              <span className="text-xs text-zinc-500">{report.business_type}</span>
             )}
           </div>
-          <h3 className="mb-1 text-lg font-semibold text-white line-clamp-1">
+          <h3 className="mb-1 text-lg font-semibold tracking-tight text-brand-navy line-clamp-1">
             {report.headline}
           </h3>
-          <p className="text-sm text-white/60 line-clamp-1">
-            📍 {report.location}
+          <p className="text-sm text-zinc-600 line-clamp-1">
+            {report.location}
           </p>
         </div>
         <div className="ml-4 flex flex-col items-end gap-2">
-          {date && <span className="text-xs text-white/40">{date}</span>}
-          <svg className="h-5 w-5 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {date && <span className="text-xs text-zinc-500">{date}</span>}
+          <svg className="h-5 w-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </div>
@@ -228,10 +213,10 @@ function QuickActionCard({
   disabled?: boolean;
 }) {
   const content = (
-    <div className={`rounded-xl border border-white/10 bg-white/5 p-5 text-center transition ${disabled ? 'opacity-50' : 'hover:border-white/20 hover:bg-white/10'}`}>
-      <div className="mb-2 text-2xl">{emoji}</div>
-      <h3 className="font-medium text-white">{title}</h3>
-      <p className="mt-1 text-xs text-white/50">{description}</p>
+    <div className={`${ui.card} p-5 text-center transition ${disabled ? 'opacity-50' : 'hover:border-zinc-400'}`}>
+      <div className="mb-2 text-2xl" aria-hidden>{emoji}</div>
+      <h3 className="font-semibold text-brand-navy">{title}</h3>
+      <p className="mt-1 text-xs text-zinc-500">{description}</p>
     </div>
   );
 

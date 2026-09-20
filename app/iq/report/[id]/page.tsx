@@ -30,6 +30,7 @@ import { fixtureAllowed, loadPrintModel } from '@/lib/iq/render/load';
 import { resolveStaticMaps, type StaticMaps } from '@/lib/iq/render/static-map';
 import type { ReportModel } from '@/lib/iq/model/schema';
 import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
+import { ui } from '@/components/iq/ui';
 import '@/app/print/print.css';
 
 type FullShape = Record<string, unknown>;
@@ -130,10 +131,10 @@ export default async function IqReportPage({ params, searchParams }: Props) {
     const t = LOCKED[lang];
     return (
       <main lang={LOCALE_TAG[lang]} className="flex min-h-screen items-center justify-center px-6">
-        <div className="text-center">
-          <h1 className="mb-4 text-3xl font-bold">{t.title}</h1>
-          <p className="mb-6 text-white/70">{t.body}</p>
-          <Link href={withLang('/iq', lang)} className="text-emerald-400 underline">
+        <div className={`${ui.card} w-full max-w-md p-8 text-center`}>
+          <h1 className="mb-3 text-2xl font-semibold tracking-tight text-brand-navy">{t.title}</h1>
+          <p className="mb-6 text-sm text-zinc-600">{t.body}</p>
+          <Link href={withLang('/iq', lang)} className={ui.btnPrimary}>
             {t.back}
           </Link>
         </div>
@@ -195,8 +196,10 @@ export default async function IqReportPage({ params, searchParams }: Props) {
       ? buildGoogleStaticMapUrl({ center: mapPins.center, pins: mapPins.pins })
       : null;
 
+  // Legacy (pre-360°) report body: its 1,300 lines are styled for the old navy
+  // shell, so it keeps a navy ground of its own until it is retired.
   return (
-    <main lang={LOCALE_TAG[lang]} className="min-h-screen px-6 py-12">
+    <main lang={LOCALE_TAG[lang]} className="min-h-screen bg-brand-navy px-6 py-12 text-zinc-50">
       <div className="mx-auto max-w-4xl space-y-6">
         <ReportContent
           report={{

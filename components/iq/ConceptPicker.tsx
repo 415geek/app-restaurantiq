@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react';
 import type { Locale } from '@/lib/i18n/locale';
 import { CONCEPT_CATEGORY_ORDER, conceptCategoryLabel, conceptOptionLabel, type ConceptOption } from '@/lib/iq/concept/labels';
 import type { ConceptCategory } from '@/lib/iq/params';
+import { ui } from '@/components/iq/ui';
 
 export interface ConceptPickerProps {
   lang: Locale;
@@ -71,16 +72,16 @@ export function ConceptPicker({ lang, typed, options, suggestedId, onConfirm, di
   const chosen = id ? options.find((o) => o.id === id) ?? null : null;
 
   return (
-    <div className="rounded-2xl border border-brand-green/40 bg-white/5 p-5" role="group" aria-label={t.title(typed)}>
-      <h3 className="text-base font-semibold text-white">{t.title(typed)}</h3>
-      <p className="mt-1 text-sm text-zinc-400">{t.help}</p>
+    <div className={`${ui.card} p-5 sm:p-6`} role="group" aria-label={t.title(typed)}>
+      <h3 className="text-lg font-semibold tracking-tight text-brand-navy">{t.title(typed)}</h3>
+      <p className="mt-1 text-sm text-zinc-600">{t.help}</p>
       {suggested ? (
-        <p className="mt-2 text-xs text-brand-green">
+        <p className="mt-2 text-xs font-medium text-emerald-700">
           {t.suggested}：{conceptCategoryLabel(suggested.category, lang)} · {conceptOptionLabel(suggested, lang)}
         </p>
       ) : null}
 
-      <div className="mt-4 text-xs font-medium uppercase tracking-wide text-zinc-500">{t.step1}</div>
+      <div className={`mt-5 ${ui.kicker}`}>{t.step1}</div>
       <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label={t.step1}>
         {categories.map((c) => (
           <button
@@ -94,7 +95,7 @@ export function ConceptPicker({ lang, typed, options, suggestedId, onConfirm, di
               setCategory(c);
               setId(null);
             }}
-            className={`rounded-full border px-3 py-1.5 text-sm transition ${category === c ? 'border-brand-green bg-brand-green text-brand-navy' : 'border-white/20 text-zinc-200 hover:border-white/40'} disabled:opacity-50`}
+            className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${category === c ? 'border-brand-navy bg-brand-navy text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:border-brand-navy'} disabled:opacity-50`}
           >
             {conceptCategoryLabel(c, lang)}
           </button>
@@ -103,7 +104,7 @@ export function ConceptPicker({ lang, typed, options, suggestedId, onConfirm, di
 
       {category ? (
         <>
-          <div className="mt-4 text-xs font-medium uppercase tracking-wide text-zinc-500">{t.step2}</div>
+          <div className={`mt-5 ${ui.kicker}`}>{t.step2}</div>
           <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label={t.step2}>
             {subtypes.map((o) => (
               <button
@@ -113,7 +114,7 @@ export function ConceptPicker({ lang, typed, options, suggestedId, onConfirm, di
                 disabled={disabled}
                 aria-checked={id === o.id}
                 onClick={() => setId(o.id)}
-                className={`rounded-lg border px-3 py-1.5 text-sm transition ${id === o.id ? 'border-white bg-white text-brand-navy' : 'border-white/15 text-zinc-300 hover:border-white/40'} disabled:opacity-50`}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${id === o.id ? 'border-brand-navy bg-brand-navy text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:border-brand-navy'} disabled:opacity-50`}
               >
                 {conceptOptionLabel(o, lang)}
               </button>
@@ -126,7 +127,7 @@ export function ConceptPicker({ lang, typed, options, suggestedId, onConfirm, di
         type="button"
         disabled={disabled || !chosen}
         onClick={() => chosen && onConfirm(chosen.id)}
-        className="mt-5 w-full rounded-xl bg-brand-green px-5 py-3 text-sm font-semibold text-brand-navy transition hover:bg-emerald-400 disabled:opacity-50"
+        className={`mt-6 w-full ${ui.btnPrimary}`}
       >
         {chosen ? `${t.confirm} · ${conceptOptionLabel(chosen, lang)}` : t.pickFirst}
       </button>

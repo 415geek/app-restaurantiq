@@ -229,10 +229,10 @@ function SupportLink({ lang, reportId, location }: { lang: Locale; reportId: str
   const text = encodeURIComponent(`Report ${reportId} · ${location} · still generating after 10 min`);
   const href = cfg?.whatsapp ? `https://wa.me/${cfg.whatsapp}?text=${text}` : cfg?.email ? `mailto:${cfg.email}?subject=${text}` : null;
   return (
-    <p className="text-xs text-zinc-400" data-testid="late-support">
+    <p className="text-xs text-zinc-500" data-testid="late-support">
       {t.lateNote}{' '}
       {href ? (
-        <a href={href} target="_blank" rel="noreferrer" className="text-emerald-400 underline underline-offset-4">
+        <a href={href} target="_blank" rel="noreferrer" className="font-medium text-brand-navy underline underline-offset-4">
           {t.support}
         </a>
       ) : (
@@ -408,7 +408,7 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6 py-16">
-      <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900/80 p-8">
+      <div className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-8 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
         <p className="text-center text-xs text-zinc-500">{location}</p>
         <IqAnalysisProgressBar
           lang={lang}
@@ -436,17 +436,17 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
         {showEmailForm ? (
           <div
             // §4.7: past five minutes the capture stops being an aside and asks.
-            className={`mt-6 rounded-xl border p-4 ${late && !savedEmail ? 'border-emerald-700/70 bg-emerald-950/20' : 'border-zinc-800 bg-zinc-950/60'}`}
+            className={`mt-6 rounded-xl border p-4 ${late && !savedEmail ? 'border-brand-navy/40 bg-[#FAFAF8]' : 'border-zinc-200 bg-[#FAFAF8]'}`}
             data-testid="notify-form"
             data-prompt={late ? 'active' : 'passive'}
           >
             {savedEmail ? (
-              <p className={`text-sm ${savedWillSend ? 'text-emerald-400' : 'text-amber-300'}`}>
+              <p className={`text-sm ${savedWillSend ? 'text-emerald-700' : 'text-amber-800'}`}>
                 {savedWillSend ? t.willEmail(savedEmail) : t.savedNoSend(savedEmail)}
               </p>
             ) : (
               <>
-                <p className="text-sm text-zinc-300">{late ? t.emailPromptLate : t.emailPrompt}</p>
+                <p className="text-sm text-zinc-700">{late ? t.emailPromptLate : t.emailPrompt}</p>
                 <form
                   className="mt-3 flex flex-col gap-2 sm:flex-row"
                   onSubmit={(e) => {
@@ -460,21 +460,21 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder={t.emailPlaceholder}
-                    className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500 focus:outline-none"
+                    className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-brand-navy placeholder:text-zinc-400 focus:border-brand-navy focus:outline-none"
                   />
                   <button
                     type="submit"
                     disabled={emailState === 'saving'}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-60"
+                    className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-[#1B2537] disabled:opacity-60"
                   >
                     {emailState === 'saving' ? t.saving : t.emailMe}
                   </button>
                 </form>
-                {emailState === 'error' ? <p className="mt-2 text-xs text-rose-400">{t.emailError}</p> : null}
+                {emailState === 'error' ? <p className="mt-2 text-xs text-rose-700">{t.emailError}</p> : null}
               </>
             )}
             {veryLate ? (
-              <div className="mt-3 border-t border-zinc-800 pt-3">
+              <div className="mt-3 border-t border-zinc-200 pt-3">
                 <SupportLink lang={lang} reportId={reportId} location={location} />
               </div>
             ) : null}
@@ -483,11 +483,11 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
 
         {error ? (
           <div className="mt-6 space-y-3 text-center">
-            <p className="text-sm text-rose-400">{error}</p>
+            <p className="text-sm text-rose-700">{error}</p>
             <button
               type="button"
               onClick={() => setRetryKey((k) => k + 1)}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+              className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-[#1B2537]"
             >
               {t.retry}
             </button>
@@ -496,7 +496,7 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
         ) : null}
 
         <div className="mt-8 text-center">
-          <Link href={withLang('/iq', lang)} className="text-sm text-emerald-500/90 hover:text-emerald-400 hover:underline">
+          <Link href={withLang('/iq', lang)} className="text-sm font-medium text-brand-navy underline decoration-zinc-300 underline-offset-4 hover:decoration-brand-navy">
             {t.back}
           </Link>
         </div>

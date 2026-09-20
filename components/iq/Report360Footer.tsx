@@ -15,6 +15,7 @@ import { ShareButton } from '@/components/share/ShareButton';
 import { LOCALES, LOCALE_LABEL, type Locale } from '@/lib/i18n/locale';
 import { withLang } from '@/lib/i18n/resolve';
 import { persistLocale } from '@/lib/i18n/use-locale';
+import { ui } from '@/components/iq/ui';
 
 type Copy = {
   kicker: string;
@@ -207,17 +208,17 @@ export function Report360Footer({ reportId, lang, location, pageHref, isLinkedTo
 
   return (
     <footer className="report-viewer-footer mx-auto mt-8 w-full max-w-[203.9mm]" data-report-footer="">
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/90">{t.kicker}</div>
-        <h2 className="mt-1 text-xl font-semibold text-white">{t.title}</h2>
-        <p className="mt-1 text-sm text-zinc-300">{t.desc}</p>
+      <div className={`${ui.card} p-5 sm:p-6`}>
+        <div className={ui.kicker}>{t.kicker}</div>
+        <h2 className="mt-1 text-xl font-semibold tracking-tight text-brand-navy">{t.title}</h2>
+        <p className="mt-1 text-sm text-zinc-600">{t.desc}</p>
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <button
             type="button"
             onClick={() => void handleDownloadPdf()}
             disabled={disabled}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-green px-6 py-3 text-base font-semibold text-brand-navy transition hover:bg-emerald-400 disabled:opacity-50"
+            className={`${ui.btnPrimary} px-6 text-base`}
           >
             {isDownloading ? (
               <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" aria-hidden>
@@ -245,7 +246,7 @@ export function Report360Footer({ reportId, lang, location, pageHref, isLinkedTo
             href={printUrl}
             target="_blank"
             rel="noopener"
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 px-6 py-3 text-base font-medium text-white transition hover:bg-white/10"
+            className={`${ui.btnSecondary} px-6 text-base`}
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -254,15 +255,15 @@ export function Report360Footer({ reportId, lang, location, pageHref, isLinkedTo
           </a>
         </div>
         {pdfError ? (
-          <p className="mt-3 text-xs text-amber-400/90" role="alert">
+          <p className="mt-3 text-xs text-rose-700" role="alert">
             {pdfError}
           </p>
         ) : null}
 
-        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-white/10 pt-5">
+        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-zinc-200 pt-5">
           <div className="inline-flex items-center gap-2" role="group" aria-label={t.language}>
-            <span className="text-xs text-zinc-400">{t.language}</span>
-            <div className="inline-flex rounded-lg border border-white/15 bg-black/20 p-1">
+            <span className="text-xs text-zinc-500">{t.language}</span>
+            <div className={ui.segment}>
               {LOCALES.map((l) => (
                 <Link
                   key={l}
@@ -270,9 +271,7 @@ export function Report360Footer({ reportId, lang, location, pageHref, isLinkedTo
                   onClick={() => persistLocale(l)}
                   aria-current={lang === l ? 'page' : undefined}
                   data-lang-pill={l}
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                    lang === l ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-300 hover:text-white'
-                  }`}
+                  className={lang === l ? ui.segmentOn : ui.segmentOff}
                 >
                   {LOCALE_LABEL[l]}
                 </Link>
@@ -285,7 +284,7 @@ export function Report360Footer({ reportId, lang, location, pageHref, isLinkedTo
               onClick={() => setFormOpen((o) => !o)}
               disabled={disabled}
               aria-expanded={formOpen}
-              className="text-sm text-emerald-300 underline decoration-emerald-700/60 underline-offset-4 hover:text-white disabled:opacity-50"
+              className={ui.btnLink}
             >
               {t.addDetails}
             </button>
@@ -293,8 +292,8 @@ export function Report360Footer({ reportId, lang, location, pageHref, isLinkedTo
         </div>
 
         {formOpen && !generating ? (
-          <div className="mt-4 rounded-xl border border-emerald-800/50 bg-emerald-950/30 p-4">
-            <p className="mb-3 text-xs text-zinc-300">{t.addDetailsDesc}</p>
+          <div className={`mt-4 ${ui.inset} p-4`}>
+            <p className="mb-3 text-xs text-zinc-600">{t.addDetailsDesc}</p>
             <PaidIntakeForm
               lang={lang}
               reportId={reportId}
@@ -308,7 +307,7 @@ export function Report360Footer({ reportId, lang, location, pageHref, isLinkedTo
           </div>
         ) : null}
         {generating ? (
-          <div className="mt-4 flex items-center gap-3 rounded-xl border border-emerald-900/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200" role="status">
+          <div className={`mt-4 flex items-center gap-3 ${ui.inset} px-4 py-3 text-sm text-zinc-700`} role="status">
             <svg className="h-4 w-4 shrink-0 animate-spin" viewBox="0 0 24 24" aria-hidden>
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -317,21 +316,21 @@ export function Report360Footer({ reportId, lang, location, pageHref, isLinkedTo
           </div>
         ) : null}
         {regenError ? (
-          <p className="mt-3 text-xs text-amber-400/90" role="alert">
+          <p className="mt-3 text-xs text-rose-700" role="alert">
             {regenError}
           </p>
         ) : null}
       </div>
 
       <div className="mt-6 flex flex-col items-center gap-3 text-center text-sm sm:flex-row sm:justify-between">
-        <Link href={withLang('/iq', lang)} className="text-emerald-400/90 hover:text-emerald-300 hover:underline">
+        <Link href={withLang('/iq', lang)} className={ui.btnLink}>
           ← {t.analyzeAnother}
         </Link>
         <span className="text-xs text-zinc-500">
           {t.reportId}: {reportId.slice(0, 8)}
         </span>
         {isLinkedToUser ? (
-          <Link href={withLang('/iq/dashboard', lang)} className="text-zinc-300 hover:text-white hover:underline">
+          <Link href={withLang('/iq/dashboard', lang)} className={ui.btnLink}>
             {t.dashboard} →
           </Link>
         ) : null}

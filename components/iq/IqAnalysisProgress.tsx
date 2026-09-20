@@ -205,29 +205,29 @@ export function IqAnalysisProgressBar({
 
   return (
     <div className="w-full text-left">
-      {title ? <h2 className="text-center text-xl font-semibold text-zinc-100">{title}</h2> : null}
+      {title ? <h2 className="text-center text-xl font-semibold tracking-tight text-brand-navy">{title}</h2> : null}
       {subtitle ? (
-        <p className="mt-2 text-center text-sm leading-relaxed text-zinc-400">{subtitle}</p>
+        <p className="mt-2 text-center text-sm leading-relaxed text-zinc-500">{subtitle}</p>
       ) : null}
 
       <div className="mt-8">
         <div className="mb-2 flex items-center justify-between text-xs text-zinc-500">
           <span>{BAR_COPY[lang].progress}</span>
-          <span className="tabular-nums font-medium text-emerald-400/90">{pct}%</span>
+          <span className="tabular-nums font-semibold text-brand-navy">{pct}%</span>
         </div>
         <div
-          className="h-2.5 overflow-hidden rounded-full bg-zinc-800/90 ring-1 ring-zinc-700/50"
+          className="h-2 overflow-hidden rounded-full bg-zinc-200"
           role="progressbar"
           aria-valuenow={pct}
           aria-valuemin={0}
           aria-valuemax={100}
         >
           <div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-700 via-emerald-500 to-teal-400 transition-[width] duration-700 ease-out"
+            className="h-full rounded-full bg-brand-navy transition-[width] duration-700 ease-out"
             style={{ width: `${pct}%` }}
           />
         </div>
-        {statusLine ? <div className="mt-2.5">{statusLine}</div> : elapsedLabel ? <p className="mt-2 text-xs text-zinc-600">{elapsedLabel}</p> : null}
+        {statusLine ? <div className="mt-2.5">{statusLine}</div> : elapsedLabel ? <p className="mt-2 text-xs text-zinc-500">{elapsedLabel}</p> : null}
       </div>
 
       <ul className="mt-6 space-y-2.5" data-testid="stage-list">
@@ -244,27 +244,27 @@ export function IqAnalysisProgressBar({
               data-state={done ? 'done' : current ? 'active' : 'pending'}
               data-stalled={stalled ? 'true' : undefined}
               className={`flex items-start gap-2.5 text-sm transition-opacity duration-500 ${
-                done || current ? 'opacity-100' : 'opacity-35'
+                done || current ? 'opacity-100' : 'opacity-45'
               }`}
             >
               <span
                 className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
                   done
-                    ? 'bg-emerald-500/20 text-emerald-400'
+                    ? 'bg-emerald-100 text-emerald-700'
                     : stalled
-                      ? 'animate-pulse bg-amber-500/25 text-amber-300'
+                      ? 'animate-pulse bg-amber-100 text-amber-700'
                       : current
-                        ? 'animate-pulse bg-emerald-500/30 text-emerald-300'
-                        : 'bg-zinc-800 text-zinc-600'
+                        ? 'animate-pulse bg-brand-navy text-white'
+                        : 'bg-zinc-100 text-zinc-500'
                 }`}
                 aria-hidden
               >
                 {done ? '✓' : stalled ? '↻' : current ? '…' : i + 1}
               </span>
-              <span className={current ? 'text-zinc-200' : 'text-zinc-400'}>
+              <span className={current ? 'font-medium text-brand-navy' : 'text-zinc-600'}>
                 {stage.label}
                 {stalled ? (
-                  <span className="mt-0.5 block text-xs text-amber-300" data-testid="stage-retrying">
+                  <span className="mt-0.5 block text-xs text-amber-700" data-testid="stage-retrying">
                     {STAGE_RETRY_COPY[lang]}
                   </span>
                 ) : null}

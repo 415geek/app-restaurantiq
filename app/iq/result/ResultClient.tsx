@@ -50,6 +50,7 @@ import {
 import { LOCALES, LOCALE_TAG, type Locale } from '@/lib/i18n/locale';
 import { withLang } from '@/lib/i18n/resolve';
 import { persistLocale, useLocale } from '@/lib/i18n/use-locale';
+import { tierPill, ui } from '@/components/iq/ui';
 
 const LEAD_STORAGE_KEY = 'iq:lead:v1';
 const LEAD_DISMISSED_KEY = 'iq:lead:dismissed:v1';
@@ -223,7 +224,7 @@ const resultCopy: Record<Locale, Copy> = {
     redirecting: 'Redirecting…',
     unlockReport: `Unlock the full risk audit — $${PRICE_USD}`,
     riskAudit: 'Location risk scorecard',
-    promoCodeHint: '🔑 Have an access code? Enter it to unlock the report',
+    promoCodeHint: 'Have an access code? Enter it to unlock the report',
     accessCodePlaceholder: 'Access code',
     accessCodeSubmit: 'Unlock',
     accessCodeSubmitting: 'Unlocking…',
@@ -260,7 +261,7 @@ const resultCopy: Record<Locale, Copy> = {
     redirecting: '正在跳转…',
     unlockReport: `解锁完整风险审计 — $${PRICE_USD}`,
     riskAudit: '选址风险评分卡',
-    promoCodeHint: '🔑 输入 access code 解锁报告',
+    promoCodeHint: '输入 access code 解锁报告',
     accessCodePlaceholder: '请输入 access code',
     accessCodeSubmit: '解锁',
     accessCodeSubmitting: '解锁中…',
@@ -296,7 +297,7 @@ const resultCopy: Record<Locale, Copy> = {
     redirecting: 'Redirigiendo…',
     unlockReport: `Desbloquear la auditoría de riesgo completa — $${PRICE_USD}`,
     riskAudit: 'Tarjeta de riesgo de la ubicación',
-    promoCodeHint: '🔑 ¿Tienes un código de acceso? Ingrésalo para desbloquear el informe',
+    promoCodeHint: '¿Tienes un código de acceso? Ingrésalo para desbloquear el informe',
     accessCodePlaceholder: 'Código de acceso',
     accessCodeSubmit: 'Desbloquear',
     accessCodeSubmitting: 'Desbloqueando…',
@@ -336,30 +337,18 @@ function VerdictBadge({
   const tier = parseDecisionTier(decisionTier);
   const tierCopy = decisionTierDisplay(tier, locale);
   if (tierCopy) {
-    const tierColors: Record<string, string> = {
-      strong_go: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-      go_with_conditions: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
-      need_more_data: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-      high_risk: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
-      no_go: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
-    };
-    const color = tierColors[tier!] ?? 'bg-white/10 text-white/80 border-white/20';
+    const color = tierPill[tier!] ?? ui.pill.neutral;
     return (
-      <span className={`inline-block rounded-full border px-4 py-1.5 text-sm font-medium ${color}`}>
+      <span className={`inline-block rounded-full border px-4 py-1.5 text-sm font-semibold ${color}`}>
         {tierCopy.label}
       </span>
     );
   }
   const v = verdict.toLowerCase();
-  const colors: Record<string, string> = {
-    go: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    caution: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-    no: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
-  };
   const label = (v === 'go' || v === 'caution' || v === 'no' ? resultCopy[locale].verdict[v] : null) || verdict;
-  const color = colors[v] || 'bg-white/10 text-white/80 border-white/20';
+  const color = tierPill[v] ?? ui.pill.neutral;
   return (
-    <span className={`inline-block rounded-full border px-4 py-1.5 text-sm font-medium ${color}`}>
+    <span className={`inline-block rounded-full border px-4 py-1.5 text-sm font-semibold ${color}`}>
       {label}
     </span>
   );
@@ -742,8 +731,8 @@ export function ResultClient(props: ResultClientProps) {
 
   const languagePills = (
     <div className="inline-flex items-center gap-2" role="group" aria-label={t.language} title={t.languageHint}>
-      <span className="text-xs text-white/50">{t.language}</span>
-      <div className="inline-flex rounded-full border border-white/15 bg-white/5 p-0.5">
+      <span className="text-xs text-zinc-500">{t.language}</span>
+      <div className={ui.segment}>
         {LOCALES.map((l) => (
           <button
             key={l}
@@ -752,9 +741,7 @@ export function ResultClient(props: ResultClientProps) {
             aria-pressed={l === locale}
             lang={LOCALE_TAG[l]}
             data-lang-pill={l}
-            className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-              l === locale ? 'bg-white/90 text-brand-navy' : 'text-white/70 hover:bg-white/10 hover:text-white'
-            }`}
+            className={l === locale ? ui.segmentOn : ui.segmentOff}
           >
             {SHORT_LABEL[l]}
           </button>
@@ -791,10 +778,10 @@ export function ResultClient(props: ResultClientProps) {
 
   if (isQuery && conceptPrompt) {
     return (
-      <main lang={htmlLang} className="flex min-h-screen items-center justify-center px-6 py-12">
+      <main lang={htmlLang} className="flex min-h-screen items-center justify-center px-4 py-12 sm:px-6">
         <div className="w-full max-w-lg space-y-4">
-          <p className="text-center text-xs uppercase tracking-[0.25em] text-white/50">{t.conceptNeeded}</p>
-          <p className="text-center text-sm text-white/60">{location}</p>
+          <p className={`text-center ${ui.kicker}`}>{t.conceptNeeded}</p>
+          <p className="text-center text-sm text-zinc-600">{location}</p>
           <ConceptPicker
             lang={locale}
             typed={businessType}
@@ -812,8 +799,8 @@ export function ResultClient(props: ResultClientProps) {
 
   if (loading || (!isQuery && !stored && !storedMissing)) {
     return (
-      <main lang={htmlLang} className="flex min-h-screen items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8">
+      <main lang={htmlLang} className="flex min-h-screen items-center justify-center px-4 py-12 sm:px-6">
+        <div className={`w-full max-w-md ${ui.card} p-8`}>
           <IqAnalysisProgressBar
             lang={locale}
             title={t.analyzing}
@@ -830,9 +817,9 @@ export function ResultClient(props: ResultClientProps) {
   if (!isQuery && storedMissing && !stored) {
     return (
       <main lang={htmlLang} className="flex min-h-screen items-center justify-center px-6">
-        <div className="text-center">
-          <p className="text-sm text-white/80 sm:text-base">{t.resultNotFound}</p>
-          <a href={withLang('/iq', locale)} className="mt-4 inline-block text-sm text-emerald-400 underline underline-offset-4">
+        <div className={`${ui.card} max-w-md p-8 text-center`}>
+          <p className="text-sm text-zinc-700 sm:text-base">{t.resultNotFound}</p>
+          <a href={withLang('/iq', locale)} className={`mt-5 ${ui.btnPrimary}`}>
             {t.runNewAnalysis}
           </a>
         </div>
@@ -843,7 +830,7 @@ export function ResultClient(props: ResultClientProps) {
   if (error || !data) {
     return (
       <main lang={htmlLang} className="flex min-h-screen items-center justify-center px-6">
-        <p className="whitespace-pre-line text-center text-sm text-white/80 sm:text-base">
+        <p className={`${ui.card} max-w-md whitespace-pre-line p-8 text-center text-sm text-zinc-700 sm:text-base`}>
           {error || t.fallbackLoadFailed}
         </p>
       </main>
@@ -862,100 +849,95 @@ export function ResultClient(props: ResultClientProps) {
       {leadSheet}
       <main
         lang={htmlLang}
-        className={`flex min-h-screen items-center justify-center px-6 py-12 ${showLeadSheet ? 'pb-[26rem] sm:pb-72' : ''}`}
+        className={`min-h-screen px-4 py-8 sm:px-6 sm:py-12 ${showLeadSheet ? 'pb-[26rem] sm:pb-72' : ''}`}
         data-testid="iq-result"
       >
-        <div className="w-full max-w-2xl space-y-6">
+        <div className="mx-auto w-full max-w-2xl space-y-5">
           {/* Social proof + language: the pills switch the whole flow (see switchLanguage). */}
           <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:justify-between">
             <SocialProofBadge locale={locale} />
             {languagePills}
           </div>
 
-        {/* 1. Verdict + Headline Card */}
-        <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 p-8 text-center shadow-2xl">
-          <div className="mb-3 text-xs uppercase tracking-[0.25em] text-white/50">
-            {t.aiVerdict}
+        {/* 1. Verdict + headline — a memo header, not a hero: left-aligned, one pill, one line of context. */}
+        <section className={`${ui.card} p-6 sm:p-8`}>
+          <div className={ui.kicker}>{t.aiVerdict}</div>
+          <div className="mt-3">
+            <VerdictBadge
+              verdict={data.verdict}
+              decisionTier={data.decision_tier}
+              locale={locale}
+            />
           </div>
-          <VerdictBadge
-            verdict={data.verdict}
-            decisionTier={data.decision_tier}
-            locale={locale}
-          />
-          <h1 className="mt-5 text-3xl font-bold leading-tight text-white md:text-4xl">
+          <h1 className="mt-4 text-2xl font-semibold leading-snug tracking-tight text-brand-navy sm:text-[1.75rem]">
             {data.headline}
           </h1>
           {data.subheadline && (
-            <p className="mx-auto mt-4 max-w-lg text-base text-white/60">{data.subheadline}</p>
+            <p className="mt-3 text-base leading-relaxed text-zinc-600">{data.subheadline}</p>
           )}
-        </div>
+          {(location || businessType) && (
+            <p className="mt-5 border-t border-zinc-100 pt-4 text-xs text-zinc-500">
+              {[location, businessType].filter(Boolean).join(' · ')}
+            </p>
+          )}
+        </section>
 
         {data.risk_audit_preview && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-white/70">
-              {t.riskAudit}
-            </h2>
+          <section className={`${ui.card} p-6`}>
+            <h2 className={`mb-4 ${ui.kicker}`}>{t.riskAudit}</h2>
             <RiskAuditScorecard
               audit={data.risk_audit_preview}
               lang={locale}
               businessType={businessType}
               compact
             />
-          </div>
+          </section>
         )}
 
-        {/* 2. Market Snapshot */}
+        {/* 2. Market snapshot */}
         {data.market_snapshot && data.market_snapshot.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-white/70">
-              <span>📊</span> {t.marketSnapshot}
-            </h2>
-            <ul className="space-y-3">
+          <section className={`${ui.card} p-6`}>
+            <h2 className={`mb-2 ${ui.kicker}`}>{t.marketSnapshot}</h2>
+            <ul className="divide-y divide-zinc-100">
               {data.market_snapshot.map((item, i) => (
-                <li
-                  key={i}
-                  className="flex items-start gap-3 text-sm text-white/80"
-                >
-                  <span className="mt-0.5 text-emerald-400">•</span>
+                <li key={i} className="flex items-start gap-3 py-3 text-sm leading-relaxed text-zinc-700">
+                  <span className="mt-[0.55em] h-1.5 w-1.5 shrink-0 rounded-full bg-brand-navy" aria-hidden />
                   <span>{item}</span>
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
         )}
 
-        {/* 3. Hidden Risk */}
+        {/* 3. Hidden risk — one red rule, no tinted box. */}
         {data.hidden_risk && (
-          <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-6">
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-rose-300">
-              <span>⚠️</span> {t.keyRisk}
-            </h2>
-            <p className="text-base leading-relaxed text-white/80">{data.hidden_risk}</p>
-          </div>
+          <section className={`${ui.card} border-l-4 border-l-rose-500 p-6`}>
+            <h2 className={`mb-2 ${ui.kicker} text-rose-700`}>{t.keyRisk}</h2>
+            <p className="text-base leading-relaxed text-zinc-800">{data.hidden_risk}</p>
+          </section>
         )}
 
-        {/* 4. Paywall Teaser + Locked Content */}
-        <div className="rounded-3xl border border-amber-500/20 bg-gradient-to-br from-amber-900/20 to-amber-800/10 p-6">
+        {/* 4. Paywall: what is locked, the intake, the unlock. */}
+        <section className={`${ui.card} p-6`}>
           {data.paywall_teaser && (
-            <p className="mb-5 text-center text-base font-medium text-amber-200">
-              &ldquo;{data.paywall_teaser}&rdquo;
-            </p>
+            <p className="mb-5 text-base font-medium leading-relaxed text-brand-navy">{data.paywall_teaser}</p>
           )}
-          <h2 className="mb-4 text-center text-sm font-semibold uppercase tracking-wide text-white/60">
-            🔒 {t.lockedFullReport}
-          </h2>
-          <ul className="space-y-2.5 text-sm text-white/50">
+          <h2 className={`mb-3 ${ui.kicker}`}>{t.lockedFullReport}</h2>
+          <ul className="divide-y divide-zinc-100 border-y border-zinc-100">
             {getIqPaywallLockedItems(locale).map((item, i) => (
-              <li key={i} className="flex items-center gap-2">
-                <span className="blur-[2px]">████</span>
+              <li key={i} className="flex items-center gap-3 py-2.5 text-sm text-zinc-600">
+                <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-zinc-400" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                  <rect x="4.5" y="8.5" width="11" height="8" rx="1.5" />
+                  <path d="M7 8.5V6a3 3 0 016 0v2.5" strokeLinecap="round" />
+                </svg>
                 <span>{item}</span>
               </li>
             ))}
           </ul>
 
           {/* Step 1 — always-visible intake (rent / size / seats first; the rest behind a toggle). Saved on unlock. */}
-          <section aria-labelledby="paid-intake-step" className="mt-5 rounded-2xl border border-white/10 bg-black/25 p-4">
-            <h3 id="paid-intake-step" className="mb-3 text-sm font-semibold leading-snug text-white">
+          <section aria-labelledby="paid-intake-step" className="mt-5">
+            <h3 id="paid-intake-step" className="mb-3 text-sm font-semibold leading-snug text-brand-navy">
               {t.stepOne}
             </h3>
             <PaidIntakeForm
@@ -975,28 +957,25 @@ export function ResultClient(props: ResultClientProps) {
             type="button"
             onClick={() => void handleCheckout()}
             disabled={checkoutLoading}
-            className="mt-4 w-full rounded-2xl bg-emerald-400 px-6 py-4 text-lg font-bold text-black transition hover:bg-emerald-300 hover:shadow-lg hover:shadow-emerald-400/20 disabled:opacity-60"
+            className={`mt-4 w-full ${ui.btnPrimary} py-4 text-base`}
           >
             {checkoutLoading ? t.redirecting : `${t.stepTwoPrefix}${t.unlockReport}`}
           </button>
           {rentNoticeShown && rentMissing && !checkoutLoading ? (
-            <div
-              role="status"
-              className="mt-3 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm leading-relaxed text-amber-100"
-            >
+            <div role="status" className={`mt-3 ${ui.notice}`}>
               <p>{t.rentNotice}</p>
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
                 <button
                   type="button"
                   onClick={focusRentInput}
-                  className="rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-brand-navy transition hover:brightness-110"
+                  className="rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#1B2537]"
                 >
                   {t.rentNoticeFill}
                 </button>
                 <button
                   type="button"
                   onClick={() => void handleCheckout({ skipRentNotice: true })}
-                  className="text-xs text-white/60 underline underline-offset-4 transition hover:text-white"
+                  className="text-xs font-medium text-amber-900 underline underline-offset-4"
                 >
                   {t.rentNoticeProceed}
                 </button>
@@ -1004,11 +983,11 @@ export function ResultClient(props: ResultClientProps) {
             </div>
           ) : null}
           {checkoutError && (
-            <p className="mt-2 text-center text-sm text-rose-300">{checkoutError}</p>
+            <p className="mt-2 text-center text-sm text-rose-700">{checkoutError}</p>
           )}
 
-          <div className="mt-5">
-            <p className="mb-2 text-center text-sm text-emerald-300/80">{t.promoCodeHint}</p>
+          <div className="mt-6 border-t border-zinc-100 pt-5">
+            <p className="mb-2 text-sm font-medium text-zinc-700">{t.promoCodeHint}</p>
             <form
               className="flex flex-col gap-2 sm:flex-row"
               onSubmit={(e) => {
@@ -1030,31 +1009,27 @@ export function ResultClient(props: ResultClientProps) {
                 maxLength={64}
                 aria-label={t.accessCodePlaceholder}
                 disabled={accessCodeLoading}
-                className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition focus:border-emerald-400/60 focus:bg-white/10 disabled:opacity-60"
+                className={`flex-1 ${ui.input} py-3`}
               />
-              <button
-                type="submit"
-                disabled={accessCodeLoading || !accessCode.trim()}
-                className="rounded-xl bg-emerald-400/20 px-5 py-3 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/30 disabled:opacity-50"
-              >
+              <button type="submit" disabled={accessCodeLoading || !accessCode.trim()} className={ui.btnSecondary}>
                 {accessCodeLoading ? t.accessCodeSubmitting : t.accessCodeSubmit}
               </button>
             </form>
             {accessCodeLoading ? (
               <div className="mt-3">
-                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                  <div className="h-full w-2/5 animate-pulse rounded-full bg-gradient-to-r from-emerald-600 to-teal-400" />
+                <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200">
+                  <div className="h-full w-2/5 animate-pulse rounded-full bg-brand-navy" />
                 </div>
-                <p className="mt-2 text-center text-xs text-white/50">{t.accessCodeVerified}</p>
+                <p className="mt-2 text-center text-xs text-zinc-500">{t.accessCodeVerified}</p>
               </div>
             ) : null}
             {accessCodeError && (
-              <p className="mt-2 text-center text-sm text-rose-300">{accessCodeError}</p>
+              <p className="mt-2 text-center text-sm text-rose-700">{accessCodeError}</p>
             )}
           </div>
 
-          <p className="mt-4 text-center text-xs text-white/40">{t.footnote}</p>
-        </div>
+          <p className="mt-4 text-center text-xs text-zinc-500">{t.footnote}</p>
+        </section>
 
         {/* Share + Social Proof */}
         <div className="flex flex-col items-center gap-4">

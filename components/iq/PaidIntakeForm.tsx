@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Locale } from '@/lib/i18n/locale';
+import { ui } from '@/components/iq/ui';
 
 /**
  * PaidIntakeForm — the optional "add details" step between the free report and
@@ -244,12 +245,10 @@ const COPY: Record<
   },
 };
 
-const inputCls =
-  'w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none transition focus:border-emerald-400/60 focus:bg-white/10 disabled:opacity-60';
-const coreInputCls =
-  'w-full rounded-xl border border-brand-green/40 bg-brand-navy/60 px-3 py-3 text-base text-white placeholder-white/30 outline-none transition focus:border-brand-green focus:ring-2 focus:ring-brand-green/40 disabled:opacity-60';
-const labelCls = 'mb-1 block text-xs font-medium text-white/60';
-const hintCls = 'mt-1 text-[11px] text-white/35';
+const inputCls = ui.input;
+const coreInputCls = `${ui.input} py-3 text-base`;
+const labelCls = ui.label;
+const hintCls = ui.hint;
 
 type Props = {
   lang?: Locale;
@@ -351,9 +350,9 @@ export function PaidIntakeForm({
     const id = paidIntakeInputId(k);
     return (
       <div className="min-w-0">
-        <label className="mb-1 flex flex-wrap items-baseline justify-between gap-x-2 text-sm font-semibold text-white" htmlFor={id}>
+        <label className="mb-1 flex flex-wrap items-baseline justify-between gap-x-2 text-sm font-semibold text-brand-navy" htmlFor={id}>
           <span>{label}</span>
-          {provided ? <span className="text-[11px] font-medium text-brand-green">{t.alreadyProvided}</span> : null}
+          {provided ? <span className="text-[11px] font-medium text-emerald-700">{t.alreadyProvided}</span> : null}
         </label>
         <input
           id={id}
@@ -368,7 +367,7 @@ export function PaidIntakeForm({
           aria-describedby={`${id}-hint`}
           className={coreInputCls}
         />
-        <p id={`${id}-hint`} className="mt-1.5 text-xs leading-snug text-white/55">
+        <p id={`${id}-hint`} className="mt-1.5 text-xs leading-snug text-zinc-500">
           {hint}
         </p>
       </div>
@@ -376,13 +375,10 @@ export function PaidIntakeForm({
   };
 
   const coreGroup = (
-    <section
-      aria-label={t.sectionCore}
-      className="rounded-2xl border border-brand-green/40 bg-gradient-to-br from-brand-green/15 to-brand-green/5 p-4"
-    >
+    <section aria-label={t.sectionCore} className={`${ui.inset} p-4`}>
       <div className="mb-3 flex items-center gap-2">
         <span className="inline-block h-2 w-2 rounded-full bg-brand-green" aria-hidden />
-        <span className="text-xs font-semibold uppercase tracking-wide text-brand-green">{t.sectionCore}</span>
+        <span className={ui.kicker}>{t.sectionCore}</span>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {core('monthly_rent_usd', t.rent, '$12,000', t.rentHint)}
@@ -394,10 +390,10 @@ export function PaidIntakeForm({
 
   const extras = (
     <div className="space-y-4">
-      <p className="text-xs text-emerald-300/80">{t.reassurance}</p>
+      <p className="text-xs text-zinc-500">{t.reassurance}</p>
 
       <div>
-        <div className="mb-2 text-[11px] uppercase tracking-wide text-white/40">{t.sectionFinance}</div>
+        <div className={`mb-2 ${ui.kicker}`}>{t.sectionFinance}</div>
         <div className="grid grid-cols-2 gap-3">
           {num('ticket_in', t.ticketIn, '$24')}
           {num('ticket_delivery', t.ticketDelivery, '$28')}
@@ -408,7 +404,7 @@ export function PaidIntakeForm({
       </div>
 
       <div>
-        <div className="mb-2 text-[11px] uppercase tracking-wide text-white/40">{t.sectionCompetition}</div>
+        <div className={`mb-2 ${ui.kicker}`}>{t.sectionCompetition}</div>
         <div className="space-y-3">
           <div>
             <label className={labelCls} htmlFor="intake-known_competitors">
@@ -468,8 +464,8 @@ export function PaidIntakeForm({
                     aria-pressed={on}
                     disabled={busy}
                     onClick={() => toggleDaypart(id)}
-                    className={`rounded-full border px-3 py-1.5 text-xs transition disabled:opacity-60 ${
-                      on ? 'border-emerald-400/60 bg-emerald-400/20 text-emerald-200' : 'border-white/10 bg-white/5 text-white/60 hover:bg-white/10'
+                    className={`rounded-full border px-3 py-1.5 text-xs font-medium transition disabled:opacity-60 ${
+                      on ? 'border-brand-navy bg-brand-navy text-white' : 'border-zinc-300 bg-white text-zinc-600 hover:border-brand-navy'
                     }`}
                   >
                     {t.daypart[id]}
@@ -513,13 +509,13 @@ export function PaidIntakeForm({
             onClick={() => setExtrasOpen((o) => !o)}
             aria-expanded={extrasOpen}
             aria-controls="paid-intake-extras"
-            className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/20 bg-white/5 px-3.5 py-3 text-left text-sm font-medium text-white/90 transition hover:border-white/35 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+            className="flex w-full items-center justify-between gap-3 rounded-xl border border-zinc-300 bg-white px-3.5 py-3 text-left text-sm font-medium text-brand-navy transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/20"
           >
             <span>{extrasOpen ? t.moreOptionalHide : t.moreOptional}</span>
             <svg
               aria-hidden
               viewBox="0 0 20 20"
-              className={`h-4 w-4 shrink-0 text-white/70 transition-transform ${extrasOpen ? 'rotate-180' : ''}`}
+              className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform ${extrasOpen ? 'rotate-180' : ''}`}
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -530,7 +526,7 @@ export function PaidIntakeForm({
             </svg>
           </button>
           {extrasOpen ? (
-            <div id="paid-intake-extras" className="mt-3 border-t border-white/10 pt-4">
+            <div id="paid-intake-extras" className="mt-3 border-t border-zinc-200 pt-4">
               {extras}
             </div>
           ) : null}
@@ -540,7 +536,7 @@ export function PaidIntakeForm({
       )}
 
       {error ? (
-        <p className="text-sm text-rose-300" role="alert">
+        <p className="text-sm text-rose-700" role="alert">
           {error}
         </p>
       ) : null}
@@ -553,19 +549,15 @@ export function PaidIntakeForm({
     <form onSubmit={(e) => void handleSubmit(e)}>
       {body}
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button
-          type="submit"
-          disabled={busy || !reportId}
-          className="rounded-xl bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:opacity-60"
-        >
+        <button type="submit" disabled={busy || !reportId} className={`${ui.btnPrimary} py-2.5`}>
           {saving ? t.saving : t.save}
         </button>
         {onCancel ? (
-          <button type="button" onClick={onCancel} disabled={saving} className="text-sm text-white/50 hover:text-white/80 disabled:opacity-60">
+          <button type="button" onClick={onCancel} disabled={saving} className={ui.btnLink}>
             {t.cancel}
           </button>
         ) : null}
-        {savedOk && !saving && !error ? <span className="text-xs text-emerald-300/80">{t.saved}</span> : null}
+        {savedOk && !saving && !error ? <span className="text-xs text-emerald-700">{t.saved}</span> : null}
       </div>
     </form>
   );

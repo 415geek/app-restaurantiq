@@ -101,7 +101,7 @@ export function SocialProofStats({ locale = 'en', variant = 'default' }: StatsPr
 
   if (variant === 'compact') {
     return (
-      <div className="flex items-center justify-center gap-6 text-sm text-gray-500">
+      <div className="flex items-center justify-center gap-6 text-sm text-zinc-500">
         <span>✓ {line}</span>
       </div>
     );
@@ -132,7 +132,7 @@ export function SocialProofBadge({ locale = 'en' }: { locale?: Locale }) {
   const count = useReportCount();
   if (count == null) return null;
   return (
-    <div className="inline-flex items-center gap-2 rounded-full bg-zinc-800/50 px-4 py-2 text-xs text-gray-400">
+    <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-xs text-zinc-600">
       <span className="relative flex h-2 w-2">
         <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75"></span>
         <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>

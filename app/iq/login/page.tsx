@@ -83,34 +83,29 @@ export default async function IqLoginPage({ searchParams }: LoginPageProps) {
   const redirectUrl = resolveClerkRedirectTarget(normalizeParam(sp.redirect_url) || withLang('/iq/dashboard', locale));
 
   return (
-    <main lang={LOCALE_TAG[locale]} className="relative min-h-screen overflow-hidden bg-black text-white">
-      {/* Soft branded backdrop */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(242,106,54,0.18),transparent_70%)]" />
-
+    <main lang={LOCALE_TAG[locale]} className="relative min-h-screen bg-[#F6F6F2] text-brand-navy">
       <div className="relative mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6 py-12">
         <div className="mb-8 flex flex-col items-center gap-2 text-center">
           <Link href={withLang('/iq', locale)} className="flex items-center gap-2">
-            <div className="grid h-9 w-9 place-items-center rounded-lg border border-[#F26A36]/30 bg-[#F26A36]/15">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/branding/logo-mark.png" alt="RestaurantIQ" className="h-6 w-6 object-contain" />
-            </div>
-            <span className="text-sm font-semibold tracking-wide text-zinc-200">RestaurantIQ</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/restaurant-iq-logo-mark.svg" alt="" className="h-8 w-8" />
+            <span className="text-base font-extrabold tracking-tight text-brand-navy">RestaurantIQ</span>
           </Link>
-          <h1 className="mt-2 text-xl font-semibold">{t.title}</h1>
-          <p className="text-sm text-zinc-400">{t.sub}</p>
+          <h1 className="mt-2 text-xl font-semibold tracking-tight">{t.title}</h1>
+          <p className="text-sm text-zinc-600">{t.sub}</p>
         </div>
 
         {isMockMode || !isClerkConfigured ? (
-          <div className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 text-center">
-            <h2 className="text-base font-semibold text-zinc-100">
+          <div className="w-full rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+            <h2 className="text-base font-semibold text-brand-navy">
               {isClerkConfigured ? t.disabledTitle : t.notConfiguredTitle}
             </h2>
-            <p className="mt-2 text-sm text-zinc-400">
+            <p className="mt-2 text-sm text-zinc-600">
               {isClerkConfigured ? t.disabledBody : t.notConfiguredBody}
             </p>
             <Link
               href={withLang('/iq', locale)}
-              className="mt-4 inline-flex rounded-md bg-orange-500 px-4 py-2 text-sm font-semibold text-black hover:bg-orange-400"
+              className="mt-4 inline-flex rounded-xl bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-[#1B2537]"
             >
               {t.backHome}
             </Link>
@@ -121,6 +116,37 @@ export default async function IqLoginPage({ searchParams }: LoginPageProps) {
               signUpUrl={`/sign-up?redirect_url=${encodeURIComponent(withLang('/iq/dashboard', locale))}`}
               forceRedirectUrl={redirectUrl}
               fallbackRedirectUrl={redirectUrl}
+              // The root provider styles Clerk for the dark app shell; the funnel is light.
+              appearance={{
+                variables: {
+                  colorPrimary: '#0B1220',
+                  colorBackground: '#FFFFFF',
+                  colorText: '#0B1220',
+                  colorTextSecondary: '#52525B',
+                  colorInputText: '#0B1220',
+                  colorInputBackground: '#FFFFFF',
+                },
+                elements: {
+                  card: 'border border-zinc-200 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]',
+                  headerTitle: 'text-brand-navy',
+                  headerSubtitle: 'text-zinc-600',
+                  formFieldLabel: 'text-zinc-700',
+                  formFieldInput: 'bg-white border-zinc-300 text-brand-navy placeholder:text-zinc-400',
+                  formButtonPrimary: 'bg-brand-navy text-white hover:bg-[#1B2537]',
+                  footerActionText: 'text-zinc-600',
+                  footerActionLink: 'text-brand-navy hover:underline',
+                  dividerText: 'text-zinc-500',
+                  dividerLine: 'bg-zinc-200',
+                  socialButtonsBlockButton: 'bg-white border-zinc-300 text-brand-navy hover:bg-zinc-50',
+                  socialButtonsBlockButtonText: 'text-brand-navy',
+                  identityPreviewText: 'text-brand-navy',
+                  formFieldHintText: 'text-zinc-500',
+                  formFieldErrorText: 'text-rose-700',
+                  alert: 'bg-white border-zinc-200',
+                  alertText: 'text-brand-navy',
+                  otpCodeFieldInput: 'bg-white border-zinc-300 text-brand-navy',
+                },
+              }}
             />
           </div>
         )}
@@ -131,7 +157,7 @@ export default async function IqLoginPage({ searchParams }: LoginPageProps) {
             href="/admin/login"
             aria-label={t.admin}
             title={t.admin}
-            className="group inline-flex items-center justify-center rounded-full border border-zinc-800 bg-zinc-900/60 p-1.5 opacity-30 transition hover:opacity-90 focus:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+            className="group inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white p-1.5 opacity-40 transition hover:opacity-90 focus:opacity-90 focus:outline-none focus:ring-2 focus:ring-brand-navy/20"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -141,7 +167,7 @@ export default async function IqLoginPage({ searchParams }: LoginPageProps) {
               className="h-3.5 w-3.5 object-contain grayscale group-hover:grayscale-0"
             />
           </Link>
-          <span className="text-[10px] uppercase tracking-[0.25em] text-zinc-700">v2 · RestaurantIQ</span>
+          <span className="text-[10px] uppercase tracking-[0.25em] text-zinc-400">v2 · RestaurantIQ</span>
         </div>
       </div>
     </main>

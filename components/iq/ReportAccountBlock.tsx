@@ -14,6 +14,7 @@ import { useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import type { Locale } from '@/lib/i18n/locale';
 import { withLang } from '@/lib/i18n/resolve';
+import { ui } from '@/components/iq/ui';
 
 type Copy = {
   savedTitle: string;
@@ -117,16 +118,12 @@ export function ReportAccountBlock({ reportId, serverUserId, lang, hideWhenLinke
   return (
     <>
       {autoLink}
-      <div className={`rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 ${className}`}>
+      <div className={`${ui.card} p-6 ${className}`}>
         {linked ? (
           <div className="text-center">
-            <div className="mb-3 text-3xl">✅</div>
-            <h3 className="mb-2 text-lg font-semibold text-zinc-100">{t.savedTitle}</h3>
-            <p className="mb-4 text-sm text-zinc-400">{t.savedDesc}</p>
-            <Link
-              href={withLang('/iq/dashboard', lang)}
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/80 px-5 py-2.5 font-medium text-zinc-200 transition hover:bg-zinc-800"
-            >
+            <h3 className="mb-2 text-lg font-semibold tracking-tight text-brand-navy">{t.savedTitle}</h3>
+            <p className="mb-4 text-sm text-zinc-600">{t.savedDesc}</p>
+            <Link href={withLang('/iq/dashboard', lang)} className={`${ui.btnSecondary} py-2.5`}>
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
               </svg>
@@ -135,20 +132,13 @@ export function ReportAccountBlock({ reportId, serverUserId, lang, hideWhenLinke
           </div>
         ) : (
           <div className="text-center">
-            <div className="mb-3 text-3xl">💾</div>
-            <h3 className="mb-2 text-lg font-semibold text-zinc-100">{t.saveTitle}</h3>
-            <p className="mb-4 text-sm text-zinc-400">{t.saveDesc}</p>
+            <h3 className="mb-2 text-lg font-semibold tracking-tight text-brand-navy">{t.saveTitle}</h3>
+            <p className="mb-4 text-sm text-zinc-600">{t.saveDesc}</p>
             <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-              <Link
-                href={`/sign-up?redirect_url=${redirect}`}
-                className="w-full rounded-xl bg-emerald-600 px-5 py-2.5 font-medium text-white transition hover:bg-emerald-500 sm:w-auto"
-              >
+              <Link href={`/sign-up?redirect_url=${redirect}`} className={`${ui.btnPrimary} w-full py-2.5 sm:w-auto`}>
                 {t.createAccount}
               </Link>
-              <Link
-                href={`/sign-in?redirect_url=${redirect}`}
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-800/60 px-5 py-2.5 font-medium text-zinc-200 transition hover:bg-zinc-800 sm:w-auto"
-              >
+              <Link href={`/sign-in?redirect_url=${redirect}`} className={`${ui.btnSecondary} w-full py-2.5 sm:w-auto`}>
                 {t.signIn}
               </Link>
             </div>
