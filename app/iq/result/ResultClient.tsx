@@ -47,9 +47,9 @@ import {
   parseRiskAuditPreview,
   type RiskAuditPreview,
 } from '@/lib/funnel/iq-risk-audit-model';
-import { LOCALE_TAG, type Locale } from '@/lib/i18n/locale';
+import { LOCALES, LOCALE_TAG, type Locale } from '@/lib/i18n/locale';
 import { withLang } from '@/lib/i18n/resolve';
-import { useLocale } from '@/lib/i18n/use-locale';
+import { persistLocale, useLocale } from '@/lib/i18n/use-locale';
 
 const LEAD_STORAGE_KEY = 'iq:lead:v1';
 const LEAD_DISMISSED_KEY = 'iq:lead:dismissed:v1';
@@ -203,8 +203,13 @@ type Copy = {
   rentNoticeFill: string;
   rentNoticeProceed: string;
   conceptNeeded: string;
+  /** Language pills above the result: switching re-runs the free analysis in that language. */
+  language: string;
+  languageHint: string;
   verdict: Record<'go' | 'caution' | 'no', string>;
 };
+
+const SHORT_LABEL: Record<Locale, string> = { en: 'EN', zh: '中文', es: 'ES' };
 
 const resultCopy: Record<Locale, Copy> = {
   en: {
@@ -240,6 +245,8 @@ const resultCopy: Record<Locale, Copy> = {
     rentNoticeFill: 'Add rent',
     rentNoticeProceed: 'Pay anyway',
     conceptNeeded: 'One quick question before we analyze',
+    language: 'Language',
+    languageHint: 'Switches this result, every page after it, and the full report you unlock.',
     verdict: { go: 'Opportunity', caution: 'Proceed with caution', no: 'High risk' },
   },
   zh: {
@@ -274,6 +281,8 @@ const resultCopy: Record<Locale, Copy> = {
     rentNoticeFill: '填一下',
     rentNoticeProceed: '直接付费',
     conceptNeeded: '分析前先确认一件事',
+    language: '语言',
+    languageHint: '切换后，本页结果、后续所有页面以及解锁的完整报告都使用该语言。',
     verdict: { go: '可进入', caution: '谨慎推进', no: '风险较高' },
   },
   es: {
@@ -309,6 +318,8 @@ const resultCopy: Record<Locale, Copy> = {
     rentNoticeFill: 'Agregar alquiler',
     rentNoticeProceed: 'Pagar de todos modos',
     conceptNeeded: 'Una pregunta rápida antes de analizar',
+    language: 'Idioma',
+    languageHint: 'Cambia este resultado, todas las páginas siguientes y el informe completo que desbloquees.',
     verdict: { go: 'Oportunidad', caution: 'Proceder con cautela', no: 'Riesgo alto' },
   },
 };
@@ -710,6 +721,48 @@ export function ResultClient(props: ResultClientProps) {
     }
   }
 
+  /**
+   * Language switch = a whole-flow switch, not a relabel. The headline, snapshot
+   * and risk are written in the analysis language, so the free result is re-run
+   * in the new language (idempotent server-side per language for 24 h, so
+   * switching back costs nothing) and the choice is persisted first, so the
+   * canonical URL, checkout (`language: locale`) and the 360° report follow it.
+   * Rent / size typed so far travel along; the rest of the intake is re-entered.
+   */
+  function switchLanguage(next: Locale) {
+    if (next === locale) return;
+    persistLocale(next);
+    const p = new URLSearchParams({ location, businessType, lang: next });
+    const rent = intake.monthly_rent_usd.trim();
+    const size = intake.sqft.trim();
+    if (rent) p.set('monthlyRentUsd', rent);
+    if (size) p.set('sqft', size);
+    router.push(`/iq/result?${p.toString()}`);
+  }
+
+  const languagePills = (
+    <div className="inline-flex items-center gap-2" role="group" aria-label={t.language} title={t.languageHint}>
+      <span className="text-xs text-white/50">{t.language}</span>
+      <div className="inline-flex rounded-full border border-white/15 bg-white/5 p-0.5">
+        {LOCALES.map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => switchLanguage(l)}
+            aria-pressed={l === locale}
+            lang={LOCALE_TAG[l]}
+            data-lang-pill={l}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+              l === locale ? 'bg-white/90 text-brand-navy' : 'text-white/70 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            {SHORT_LABEL[l]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   const analyzeProgressPct = useMemo(() => {
     const fromTime = progressFromElapsed(analyzeElapsedSec, FREE_ANALYZE_PHASES, {
       done: analyzeDone,
@@ -811,9 +864,10 @@ export function ResultClient(props: ResultClientProps) {
         data-testid="iq-result"
       >
         <div className="w-full max-w-2xl space-y-6">
-          {/* Social Proof Badge */}
-          <div className="text-center">
+          {/* Social proof + language: the pills switch the whole flow (see switchLanguage). */}
+          <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:justify-between">
             <SocialProofBadge locale={locale} />
+            {languagePills}
           </div>
 
         {/* 1. Verdict + Headline Card */}

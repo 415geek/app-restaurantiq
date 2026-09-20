@@ -1,9 +1,10 @@
 'use client';
 
 /**
- * Social proof (评审 Spec §4.7): only the real number of analyses generated,
- * read from GET /api/iq/stats. No accuracy claims, no invented counts — when
- * the count is unavailable the number is hidden rather than faked.
+ * Social proof (评审 Spec §4.7): the number of analyses generated, read from
+ * GET /api/iq/stats (a fixed pre-Supabase baseline plus the live row count, so
+ * it grows with every analysis). No accuracy claims; the number is hidden
+ * rather than faked when the endpoint is unreachable.
  */
 import { useEffect, useState } from 'react';
 import type { Locale } from '@/lib/i18n/locale';

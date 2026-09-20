@@ -34,7 +34,7 @@ type Copy = {
   audiences: { title: string; items: Array<{ title: string; body: string }> };
   faq: { title: string; items: Array<{ q: string; a: string }> };
   account: { title: string; body: string; signIn: string; register: string };
-  footer: { disclaimer: string; sources: string };
+  footer: { disclaimer: string };
   langSwitcher: string;
 };
 
@@ -52,15 +52,15 @@ const COPY: Record<Locale, Copy> = {
         'How much does this spot need to make each month? Find out before you sign',
         'Good locations backed by data. Bad ones flagged before you commit',
       ],
-      subtitle: 'Type an address and a cuisine. In 60 seconds: Chinese households nearby, same-cuisine competitors, and the monthly revenue you need just to break even. Built on U.S. Census and open map data — every number is traceable.',
+      subtitle: 'Type an address and a cuisine. In 60 seconds: Chinese households nearby, same-cuisine competitors, and the monthly revenue you need just to break even. Built on official statistics and licensed map data — every number is traceable.',
       address: 'Restaurant address, e.g. 123 Main St, San Francisco, CA 94105',
       cuisine: 'Cuisine or concept, e.g. Hunan, HK café, hot pot, boba',
       rent: 'Monthly rent (USD)',
       sqft: 'Size (sq ft)',
-      more: 'Add rent and size (optional — sharper finance pages)',
-      less: 'Hide',
+      more: 'Add rent and size — optional, makes the finance pages sharper',
+      less: 'Hide rent and size',
       cta: 'Get my free risk score',
-      trust: ['Verdict in 60 seconds', 'U.S. Census · Google Maps · open data', 'Free tier — no sign-up; leave an email to save your result'],
+      trust: ['Verdict in 60 seconds', 'Free tier — no sign-up; leave an email to save your result'],
     },
     how: {
       title: 'Three steps from address to verdict',
@@ -122,14 +122,14 @@ const COPY: Record<Locale, Copy> = {
     faq: {
       title: 'FAQ',
       items: [
-        { q: 'Where does the data come from?', a: 'Population and income from the U.S. Census Bureau (ACS), jobs from LEHD LODES, places from Google Maps and Overture Maps, dining spend from the BLS. The last page lists the agency, update date, and license for each dataset.' },
+        { q: 'Where does the data come from, and can I trust it?', a: 'Every report is built from official public statistics and licensed commercial map and business datasets, pulled for the exact address you enter rather than a city-wide average. The last page shows the update date and license behind each figure, and anything we could not obtain is marked unavailable — nothing is estimated to fill a gap.' },
         { q: 'What if data is missing?', a: 'It says “unavailable.” Nothing is estimated or invented; when the gaps are too large, the report is marked pre-check and explains what is missing.' },
         { q: 'How long does it take?', a: 'The free verdict takes about a minute; the professional report usually 1–3 minutes — you can leave the page and come back.' },
         { q: 'Is this investment advice?', a: 'No. It is a site-selection reference built on public data — it helps you ask the right questions and run the numbers. Verify on site and consult professionals before signing.' },
       ],
     },
     account: { title: 'Already bought a report?', body: 'Sign in to view and download every report you’ve paid for.', signIn: 'Sign in', register: 'Create account' },
-    footer: { disclaimer: '© RestaurantIQ · For site-selection reference only; not investment, legal, or leasing advice.', sources: 'Data: U.S. Census Bureau · LEHD · Google Maps Platform · Overture Maps · BLS' },
+    footer: { disclaimer: '© RestaurantIQ · For site-selection reference only; not investment, legal, or leasing advice.' },
     langSwitcher: 'Language',
   },
   zh: {
@@ -145,15 +145,15 @@ const COPY: Record<Locale, Copy> = {
         '这个铺位每月要做多少才保本？签约前先算',
         '好位置用数据说话，坏位置提前劝退',
       ],
-      subtitle: '输入地址和菜系，60 秒看到：附近有多少华人家庭、同菜系竞品几家、每月要做到多少营收才保本。数据来自美国人口普查和公开地图，每个数字都能溯源。',
+      subtitle: '输入地址和菜系，60 秒看到：附近有多少华人家庭、同菜系竞品几家、每月要做到多少营收才保本。基于官方统计数据与授权地图数据，每个数字都能溯源。',
       address: '餐厅地址，例如 123 Main St, San Francisco, CA 94105',
       cuisine: '菜系或业态，例如：湘菜、港式茶餐厅、火锅、奶茶',
       rent: '预计月租金 USD',
       sqft: '面积 sqft',
-      more: '补充租金和面积（选填，财务更准）',
-      less: '收起',
+      more: '补充租金和面积 — 选填，填了财务页更准',
+      less: '收起租金和面积',
       cta: '免费生成风险评分',
-      trust: ['60 秒出结论', '美国人口普查 · Google 地图 · 公开数据', '免费版无需注册，留邮箱可保存结果'],
+      trust: ['60 秒出结论', '免费版无需注册，留邮箱可保存结果'],
     },
     how: {
       title: '三步，从地址到结论',
@@ -215,14 +215,14 @@ const COPY: Record<Locale, Copy> = {
     faq: {
       title: '常见问题',
       items: [
-        { q: '数据从哪来？可信吗？', a: '人口和收入来自美国人口普查局 ACS，就业岗位来自 LEHD LODES，门店信息来自 Google 地图与 Overture 开放地图，餐饮支出来自劳工统计局。报告最后一页列出每项数据的机构、更新日期和许可。' },
+        { q: '数据从哪来？可信吗？', a: '每份报告都基于官方公开统计数据与授权的商业地图和门店数据，按你输入的具体地址拉取，不是全市平均。报告最后一页标注每个数字背后的更新日期和数据许可；拿不到的数据写「未获取」，不用估算来补空。' },
         { q: '拿不到的数据怎么办？', a: '写「未获取」，不估算、不编造。数据缺口太大时报告会标为预检版，并说明缺什么。' },
         { q: '要多久？', a: '免费结论 60 秒左右；专业版报告通常 1–3 分钟生成，可以离开页面稍后回来。' },
         { q: '报告能当投资建议吗？', a: '不能。它是基于公开数据的选址参考，帮你把问题问对、把账算清；签约前请实地核查并咨询专业顾问。' },
       ],
     },
     account: { title: '已经买过报告？', body: '登录后可以查看和下载所有已付费的报告。', signIn: '登录', register: '注册账号' },
-    footer: { disclaimer: '© RestaurantIQ · 报告仅供选址参考，不构成投资、法律或租赁建议。', sources: '数据来源：U.S. Census Bureau · LEHD · Google Maps Platform · Overture Maps · BLS' },
+    footer: { disclaimer: '© RestaurantIQ · 报告仅供选址参考，不构成投资、法律或租赁建议。' },
     langSwitcher: '语言',
   },
   es: {
@@ -238,15 +238,15 @@ const COPY: Record<Locale, Copy> = {
         '¿Cuánto tiene que vender este local cada mes? Descúbrelo antes de firmar',
         'Buenas ubicaciones respaldadas por datos. Malas ubicaciones, señaladas antes de comprometerte',
       ],
-      subtitle: 'Escribe una dirección y un tipo de cocina. En 60 segundos: hogares chinos cercanos, competidores del mismo tipo de cocina y los ingresos mensuales que necesitas solo para llegar al punto de equilibrio. Basado en el Censo de EE. UU. y datos abiertos de mapas; cada cifra es rastreable.',
+      subtitle: 'Escribe una dirección y un tipo de cocina. En 60 segundos: hogares chinos cercanos, competidores del mismo tipo de cocina y los ingresos mensuales que necesitas solo para llegar al punto de equilibrio. Basado en estadísticas oficiales y datos de mapas con licencia; cada cifra es rastreable.',
       address: 'Dirección del restaurante, p. ej., 123 Main St, San Francisco, CA 94105',
       cuisine: 'Tipo de cocina o concepto, p. ej., Hunan, cafetería HK, hot pot, boba',
       rent: 'Renta mensual (USD)',
       sqft: 'Tamaño (pies cuadrados)',
-      more: 'Agregar renta y tamaño (opcional; finanzas más precisas)',
-      less: 'Ocultar',
+      more: 'Agregar renta y tamaño — opcional, afina las páginas financieras',
+      less: 'Ocultar renta y tamaño',
       cta: 'Obtener mi puntuación de riesgo gratis',
-      trust: ['Veredicto en 60 segundos', 'Censo de EE. UU. · Google Maps · datos abiertos', 'Plan gratuito sin registro; deja tu correo para guardar el resultado'],
+      trust: ['Veredicto en 60 segundos', 'Plan gratuito sin registro; deja tu correo para guardar el resultado'],
     },
     how: {
       title: 'Tres pasos: de la dirección al veredicto',
@@ -308,14 +308,14 @@ const COPY: Record<Locale, Copy> = {
     faq: {
       title: 'Preguntas frecuentes',
       items: [
-        { q: '¿De dónde salen los datos?', a: 'Población e ingresos de la Oficina del Censo de EE. UU. (ACS), empleos de LEHD LODES, lugares de Google Maps y Overture Maps, gasto en restaurantes del BLS. La última página enumera la agencia, la fecha de actualización y la licencia de cada conjunto de datos.' },
+        { q: '¿De dónde salen los datos y son confiables?', a: 'Cada informe se construye con estadísticas oficiales públicas y datos comerciales de mapas y negocios con licencia, consultados para la dirección exacta que ingresas y no para un promedio de la ciudad. La última página muestra la fecha de actualización y la licencia detrás de cada cifra; lo que no pudimos obtener se marca como no disponible, nada se estima para rellenar huecos.' },
         { q: '¿Qué pasa si faltan datos?', a: 'Se indica “no disponible”. Nada se estima ni se inventa; cuando las lagunas son demasiado grandes, el informe se marca como preliminar y explica qué falta.' },
         { q: '¿Cuánto tarda?', a: 'El veredicto gratuito, aproximadamente un minuto; el informe profesional, normalmente de 1 a 3 minutos. Puedes salir de la página y volver.' },
         { q: '¿Es asesoría de inversión?', a: 'No. Es una referencia para elegir ubicación, construida con datos públicos: te ayuda a hacer las preguntas correctas y a hacer los números. Verifica en el sitio y consulta a profesionales antes de firmar.' },
       ],
     },
     account: { title: '¿Ya compraste un informe?', body: 'Inicia sesión para ver y descargar todos los informes que has pagado.', signIn: 'Iniciar sesión', register: 'Crear cuenta' },
-    footer: { disclaimer: '© RestaurantIQ · Solo como referencia para elegir ubicación; no es asesoría de inversión, legal ni de arrendamiento.', sources: 'Datos: U.S. Census Bureau · LEHD · Google Maps Platform · Overture Maps · BLS' },
+    footer: { disclaimer: '© RestaurantIQ · Solo como referencia para elegir ubicación; no es asesoría de inversión, legal ni de arrendamiento.' },
     langSwitcher: 'Idioma',
   },
 };
@@ -539,8 +539,27 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             >
               {t.hero.cta}
             </button>
-            <button type="button" onClick={() => setMoreOpen((o) => !o)} className="mt-2 px-2 text-xs font-medium text-zinc-500 underline-offset-4 hover:text-brand-navy hover:underline" aria-expanded={moreOpen}>
-              {moreOpen ? t.hero.less : t.hero.more}
+            {/* Optional rent / size: a full-width control, not a footnote link — users
+                were not seeing the grey underlined text under the CTA at all. */}
+            <button
+              type="button"
+              onClick={() => setMoreOpen((o) => !o)}
+              aria-expanded={moreOpen}
+              className={`mt-2 flex h-12 w-full items-center justify-between gap-3 rounded-2xl border px-4 text-left text-sm font-semibold transition ${
+                moreOpen
+                  ? 'border-zinc-300 bg-zinc-50 text-brand-navy hover:bg-zinc-100'
+                  : 'border-dashed border-emerald-500/70 bg-emerald-50 text-brand-navy hover:border-emerald-600 hover:bg-emerald-100'
+              }`}
+            >
+              <span className="inline-flex items-center gap-2.5">
+                <span className={`inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-base font-bold leading-none ${moreOpen ? 'bg-zinc-200 text-zinc-700' : 'bg-brand-green text-brand-navy'}`} aria-hidden>
+                  {moreOpen ? '−' : '+'}
+                </span>
+                {moreOpen ? t.hero.less : t.hero.more}
+              </span>
+              <svg viewBox="0 0 20 20" className={`h-4 w-4 flex-none text-zinc-500 transition ${moreOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 8l5 5 5-5" />
+              </svg>
             </button>
           </form>
 
@@ -702,9 +721,8 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               </div>
             </div>
           </div>
-          <footer className="mt-12 flex flex-col gap-2 border-t border-white/10 pt-6 text-xs text-zinc-400 md:flex-row md:items-center md:justify-between">
+          <footer className="mt-12 border-t border-white/10 pt-6 text-xs text-zinc-400">
             <span>{t.footer.disclaimer}</span>
-            <span>{t.footer.sources}</span>
           </footer>
         </div>
       </section>
