@@ -40,7 +40,7 @@ import {
   type FoursquareCompetitorRow,
 } from '@/lib/funnel/external-data/foursquare-places';
 
-type GeocodeResult = {
+export type GeocodeResult = {
   formatted_address: string;
   lat: number;
   lng: number;
@@ -181,24 +181,16 @@ function placesStatusOf(three: ThreeLayerCompetitors | null): string {
   return 'ERROR';
 }
 
-export async function gatherIqMarketDataFromGoogle(input: {
-  location: string;
-  businessType: string;
-  /** Taxonomy id when the concept was already confirmed (skips the text classifier). */
-  conceptId?: string | null;
-  /** Injectable fetch / cache / env / cost context (tests, scripts); defaults to the Supabase-cached production context. */
-  ctx?: FetchContext;
-}): Promise<Record<string, unknown> | null> {
-  const ctx = input.ctx ?? createFetchContext();
+/**
+ * Step 1 on its own: the geocode every other leg hangs off. Exposed so the
+ * resolver can start the Census pull the moment the point is known instead of
+ * after the whole competitor search has finished.
+ */
+export async function geocodeIqLocation(locationRaw: string, ctx: FetchContext): Promise<GeocodeResult | null> {
   const apiKey = (ctx.env('GOOGLE_MAPS_API_KEY') ?? '').trim();
-  const location = input.location.trim();
-  const cuisine = input.businessType.trim();
+  const location = locationRaw.trim();
   if (!location) return null;
-
   let geocode: GeocodeResult | null = null;
-  let three: ThreeLayerCompetitors | null = null;
-
-  // ── Step 1: Google geocode (best-effort) ────────────────────────────────────────
   if (apiKey) {
     try {
       const geocodeUrl = new URL('https://maps.googleapis.com/maps/api/geocode/json');
@@ -242,7 +234,29 @@ export async function gatherIqMarketDataFromGoogle(input: {
       geocode = fallback;
     }
   }
+  return geocode;
+}
+
+export async function gatherIqMarketDataFromGoogle(input: {
+  location: string;
+  businessType: string;
+  /** Taxonomy id when the concept was already confirmed (skips the text classifier). */
+  conceptId?: string | null;
+  /** Injectable fetch / cache / env / cost context (tests, scripts); defaults to the Supabase-cached production context. */
+  ctx?: FetchContext;
+  /** Already-resolved geocode (geocodeIqLocation); when given, step 1 is skipped. */
+  geocode?: GeocodeResult | null;
+}): Promise<Record<string, unknown> | null> {
+  const ctx = input.ctx ?? createFetchContext();
+  const apiKey = (ctx.env('GOOGLE_MAPS_API_KEY') ?? '').trim();
+  const location = input.location.trim();
+  const cuisine = input.businessType.trim();
+  if (!location) return null;
+
+  // ── Step 1: Google geocode (best-effort) ────────────────────────────────────────
+  const geocode = input.geocode !== undefined ? input.geocode : await geocodeIqLocation(location, ctx);
   if (!geocode) return null;
+  let three: ThreeLayerCompetitors | null = null;
 
   // ── Step 2: §4.2 three-layer competitor retrieval (Places (New) + Distance Matrix) ──
   if (apiKey) {

@@ -15,8 +15,18 @@ import { analyzeWithN8n, getAnalyzeWebhookUrl } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
 import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 import { toLocale, type Locale } from '@/lib/i18n/locale';
+import type { WebResearchPack } from '@/lib/funnel/iq-web-research';
 
 export const runtime = 'nodejs';
+/** Vercel function budget: the free verdict is ~40 s on a normal run; this is headroom, not a target. */
+export const maxDuration = 180;
+
+/**
+ * How long the row insert waits for the deferred web research after the LLM
+ * has answered. It normally finished long before; if not, the row is stored
+ * without it and the paid report fetches it then.
+ */
+const WEB_RESEARCH_GRACE_MS = 5_000;
 
 const MOCK_COPY: Record<Locale, { headline: string; subheadline: string; snapshot: string[]; risk: string; teaser: string }> = {
   en: {
@@ -115,6 +125,16 @@ function conceptLabelFor(c: ConceptResolution | null, lang: Locale): string | un
 
 export async function POST(req: Request) {
   await ensureRuntimeConfig();
+  // Wall-clock per phase, logged at the end: the only way to know what "60
+  // seconds" actually costs in production is to measure it there.
+  const t0 = Date.now();
+  const marks: Record<string, number> = {};
+  let lastMark = t0;
+  const mark = (name: string) => {
+    const now = Date.now();
+    marks[name] = now - lastMark;
+    lastMark = now;
+  };
   try {
     const body = (await req.json()) as {
       location?: string;
@@ -192,6 +212,7 @@ export async function POST(req: Request) {
       } catch (conceptErr) {
         console.warn('[funnel/analyze] concept resolution failed, continuing with raw text:', conceptErr);
       }
+      mark('concept');
       if (concept?.needs_confirmation) {
         return NextResponse.json({
           needs_concept_confirmation: true,
@@ -221,7 +242,9 @@ export async function POST(req: Request) {
         sinceIso: analyzeCacheSinceIso(),
       });
       const stored = cachedRow ? readStoredFreeResult(cachedRow.market_data_json) : null;
+      mark('cache');
       if (cachedRow && stored) {
+        console.info('[funnel/analyze] timings', { ...marks, total: Date.now() - t0, cached: true });
         const storedConcept = (cachedRow.market_data_json as Record<string, unknown> | null)?.concept;
         return NextResponse.json({
           reportId: cachedRow.id,
@@ -240,6 +263,9 @@ export async function POST(req: Request) {
     // One market prefetch per request (it used to run twice: before the LLM
     // and again as a "merge" afterwards).
     let prefetchedMarket: Record<string, unknown> | null = null;
+    // Web research is not part of the free brief, so it keeps running while the
+    // LLM writes and is merged into the stored row afterwards.
+    let webResearchPending: Promise<WebResearchPack | null> | null = null;
     try {
       prefetchedMarket =
         (await resolveMarketDataForIqReport({
@@ -248,10 +274,14 @@ export async function POST(req: Request) {
           businessType: conceptLabel || businessType || 'restaurant',
           isPremium: false,
           lang: language,
+          onWebResearch: (pending) => {
+            webResearchPending = pending;
+          },
         })) ?? null;
     } catch (prefetchErr) {
       console.warn('[funnel/analyze] market prefetch failed, continuing:', prefetchErr);
     }
+    mark('market');
     // Deterministic metrics (fair-share revenue, saturation, demand pool, rent
     // economics) are appended so the free verdict is grounded in computed numbers.
     const siteMetrics = computeSiteMetrics({
@@ -305,6 +335,8 @@ export async function POST(req: Request) {
       }
     }
 
+    mark('llm');
+
     const verdict = String(parsed.verdict ?? '').trim();
     const headline = String(parsed.headline ?? '').trim();
     const subheadline = String(parsed.subheadline ?? '').trim();
@@ -342,6 +374,15 @@ export async function POST(req: Request) {
     } else if (prefetchedMarket && Object.keys(prefetchedMarket).length > 0) {
       marketSeed = { ...prefetchedMarket };
     }
+    if (webResearchPending) {
+      const pending: Promise<WebResearchPack | null> = webResearchPending;
+      const web = await Promise.race([
+        pending,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), WEB_RESEARCH_GRACE_MS)),
+      ]);
+      if (web) marketSeed = { ...(marketSeed ?? {}), web_research: web };
+    }
+    mark('web');
     const marketDataJson: Record<string, unknown> = {
       ...(marketSeed ?? {}),
       ...(userInputs || concept
@@ -382,6 +423,8 @@ export async function POST(req: Request) {
         throw err;
       }
     }
+    mark('insert');
+    console.info('[funnel/analyze] timings', { ...marks, total: Date.now() - t0, cached: false });
 
     return NextResponse.json({
       reportId,

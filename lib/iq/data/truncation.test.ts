@@ -191,6 +191,9 @@ test('§3.1 refinement stops at the data cost cap once calls are billed', async 
   assert.ok(maxRefineSpend > d.data_cost_cap_usd, 'this test is only meaningful while refinement could outspend the cap');
   // The guard is in fetchGooglePlaces: a split is skipped when it would take the
   // ledger past data_cost_cap_usd, and the cell is reported as still truncated.
+  // Cells queued but not yet run count as spent — the ledger only books a call
+  // once it has been made, and a refinement round queues several at once.
   const src = readFileSync(new URL('./google-places.ts', import.meta.url), 'utf8');
-  assert.match(src, /ctx\.cost\.total\(\) \+ splitCost > costCap/);
+  assert.match(src, /const projected = ctx\.cost\.total\(\) \+ queue\.length \* perCallCost\(ctx\) \+ splitCost/);
+  assert.match(src, /splitCost > 0 && projected > costCap/);
 });

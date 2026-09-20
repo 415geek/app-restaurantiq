@@ -768,7 +768,9 @@ export function ResultClient(props: ResultClientProps) {
       done: analyzeDone,
       maxPctUntilDone: 90,
     });
-    const stepFloor = [10, 36, 58][loadingStep] ?? 58;
+    // The ticker moves the row highlight; it must not drag the bar past the
+    // time-based curve, or the bar sits at 58% for a minute.
+    const stepFloor = [4, 10, 16][loadingStep] ?? 16;
     return Math.min(100, Math.max(fromTime, analyzeDone ? 100 : stepFloor));
   }, [analyzeElapsedSec, analyzeDone, loadingStep]);
 

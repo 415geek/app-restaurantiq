@@ -79,33 +79,39 @@ const FULL_REPORT_PHASES: PhaseTarget[] = [
   { atSec: 260, pct: 88 },
 ];
 
+/**
+ * Free verdict: measured at 40–100 s end to end (competitor search, Census
+ * pull, the model's answer). The old curve hit 85% at 28 s and then sat there
+ * for a minute, which reads as a hang; this one is paced to the real run.
+ */
 const FREE_ANALYZE_PHASES: PhaseTarget[] = [
-  { atSec: 0, pct: 8 },
-  { atSec: 4, pct: 28 },
-  { atSec: 10, pct: 52 },
-  { atSec: 18, pct: 72 },
-  { atSec: 28, pct: 85 },
+  { atSec: 0, pct: 4 },
+  { atSec: 8, pct: 18 },
+  { atSec: 20, pct: 38 },
+  { atSec: 40, pct: 60 },
+  { atSec: 65, pct: 76 },
+  { atSec: 95, pct: 86 },
 ];
 
 /** The five real stages of the paid job (order = execution order: competitors are pulled before Census). */
 const FULL_STAGE_LABELS: Record<Locale, Record<UiStageId, string>> = {
   en: {
-    competitors: 'Pulling nearby competitors (Google Places · Yelp)',
-    demographics: 'Pulling population and income (U.S. Census ACS)',
+    competitors: 'Mapping nearby competitors',
+    demographics: 'Pulling population and income around the site',
     finance: 'Computing the break-even model',
     write: 'Writing and reviewing the report',
     layout: 'Laying out the pages',
   },
   zh: {
-    competitors: '竞品检索（Google Places · Yelp）',
-    demographics: '拉取人口与收入（美国人口普查 ACS）',
+    competitors: '检索周边竞品',
+    demographics: '拉取周边人口与收入',
     finance: '财务模型（保本线）',
     write: '撰写并复核报告',
     layout: '排版',
   },
   es: {
-    competitors: 'Buscando competidores cercanos (Google Places · Yelp)',
-    demographics: 'Obteniendo población e ingresos (Censo de EE. UU., ACS)',
+    competitors: 'Ubicando competidores cercanos',
+    demographics: 'Obteniendo población e ingresos de la zona',
     finance: 'Calculando el modelo de punto de equilibrio',
     write: 'Redactando y revisando el informe',
     layout: 'Maquetando las páginas',

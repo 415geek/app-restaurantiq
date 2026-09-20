@@ -304,6 +304,27 @@ export const PLACES_PER_CALL_CAP = 20;
 const SUBDIVISION = 4;
 /** How many times one call may be refined; 2 levels turn one cell into at most 16. */
 const MAX_REFINE_DEPTH = 2;
+/**
+ * Calls in flight at once. The plan used to run strictly one call after another
+ * — 14 plan steps plus up to 32 refinement cells is ~46 round trips, which on
+ * its own put the free verdict past a minute. Only ordering that carries
+ * meaning is kept sequential: the 先近后远 gate is decided after every earlier
+ * call has been merged, and refinement rounds still go layer by layer.
+ */
+export const PLACES_CONCURRENCY = 6;
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
 
 /**
  * Split a call into four quadrant cells that together cover its circle. Each
@@ -450,36 +471,8 @@ export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchCont
   // cancel the other aliases — which is exactly the multilingual recall §3.2 adds.
   const widen = new Map<string, boolean>();
 
-  while (queue.length || pending.length) {
-    if (!queue.length) {
-      // The plan is done; spend what is left on the most valuable truncated cell.
-      pending.sort((a, b) => (refinePriority[a.call.layer ?? 'user'] ?? 9) - (refinePriority[b.call.layer ?? 'user'] ?? 9) || a.depth - b.depth);
-      const next = pending.shift() as Cell;
-      // Refinement is the only unbounded part of the plan, so it is also the part
-      // that has to respect the wallet: `data_cost_cap_usd` is what a report may
-      // spend on data. While Places sits inside Google's free allowance
-      // `perCallCost` is 0 and this never binds; once GOOGLE_PLACES_BILLED=1 it
-      // stops refining at the cap and the rest is reported as unexhausted rather
-      // than quietly overspent.
-      const splitCost = SUBDIVISION * perCallCost(ctx);
-      if (refineBudget < SUBDIVISION || (splitCost > 0 && ctx.cost.total() + splitCost > costCap)) {
-        truncated.add(next.call.label);
-        continue;
-      }
-      refineBudget -= SUBDIVISION;
-      for (const c of subdivideCall(next.call, next.centre)) queue.push({ ...c, depth: next.depth + 1 });
-      continue;
-    }
-    const { call, centre, depth } = queue.shift() as Cell;
-    if (call.only_if_fewer_than != null && call.layer) {
-      const gateKey = `${call.layer}@${call.radiusM}`;
-      if (!widen.has(gateKey)) widen.set(gateKey, layerCount(call.layer) < call.only_if_fewer_than);
-      if (!widen.get(gateKey)) {
-        outcomes.push({ ...call, cache: 'skipped', results: 0 });
-        continue;
-      }
-    }
-    const r = await nearby(ctx, key, centre, call);
+  /** Merge one call's result; true when the error is fatal and the plan must stop. */
+  const absorb = ({ call, centre, depth }: Cell, r: CallResult): boolean => {
     if (r.ok) {
       succeeded++;
       if (r.cache === 'hit') cacheHits++;
@@ -506,15 +499,83 @@ export async function fetchGooglePlaces(input: GooglePlacesInput, ctx: FetchCont
         if (!l1Tried.includes(call.label)) l1Tried.push(call.label);
         l1Radius = Math.max(l1Radius ?? 0, call.radiusM);
       }
-      continue;
+      return false;
     }
     if (r.status !== 0) networkCalls++;
     outcomes.push({ ...call, cache: 'miss', results: 0, error: r.message });
     errors.push(`${call.label}: ${r.message}`);
-    if (r.fatal) {
-      fatal = r.message;
-      break;
+    if (r.fatal) fatal = r.message;
+    return r.fatal;
+  };
+
+  while (queue.length || pending.length) {
+    if (!queue.length) {
+      // The plan is done; spend what is left on the most valuable truncated cells.
+      // One refinement round = every pending cell at the best (layer, depth) rank,
+      // so a direct-layer cell is never starved by an anchor-ring split and the
+      // round's sub-cells can run together.
+      pending.sort((a, b) => (refinePriority[a.call.layer ?? 'user'] ?? 9) - (refinePriority[b.call.layer ?? 'user'] ?? 9) || a.depth - b.depth);
+      const head = pending[0];
+      const rank = (c: Cell) => `${refinePriority[c.call.layer ?? 'user'] ?? 9}:${c.depth}`;
+      while (pending.length && rank(pending[0]) === rank(head)) {
+        const next = pending.shift() as Cell;
+        // Refinement is the only unbounded part of the plan, so it is also the part
+        // that has to respect the wallet: `data_cost_cap_usd` is what a report may
+        // spend on data. While Places sits inside Google's free allowance
+        // `perCallCost` is 0 and this never binds; once GOOGLE_PLACES_BILLED=1 it
+        // stops refining at the cap and the rest is reported as unexhausted rather
+        // than quietly overspent. Cells already queued but not yet run are counted
+        // as spent, since the ledger only books a call once it has been made.
+        const splitCost = SUBDIVISION * perCallCost(ctx);
+        const projected = ctx.cost.total() + queue.length * perCallCost(ctx) + splitCost;
+        if (refineBudget < SUBDIVISION || (splitCost > 0 && projected > costCap)) {
+          truncated.add(next.call.label);
+          continue;
+        }
+        refineBudget -= SUBDIVISION;
+        for (const c of subdivideCall(next.call, next.centre)) queue.push({ ...c, depth: next.depth + 1 });
+      }
+      continue;
     }
+
+    // Take the next run of cells that can go out together. A 先近后远 gate is
+    // decided only when nothing is in flight, so it sees every earlier hit
+    // exactly as the sequential plan did; skipped cells keep their place so the
+    // outcome list reads in plan order.
+    // The very first call goes alone: a disabled key or a dead project answers
+    // it with a fatal error, and five more calls in flight would each be booked.
+    const limit = succeeded === 0 ? 1 : PLACES_CONCURRENCY;
+    const batch: Array<{ cell: Cell; skipped: boolean }> = [];
+    while (queue.length && batch.filter((b) => !b.skipped).length < limit) {
+      const cell = queue[0];
+      const { call } = cell;
+      if (call.only_if_fewer_than != null && call.layer) {
+        const gateKey = `${call.layer}@${call.radiusM}`;
+        if (!widen.has(gateKey)) {
+          if (batch.some((b) => !b.skipped)) break;
+          widen.set(gateKey, layerCount(call.layer) < call.only_if_fewer_than);
+        }
+        queue.shift();
+        batch.push({ cell, skipped: !widen.get(gateKey) });
+        continue;
+      }
+      queue.shift();
+      batch.push({ cell, skipped: false });
+    }
+    const live = batch.filter((b) => !b.skipped).map((b) => b.cell);
+    const results = await mapLimit(live, PLACES_CONCURRENCY, (cell) => nearby(ctx, key, cell.centre, cell.call));
+    // Every call that went out is booked, fatal or not — the ledger already
+    // paid for it; the plan stops only after the whole batch is accounted for.
+    let stop = false;
+    let ri = 0;
+    for (const b of batch) {
+      if (b.skipped) {
+        outcomes.push({ ...b.cell.call, cache: 'skipped', results: 0 });
+        continue;
+      }
+      if (absorb(b.cell, results[ri++])) stop = true;
+    }
+    if (stop) break;
   }
   // A fatal error can leave cells unexamined: they are unexhausted, so say so.
   for (const c of pending) truncated.add(c.call.label);

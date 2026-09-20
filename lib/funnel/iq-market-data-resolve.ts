@@ -9,18 +9,20 @@
  */
 
 import { DEFAULT_LOCALE, type Locale } from '@/lib/i18n/locale';
-import { enrichMarketDataWithAcs } from '@/lib/funnel/iq-acs-enrichment';
+import { buildAcsContextForLatLng, enrichMarketDataWithAcs } from '@/lib/funnel/iq-acs-enrichment';
+import { createFetchContext } from '@/lib/iq/data/context';
 import { enrichMarketDataWithSiteHistory } from '@/lib/funnel/external-data/site-history';
 import { enrichMarketDataWithJurisdiction } from '@/lib/iq/jurisdiction';
 import { enrichMarketDataWithDemographicNarrative } from '@/lib/funnel/iq-demographic-narrative';
 import { enrichMarketDataWithCompetitorInsights } from '@/lib/funnel/iq-deepseek-competitor-insights';
 import { computeFinanceModel } from '@/lib/funnel/iq-finance-model';
-import { gatherIqMarketDataFromGoogle } from '@/lib/funnel/iq-market-data';
+import { gatherIqMarketDataFromGoogle, geocodeIqLocation } from '@/lib/funnel/iq-market-data';
 import { extractMarketSummary } from '@/lib/funnel/iq-premium-anchors';
 import {
   fetchTavilyMarketResearch,
   fetchTavilyDeepResearch,
   type DeepResearchPack,
+  type WebResearchPack,
 } from '@/lib/funnel/iq-web-research';
 import { fetchCaltransTrafficByLocation, type CaltransAADTResult } from '@/lib/funnel/external-data/caltrans';
 import { fetchCommercialListings, type CommercialListingsResult } from '@/lib/funnel/external-data/commercial-listings';
@@ -111,6 +113,14 @@ export async function resolveMarketDataForIqReport(input: {
    * finance model start and finish. Errors thrown by the hook are ignored.
    */
   onStep?: (step: MarketResolveStep, phase: 'start' | 'done') => void | Promise<void>;
+  /**
+   * Hand the web-research fetch to the caller instead of waiting for it here.
+   * The free verdict never reads `web_research` (its brief is Places + ACS), so
+   * the free route lets the search run alongside the LLM call and merges the
+   * result into the stored row afterwards — the paid report still finds it.
+   * When set, this function never writes `web_research` itself.
+   */
+  onWebResearch?: (pending: Promise<WebResearchPack | null>) => void;
 }): Promise<Record<string, unknown> | null> {
   const {
     location,
@@ -133,20 +143,46 @@ export async function resolveMarketDataForIqReport(input: {
       ? { ...input.existing }
       : {};
 
+  // The three slow legs — competitor search, Census, web research — only share
+  // the geocode, so they run side by side. Sequentially they were the bulk of
+  // the "60 seconds" that measured at 100+.
+  const hadWeb = Boolean(base.web_research && typeof base.web_research === 'object');
+  let webPending: Promise<WebResearchPack | null> | null = null;
+  if (!leanResolve && !hadWeb) {
+    webPending = fetchTavilyMarketResearch({ location, businessType: businessType || 'restaurant' }).catch(() => null);
+    input.onWebResearch?.(webPending);
+  }
+
   await step('places', 'start');
+  let acsPending: Promise<Awaited<ReturnType<typeof buildAcsContextForLatLng>>> | null = null;
   if (needsGooglePlacesEnrichment(base)) {
+    const ctx = createFetchContext();
+    const geocode = await geocodeIqLocation(location, ctx);
+    const hasAcs = Boolean(base.acs_context && typeof base.acs_context === 'object');
+    if (geocode && !hasAcs) acsPending = buildAcsContextForLatLng(geocode.lat, geocode.lng).catch(() => null);
     const google = await gatherIqMarketDataFromGoogle({
       location,
       businessType: businessType || 'restaurant',
+      ctx,
+      geocode,
     });
     if (google && Object.keys(google).length > 0) {
       base = Object.keys(base).length === 0 ? { ...google } : mergeGoogleOntoExisting(base, google);
+    } else if (geocode && !base.geocode) {
+      // The competitor leg failed but the point is known: keep it so the
+      // demographics still attach and the map still centres.
+      base = { ...base, geocode };
     }
   }
   await step('places', 'done');
 
   await step('acs', 'start');
-  base = await enrichMarketDataWithAcs(base);
+  if (acsPending) {
+    const acs = await acsPending;
+    if (acs && !(base.acs_context && typeof base.acs_context === 'object')) base = { ...base, acs_context: acs };
+  } else {
+    base = await enrichMarketDataWithAcs(base);
+  }
   await step('acs', 'done');
 
   // Businesses at the exact address + their reviews (Google/Yelp). Cheap (a
@@ -278,12 +314,20 @@ export async function resolveMarketDataForIqReport(input: {
   const hasWeb = base.web_research && typeof base.web_research === 'object';
 
   if (!leanResolve && (!hasWeb || needsWebFallback)) {
-    const tavily = await fetchTavilyMarketResearch({
-      location,
-      businessType: businessType || 'restaurant',
-    });
-    if (tavily) {
-      base = { ...base, web_research: tavily };
+    if (webPending) {
+      // Started up front; the caller owns it when it asked to.
+      if (!input.onWebResearch) {
+        const tavily = await webPending;
+        if (tavily) base = { ...base, web_research: tavily };
+      }
+    } else {
+      const tavily = await fetchTavilyMarketResearch({
+        location,
+        businessType: businessType || 'restaurant',
+      });
+      if (tavily) {
+        base = { ...base, web_research: tavily };
+      }
     }
   }
 
