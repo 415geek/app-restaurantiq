@@ -503,3 +503,10 @@
 - **改法**：`lib/iq/data/geometry-mirror.ts` 优先从自有镜像读，按 `{IQ_GEOMETRY_MIRROR_URL}/{bg|tract}/{county}.json` 一县一文件，取到后按县缓存 30 天——同县的后续报告全部命中缓存，而不是把「每份报告一次请求」换个域名继续。未配置镜像或该县尚未镜像时，原样回退到 TIGERweb，行为不变。
 - **准备脚本**：`scripts/build-geometry-mirror.ts --counties 06075,06081`，在任何能访问 TIGERweb 的机器上跑（本机即可），输出目录上传到任意静态托管（Supabase Storage / R2 / GitHub release），再把 `IQ_GEOMETRY_MIRROR_URL` 指过去。坐标保留 5 位小数（约 1 米，远超圈层分配所需精度），文件通常因此减半。脚本按 `resultOffset` 分页直到返回不足一页——ArcGIS 同样有单次返回上限，把首页当成全县是 §3.1 已经修过的同一个错误。
 - **为什么这是正解而不是权宜**：普查边界一年才变一次。每份付费报告去政府 ArcGIS 实时拉一次年度静态参考数据，本身就是脆弱设计；这次被策略拒绝只是把这个脆弱点暴露出来。
+
+## 边界镜像随应用部署（2026-09-20）
+- **落地方式**：11 个核心县（旧金山、圣马刁、圣塔克拉拉、阿拉米达、康特拉科斯塔、洛杉矶、橙县、皇后区、布鲁克林、金县、哈里斯县）的 block group 边界提交到 `public/geometry/bg/{county}.json`，随每次部署一起上线，由 `https://app.restaurantiq.ai/geometry` 提供。`IQ_GEOMETRY_MIRROR_URL` 指向自己的域名，D2 通过同源静态文件取边界。
+- **为什么不放对象存储**：Blob 上传被本环境网络策略拒绝；而放进仓库还有一个独立的好处——数据和代码同一次部署，不存在「代码上线了、镜像主机挂了」的半在线状态。代价是 git 多约 9 MB（打包后；原始 41 MB），边界一年更新一次，可接受。
+- **只提交 bg 层**：tract 层仅在 BG 几何缺失时作回退，镜像保证 BG 一定在，24 MB 省掉。
+- **验证**：每县 GEOID 与 ACS 权威列表逐一对照（旧金山 681/681，洛杉矶 6591/6591，零缺失零多余）；本地起服务走 `/geometry` 路径跑端到端，D2 从 partial 变 ok，需求覆盖 50 → 95、客群契合 50 → 100，与直连 TIGERweb 的结果一致。
+- **年度更新**：`npx tsx scripts/build-geometry-mirror.ts --counties ... --layer bg --out public/geometry` 然后提交。新增县同理。
