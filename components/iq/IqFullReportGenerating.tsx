@@ -436,12 +436,12 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
         {showEmailForm ? (
           <div
             // §4.7: past five minutes the capture stops being an aside and asks.
-            className={`mt-6 rounded-xl border p-4 ${late && !savedEmail ? 'border-brand-navy/40 bg-[#FAFAF8]' : 'border-zinc-200 bg-[#FAFAF8]'}`}
+            className={`mt-6 rounded-xl border p-4 ${late && !savedEmail ? 'border-brand-navy/40 bg-brand-paper' : 'border-zinc-200 bg-brand-paper'}`}
             data-testid="notify-form"
             data-prompt={late ? 'active' : 'passive'}
           >
             {savedEmail ? (
-              <p className={`text-sm ${savedWillSend ? 'text-emerald-700' : 'text-amber-800'}`}>
+              <p className={`text-sm ${savedWillSend ? 'text-brand-pine' : 'text-brand-ochre'}`}>
                 {savedWillSend ? t.willEmail(savedEmail) : t.savedNoSend(savedEmail)}
               </p>
             ) : (
@@ -465,12 +465,12 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
                   <button
                     type="submit"
                     disabled={emailState === 'saving'}
-                    className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-[#1B2537] disabled:opacity-60"
+                    className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-soft disabled:opacity-60"
                   >
                     {emailState === 'saving' ? t.saving : t.emailMe}
                   </button>
                 </form>
-                {emailState === 'error' ? <p className="mt-2 text-xs text-rose-700">{t.emailError}</p> : null}
+                {emailState === 'error' ? <p className="mt-2 text-xs text-brand-clay">{t.emailError}</p> : null}
               </>
             )}
             {veryLate ? (
@@ -483,11 +483,11 @@ export function IqFullReportGenerating({ reportId, location, headline, lang }: P
 
         {error ? (
           <div className="mt-6 space-y-3 text-center">
-            <p className="text-sm text-rose-700">{error}</p>
+            <p className="text-sm text-brand-clay">{error}</p>
             <button
               type="button"
               onClick={() => setRetryKey((k) => k + 1)}
-              className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-[#1B2537]"
+              className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-soft"
             >
               {t.retry}
             </button>

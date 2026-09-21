@@ -911,8 +911,8 @@ export function ResultClient(props: ResultClientProps) {
 
         {/* 3. Hidden risk — one red rule, no tinted box. */}
         {data.hidden_risk && (
-          <section className={`${ui.card} border-l-4 border-l-rose-500 p-6`}>
-            <h2 className={`mb-2 ${ui.kicker} text-rose-700`}>{t.keyRisk}</h2>
+          <section className={`${ui.card} border-l-4 border-l-brand-clay p-6`}>
+            <h2 className={`mb-2 ${ui.kicker} text-brand-clay`}>{t.keyRisk}</h2>
             <p className="text-base leading-relaxed text-zinc-800">{data.hidden_risk}</p>
           </section>
         )}
@@ -968,14 +968,14 @@ export function ResultClient(props: ResultClientProps) {
                 <button
                   type="button"
                   onClick={focusRentInput}
-                  className="rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#1B2537]"
+                  className="rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-navy-soft"
                 >
                   {t.rentNoticeFill}
                 </button>
                 <button
                   type="button"
                   onClick={() => void handleCheckout({ skipRentNotice: true })}
-                  className="text-xs font-medium text-amber-900 underline underline-offset-4"
+                  className="text-xs font-medium text-brand-ochre underline underline-offset-4"
                 >
                   {t.rentNoticeProceed}
                 </button>
@@ -983,7 +983,7 @@ export function ResultClient(props: ResultClientProps) {
             </div>
           ) : null}
           {checkoutError && (
-            <p className="mt-2 text-center text-sm text-rose-700">{checkoutError}</p>
+            <p className="mt-2 text-center text-sm text-brand-clay">{checkoutError}</p>
           )}
 
           <div className="mt-6 border-t border-zinc-100 pt-5">
@@ -1024,7 +1024,7 @@ export function ResultClient(props: ResultClientProps) {
               </div>
             ) : null}
             {accessCodeError && (
-              <p className="mt-2 text-center text-sm text-rose-700">{accessCodeError}</p>
+              <p className="mt-2 text-center text-sm text-brand-clay">{accessCodeError}</p>
             )}
           </div>
 

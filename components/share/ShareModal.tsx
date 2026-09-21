@@ -205,16 +205,18 @@ export function ShareModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-zinc-900 p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-navy/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_24px_60px_-24px_rgba(11,18,32,0.45)]">
         <div className="mb-6 flex items-center justify-between">
-          <h3 className="text-xl font-semibold text-white">{t.share}</h3>
+          <h3 className="text-lg font-semibold tracking-tight text-brand-navy">{t.share}</h3>
           <button
             onClick={onClose}
             aria-label={t.close}
-            className="rounded-lg p-2 text-gray-400 transition hover:bg-zinc-800 hover:text-white"
+            className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-100 hover:text-brand-navy"
           >
-            ✕
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <path strokeLinecap="round" d="M5 5l10 10M15 5L5 15" />
+            </svg>
           </button>
         </div>
 
@@ -223,10 +225,10 @@ export function ShareModal({
             <button
               key={platform.id}
               onClick={() => handleShare(platform.id)}
-              className="flex items-center gap-3 rounded-xl bg-zinc-800 p-4 transition hover:bg-zinc-700"
+              className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-brand-paper p-4 text-left transition hover:border-zinc-400 hover:bg-zinc-50"
             >
-              <span className="text-2xl">{platform.icon}</span>
-              <span className="text-sm font-medium text-white">
+              <span className="text-2xl" aria-hidden>{platform.icon}</span>
+              <span className="text-sm font-medium text-brand-navy">
                 {platform.label[locale]}
               </span>
             </button>
@@ -234,14 +236,14 @@ export function ShareModal({
         </div>
 
         {copied && (
-          <div className="mt-4 rounded-lg bg-emerald-500/20 p-3 text-center text-sm text-emerald-400">
+          <div className="mt-4 rounded-lg border border-brand-pine/25 bg-brand-pine/8 p-3 text-center text-sm text-brand-pine">
             {t.copied}
           </div>
         )}
 
         <button
           onClick={onClose}
-          className="mt-6 w-full rounded-xl bg-zinc-800 py-3 text-sm font-medium text-gray-400 transition hover:bg-zinc-700 hover:text-white"
+          className="mt-6 w-full rounded-xl border border-zinc-300 bg-white py-3 text-sm font-semibold text-brand-navy transition hover:bg-zinc-50"
         >
           {t.close}
         </button>

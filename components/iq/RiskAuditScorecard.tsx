@@ -180,7 +180,7 @@ export function RiskAuditScorecard({ audit, lang, businessType, compact, conclus
       {(audit.missing_data?.length ?? 0) > 0 && (
         <div className={`${ui.notice} text-xs`}>
           <div className="mb-1 font-medium">{t.missing}</div>
-          <ul className="list-inside list-disc space-y-0.5 text-amber-800">
+          <ul className="list-inside list-disc space-y-0.5 text-brand-ochre">
             {audit.missing_data!.map((item) => (
               <li key={item}>{item}</li>
             ))}

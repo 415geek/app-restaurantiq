@@ -76,7 +76,7 @@ export function ConceptPicker({ lang, typed, options, suggestedId, onConfirm, di
       <h3 className="text-lg font-semibold tracking-tight text-brand-navy">{t.title(typed)}</h3>
       <p className="mt-1 text-sm text-zinc-600">{t.help}</p>
       {suggested ? (
-        <p className="mt-2 text-xs font-medium text-emerald-700">
+        <p className="mt-2 text-xs font-medium text-brand-pine">
           {t.suggested}：{conceptCategoryLabel(suggested.category, lang)} · {conceptOptionLabel(suggested, lang)}
         </p>
       ) : null}

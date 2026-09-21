@@ -24,7 +24,7 @@ const copy: Record<Locale, { share: string }> = {
 };
 
 const variants = {
-  primary: 'bg-brand-navy text-white hover:bg-[#1B2537]',
+  primary: 'bg-brand-navy text-white hover:bg-brand-navy-soft',
   secondary: 'border border-zinc-300 bg-white text-brand-navy hover:bg-zinc-50',
   ghost: 'bg-transparent text-zinc-600 hover:bg-zinc-100 hover:text-brand-navy',
 };

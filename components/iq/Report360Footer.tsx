@@ -255,7 +255,7 @@ export function Report360Footer({ reportId, lang, location, pageHref, isLinkedTo
           </a>
         </div>
         {pdfError ? (
-          <p className="mt-3 text-xs text-rose-700" role="alert">
+          <p className="mt-3 text-xs text-brand-clay" role="alert">
             {pdfError}
           </p>
         ) : null}
@@ -316,7 +316,7 @@ export function Report360Footer({ reportId, lang, location, pageHref, isLinkedTo
           </div>
         ) : null}
         {regenError ? (
-          <p className="mt-3 text-xs text-rose-700" role="alert">
+          <p className="mt-3 text-xs text-brand-clay" role="alert">
             {regenError}
           </p>
         ) : null}

@@ -352,7 +352,7 @@ export function PaidIntakeForm({
       <div className="min-w-0">
         <label className="mb-1 flex flex-wrap items-baseline justify-between gap-x-2 text-sm font-semibold text-brand-navy" htmlFor={id}>
           <span>{label}</span>
-          {provided ? <span className="text-[11px] font-medium text-emerald-700">{t.alreadyProvided}</span> : null}
+          {provided ? <span className="text-[11px] font-medium text-brand-pine">{t.alreadyProvided}</span> : null}
         </label>
         <input
           id={id}
@@ -377,7 +377,7 @@ export function PaidIntakeForm({
   const coreGroup = (
     <section aria-label={t.sectionCore} className={`${ui.inset} p-4`}>
       <div className="mb-3 flex items-center gap-2">
-        <span className="inline-block h-2 w-2 rounded-full bg-brand-green" aria-hidden />
+        <span className="inline-block h-2 w-2 rounded-full bg-brand-navy" aria-hidden />
         <span className={ui.kicker}>{t.sectionCore}</span>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -536,7 +536,7 @@ export function PaidIntakeForm({
       )}
 
       {error ? (
-        <p className="text-sm text-rose-700" role="alert">
+        <p className="text-sm text-brand-clay" role="alert">
           {error}
         </p>
       ) : null}
@@ -557,7 +557,7 @@ export function PaidIntakeForm({
             {t.cancel}
           </button>
         ) : null}
-        {savedOk && !saving && !error ? <span className="text-xs text-emerald-700">{t.saved}</span> : null}
+        {savedOk && !saving && !error ? <span className="text-xs text-brand-pine">{t.saved}</span> : null}
       </div>
     </form>
   );

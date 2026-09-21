@@ -188,12 +188,17 @@ export function scoreBarWidthPercent(score: number): number {
 /**
  * Bar color resolved as inline-style hex so Tailwind purge cannot drop it.
  * Favorability is dimension-aware: higher pressure → less favorable.
+ *
+ * Mid-tones of the status family (globals.css --brand-pine / --brand-ochre /
+ * --brand-clay): a filled bar needs more presence than the pill ink, but the
+ * bright emerald / amber / rose it used before were the loudest thing on a
+ * warm-white page and read as decoration rather than as a reading.
  */
 export function scoreBarColorHex(score: number, higherIsWorse: boolean): string {
   const favorable = higherIsWorse ? 100 - score : score;
-  if (favorable >= 75) return '#34d399'; // emerald-400
-  if (favorable >= 55) return '#fbbf24'; // amber-400
-  return '#fb7185'; // rose-400
+  if (favorable >= 75) return '#3E7F63'; // pine, mid
+  if (favorable >= 55) return '#C08A2E'; // ochre, mid
+  return '#B4544A'; // clay, mid
 }
 
 export function scoreLayerFootnote(lang: Locale): string {

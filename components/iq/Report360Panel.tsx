@@ -104,13 +104,13 @@ export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; la
       <h3 className="mb-1 text-lg font-semibold tracking-tight text-brand-navy">{t.title}</h3>
       <p className="mb-4 text-sm text-zinc-600">{t.desc}</p>
       {status?.migration_needed ? (
-        <p className="text-xs text-amber-800" role="alert">
+        <p className="text-xs text-brand-ochre" role="alert">
           {t.migration}
         </p>
       ) : status?.ready ? (
         /* Reached only when the reload guard tripped: the stored model exists but this page could not render it. */
         <div className="flex flex-wrap items-center gap-3">
-          <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${ui.pill.green}`}>{t.ready}</span>
+          <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${ui.pill.pine}`}>{t.ready}</span>
           <a href={pdfUrl} className={`${ui.btnPrimary} py-2.5`}>
             {t.download}
           </a>
@@ -128,7 +128,7 @@ export function Report360Panel({ reportId, lang = 'en' }: { reportId: string; la
         </div>
       )}
       {error ? (
-        <p className="mt-3 text-xs text-rose-700" role="alert">
+        <p className="mt-3 text-xs text-brand-clay" role="alert">
           {error}
         </p>
       ) : null}

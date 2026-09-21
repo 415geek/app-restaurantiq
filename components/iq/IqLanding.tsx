@@ -332,7 +332,7 @@ function useTypewriter(phrases: string[], opts: { type?: number; erase?: number;
   // caret blinks while the sentence holds); SEO / no-JS readers get the full text
   // from the sr-only copy rendered next to it.
   const [state, setState] = useState<{ i: number; n: number; dir: 'type' | 'hold' | 'erase' }>({ i: 0, n: 0, dir: 'type' });
-  const key = phrases.join(' ');
+  const key = phrases.join('\u0000');
   useEffect(() => {
     setState({ i: 0, n: 0, dir: 'type' });
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -407,8 +407,16 @@ function Logo() {
   );
 }
 
-const CheckIcon = () => (
-  <svg viewBox="0 0 20 20" className="mt-0.5 h-5 w-5 flex-none text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+/** A tick means "included", so it is the one place green is allowed — muted on paper, white on the navy card. */
+const CheckIcon = ({ onDark = false }: { onDark?: boolean }) => (
+  <svg
+    viewBox="0 0 20 20"
+    className={`mt-0.5 h-5 w-5 flex-none ${onDark ? 'text-white/70' : 'text-brand-pine'}`}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    aria-hidden
+  >
     <path strokeLinecap="round" strokeLinejoin="round" d="M4 10.5l4 4 8-9" />
   </svg>
 );
@@ -467,7 +475,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             <Link href={loginHref} className="hidden rounded-full px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 sm:inline-flex">
               {t.nav.signIn}
             </Link>
-            <button type="button" onClick={() => scrollTo('top')} className="hidden rounded-full bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-[#1B2537] sm:inline-flex">
+            <button type="button" onClick={() => scrollTo('top')} className="hidden rounded-full bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-soft sm:inline-flex">
               {t.nav.cta}
             </button>
           </div>
@@ -478,7 +486,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       <section id="top" className="border-b border-zinc-200 bg-white text-brand-navy">
         <div className="mx-auto max-w-6xl px-5 pb-16 pt-14 md:pb-24 md:pt-20">
           <div className="mx-auto max-w-5xl text-center">
-            <p className="mb-5 inline-flex rounded-full border border-zinc-200 bg-[#FAFAF8] px-3.5 py-1.5 text-xs font-semibold tracking-wide text-zinc-700">{t.hero.eyebrow}</p>
+            <p className="mb-5 inline-flex rounded-full border border-zinc-200 bg-brand-paper px-3.5 py-1.5 text-xs font-semibold tracking-wide text-zinc-700">{t.hero.eyebrow}</p>
             <div className="mx-auto flex justify-center">
               <HeroTitle headlines={t.hero.headlines} />
             </div>
@@ -494,8 +502,8 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             className="mx-auto mt-9 max-w-3xl rounded-3xl border border-zinc-200 bg-white p-3 text-brand-navy shadow-[0_24px_60px_-32px_rgba(11,18,32,0.35)] sm:p-4"
           >
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="flex items-center gap-3 rounded-2xl bg-zinc-50 px-4 ring-1 ring-inset ring-zinc-200 focus-within:ring-2 focus-within:ring-brand-green">
-                <svg viewBox="0 0 24 24" className="h-5 w-5 flex-none text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <label className="flex items-center gap-3 rounded-2xl bg-zinc-50 px-4 ring-1 ring-inset ring-zinc-200 focus-within:ring-2 focus-within:ring-brand-navy/30">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 flex-none text-zinc-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z" />
                   <circle cx="12" cy="10" r="2.5" />
                 </svg>
@@ -510,7 +518,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
                   className="h-14 w-full bg-transparent text-[15px] text-brand-navy outline-none placeholder:text-zinc-400"
                 />
               </label>
-              <label className="flex items-center gap-3 rounded-2xl bg-zinc-50 px-4 ring-1 ring-inset ring-zinc-200 focus-within:ring-2 focus-within:ring-brand-green">
+              <label className="flex items-center gap-3 rounded-2xl bg-zinc-50 px-4 ring-1 ring-inset ring-zinc-200 focus-within:ring-2 focus-within:ring-brand-navy/30">
                 <svg viewBox="0 0 24 24" className="h-5 w-5 flex-none text-zinc-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v16m0-7h4a3 3 0 003-3V4M16 4h4v6a3 3 0 01-3 3h-1zm3 9v7" />
                 </svg>
@@ -526,14 +534,14 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             </div>
             {moreOpen ? (
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                <input type="text" inputMode="decimal" placeholder={t.hero.rent} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} className="h-12 rounded-2xl bg-zinc-50 px-4 text-[15px] text-brand-navy outline-none ring-1 ring-inset ring-zinc-200 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-green" />
-                <input type="text" inputMode="decimal" placeholder={t.hero.sqft} value={sqft} onChange={(e) => setSqft(e.target.value)} className="h-12 rounded-2xl bg-zinc-50 px-4 text-[15px] text-brand-navy outline-none ring-1 ring-inset ring-zinc-200 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-green" />
+                <input type="text" inputMode="decimal" placeholder={t.hero.rent} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} className="h-12 rounded-2xl bg-zinc-50 px-4 text-[15px] text-brand-navy outline-none ring-1 ring-inset ring-zinc-200 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-navy/30" />
+                <input type="text" inputMode="decimal" placeholder={t.hero.sqft} value={sqft} onChange={(e) => setSqft(e.target.value)} className="h-12 rounded-2xl bg-zinc-50 px-4 text-[15px] text-brand-navy outline-none ring-1 ring-inset ring-zinc-200 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-navy/30" />
               </div>
             ) : null}
             <button
               type="submit"
               disabled={!location.trim()}
-              className="mt-2 h-14 w-full rounded-2xl bg-brand-navy px-6 text-[15px] font-semibold text-white transition hover:bg-[#1B2537] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-2 h-14 w-full rounded-2xl bg-brand-navy px-6 text-[15px] font-semibold text-white transition hover:bg-brand-navy-soft disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t.hero.cta}
             </button>
@@ -546,11 +554,11 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               className={`mt-2 flex h-12 w-full items-center justify-between gap-3 rounded-2xl border px-4 text-left text-sm font-semibold transition ${
                 moreOpen
                   ? 'border-zinc-300 bg-zinc-50 text-brand-navy hover:bg-zinc-100'
-                  : 'border-dashed border-emerald-500/70 bg-emerald-50 text-brand-navy hover:border-emerald-600 hover:bg-emerald-100'
+                  : 'border-dashed border-brand-navy/35 bg-brand-paper text-brand-navy hover:border-brand-navy/70 hover:bg-zinc-100'
               }`}
             >
               <span className="inline-flex items-center gap-2.5">
-                <span className={`inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-base font-bold leading-none ${moreOpen ? 'bg-zinc-200 text-zinc-700' : 'bg-brand-green text-brand-navy'}`} aria-hidden>
+                <span className={`inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-base font-bold leading-none ${moreOpen ? 'bg-zinc-200 text-zinc-700' : 'bg-brand-navy text-white'}`} aria-hidden>
                   {moreOpen ? '−' : '+'}
                 </span>
                 {moreOpen ? t.hero.less : t.hero.more}
@@ -564,7 +572,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
           <ul className="mx-auto mt-6 flex max-w-3xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-zinc-500">
             {t.hero.trust.map((s) => (
               <li key={s} className="inline-flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-brand-green" aria-hidden />
+                <span className="h-1.5 w-1.5 rounded-full bg-brand-pine" aria-hidden />
                 {s}
               </li>
             ))}
@@ -573,7 +581,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       </section>
 
       {/* ── How it works ───────────────────────────────────────────────── */}
-      <section className="bg-[#F6F6F2] text-brand-navy">
+      <section className="bg-brand-canvas text-brand-navy">
         <div className="mx-auto max-w-6xl px-5 py-16 md:py-24">
           <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.how.title}</h2>
           <ol className="mt-10 grid gap-5 md:grid-cols-3">
@@ -597,7 +605,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {t.inside.items.map((f, i) => (
             <div key={f.title} className="rounded-2xl border border-zinc-200 bg-white p-6 transition hover:border-zinc-400">
-              <div className="text-xs font-bold text-emerald-600">{String(i + 1).padStart(2, '0')}</div>
+              <div className="text-xs font-bold tabular-nums text-zinc-400">{String(i + 1).padStart(2, '0')}</div>
               <h3 className="mt-2 text-lg font-bold text-brand-navy">{f.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-zinc-600">{f.body}</p>
             </div>
@@ -609,7 +617,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       <section id="sample" className="bg-brand-canvas">
         <div className="mx-auto grid max-w-6xl gap-10 px-5 py-16 md:grid-cols-2 md:items-center md:py-24">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">{t.sample.eyebrow}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">{t.sample.eyebrow}</p>
             <h2 className="font-cjk-serif mt-3 text-2xl font-black md:text-4xl">{t.sample.title}</h2>
             <p className="mt-4 text-zinc-600">{t.sample.body}</p>
             <div className="mt-6 inline-flex items-center gap-3 rounded-2xl bg-brand-navy px-5 py-3 text-white">
@@ -651,8 +659,9 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             </ul>
             <button type="button" onClick={() => scrollTo('top')} className="mt-8 w-full rounded-2xl border border-zinc-300 px-5 py-3 text-sm font-bold text-brand-navy hover:bg-zinc-50">{t.pricing.free.cta}</button>
           </div>
-          <div className="relative rounded-3xl bg-brand-navy p-7 text-white ring-4 ring-brand-green/25">
-            <span className="absolute -top-3 left-6 rounded-full bg-brand-green px-3 py-1 text-xs font-bold text-brand-navy">{t.pricing.pro.badge}</span>
+          {/* The paid tier is the one dark card on the page; contrast carries it, not a glow ring. */}
+          <div className="relative rounded-3xl bg-brand-navy p-7 text-white">
+            <span className="absolute -top-3 left-6 rounded-full bg-white px-3 py-1 text-xs font-bold text-brand-navy shadow-[0_1px_2px_rgba(16,24,40,0.12)]">{t.pricing.pro.badge}</span>
             <div className="text-sm font-bold text-zinc-400">{t.pricing.pro.name}</div>
             <div className="mt-2 flex items-baseline gap-1">
               <span className="text-4xl font-extrabold tracking-tight">{t.pricing.pro.price}</span>
@@ -660,10 +669,10 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             </div>
             <ul className="mt-6 space-y-3 text-sm text-zinc-200">
               {t.pricing.pro.items.map((i) => (
-                <li key={i} className="flex gap-2"><CheckIcon />{i}</li>
+                <li key={i} className="flex gap-2"><CheckIcon onDark />{i}</li>
               ))}
             </ul>
-            <button type="button" onClick={() => scrollTo('top')} className="mt-8 w-full rounded-2xl bg-brand-green px-5 py-3 text-sm font-bold text-brand-navy hover:bg-emerald-400">{t.pricing.pro.cta}</button>
+            <button type="button" onClick={() => scrollTo('top')} className="mt-8 w-full rounded-2xl bg-white px-5 py-3 text-sm font-bold text-brand-navy transition hover:bg-zinc-200">{t.pricing.pro.cta}</button>
           </div>
         </div>
       </section>
@@ -708,7 +717,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
           <div className="grid gap-10 md:grid-cols-2 md:items-center">
             <div>
               <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.hero.title}</h2>
-              <button type="button" onClick={() => scrollTo('top')} className="mt-6 rounded-2xl bg-brand-green px-6 py-3.5 text-sm font-bold text-brand-navy hover:bg-emerald-400">{t.hero.cta}</button>
+              <button type="button" onClick={() => scrollTo('top')} className="mt-6 rounded-2xl bg-white px-6 py-3.5 text-sm font-bold text-brand-navy transition hover:bg-zinc-200">{t.hero.cta}</button>
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
               <h3 className="text-lg font-bold">{t.account.title}</h3>

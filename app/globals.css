@@ -6,13 +6,29 @@
   --brand-orange: #F26A36; /* legacy accent (older dashboard surfaces) */
   /* RestaurantIQ brand system: Midnight Navy · Signal Green · Warm White; 🟢 opportunity / 🟡 caution / 🔴 risk */
   --brand-navy: #0B1220;
-  --brand-green: #22C55E;
-  --brand-emerald: #16C784;
-  --brand-lime: #A3FF4F; /* advertising only */
-  --brand-canvas: #F7F8F4;
+  --brand-navy-soft: #1B2537; /* hover / pressed state of a navy action */
+  --brand-green: #22C55E; /* dark surfaces only — see the status family below */
+  --brand-canvas: #F6F6F2; /* the one warm-white ground under every funnel page */
+  --brand-paper: #FAFAF8; /* inset inside a white card */
   --brand-slate: #334155;
   --brand-amber: #F59E0B;
   --brand-red: #EF4444;
+
+  /*
+   * Status family. A bright signal green (#22C55E) next to warm white and grey
+   * reads as an unrelated neon accent — the "AI tool" tell. These five are one
+   * recipe instead: a deep, low-chroma ink that carries the meaning, with its
+   * own ground and hairline mixed from the same ink at 8% / 25% alpha, so every
+   * tint belongs to the same family whatever surface it sits on.
+   *
+   * Green appears ONLY where it means "this is good". Bullets, section numbers,
+   * focus rings, badges and disclosure controls are navy or neutral.
+   */
+  --brand-pine: #1C5D45; /* good · verified · GO */
+  --brand-steel: #2E4C6D; /* conditional */
+  --brand-ochre: #8A5A12; /* caution · not enough data */
+  --brand-sienna: #9A4F1F; /* elevated risk */
+  --brand-clay: #98342B; /* no go · failure */
 }
 
 @theme inline {
@@ -20,13 +36,18 @@
   --color-foreground: var(--foreground);
   --color-brand-orange: var(--brand-orange);
   --color-brand-navy: var(--brand-navy);
+  --color-brand-navy-soft: var(--brand-navy-soft);
   --color-brand-green: var(--brand-green);
-  --color-brand-emerald: var(--brand-emerald);
-  --color-brand-lime: var(--brand-lime);
   --color-brand-canvas: var(--brand-canvas);
+  --color-brand-paper: var(--brand-paper);
   --color-brand-slate: var(--brand-slate);
   --color-brand-amber: var(--brand-amber);
   --color-brand-red: var(--brand-red);
+  --color-brand-pine: var(--brand-pine);
+  --color-brand-steel: var(--brand-steel);
+  --color-brand-ochre: var(--brand-ochre);
+  --color-brand-sienna: var(--brand-sienna);
+  --color-brand-clay: var(--brand-clay);
   --font-cjk: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
   --font-cjk-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', 'Noto Serif CJK SC', serif;
   --font-sans: var(--font-geist-sans);

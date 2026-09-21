@@ -134,8 +134,8 @@ export function SocialProofBadge({ locale = 'en' }: { locale?: Locale }) {
   return (
     <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-xs text-zinc-600">
       <span className="relative flex h-2 w-2">
-        <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+        <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-brand-pine opacity-75"></span>
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-brand-pine"></span>
       </span>
       {COPY[locale].badge(fmt(count))}
     </div>

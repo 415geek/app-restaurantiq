@@ -83,7 +83,7 @@ export default async function IqLoginPage({ searchParams }: LoginPageProps) {
   const redirectUrl = resolveClerkRedirectTarget(normalizeParam(sp.redirect_url) || withLang('/iq/dashboard', locale));
 
   return (
-    <main lang={LOCALE_TAG[locale]} className="relative min-h-screen bg-[#F6F6F2] text-brand-navy">
+    <main lang={LOCALE_TAG[locale]} className="relative min-h-screen bg-brand-canvas text-brand-navy">
       <div className="relative mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6 py-12">
         <div className="mb-8 flex flex-col items-center gap-2 text-center">
           <Link href={withLang('/iq', locale)} className="flex items-center gap-2">
@@ -105,7 +105,7 @@ export default async function IqLoginPage({ searchParams }: LoginPageProps) {
             </p>
             <Link
               href={withLang('/iq', locale)}
-              className="mt-4 inline-flex rounded-xl bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-[#1B2537]"
+              className="mt-4 inline-flex rounded-xl bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-soft"
             >
               {t.backHome}
             </Link>
@@ -132,7 +132,7 @@ export default async function IqLoginPage({ searchParams }: LoginPageProps) {
                   headerSubtitle: 'text-zinc-600',
                   formFieldLabel: 'text-zinc-700',
                   formFieldInput: 'bg-white border-zinc-300 text-brand-navy placeholder:text-zinc-400',
-                  formButtonPrimary: 'bg-brand-navy text-white hover:bg-[#1B2537]',
+                  formButtonPrimary: 'bg-brand-navy text-white hover:bg-brand-navy-soft',
                   footerActionText: 'text-zinc-600',
                   footerActionLink: 'text-brand-navy hover:underline',
                   dividerText: 'text-zinc-500',
@@ -141,7 +141,7 @@ export default async function IqLoginPage({ searchParams }: LoginPageProps) {
                   socialButtonsBlockButtonText: 'text-brand-navy',
                   identityPreviewText: 'text-brand-navy',
                   formFieldHintText: 'text-zinc-500',
-                  formFieldErrorText: 'text-rose-700',
+                  formFieldErrorText: 'text-brand-clay',
                   alert: 'bg-white border-zinc-200',
                   alertText: 'text-brand-navy',
                   otpCodeFieldInput: 'bg-white border-zinc-300 text-brand-navy',

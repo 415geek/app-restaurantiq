@@ -250,9 +250,9 @@ export function IqAnalysisProgressBar({
               <span
                 className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
                   done
-                    ? 'bg-emerald-100 text-emerald-700'
+                    ? 'bg-brand-pine/10 text-brand-pine'
                     : stalled
-                      ? 'animate-pulse bg-amber-100 text-amber-700'
+                      ? 'animate-pulse bg-brand-ochre/10 text-brand-ochre'
                       : current
                         ? 'animate-pulse bg-brand-navy text-white'
                         : 'bg-zinc-100 text-zinc-500'
@@ -264,7 +264,7 @@ export function IqAnalysisProgressBar({
               <span className={current ? 'font-medium text-brand-navy' : 'text-zinc-600'}>
                 {stage.label}
                 {stalled ? (
-                  <span className="mt-0.5 block text-xs text-amber-700" data-testid="stage-retrying">
+                  <span className="mt-0.5 block text-xs text-brand-ochre" data-testid="stage-retrying">
                     {STAGE_RETRY_COPY[lang]}
                   </span>
                 ) : null}

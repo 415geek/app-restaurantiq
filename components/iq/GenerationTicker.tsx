@@ -349,8 +349,8 @@ export function GenerationTicker({
     <div className="flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between" aria-live="polite">
       <span className="inline-flex min-w-0 items-center gap-2 text-zinc-700">
         <span className="relative flex h-2 w-2 flex-none">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-pine opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-brand-pine" />
         </span>
         <span key={message} className="truncate animate-[fadeIn_.4s_ease-out]">{message}</span>
       </span>
