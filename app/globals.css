@@ -41,13 +41,15 @@
 
   /*
    * IQ landing hero. White stays the brand ground; the address card sits on a
-   * pale mint so it separates from the page, and the primary action is a deep
-   * forest green from the same family as pine (Owner.com idiom).
+   * sage tint deep enough to read as its own surface against white, and the
+   * primary action is a deep forest green from the same family as pine
+   * (Owner.com idiom). Landing dark surfaces use forest, not navy, so the page
+   * stays one green family plus neutrals.
    */
   --brand-forest: #14452F; /* landing primary action */
   --brand-forest-hover: #0E3524;
-  --brand-mint: #EAF4EE; /* address card ground */
-  --brand-mist: #F5F8F6; /* alternating landing section ground */
+  --brand-mint: #DCEEE2; /* address card ground */
+  --brand-mist: #F3F7F4; /* alternating landing section ground */
 }
 
 @theme inline {

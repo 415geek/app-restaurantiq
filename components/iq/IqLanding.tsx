@@ -522,7 +522,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             <Link href={loginHref} className="hidden rounded-full px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 sm:inline-flex">
               {t.nav.signIn}
             </Link>
-            <button type="button" onClick={() => scrollTo('top')} className="hidden rounded-full bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-soft sm:inline-flex">
+            <button type="button" onClick={() => scrollTo('top')} className="hidden rounded-full bg-brand-forest px-4 py-2 text-sm font-semibold text-white hover:bg-brand-forest-hover sm:inline-flex">
               {t.nav.cta}
             </button>
           </div>
@@ -546,7 +546,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               e.preventDefault();
               handleSubmit();
             }}
-            className="mx-auto mt-9 max-w-3xl rounded-3xl border border-brand-forest/10 bg-brand-mint p-3 text-brand-navy shadow-[0_0_0_6px_rgba(28,93,69,0.05),0_28px_70px_-30px_rgba(20,69,47,0.5)] sm:p-4"
+            className="mx-auto mt-9 max-w-3xl rounded-3xl border border-brand-forest/20 bg-brand-mint p-3 text-brand-navy shadow-[0_0_0_8px_rgba(20,69,47,0.06),0_30px_80px_-28px_rgba(20,69,47,0.55)] sm:p-4"
           >
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="flex items-center gap-3 rounded-2xl bg-white px-4 ring-1 ring-inset ring-brand-forest/15 focus-within:ring-2 focus-within:ring-brand-forest/40">
@@ -669,8 +669,8 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">{t.sample.eyebrow}</p>
             <h2 className="font-cjk-serif mt-3 text-2xl font-black md:text-4xl">{t.sample.title}</h2>
             <p className="mt-4 text-zinc-600">{t.sample.body}</p>
-            <div className="mt-6 inline-flex items-center gap-3 rounded-2xl bg-brand-navy px-5 py-3 text-white">
-              <span className="h-2.5 w-2.5 rounded-full bg-brand-red" aria-hidden />
+            <div className="mt-6 inline-flex items-center gap-3 rounded-2xl bg-brand-clay/10 px-5 py-3 text-brand-clay ring-1 ring-inset ring-brand-clay/20">
+              <span className="h-2.5 w-2.5 rounded-full bg-brand-clay" aria-hidden />
               <span className="text-lg font-extrabold tracking-tight">{t.sample.verdict}</span>
             </div>
             <p className="mt-6 text-xs text-zinc-500">{t.sample.foot}</p>
@@ -709,19 +709,19 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             <button type="button" onClick={() => scrollTo('top')} className="mt-8 w-full rounded-2xl border border-zinc-300 px-5 py-3 text-sm font-bold text-brand-navy hover:bg-zinc-50">{t.pricing.free.cta}</button>
           </div>
           {/* The paid tier is the one dark card on the page; contrast carries it, not a glow ring. */}
-          <div className="relative rounded-3xl bg-brand-navy p-7 text-white">
-            <span className="absolute -top-3 left-6 rounded-full bg-white px-3 py-1 text-xs font-bold text-brand-navy shadow-[0_1px_2px_rgba(16,24,40,0.12)]">{t.pricing.pro.badge}</span>
-            <div className="text-sm font-bold text-zinc-400">{t.pricing.pro.name}</div>
+          <div className="relative rounded-3xl bg-brand-forest p-7 text-white">
+            <span className="absolute -top-3 left-6 rounded-full bg-white px-3 py-1 text-xs font-bold text-brand-forest shadow-[0_1px_2px_rgba(16,24,40,0.12)]">{t.pricing.pro.badge}</span>
+            <div className="text-sm font-bold text-white/60">{t.pricing.pro.name}</div>
             <div className="mt-2 flex items-baseline gap-1">
               <span className="text-4xl font-extrabold tracking-tight">{t.pricing.pro.price}</span>
-              <span className="text-sm text-zinc-400">{t.pricing.pro.unit}</span>
+              <span className="text-sm text-white/60">{t.pricing.pro.unit}</span>
             </div>
-            <ul className="mt-6 space-y-3 text-sm text-zinc-200">
+            <ul className="mt-6 space-y-3 text-sm text-white/85">
               {t.pricing.pro.items.map((i) => (
                 <li key={i} className="flex gap-2"><CheckIcon onDark />{i}</li>
               ))}
             </ul>
-            <button type="button" onClick={() => scrollTo('top')} className="mt-8 w-full rounded-2xl bg-white px-5 py-3 text-sm font-bold text-brand-navy transition hover:bg-zinc-200">{t.pricing.pro.cta}</button>
+            <button type="button" onClick={() => scrollTo('top')} className="mt-8 w-full rounded-2xl bg-white px-5 py-3 text-sm font-bold text-brand-forest transition hover:bg-brand-mint">{t.pricing.pro.cta}</button>
           </div>
         </div>
       </section>
