@@ -381,7 +381,7 @@ function HeroTitle({ headlines }: { headlines: string[] }) {
   const { text, done } = useTypewriter(order, { type: 62, erase: 22, hold: 2600 });
   const longest = headlines.reduce((a, b) => (b.length > a.length ? b : a), '');
   return (
-    <h1 className="font-cjk-serif text-[clamp(1.6rem,4.6vw,3.15rem)] font-black leading-[1.25] text-brand-navy">
+    <h1 className="font-cjk-serif text-[clamp(1.6rem,4.6vw,3.15rem)] font-black leading-[1.25] text-zinc-900">
       <span className="sr-only">{headlines[0]}</span>
       {/* No whitespace-nowrap: long EN headlines must wrap. Parent section is
           overflow-hidden (glow clip), so nowrap was cutting "Know whether…" on both sides. */}
@@ -391,7 +391,7 @@ function HeroTitle({ headlines }: { headlines: string[] }) {
         </span>
         <span className="col-start-1 row-start-1">
           {text}
-          <span className={`ml-0.5 inline-block w-[0.06em] translate-y-[0.1em] bg-brand-navy align-baseline ${done ? 'animate-pulse' : ''}`} style={{ height: '0.95em' }} aria-hidden />
+          <span className={`ml-0.5 inline-block w-[0.06em] translate-y-[0.1em] bg-zinc-900 align-baseline ${done ? 'animate-pulse' : ''}`} style={{ height: '0.95em' }} aria-hidden />
         </span>
       </span>
     </h1>
@@ -402,7 +402,7 @@ function Logo() {
   return (
     <span className="inline-flex items-center gap-2">
       <Image src="/restaurant-iq-logo-mark.svg" alt="" width={32} height={32} className="h-8 w-8" priority />
-      <span className="text-[17px] font-extrabold tracking-tight text-brand-navy">RestaurantIQ</span>
+      <span className="text-[17px] font-extrabold tracking-tight text-zinc-900">RestaurantIQ</span>
     </span>
   );
 }
@@ -435,7 +435,7 @@ function HeroStage({ sample }: { sample: Copy['sample'] }) {
         <div className="absolute inset-0 rounded-t-[2rem] bg-[repeating-linear-gradient(125deg,rgba(255,255,255,0.07)_0_1px,transparent_1px_46px)]" />
       </div>
       <div className="relative z-10 mx-auto w-[280px] rounded-[2.6rem] border-[9px] border-zinc-900 bg-white shadow-[0_30px_60px_-20px_rgba(11,18,32,0.45)] md:w-[320px]">
-        <div className="flex items-center justify-between px-6 pt-3 text-[13px] font-semibold text-brand-navy">
+        <div className="flex items-center justify-between px-6 pt-3 text-[13px] font-semibold text-zinc-900">
           <span>9:41</span>
           <span className="h-6 w-20 rounded-full bg-zinc-900" />
           <span className="text-[11px] tracking-widest">●●●</span>
@@ -447,7 +447,7 @@ function HeroStage({ sample }: { sample: Copy['sample'] }) {
               className="flex h-20 w-20 flex-none items-center justify-center rounded-full"
               style={{ background: `conic-gradient(var(--brand-clay) ${pct * 3.6}deg, #E5E7EB 0)` }}
             >
-              <div className="flex h-[64px] w-[64px] items-center justify-center rounded-full bg-white text-lg font-extrabold tabular-nums text-brand-navy">{pct}</div>
+              <div className="flex h-[64px] w-[64px] items-center justify-center rounded-full bg-white text-lg font-extrabold tabular-nums text-zinc-900">{pct}</div>
             </div>
             <div>
               <div className="text-xs text-zinc-500">{score?.label}</div>
@@ -458,7 +458,7 @@ function HeroStage({ sample }: { sample: Copy['sample'] }) {
             {rows.slice(0, 4).map((r) => (
               <div key={r.label} className="flex items-baseline justify-between gap-3 py-2.5">
                 <dt className="text-xs text-zinc-600">{r.label}</dt>
-                <dd className="text-sm font-bold tabular-nums text-brand-navy">{r.value}</dd>
+                <dd className="text-sm font-bold tabular-nums text-zinc-900">{r.value}</dd>
               </div>
             ))}
           </dl>
@@ -492,17 +492,17 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
   const signUpHref = `/sign-up?redirect_url=${encodeURIComponent(withLang('/iq/dashboard', locale))}`;
 
   return (
-    <main lang={LOCALE_TAG[locale]} className="font-cjk-sans min-h-screen bg-white text-brand-navy antialiased">
+    <main lang={LOCALE_TAG[locale]} className="font-cjk-sans min-h-screen bg-white text-zinc-900 antialiased">
       {/* ── Nav ─────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 text-brand-navy backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 text-zinc-900 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-4 sm:px-5">
           <Link href={withLang('/iq', locale)} aria-label="RestaurantIQ">
             <Logo />
           </Link>
           <nav className="hidden items-center gap-7 text-sm font-medium text-zinc-600 md:flex" aria-label="Sections">
-            <button type="button" onClick={() => scrollTo('inside')} className="hover:text-brand-navy">{t.nav.features}</button>
-            <button type="button" onClick={() => scrollTo('pricing')} className="hover:text-brand-navy">{t.nav.pricing}</button>
-            <button type="button" onClick={() => scrollTo('faq')} className="hover:text-brand-navy">{t.nav.faq}</button>
+            <button type="button" onClick={() => scrollTo('inside')} className="hover:text-zinc-900">{t.nav.features}</button>
+            <button type="button" onClick={() => scrollTo('pricing')} className="hover:text-zinc-900">{t.nav.pricing}</button>
+            <button type="button" onClick={() => scrollTo('faq')} className="hover:text-zinc-900">{t.nav.faq}</button>
           </nav>
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="inline-flex rounded-full border border-zinc-200 bg-white p-0.5" role="group" aria-label={t.langSwitcher}>
@@ -513,7 +513,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
                   onClick={() => setLocale(l)}
                   aria-pressed={l === locale}
                   lang={LOCALE_TAG[l]}
-                  className={`rounded-full px-2 py-1 text-xs font-semibold transition ${l === locale ? 'bg-brand-navy text-white' : 'text-zinc-600 hover:bg-zinc-100 hover:text-brand-navy'}`}
+                  className={`rounded-full px-2 py-1 text-xs font-semibold transition ${l === locale ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}
                 >
                   {SHORT_LABEL[l]}
                 </button>
@@ -530,7 +530,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       </header>
 
       {/* ── Hero ────────────────────────────────────────────────────────── */}
-      <section id="top" className="border-b border-zinc-200 bg-white text-brand-navy">
+      <section id="top" className="border-b border-zinc-200 bg-white text-zinc-900">
         <div className="mx-auto max-w-6xl px-5 pt-14 md:pt-20">
           <div className="mx-auto max-w-5xl text-center">
             <p className="mb-5 inline-flex rounded-full border border-brand-forest/15 bg-brand-mint px-3.5 py-1.5 text-xs font-semibold tracking-wide text-brand-forest">{t.hero.eyebrow}</p>
@@ -546,7 +546,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               e.preventDefault();
               handleSubmit();
             }}
-            className="mx-auto mt-9 max-w-3xl rounded-3xl bg-brand-mint p-3 text-brand-navy ring-1 ring-inset ring-brand-forest/10 shadow-[0_24px_60px_-30px_rgba(20,69,47,0.35)] sm:p-4"
+            className="mx-auto mt-9 max-w-3xl rounded-3xl bg-brand-mint p-3 text-zinc-900 ring-1 ring-inset ring-brand-forest/15 shadow-[0_0_0_6px_rgba(220,238,226,0.45),0_28px_70px_-30px_rgba(20,69,47,0.45)] sm:p-4"
           >
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="flex items-center gap-3 rounded-2xl bg-white px-4 ring-1 ring-inset ring-brand-forest/15 focus-within:ring-2 focus-within:ring-brand-forest/40">
@@ -562,7 +562,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   required
-                  className="h-14 w-full bg-transparent text-[15px] text-brand-navy outline-none placeholder:text-zinc-400"
+                  className="h-14 w-full bg-transparent text-[15px] text-zinc-900 outline-none placeholder:text-zinc-400"
                 />
               </label>
               <label className="flex items-center gap-3 rounded-2xl bg-white px-4 ring-1 ring-inset ring-brand-forest/15 focus-within:ring-2 focus-within:ring-brand-forest/40">
@@ -575,22 +575,25 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
                   placeholder={t.hero.cuisine}
                   value={businessType}
                   onChange={(e) => setBusinessType(e.target.value)}
-                  className="h-14 w-full bg-transparent text-[15px] text-brand-navy outline-none placeholder:text-zinc-400"
+                  className="h-14 w-full bg-transparent text-[15px] text-zinc-900 outline-none placeholder:text-zinc-400"
                 />
               </label>
             </div>
             {moreOpen ? (
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                <input type="text" inputMode="decimal" placeholder={t.hero.rent} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-brand-navy outline-none ring-1 ring-inset ring-brand-forest/15 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-forest/40" />
-                <input type="text" inputMode="decimal" placeholder={t.hero.sqft} value={sqft} onChange={(e) => setSqft(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-brand-navy outline-none ring-1 ring-inset ring-brand-forest/15 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-forest/40" />
+                <input type="text" inputMode="decimal" placeholder={t.hero.rent} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-zinc-900 outline-none ring-1 ring-inset ring-brand-forest/15 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-forest/40" />
+                <input type="text" inputMode="decimal" placeholder={t.hero.sqft} value={sqft} onChange={(e) => setSqft(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-zinc-900 outline-none ring-1 ring-inset ring-brand-forest/15 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-forest/40" />
               </div>
             ) : null}
             <button
               type="submit"
               disabled={!location.trim()}
-              className="mt-2 h-14 w-full rounded-2xl bg-white px-6 text-[15px] font-semibold text-brand-forest transition hover:bg-brand-mint disabled:cursor-not-allowed disabled:opacity-60"
+              className="group mt-2 inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-forest px-6 text-[15px] font-semibold text-white shadow-[0_1px_0_rgba(255,255,255,0.12)_inset,0_8px_20px_-10px_rgba(20,69,47,0.7)] transition hover:bg-brand-forest-hover active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {t.hero.cta}
+              <svg viewBox="0 0 20 20" className="h-4 w-4 transition group-hover:translate-x-0.5 group-disabled:translate-x-0" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 10h12m-5-5l5 5-5 5" />
+              </svg>
             </button>
             {/* Optional rent / size: a full-width control, not a footnote link — users
                 were not seeing the grey underlined text under the CTA at all. */}
@@ -600,12 +603,12 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               aria-expanded={moreOpen}
               className={`mt-2 flex h-12 w-full items-center justify-between gap-3 rounded-2xl border px-4 text-left text-sm font-semibold transition ${
                 moreOpen
-                  ? 'border-white/20 bg-white text-brand-navy hover:bg-white/90'
-                  : 'border-dashed border-white/40 bg-white/10 text-white hover:border-white/70 hover:bg-white/20'
+                  ? 'border-brand-forest/15 bg-white text-zinc-900 hover:bg-white/90'
+                  : 'border-dashed border-brand-forest/30 bg-white/40 text-brand-forest hover:border-brand-forest/50 hover:bg-white/70'
               }`}
             >
               <span className="inline-flex items-center gap-2.5">
-                <span className={`inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-base font-bold leading-none ${moreOpen ? 'bg-brand-mint text-brand-forest' : 'bg-white text-brand-forest'}`} aria-hidden>
+                <span className={`inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-base font-bold leading-none ${moreOpen ? 'bg-brand-mint text-brand-forest' : 'bg-brand-forest text-white'}`} aria-hidden>
                   {moreOpen ? '−' : '+'}
                 </span>
                 {moreOpen ? t.hero.less : t.hero.more}
@@ -630,7 +633,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       </section>
 
       {/* ── How it works ───────────────────────────────────────────────── */}
-      <section className="bg-brand-mist text-brand-navy">
+      <section className="bg-brand-mist text-zinc-900">
         <div className="mx-auto max-w-6xl px-5 py-16 md:py-24">
           <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.how.title}</h2>
           <ol className="mt-10 grid gap-5 md:grid-cols-3">
@@ -655,7 +658,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
           {t.inside.items.map((f, i) => (
             <div key={f.title} className="rounded-2xl border border-zinc-200 bg-white p-6 transition hover:border-brand-forest/40">
               <div className="text-xs font-bold tabular-nums text-brand-pine">{String(i + 1).padStart(2, '0')}</div>
-              <h3 className="mt-2 text-lg font-bold text-brand-navy">{f.title}</h3>
+              <h3 className="mt-2 text-lg font-bold text-zinc-900">{f.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-zinc-600">{f.body}</p>
             </div>
           ))}
@@ -683,7 +686,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
                     <dt className="text-sm font-medium text-zinc-700">{r.label}</dt>
                     {r.note ? <dd className="text-xs text-zinc-400">{r.note}</dd> : null}
                   </div>
-                  <dd className="text-right text-lg font-extrabold tabular-nums tracking-tight text-brand-navy">{r.value}</dd>
+                  <dd className="text-right text-lg font-extrabold tabular-nums tracking-tight text-zinc-900">{r.value}</dd>
                 </div>
               ))}
             </dl>
@@ -706,7 +709,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
                 <li key={i} className="flex gap-2"><CheckIcon />{i}</li>
               ))}
             </ul>
-            <button type="button" onClick={() => scrollTo('top')} className="mt-8 w-full rounded-2xl border border-zinc-300 px-5 py-3 text-sm font-bold text-brand-navy hover:bg-zinc-50">{t.pricing.free.cta}</button>
+            <button type="button" onClick={() => scrollTo('top')} className="mt-8 w-full rounded-2xl border border-zinc-300 px-5 py-3 text-sm font-bold text-zinc-900 hover:bg-zinc-50">{t.pricing.free.cta}</button>
           </div>
           {/* The paid tier is the one dark card on the page; contrast carries it, not a glow ring. */}
           <div className="relative rounded-3xl bg-brand-forest p-7 text-white">
@@ -733,7 +736,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {t.audiences.items.map((a) => (
               <div key={a.title} className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200">
-                <h3 className="font-bold text-brand-navy">{a.title}</h3>
+                <h3 className="font-bold text-zinc-900">{a.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-600">{a.body}</p>
               </div>
             ))}
@@ -749,7 +752,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             const open = openFaq === i;
             return (
               <div key={f.q}>
-                <button type="button" onClick={() => setOpenFaq(open ? null : i)} aria-expanded={open} className="flex w-full items-center justify-between gap-4 py-5 text-left text-base font-bold text-brand-navy">
+                <button type="button" onClick={() => setOpenFaq(open ? null : i)} aria-expanded={open} className="flex w-full items-center justify-between gap-4 py-5 text-left text-base font-bold text-zinc-900">
                   {f.q}
                   <span className={`flex h-7 w-7 flex-none items-center justify-center rounded-full border border-zinc-300 text-lg leading-none transition ${open ? 'rotate-45' : ''}`} aria-hidden>+</span>
                 </button>

@@ -1,16 +1,11 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- RestaurantIQ mark: a location pin holding a rising bar chart (site → data → verdict), forest green on white. -->
+  <rect width="128" height="128" rx="30" fill="#14452F"/>
   <path
-    fill-rule="evenodd"
-    clip-rule="evenodd"
-    d="M64 28C89.4051 28 110 48.5949 110 74C110 82.0322 107.941 89.5838 104.324 96.154L94.516 90.7528C97.2822 85.891 98.8571 80.2671 98.8571 74.2857C98.8571 55.6658 83.7627 40.5714 65.1429 40.5714C46.523 40.5714 31.4286 55.6658 31.4286 74.2857C31.4286 90.4678 42.8237 103.989 58 107.266V118.694C36.4489 115.27 20 96.5759 20 74.2857C20 48.5949 40.5949 28 66 28H64Z"
-    fill="#FF6D36"
+    d="M64 22C45.2 22 30 37.2 30 56C30 80.5 64 108 64 108C64 108 98 80.5 98 56C98 37.2 82.8 22 64 22Z"
+    fill="#FFFFFF"
   />
-  <path
-    fill-rule="evenodd"
-    clip-rule="evenodd"
-    d="M62 48H72V100H62V48ZM49 75C49 66.7157 55.7157 60 64 60C72.2843 60 79 66.7157 79 75C79 83.2843 72.2843 90 64 90C55.7157 90 49 83.2843 49 75Z"
-    fill="#FF6D36"
-  />
-  <circle cx="95" cy="79" r="9" fill="#FF6D36"/>
-  <circle cx="64" cy="16" r="9" fill="#FF6D36"/>
+  <rect x="47" y="56" width="8" height="12" rx="2" fill="#14452F"/>
+  <rect x="60" y="48" width="8" height="20" rx="2" fill="#14452F"/>
+  <rect x="73" y="40" width="8" height="28" rx="2" fill="#3FA56B"/>
 </svg>
