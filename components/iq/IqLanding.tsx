@@ -546,7 +546,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               e.preventDefault();
               handleSubmit();
             }}
-            className="mx-auto mt-9 max-w-3xl rounded-3xl border border-brand-forest/20 bg-brand-mint p-3 text-brand-navy shadow-[0_0_0_8px_rgba(20,69,47,0.06),0_30px_80px_-28px_rgba(20,69,47,0.55)] sm:p-4"
+            className="mx-auto mt-9 max-w-3xl rounded-3xl bg-brand-forest p-3 text-brand-navy shadow-[0_0_0_8px_rgba(20,69,47,0.08),0_30px_80px_-28px_rgba(20,69,47,0.6)] sm:p-4"
           >
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="flex items-center gap-3 rounded-2xl bg-white px-4 ring-1 ring-inset ring-brand-forest/15 focus-within:ring-2 focus-within:ring-brand-forest/40">
@@ -588,7 +588,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             <button
               type="submit"
               disabled={!location.trim()}
-              className="mt-2 h-14 w-full rounded-2xl bg-brand-forest px-6 text-[15px] font-semibold text-white transition hover:bg-brand-forest-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-2 h-14 w-full rounded-2xl bg-white px-6 text-[15px] font-semibold text-brand-forest transition hover:bg-brand-mint disabled:cursor-not-allowed disabled:opacity-60"
             >
               {t.hero.cta}
             </button>
@@ -600,12 +600,12 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               aria-expanded={moreOpen}
               className={`mt-2 flex h-12 w-full items-center justify-between gap-3 rounded-2xl border px-4 text-left text-sm font-semibold transition ${
                 moreOpen
-                  ? 'border-brand-forest/20 bg-white text-brand-navy hover:bg-white/70'
-                  : 'border-dashed border-brand-forest/35 bg-white/60 text-brand-navy hover:border-brand-forest/70 hover:bg-white'
+                  ? 'border-white/20 bg-white text-brand-navy hover:bg-white/90'
+                  : 'border-dashed border-white/40 bg-white/10 text-white hover:border-white/70 hover:bg-white/20'
               }`}
             >
               <span className="inline-flex items-center gap-2.5">
-                <span className={`inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-base font-bold leading-none ${moreOpen ? 'bg-brand-mint text-brand-forest' : 'bg-brand-forest text-white'}`} aria-hidden>
+                <span className={`inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-base font-bold leading-none ${moreOpen ? 'bg-brand-mint text-brand-forest' : 'bg-white text-brand-forest'}`} aria-hidden>
                   {moreOpen ? '−' : '+'}
                 </span>
                 {moreOpen ? t.hero.less : t.hero.more}
