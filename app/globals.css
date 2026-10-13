@@ -38,6 +38,16 @@
   --brand-ochre: #8A5A12; /* caution · not enough data */
   --brand-sienna: #9A4F1F; /* elevated risk */
   --brand-clay: #98342B; /* no go · failure */
+
+  /*
+   * IQ landing hero. White stays the brand ground; the address card sits on a
+   * pale mint so it separates from the page, and the primary action is a deep
+   * forest green from the same family as pine (Owner.com idiom).
+   */
+  --brand-forest: #14452F; /* landing primary action */
+  --brand-forest-hover: #0E3524;
+  --brand-mint: #EAF4EE; /* address card ground */
+  --brand-mist: #F5F8F6; /* alternating landing section ground */
 }
 
 @theme inline {
@@ -61,6 +71,10 @@
   --color-brand-ochre: var(--brand-ochre);
   --color-brand-sienna: var(--brand-sienna);
   --color-brand-clay: var(--brand-clay);
+  --color-brand-forest: var(--brand-forest);
+  --color-brand-forest-hover: var(--brand-forest-hover);
+  --color-brand-mint: var(--brand-mint);
+  --color-brand-mist: var(--brand-mist);
   --font-cjk: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
   --font-cjk-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', 'Noto Serif CJK SC', serif;
   --font-sans: var(--font-geist-sans);

@@ -421,6 +421,53 @@ const CheckIcon = ({ onDark = false }: { onDark?: boolean }) => (
   </svg>
 );
 
+/**
+ * Hero visual under the address card: a green gradient stage (deep forest →
+ * pale mint) with a phone showing the sample verdict. Built from the sample
+ * copy so it stays trilingual and never shows a real customer's numbers.
+ */
+function HeroStage({ sample }: { sample: Copy['sample'] }) {
+  const [score, ...rows] = sample.rows;
+  const pct = Number.parseFloat(score?.value ?? '0') || 0;
+  return (
+    <div className="relative mx-auto mt-14 h-[380px] max-w-5xl overflow-hidden md:mt-16 md:h-[460px]" aria-hidden>
+      <div className="absolute inset-x-0 bottom-0 top-24 rounded-t-[2rem] bg-[linear-gradient(100deg,#14452F_0%,#2B7A50_34%,#8FCCA5_64%,#E3F4E9_100%)]">
+        <div className="absolute inset-0 rounded-t-[2rem] bg-[repeating-linear-gradient(125deg,rgba(255,255,255,0.07)_0_1px,transparent_1px_46px)]" />
+      </div>
+      <div className="relative z-10 mx-auto w-[280px] rounded-[2.6rem] border-[9px] border-zinc-900 bg-white shadow-[0_30px_60px_-20px_rgba(11,18,32,0.45)] md:w-[320px]">
+        <div className="flex items-center justify-between px-6 pt-3 text-[13px] font-semibold text-brand-navy">
+          <span>9:41</span>
+          <span className="h-6 w-20 rounded-full bg-zinc-900" />
+          <span className="text-[11px] tracking-widest">●●●</span>
+        </div>
+        <div className="px-5 pb-10 pt-5 text-left">
+          <p className="text-[11px] font-semibold text-zinc-500">{sample.eyebrow}</p>
+          <div className="mt-4 flex items-center gap-4">
+            <div
+              className="flex h-20 w-20 flex-none items-center justify-center rounded-full"
+              style={{ background: `conic-gradient(var(--brand-clay) ${pct * 3.6}deg, #E5E7EB 0)` }}
+            >
+              <div className="flex h-[64px] w-[64px] items-center justify-center rounded-full bg-white text-lg font-extrabold tabular-nums text-brand-navy">{pct}</div>
+            </div>
+            <div>
+              <div className="text-xs text-zinc-500">{score?.label}</div>
+              <span className="mt-1 inline-flex rounded-full bg-brand-clay/10 px-2.5 py-1 text-xs font-bold text-brand-clay">{sample.verdict}</span>
+            </div>
+          </div>
+          <dl className="mt-5 divide-y divide-zinc-100 rounded-2xl bg-brand-mist px-3">
+            {rows.slice(0, 4).map((r) => (
+              <div key={r.label} className="flex items-baseline justify-between gap-3 py-2.5">
+                <dt className="text-xs text-zinc-600">{r.label}</dt>
+                <dd className="text-sm font-bold tabular-nums text-brand-navy">{r.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
   const [location, setLocation] = useState('');
   const [businessType, setBusinessType] = useState('');
@@ -484,9 +531,9 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
 
       {/* ── Hero ────────────────────────────────────────────────────────── */}
       <section id="top" className="border-b border-zinc-200 bg-white text-brand-navy">
-        <div className="mx-auto max-w-6xl px-5 pb-16 pt-14 md:pb-24 md:pt-20">
+        <div className="mx-auto max-w-6xl px-5 pt-14 md:pt-20">
           <div className="mx-auto max-w-5xl text-center">
-            <p className="mb-5 inline-flex rounded-full border border-zinc-200 bg-brand-paper px-3.5 py-1.5 text-xs font-semibold tracking-wide text-zinc-700">{t.hero.eyebrow}</p>
+            <p className="mb-5 inline-flex rounded-full border border-brand-forest/15 bg-brand-mint px-3.5 py-1.5 text-xs font-semibold tracking-wide text-brand-forest">{t.hero.eyebrow}</p>
             <div className="mx-auto flex justify-center">
               <HeroTitle headlines={t.hero.headlines} />
             </div>
@@ -499,11 +546,11 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               e.preventDefault();
               handleSubmit();
             }}
-            className="mx-auto mt-9 max-w-3xl rounded-3xl border border-zinc-200 bg-white p-3 text-brand-navy shadow-[0_24px_60px_-32px_rgba(11,18,32,0.35)] sm:p-4"
+            className="mx-auto mt-9 max-w-3xl rounded-3xl border border-brand-forest/10 bg-brand-mint p-3 text-brand-navy shadow-[0_0_0_6px_rgba(28,93,69,0.05),0_28px_70px_-30px_rgba(20,69,47,0.5)] sm:p-4"
           >
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="flex items-center gap-3 rounded-2xl bg-zinc-50 px-4 ring-1 ring-inset ring-zinc-200 focus-within:ring-2 focus-within:ring-brand-navy/30">
-                <svg viewBox="0 0 24 24" className="h-5 w-5 flex-none text-zinc-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <label className="flex items-center gap-3 rounded-2xl bg-white px-4 ring-1 ring-inset ring-brand-forest/15 focus-within:ring-2 focus-within:ring-brand-forest/40">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 flex-none text-brand-pine" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z" />
                   <circle cx="12" cy="10" r="2.5" />
                 </svg>
@@ -518,8 +565,8 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
                   className="h-14 w-full bg-transparent text-[15px] text-brand-navy outline-none placeholder:text-zinc-400"
                 />
               </label>
-              <label className="flex items-center gap-3 rounded-2xl bg-zinc-50 px-4 ring-1 ring-inset ring-zinc-200 focus-within:ring-2 focus-within:ring-brand-navy/30">
-                <svg viewBox="0 0 24 24" className="h-5 w-5 flex-none text-zinc-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <label className="flex items-center gap-3 rounded-2xl bg-white px-4 ring-1 ring-inset ring-brand-forest/15 focus-within:ring-2 focus-within:ring-brand-forest/40">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 flex-none text-brand-pine" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v16m0-7h4a3 3 0 003-3V4M16 4h4v6a3 3 0 01-3 3h-1zm3 9v7" />
                 </svg>
                 <input
@@ -534,14 +581,14 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             </div>
             {moreOpen ? (
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                <input type="text" inputMode="decimal" placeholder={t.hero.rent} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} className="h-12 rounded-2xl bg-zinc-50 px-4 text-[15px] text-brand-navy outline-none ring-1 ring-inset ring-zinc-200 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-navy/30" />
-                <input type="text" inputMode="decimal" placeholder={t.hero.sqft} value={sqft} onChange={(e) => setSqft(e.target.value)} className="h-12 rounded-2xl bg-zinc-50 px-4 text-[15px] text-brand-navy outline-none ring-1 ring-inset ring-zinc-200 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-navy/30" />
+                <input type="text" inputMode="decimal" placeholder={t.hero.rent} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-brand-navy outline-none ring-1 ring-inset ring-brand-forest/15 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-forest/40" />
+                <input type="text" inputMode="decimal" placeholder={t.hero.sqft} value={sqft} onChange={(e) => setSqft(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-brand-navy outline-none ring-1 ring-inset ring-brand-forest/15 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-forest/40" />
               </div>
             ) : null}
             <button
               type="submit"
               disabled={!location.trim()}
-              className="mt-2 h-14 w-full rounded-2xl bg-brand-navy px-6 text-[15px] font-semibold text-white transition hover:bg-brand-navy-soft disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-2 h-14 w-full rounded-2xl bg-brand-forest px-6 text-[15px] font-semibold text-white transition hover:bg-brand-forest-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
               {t.hero.cta}
             </button>
@@ -553,12 +600,12 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               aria-expanded={moreOpen}
               className={`mt-2 flex h-12 w-full items-center justify-between gap-3 rounded-2xl border px-4 text-left text-sm font-semibold transition ${
                 moreOpen
-                  ? 'border-zinc-300 bg-zinc-50 text-brand-navy hover:bg-zinc-100'
-                  : 'border-dashed border-brand-navy/35 bg-brand-paper text-brand-navy hover:border-brand-navy/70 hover:bg-zinc-100'
+                  ? 'border-brand-forest/20 bg-white text-brand-navy hover:bg-white/70'
+                  : 'border-dashed border-brand-forest/35 bg-white/60 text-brand-navy hover:border-brand-forest/70 hover:bg-white'
               }`}
             >
               <span className="inline-flex items-center gap-2.5">
-                <span className={`inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-base font-bold leading-none ${moreOpen ? 'bg-zinc-200 text-zinc-700' : 'bg-brand-navy text-white'}`} aria-hidden>
+                <span className={`inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-base font-bold leading-none ${moreOpen ? 'bg-brand-mint text-brand-forest' : 'bg-brand-forest text-white'}`} aria-hidden>
                   {moreOpen ? '−' : '+'}
                 </span>
                 {moreOpen ? t.hero.less : t.hero.more}
@@ -577,17 +624,19 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               </li>
             ))}
           </ul>
+
+          <HeroStage sample={t.sample} />
         </div>
       </section>
 
       {/* ── How it works ───────────────────────────────────────────────── */}
-      <section className="bg-brand-canvas text-brand-navy">
+      <section className="bg-brand-mist text-brand-navy">
         <div className="mx-auto max-w-6xl px-5 py-16 md:py-24">
           <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.how.title}</h2>
           <ol className="mt-10 grid gap-5 md:grid-cols-3">
             {t.how.steps.map((s) => (
               <li key={s.n} className="rounded-2xl border border-zinc-200 bg-white p-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-navy text-base font-bold text-white">{s.n}</div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-mint text-base font-bold text-brand-forest">{s.n}</div>
                 <h3 className="mt-5 text-lg font-bold">{s.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-600">{s.body}</p>
               </li>
@@ -604,8 +653,8 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
         </div>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {t.inside.items.map((f, i) => (
-            <div key={f.title} className="rounded-2xl border border-zinc-200 bg-white p-6 transition hover:border-zinc-400">
-              <div className="text-xs font-bold tabular-nums text-zinc-400">{String(i + 1).padStart(2, '0')}</div>
+            <div key={f.title} className="rounded-2xl border border-zinc-200 bg-white p-6 transition hover:border-brand-forest/40">
+              <div className="text-xs font-bold tabular-nums text-brand-pine">{String(i + 1).padStart(2, '0')}</div>
               <h3 className="mt-2 text-lg font-bold text-brand-navy">{f.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-zinc-600">{f.body}</p>
             </div>
@@ -614,7 +663,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       </section>
 
       {/* ── Sample numbers ─────────────────────────────────────────────── */}
-      <section id="sample" className="bg-brand-canvas">
+      <section id="sample" className="bg-brand-mist">
         <div className="mx-auto grid max-w-6xl gap-10 px-5 py-16 md:grid-cols-2 md:items-center md:py-24">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">{t.sample.eyebrow}</p>
@@ -678,7 +727,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       </section>
 
       {/* ── Audiences ──────────────────────────────────────────────────── */}
-      <section className="border-y border-zinc-100 bg-brand-canvas">
+      <section className="border-y border-zinc-100 bg-brand-mist">
         <div className="mx-auto max-w-6xl px-5 py-16 md:py-20">
           <h2 className="font-cjk-serif text-2xl font-black md:text-3xl">{t.audiences.title}</h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -712,23 +761,23 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       </section>
 
       {/* ── Final CTA + account ─────────────────────────────────────────── */}
-      <section className="bg-brand-navy text-white">
+      <section className="bg-brand-forest text-white">
         <div className="mx-auto max-w-6xl px-5 py-16 md:py-20">
           <div className="grid gap-10 md:grid-cols-2 md:items-center">
             <div>
               <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.hero.title}</h2>
-              <button type="button" onClick={() => scrollTo('top')} className="mt-6 rounded-2xl bg-white px-6 py-3.5 text-sm font-bold text-brand-navy transition hover:bg-zinc-200">{t.hero.cta}</button>
+              <button type="button" onClick={() => scrollTo('top')} className="mt-6 rounded-2xl bg-white px-6 py-3.5 text-sm font-bold text-brand-forest transition hover:bg-brand-mint">{t.hero.cta}</button>
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
               <h3 className="text-lg font-bold">{t.account.title}</h3>
-              <p className="mt-2 text-sm text-zinc-300">{t.account.body}</p>
+              <p className="mt-2 text-sm text-white/75">{t.account.body}</p>
               <div className="mt-5 flex flex-wrap gap-3">
                 <Link href={loginHref} className="rounded-2xl border border-white/20 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/10">{t.account.signIn}</Link>
-                <Link href={signUpHref} className="rounded-2xl bg-white px-5 py-2.5 text-sm font-semibold text-brand-navy hover:bg-zinc-200">{t.account.register}</Link>
+                <Link href={signUpHref} className="rounded-2xl bg-white px-5 py-2.5 text-sm font-semibold text-brand-forest hover:bg-brand-mint">{t.account.register}</Link>
               </div>
             </div>
           </div>
-          <footer className="mt-12 border-t border-white/10 pt-6 text-xs text-zinc-400">
+          <footer className="mt-12 border-t border-white/15 pt-6 text-xs text-white/60">
             <span>{t.footer.disclaimer}</span>
           </footer>
         </div>
