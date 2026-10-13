@@ -3,7 +3,16 @@
 :root {
   --background: #0a0a0a;
   --foreground: #ffffff;
-  --brand-orange: #F26A36; /* legacy accent (older dashboard surfaces) */
+  --brand-orange: #F26A36; /* logo orange; the landing page's one accent */
+  --brand-orange-hover: #DE5A27; /* pressed / hover state of an orange action */
+  --brand-orange-soft: #F7A27D; /* orange tint for small marks on dark (icons, eyebrows) */
+  /*
+   * Landing page (dark). One near-black matched to the logo-mark's baked-in
+   * ground, one raised surface, white-alpha hairlines. Orange is the only hue;
+   * no neon green / red decoration next to it.
+   */
+  --brand-ink: #0A0A0A;
+  --brand-ink-raised: #141416;
   /* RestaurantIQ brand system: Midnight Navy · Signal Green · Warm White; 🟢 opportunity / 🟡 caution / 🔴 risk */
   --brand-navy: #0B1220;
   --brand-navy-soft: #1B2537; /* hover / pressed state of a navy action */
@@ -35,6 +44,10 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-brand-orange: var(--brand-orange);
+  --color-brand-orange-hover: var(--brand-orange-hover);
+  --color-brand-orange-soft: var(--brand-orange-soft);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-ink-raised: var(--brand-ink-raised);
   --color-brand-navy: var(--brand-navy);
   --color-brand-navy-soft: var(--brand-navy-soft);
   --color-brand-green: var(--brand-green);

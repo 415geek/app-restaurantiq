@@ -72,7 +72,7 @@ function WorkflowStepPreview({
   const shot = screenshots[step];
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#090a0f] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+    <div className="rounded-2xl border border-white/10 bg-brand-ink-raised p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
       <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black h-[180px] sm:h-[220px] md:h-[280px] lg:h-[320px]">
         <div className="absolute left-3 top-3 z-20 rounded-full border border-white/15 bg-black/70 px-3 py-1 text-[11px] font-medium tracking-wide text-zinc-200 backdrop-blur">
           {lang === 'zh' ? label.zh : label.en}
@@ -92,9 +92,9 @@ function WorkflowStepPreview({
             }
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_30%_20%,rgba(242,106,54,0.18),transparent_40%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,0.06),transparent_45%)]">
-            <div className="rounded-2xl border border-[#F26A36]/30 bg-[#F26A36]/10 px-6 py-4 text-center shadow-[0_0_0_1px_rgba(242,106,54,0.12)]">
-              <div className="text-xs uppercase tracking-[0.18em] text-[#F7A27D]">
+          <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_30%_20%,rgba(242,106,54,0.10),transparent_40%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,0.04),transparent_45%)]">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-center">
+              <div className="text-xs uppercase tracking-[0.18em] text-brand-orange-soft">
                 {lang === 'zh' ? '即将上线' : 'Coming Soon'}
               </div>
               <div className="mt-2 text-lg font-semibold text-white">
@@ -320,7 +320,7 @@ const contentByLang = {
 type ModalCopy = (typeof contentByLang)[Language]['modal'];
 
 const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => {
-  return <div className={"bg-zinc-900 border border-zinc-800 rounded-2xl p-6 " + className}>{children}</div>;
+  return <div className={"bg-brand-ink-raised border border-white/10 rounded-2xl p-6 " + className}>{children}</div>;
 };
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -331,8 +331,8 @@ const Button = ({ children, className = '', variant = 'primary', ...props }: But
   const base = 'inline-flex items-center justify-center rounded-lg text-sm font-semibold transition-colors h-12 px-8';
   const variantClass =
     variant === 'primary'
-      ? 'bg-[#F26A36] text-white hover:bg-[#F26A36]/90'
-      : 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700';
+      ? 'bg-brand-orange text-white hover:bg-brand-orange-hover'
+      : 'border border-white/15 bg-white/[0.04] text-zinc-100 hover:bg-white/[0.08]';
   return (
     <button className={base + ' ' + variantClass + ' ' + className} {...props}>
       {children}
@@ -380,7 +380,7 @@ function BookDemoModal({
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-zinc-950 border border-zinc-800 rounded-2xl p-8 w-full max-w-md shadow-2xl"
+        className="bg-brand-ink-raised border border-white/10 rounded-2xl p-8 w-full max-w-md shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-2xl font-bold mb-2">{copy.title}</h3>
@@ -390,39 +390,39 @@ function BookDemoModal({
             <input
               {...register('name')}
               placeholder={copy.placeholders.name}
-              className="w-full bg-zinc-900 border border-zinc-800 focus:border-[#F26A36] rounded-xl px-4 py-3 text-white outline-none"
+              className="w-full bg-brand-ink border border-white/10 focus:border-brand-orange rounded-xl px-4 py-3 text-white outline-none"
             />
-            {errors.name && <p className="text-red-500 text-xs mt-1 ml-1">{errors.name.message}</p>}
+            {errors.name && <p className="text-red-400 text-xs mt-1 ml-1">{errors.name.message}</p>}
           </div>
           <div>
             <input
               {...register('email')}
               placeholder={copy.placeholders.email}
-              className="w-full bg-zinc-900 border border-zinc-800 focus:border-[#F26A36] rounded-xl px-4 py-3 text-white outline-none"
+              className="w-full bg-brand-ink border border-white/10 focus:border-brand-orange rounded-xl px-4 py-3 text-white outline-none"
             />
-            {errors.email && <p className="text-red-500 text-xs mt-1 ml-1">{errors.email.message}</p>}
+            {errors.email && <p className="text-red-400 text-xs mt-1 ml-1">{errors.email.message}</p>}
           </div>
 
           <div className="space-y-1">
-            <label className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3">
+            <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
               <input
                 type="checkbox"
                 {...register('consent')}
-                className="mt-1 h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-[#F26A36] focus:ring-[#F26A36]"
+                className="mt-1 h-4 w-4 rounded border-white/20 bg-brand-ink accent-brand-orange focus:ring-brand-orange"
               />
               <span className="text-xs text-zinc-300">
                 {copy.consentPrefix}{' '}
                 <button
                   type="button"
                   onClick={() => setIsTermsOpen(true)}
-                  className="text-[#F26A36] underline underline-offset-2 hover:text-[#F26A36]/80"
+                  className="text-brand-orange-soft underline underline-offset-2 hover:text-white"
                 >
                   {copy.consentLink}
                 </button>
               </span>
             </label>
             {errors.consent && (
-              <p className="text-red-500 text-xs mt-1 ml-1">{errors.consent.message}</p>
+              <p className="text-red-400 text-xs mt-1 ml-1">{errors.consent.message}</p>
             )}
           </div>
 
@@ -437,7 +437,7 @@ function BookDemoModal({
             onClick={() => setIsTermsOpen(false)}
           >
             <div
-              className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#090a0f] p-6 shadow-2xl"
+              className="w-full max-w-2xl rounded-2xl border border-white/10 bg-brand-ink-raised p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-3">
@@ -491,7 +491,7 @@ function HeroTypedTitle({ title }: { title: string }) {
       <span>{typedHeroText}</span>
       {!heroTypingDone && (
         <span
-          className="ml-1 inline-block h-[1em] w-[2px] bg-[#F26A36] align-[-0.1em] animate-pulse"
+          className="ml-1 inline-block h-[1em] w-[2px] bg-brand-orange align-[-0.1em] animate-pulse"
           aria-hidden="true"
         />
       )}
@@ -515,7 +515,7 @@ export default function HomePage() {
   }, [lightboxImage]);
 
   return (
-    <main className="min-h-screen bg-[#0A0A0A] text-white selection:bg-[#F26A36] selection:text-white">
+    <main className="min-h-screen bg-brand-ink text-white selection:bg-brand-orange selection:text-white">
       {isDemoModalOpen && (
         <BookDemoModal
           key={language}
@@ -556,7 +556,7 @@ export default function HomePage() {
           onClick={() => setLightboxImage(null)}
         >
           <div
-            className="relative w-full max-w-6xl rounded-2xl border border-white/10 bg-[#090a0f] p-3 shadow-2xl shadow-black/50"
+            className="relative w-full max-w-6xl rounded-2xl border border-white/10 bg-brand-ink-raised p-3 shadow-2xl shadow-black/50"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -608,7 +608,7 @@ export default function HomePage() {
           {copy.hero.tags.map((tag) => (
             <span
               key={tag}
-              className="px-3 py-1 rounded-full bg-[#F26A36]/10 text-[#F26A36] border border-[#F26A36]/20 text-sm font-medium"
+              className="px-3 py-1 rounded-full bg-white/[0.04] text-zinc-300 border border-white/10 text-sm font-medium"
             >
               {tag}
             </span>
@@ -638,7 +638,7 @@ export default function HomePage() {
         >
           <Link
             href="/sign-up"
-            className="inline-flex items-center justify-center rounded-lg text-sm font-semibold transition-colors h-12 px-8 bg-[#F26A36] text-white hover:bg-[#F26A36]/90"
+            className="inline-flex items-center justify-center rounded-lg text-sm font-semibold transition-colors h-12 px-8 bg-brand-orange text-white hover:bg-brand-orange-hover"
           >
             {copy.hero.ctaPrimary}
           </Link>
@@ -649,10 +649,10 @@ export default function HomePage() {
       </section>
 
       <section className="py-10 border-y border-white/5 bg-white/[0.02]">
-        <div className="max-w-7xl mx-auto px-4 flex flex-wrap justify-center gap-8 md:gap-16 text-zinc-500 font-medium">
+        <div className="max-w-7xl mx-auto px-4 flex flex-wrap justify-center gap-8 md:gap-16 text-zinc-400 font-medium">
           {copy.socialProof.map((proof) => (
             <span key={proof} className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-[#F26A36]" /> {proof}
+              <CheckCircle className="w-4 h-4 text-brand-orange-soft" /> {proof}
             </span>
           ))}
         </div>
@@ -665,8 +665,8 @@ export default function HomePage() {
             <div className="space-y-6">
               {copy.problem.items.map((item) => (
                 <div className="flex gap-4" key={item.title}>
-                  <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center shrink-0">
-                    <span className="text-red-500 font-bold">X</span>
+                  <div className="w-12 h-12 rounded-xl border border-white/10 bg-white/[0.04] flex items-center justify-center shrink-0">
+                    <span className="text-zinc-400 font-bold">X</span>
                   </div>
                   <div>
                     <h4 className="font-bold text-lg">{item.title}</h4>
@@ -677,15 +677,15 @@ export default function HomePage() {
             </div>
           </div>
           <div>
-            <Card className="bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border-[#F26A36]/20 relative overflow-hidden">
+            <Card className="border-brand-orange/25 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4">
-                <Zap className="text-[#F26A36] w-6 h-6" />
+                <Zap className="text-brand-orange w-6 h-6" />
               </div>
               <h3 className="text-2xl font-bold mb-6 text-white">{copy.solution.title}</h3>
               <ul className="space-y-4">
                 {copy.solution.items.map((item) => (
                   <li className="flex items-center gap-3" key={item}>
-                    <CheckCircle className="text-green-500 w-5 h-5" />
+                    <CheckCircle className="text-brand-orange-soft w-5 h-5" />
                     <span className="text-zinc-300">{item}</span>
                   </li>
                 ))}
@@ -698,7 +698,7 @@ export default function HomePage() {
       <section className="py-24 px-4 bg-white/[0.02] border-y border-white/5">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <div className="mb-4 inline-flex items-center rounded-full border border-[#F26A36]/30 bg-[#F26A36]/10 px-4 py-1.5 text-xs font-semibold tracking-wide text-[#F7A27D]">
+            <div className="mb-4 inline-flex items-center rounded-full border border-brand-orange/25 bg-brand-orange/[0.06] px-4 py-1.5 text-xs font-semibold tracking-wide text-brand-orange-soft">
               {language === 'zh' ? '核心功能亮点' : 'Core Product Highlights'}
             </div>
             <h2 className="text-3xl md:text-4xl font-bold mb-4">{copy.safety.title}</h2>
@@ -714,8 +714,8 @@ export default function HomePage() {
                 transition={{ duration: 0.35, delay: idx * 0.06 }}
                 className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]"
               >
-                <Card className="h-full bg-[#0a0a0a] border-white/10 flex flex-col justify-center">
-                  <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-[#F7A27D]">
+                <Card className="h-full flex flex-col justify-center">
+                  <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-brand-orange-soft">
                     {language === 'zh' ? '亮点' : 'Highlight'} 0{w.step}
                   </div>
                   <div className="mb-3 inline-flex w-fit items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-300">
@@ -725,8 +725,7 @@ export default function HomePage() {
                   <p className="text-zinc-400 text-sm">{w.description}</p>
                 </Card>
                 <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.03] via-white/[0.02] to-transparent p-[1px] shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(242,106,54,0.18),transparent_45%)]" />
-                  <div className="relative rounded-2xl border border-white/5 bg-[#0a0a0a] p-3 md:p-4">
+                  <div className="relative rounded-2xl border border-white/5 bg-brand-ink p-3 md:p-4">
                     <WorkflowStepPreview step={w.step} lang={language} onOpen={setLightboxImage} />
                   </div>
                 </div>
@@ -740,13 +739,13 @@ export default function HomePage() {
         <h2 className="text-3xl md:text-4xl font-bold mb-16">{copy.pricing.title}</h2>
         <div className="grid md:grid-cols-3 gap-8">
           {copy.pricing.plans.map((plan, i) => (
-            <Card key={plan.name} className={i === 1 ? 'border-[#F26A36] shadow-lg shadow-[#F26A36]/10' : ''}>
+            <Card key={plan.name} className={i === 1 ? 'border-brand-orange/60' : ''}>
               <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
               <div className="text-3xl font-bold mb-6">{plan.price}</div>
               <ul className="space-y-4 mb-8 text-left">
                 {plan.features.map((f) => (
                   <li key={f} className="flex items-center gap-2 text-zinc-400">
-                    <CheckCircle className="w-4 h-4 text-green-500" /> {f}
+                    <CheckCircle className="w-4 h-4 text-zinc-500" /> {f}
                   </li>
                 ))}
               </ul>
@@ -758,18 +757,18 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="py-32 px-4 text-center bg-[#F26A36]/10 border-t border-[#F26A36]/20">
+      <section className="py-32 px-4 text-center bg-brand-ink-raised border-t border-white/5">
         <h2 className="text-4xl font-bold mb-6">{copy.finalCta.title}</h2>
         <p className="text-zinc-400 mb-8 max-w-2xl mx-auto">{copy.finalCta.subtitle}</p>
         <Link
           href="/sign-up"
-          className="inline-flex items-center justify-center rounded-lg text-sm font-semibold transition-colors bg-[#F26A36] text-white hover:bg-[#F26A36]/90 shadow-xl shadow-[#F26A36]/20 h-14 px-10 text-lg"
+          className="inline-flex items-center justify-center rounded-lg text-sm font-semibold transition-colors bg-brand-orange text-white hover:bg-brand-orange-hover h-14 px-10 text-lg"
         >
           {copy.finalCta.button} <ArrowRight className="ml-2 w-5 h-5" />
         </Link>
       </section>
 
-      <footer className="py-8 text-center text-zinc-500 text-sm border-t border-zinc-800">
+      <footer className="py-8 text-center text-zinc-500 text-sm border-t border-white/5">
         <p className="flex items-center justify-center gap-1">{copy.footer.builtWith}</p>
         <p className="mt-2">
           {copy.footer.supportLabel}:{' '}
