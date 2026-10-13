@@ -546,7 +546,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               e.preventDefault();
               handleSubmit();
             }}
-            className="mx-auto mt-9 max-w-3xl rounded-3xl bg-brand-forest p-3 text-brand-navy shadow-[0_0_0_8px_rgba(20,69,47,0.08),0_30px_80px_-28px_rgba(20,69,47,0.6)] sm:p-4"
+            className="mx-auto mt-9 max-w-3xl rounded-3xl bg-brand-mint p-3 text-brand-navy ring-1 ring-inset ring-brand-forest/10 shadow-[0_24px_60px_-30px_rgba(20,69,47,0.35)] sm:p-4"
           >
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="flex items-center gap-3 rounded-2xl bg-white px-4 ring-1 ring-inset ring-brand-forest/15 focus-within:ring-2 focus-within:ring-brand-forest/40">
