@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { ReportModel } from '../model/schema';
 import { createCostLedger } from '../data/context';
 import { numberGuard } from './number-guard';
+import { backfillRentCeiling } from '../engines/rent-ceiling';
 import { PAGES, pageFragment, templateNarrative, type PageId } from './templates';
 import {
   NARRATIVE_COST_PAGE_USD,
@@ -17,7 +18,8 @@ import {
   type NarrativeLlmRequest,
 } from './generate';
 
-const load = (): ReportModel => JSON.parse(readFileSync(join(process.cwd(), 'qa/fixtures/report_model_millbrae.json'), 'utf8')) as ReportModel;
+/** The fixture predates v4 S1; production models reach the generator through the same backfill (load.ts / generateNarratives). */
+const load = (): ReportModel => backfillRentCeiling(JSON.parse(readFileSync(join(process.cwd(), 'qa/fixtures/report_model_millbrae.json'), 'utf8')) as ReportModel);
 const noEnv = () => null;
 const base = (m: ReportModel, llm: NarrativeLlm | null | undefined, extra: Partial<Parameters<typeof generateNarratives>[1]> = {}) =>
   generateNarratives(m, { llm, cost: createCostLedger(), env: noEnv, language: 'zh', timeoutMs: 2_000, ...extra });
@@ -30,12 +32,12 @@ function validFor(m: ReportModel, pageId: PageId): { title: string; body: string
   return { title: '需求不足，不建议签约', body: `按 [src:${key}] 判断需求不足。${conds}`, refs: [key] };
 }
 
-test('(a) llm: null → all 15 pages are templates and every template passes NumberGuard on its own fragment', async () => {
+test('(a) llm: null → all 16 pages are templates and every template passes NumberGuard on its own fragment', async () => {
   const m = load();
   const { narrative, stats } = await base(m, null);
-  assert.equal(PAGES.length, 15);
-  assert.equal(Object.keys(narrative).length, 15);
-  assert.deepEqual(stats, { llm_pages: 0, template_pages: 15, regenerated: 0, guard_failures: [] });
+  assert.equal(PAGES.length, 16);
+  assert.equal(Object.keys(narrative).length, 16);
+  assert.deepEqual(stats, { llm_pages: 0, template_pages: 16, regenerated: 0, guard_failures: [] });
   for (const p of PAGES) {
     const n = narrative[p.id];
     const t = templateNarrative(m, p.id);
@@ -49,7 +51,7 @@ test('(a) llm: null → all 15 pages are templates and every template passes Num
   // no key in env + llm undefined → templates only, no cost
   const cost = createCostLedger();
   const r2 = await generateNarratives(m, { cost, env: noEnv, language: 'zh' });
-  assert.equal(r2.stats.template_pages, 15);
+  assert.equal(r2.stats.template_pages, 16);
   assert.equal(cost.entries().length, 0);
 });
 
@@ -90,7 +92,7 @@ test('(b) fabricated number on the first call, valid on the second → regenerat
   assert.equal(calls[0].tier, 'page');
   assert.equal(stats.regenerated, 1);
   assert.equal(stats.llm_pages, 1);
-  assert.equal(stats.template_pages, 14);
+  assert.equal(stats.template_pages, 15);
   assert.deepEqual(stats.guard_failures, [{ page: 'page_9', unmatched: ['127%', '127%'], banned: [] }]);
   assert.equal(narrative.page_9.guard, 'ok_after_regen');
   assert.equal(narrative.page_9.provider, 'anthropic/claude-sonnet-5');
@@ -122,11 +124,11 @@ test('(d) a throwing or hanging llm → template fallback, never throws', async 
     throw new Error('socket hang up');
   };
   const r1 = await base(m, boom);
-  assert.equal(r1.stats.template_pages, 15);
+  assert.equal(r1.stats.template_pages, 16);
   assert.equal(r1.narrative.page_4.guard, 'template_fallback:llm_error:socket hang up');
   const hang: NarrativeLlm = () => new Promise(() => {});
   const r2 = await base(m, hang, { timeoutMs: 30 });
-  assert.equal(r2.stats.template_pages, 15);
+  assert.equal(r2.stats.template_pages, 16);
   assert.ok(r2.narrative.page_2.guard?.startsWith('template_fallback:llm_error:timeout'), r2.narrative.page_2.guard);
 });
 
@@ -160,11 +162,11 @@ test('(f) cost ledger increments per LLM call; pages 2 and 15 run last on the su
   };
   const cost = createCostLedger();
   const { narrative, stats } = await generateNarratives(m, { llm, cost, env: noEnv, language: 'zh', concurrency: 3 });
-  assert.equal(stats.llm_pages, 15);
+  assert.equal(stats.llm_pages, 16);
   assert.equal(stats.template_pages, 0);
-  assert.equal(order.length, 15);
-  assert.equal(order[13], 'page_2');
-  assert.equal(order[14], 'page_15');
+  assert.equal(order.length, 16);
+  assert.equal(order[14], 'page_2');
+  assert.equal(order[15], 'page_15');
   assert.equal(tiers.get('page_2'), 'summary');
   assert.equal(tiers.get('page_15'), 'summary');
   assert.ok([...tiers.entries()].filter(([id]) => id !== 'page_2' && id !== 'page_15').every(([, t]) => t === 'page'));
@@ -173,9 +175,9 @@ test('(f) cost ledger increments per LLM call; pages 2 and 15 run last on the su
   assert.ok(systems.get('page_2')!.includes('执行摘要') && !systems.get('page_2')!.includes('面向老板的总结'));
   assert.ok(systems.get('page_15')!.includes('面向老板的总结') && systems.get('page_15')!.includes('签约前必须做的事'));
   assert.ok(!systems.get('page_9')!.includes('执行摘要'));
-  assert.equal(cost.entries().length, 15);
-  assert.equal(cost.entries().filter((e) => e.source === 'llm').length, 15);
-  assert.equal(cost.total(), Math.round((13 * NARRATIVE_COST_PAGE_USD + 2 * NARRATIVE_COST_SUMMARY_USD) * 10_000) / 10_000);
+  assert.equal(cost.entries().length, 16);
+  assert.equal(cost.entries().filter((e) => e.source === 'llm').length, 16);
+  assert.equal(cost.total(), Math.round((14 * NARRATIVE_COST_PAGE_USD + 2 * NARRATIVE_COST_SUMMARY_USD) * 10_000) / 10_000);
   assert.ok(cost.entries().some((e) => e.note === 'narrative page_2'));
   assert.ok(cost.entries().some((e) => e.note === 'narrative page_15'));
   for (const p of PAGES) assert.equal(narrative[p.id].guard, 'ok');
@@ -225,7 +227,7 @@ test('english mode: prompts in English, 12-word title cap, verbatim text_en cond
     return null;
   };
   await base(m, llm, { language: 'en' });
-  assert.equal(seen.length, 15);
+  assert.equal(seen.length, 16);
   assert.ok(seen[0].system.startsWith('You are a RestaurantIQ analyst') && seen[0].user.startsWith('page = '));
   assert.ok(seen.find((r) => r.pageId === 'page_2')!.system.includes('Pre-lease conditions'));
   assert.ok(seen.find((r) => r.pageId === 'page_15')!.system.includes('Must do before signing'));
@@ -251,14 +253,14 @@ test('spanish mode: Spanish prompts, 14-word title cap, verbatim text_es conditi
     return null;
   };
   const { narrative, stats } = await base(m, llm, { language: 'es' });
-  assert.equal(seen.length, 15);
+  assert.equal(seen.length, 16);
   assert.ok(seen[0].system.startsWith('Eres analista de RestaurantIQ') && seen[0].user.startsWith('página = '), seen[0].user.slice(0, 40));
   assert.ok(seen.find((r) => r.pageId === 'page_2')!.system.includes('Condiciones previas al contrato:'));
   assert.ok(seen.find((r) => r.pageId === 'page_15')!.system.includes('Imprescindible antes de firmar:'));
   assert.ok(seen.find((r) => r.pageId === 'page_15')!.user.includes('"text_es":'), 'page 15 fragment carries text_es');
   assert.ok(seen.find((r) => r.pageId === 'page_9')!.user.includes('notas de parámetros = Ids de anillo'));
   // no LLM → Spanish templates
-  assert.equal(stats.template_pages, 15);
+  assert.equal(stats.template_pages, 16);
   assert.equal(narrative.page_1.title, templateNarrative(m, 'page_1', 'es').title);
   assert.ok(!/[一-鿿]/.test(narrative.page_15.body), narrative.page_15.body);
 

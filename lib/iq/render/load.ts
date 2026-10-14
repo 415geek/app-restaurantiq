@@ -12,6 +12,7 @@ import { iqGetReport } from '@/lib/funnel/iq-repository';
 import { isLocale, toLocale } from '@/lib/i18n/locale';
 import { reportModelSchema, type ReportModel } from '../model/schema';
 import { rederiveWithoutRent } from '../pipeline';
+import { backfillRentCeiling } from '../engines/rent-ceiling';
 
 const FIXTURE_RE = /^[a-z0-9_-]{1,40}$/;
 /** `<fixture>-no-rent` renders the fixture as if the customer had left the monthly rent blank (smoke-print --no-rent). */
@@ -48,12 +49,12 @@ function isNarrativeEntry(v: unknown): v is NarrativeEntry {
 function coerceModel(raw: unknown, label: string): ReportModel | null {
   if (!raw || typeof raw !== 'object') return null;
   const parsed = reportModelSchema.safeParse(raw);
-  if (parsed.success) return parsed.data;
+  if (parsed.success) return backfillRentCeiling(parsed.data);
   console.warn(`[iq/render/load] ${label}: report_model failed schema validation (rendering raw)`, parsed.error.issues.slice(0, 3));
   const m = raw as ReportModel;
   if (!m.meta || !m.input || !m.score || !m.trade_area) return null;
   if (!m.narrative || typeof m.narrative !== 'object') m.narrative = {};
-  return m;
+  return backfillRentCeiling(m);
 }
 
 /**

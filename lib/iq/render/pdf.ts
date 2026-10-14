@@ -58,7 +58,7 @@ export async function renderReportPdf(opts: RenderReportPdfOptions): Promise<Buf
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
 
     const pages = await page.$$eval('h1.action-title', (els) => els.length);
-    if (pages !== 15) console.warn(`[iq/render/pdf] expected 15 action titles, found ${pages} (${url})`);
+    if (pages !== 16) console.warn(`[iq/render/pdf] expected 16 action titles, found ${pages} (${url})`);
 
     // v4 §1.4: print, then prove the glyphs made it. A failed check gets one more
     // try after the fonts have had a chance to settle; a second failure is not

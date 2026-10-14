@@ -95,6 +95,7 @@ function ctxOf(model: ReportModel, lang?: Locale): Ctx {
 
 const PAGE_ICON: Record<PageId, IconType> = {
   page_1: FileText,
+  page_rent: Calculator,
   page_2: ClipboardCheck,
   page_3: MapPin,
   page_4: Users,
@@ -114,6 +115,7 @@ const PAGE_ICON: Record<PageId, IconType> = {
 /** Chinese edition keeps a one-line English subtitle under the title; en / es render in one language only. */
 const SUBTITLE_EN: Record<PageId, string> = {
   page_1: '360° site-selection report for a restaurant concept',
+  page_rent: 'Rent Ceiling · the most this site can carry, the critical point, and what the asking rent costs over the lease',
   page_2: 'Executive Summary · verdict, evidence, risks and pre-lease conditions',
   page_3: 'Trade Area Map · reach rings, competitors, anchors and rail access',
   page_4: 'Demand Coverage · four-ring profile against the county benchmark',
@@ -159,7 +161,7 @@ function PageShell({ c, model, pageId, chips, children, tail }: { c: Ctx; model:
   const kicker = c.S.pages[pageId];
   const zh = c.lang === 'zh';
   return (
-    <section className={`page page-${spec.n}`} data-page={spec.n} aria-label={zh ? `${kicker} · ${spec.en}` : kicker}>
+    <section className={`page page-${spec.n}`} data-page={spec.n} data-page-id={pageId} aria-label={zh ? `${kicker} · ${spec.en}` : kicker}>
       <header className="page-head">
         <div className="kicker">
           <Icon size={12} strokeWidth={1.75} aria-hidden />
@@ -388,6 +390,97 @@ function Page1({ model, staticMaps, lang }: PageProps) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 2 · Rent ceiling (v4 §2.1)                                           */
+/* ------------------------------------------------------------------ */
+function PageRent({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
+  const m = model;
+  const T = S.pRent;
+  const r = m.value_modules?.rent_ceiling ?? null;
+  const pct = (v: number) => F.pct(v, 1);
+  const over = r != null && r.asking != null && r.gap_monthly != null && r.gap_monthly > 0;
+  return (
+    <PageShell c={c} model={m} pageId="page_rent" chips={<SourceChips model={m} ids={['D12']} model_labels={[T.chip]} lang={c.lang} />}>
+      {!r ? (
+        <div className="panel">{T.unavailable}</div>
+      ) : (
+        <>
+          {!r.affordable ? (
+            <div className="panel rent-callout rent-over">
+              <p className="rent-lead">{fill(T.unaffordable, { demand: F.usd(r.demand_lo), fixed: F.usd(r.non_rent_fixed) })}</p>
+              {r.asking != null && m.finance.breakeven_monthly != null ? <p className="rent-sub">{fill(T.unaffordableAsking, { asking: F.usd(r.asking), breakeven: F.usd(m.finance.breakeven_monthly) })}</p> : null}
+            </div>
+          ) : null}
+          <table className="data-table rent-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th className="num">{T.colMonthly}</th>
+                <th className="num">{T.colAnnual}</th>
+                <th className="num">{T.colOcc}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="rent-safe">
+                <th>{T.rowSafe}</th>
+                <td className="num">{F.usd(r.safe)}</td>
+                <td className="num">{F.usd(r.safe * 12)}</td>
+                <td className="num">{pct(r.safe / r.demand_lo)}</td>
+              </tr>
+              <tr>
+                <th>{T.rowCritical}</th>
+                <td className="num">{F.usd(r.critical)}</td>
+                <td className="num">{F.usd(r.critical * 12)}</td>
+                <td className="num">{pct(r.critical / r.demand_lo)}</td>
+              </tr>
+              <tr>
+                <th>{fill(T.rowStress, { drop: String(Math.round(r.stress_drop * 100)) })}</th>
+                <td className="num">{F.usd(r.stress)}</td>
+                <td className="num">{F.usd(r.stress * 12)}</td>
+                <td className="num">{pct(r.stress / (r.demand_lo * (1 - r.stress_drop)))}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div className={`panel rent-callout${over ? ' rent-over' : ''}`}>
+            <p className="rent-lead">
+              {r.asking == null
+                ? T.askingNone
+                : over
+                  ? fill(T.askingOver, { asking: F.usd(r.asking), gap: F.usd(r.gap_monthly) })
+                  : fill(T.askingWithin, { asking: F.usd(r.asking) })}
+            </p>
+            {over && r.gap_lease != null ? <p className="rent-sub">{fill(T.leaseSaving, { total: F.usd(r.gap_lease), months: String(r.lease_months) })}</p> : null}
+          </div>
+          {r.equivalents.length > 0 ? (
+            <>
+              <h2 className="h2">{fill(T.equivHead, { safe: F.usd(r.safe) })}</h2>
+              <ul className="tight-list rent-equiv">
+                {r.equivalents.map((e) => (
+                  <li key={e.type}>
+                    <span className="li-body">
+                      {e.type === 'free_rent_month'
+                        ? fill(T.equivFree, { v: F.usd(e.value), months: String(e.amortize_months) })
+                        : e.type === 'ti_allowance'
+                          ? fill(T.equivTi, { unit: F.usd(e.unit_usd), v: F.usd(e.value), months: String(e.amortize_months) })
+                          : fill(T.equivPct, { threshold: F.usd(e.threshold_monthly_sales) })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          <p className="table-note">
+            {fill(T.method, { demand: F.usd(r.demand_lo), cm: pct(r.contribution_margin), fixed: F.usd(r.non_rent_fixed), target: pct(r.target_ratio) })}
+          </p>
+          <XRef>{T.xref}</XRef>
+        </>
+      )}
+    </PageShell>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* 2 · Executive summary                                                 */
 /* ------------------------------------------------------------------ */
 function Page2({ model, lang }: PageProps) {
@@ -401,6 +494,18 @@ function Page2({ model, lang }: PageProps) {
   // No rent provided → break-even and coverage are ex-rent and every label says so.
   const noRent = m.finance.rent_excluded;
   const xr = noRent ? S.exRent : '';
+  // v4 §3 价值可见: only lines the model can back; never a hole, never a price for nothing.
+  const valueLines: string[] = [];
+  const nearest = [...m.competitors.l1].filter((x) => x.rating_count != null && x.rating_count > 0).sort((a, b2) => a.distance_mi - b2.distance_mi)[0];
+  if (nearest) valueLines.push(fill(S.pRent.valueCompetitor, { name: c.lang === 'zh' ? nearest.name_zh || nearest.name : nearest.name, mi: F.num(nearest.distance_mi, 2), n: F.int(nearest.rating_count) }));
+  const rc = m.value_modules?.rent_ceiling ?? null;
+  if (rc) {
+    const gap = rc.gap_monthly != null && rc.gap_monthly > 0 && rc.gap_lease != null ? fill(S.pRent.valueRentGap, { gap: F.usd(rc.gap_monthly), total: F.usd(rc.gap_lease) }) : '';
+    valueLines.push(fill(S.pRent.valueRent, { safe: F.usd(rc.safe) }) + gap);
+  }
+  if (conds[0]) valueLines.push(fill(S.pRent.valueCondition, { text: c.field(conds[0].text_zh, conds[0].text_en) }));
+  else if (risks[0]) valueLines.push(fill(S.pRent.valueRisk, { text: c.field(risks[0].risk_zh, risks[0].risk_en) }));
+  if (valueLines.length > 0) valueLines.push(fill(S.pRent.valuePrice, { price: `$${process.env.NEXT_PUBLIC_STRIPE_PRICE_USD?.trim() || '19'}` }));
   return (
     <PageShell c={c} model={m} pageId="page_2" chips={<SourceChips model={m} ids={['D2', 'D5', 'D6', 'D12']} model_labels={[S.p2.chipHuff, S.p2.chipBreakeven]} lang={c.lang} />}>
       <div className="summary-top">
@@ -414,6 +519,17 @@ function Page2({ model, lang }: PageProps) {
           <KeyNumber label={S.p2.completeness} value={`${F.int(m.confidence.total)}`} sub={fill(S.p2.completenessSub, { level: S.level[m.confidence.level] })} />
         </div>
       </div>
+      {/* v4 §3: the report says what it did, in the customer's money, before any chart. */}
+      {valueLines.length > 0 ? (
+        <div className="value-block">
+          <div className="panel-title">{S.pRent.valueTitle}</div>
+          <ul className="value-list">
+            {valueLines.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div className="twin-wrap">
         <h2 className="h2">{S.p2.chart}</h2>
         <TwinBars breakeven={m.finance.breakeven_monthly} captured={m.demand.captured_monthly_usd} safety={m.finance.safety_monthly} lang={c.lang} exRent={noRent} />
@@ -1812,6 +1928,7 @@ function Page15({ model, lang }: PageProps) {
 
 export const PAGE_COMPONENTS: Record<PageId, ComponentType<PageProps>> = {
   page_1: Page1,
+  page_rent: PageRent,
   page_2: Page2,
   page_3: Page3,
   page_4: Page4,

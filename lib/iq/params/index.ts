@@ -51,6 +51,15 @@ export const defaultsSchema = z.object({
     split: z.object({ utilities: z.number(), insurance: z.number(), pos: z.number(), marketing: z.number() }),
     concepts: z.record(z.string(), z.object({ other_fixed_usd: z.number(), headcount: z.number() })),
   }),
+  /** v4 §2.1: the rent-ceiling constants (target occupancy by archetype, stress drop, lease term, equivalents). */
+  rent_ceiling: z.object({
+    target_ratio: z.record(z.string(), z.number()).and(z.object({ default: z.number() })),
+    stress_drop: z.number(),
+    lease_months: z.number(),
+    free_rent_amortize_months: z.number(),
+    ti_unit_usd: z.number(),
+    ti_amortize_months: z.number(),
+  }),
   /** v4 §1.3: every input-sanity threshold, so the engine carries no literals. */
   input_sanity: z.object({
     rent_floor_usd: z.object({ hcol: z.number(), mcol: z.number(), lcol: z.number() }),

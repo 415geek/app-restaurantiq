@@ -14,6 +14,7 @@ import type { Locale } from '@/lib/i18n/locale';
 import type { CostLedger } from '../data/types';
 import type { ReportModel } from '../model/schema';
 import { getDefaults } from '../params';
+import { backfillRentCeiling } from '../engines/rent-ceiling';
 import { hasLlmKey } from './llm';
 import { numberGuard } from './number-guard';
 import { PAGES, RISK_WORDING_RULE, localizedField, pageFragment, templateNarrative, type PageId } from './templates';
@@ -482,7 +483,8 @@ export function narrativeForPage(model: ReportModel, pageId: PageId, lang?: Narr
   return model.narrative?.[pageId] ?? templateNarrative(model, pageId, lang);
 }
 
-export async function generateNarratives(model: ReportModel, opts: GenerateNarrativesOptions): Promise<GenerateNarrativesResult> {
+export async function generateNarratives(input: ReportModel, opts: GenerateNarrativesOptions): Promise<GenerateNarrativesResult> {
+  const model = backfillRentCeiling(input); // stored models from before v4 S1 carry no value_modules
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const llm: NarrativeLlm | null = opts.llm === null ? null : (opts.llm ?? (hasLlmKey(opts.env) ? defaultNarrativeLlm(timeoutMs) : null));
   const lang = opts.language;

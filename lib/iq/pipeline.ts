@@ -35,6 +35,7 @@ import { buildConditions, dimensionRow, scoreDemandCoverage, scoreDimensions, sc
 import { computeConceptShare, type DemandBasis } from './engines/cuisine-share';
 import { computeHuff, lunchAudienceFor, type HuffCompetitor, type HuffResult } from './engines/demand-huff';
 import { checkInputSanity, inputBlocked } from './engines/input-sanity';
+import { computeRentCeiling } from './engines/rent-ceiling';
 import { computeFinance } from './engines/finance';
 import { computeRisks } from './engines/risk';
 import { computeTradeArea, primaryRingFor, RING_ORDER, type BlockGroupInput, type RingInput, type TradeAreaResult } from './engines/trade-area';
@@ -716,6 +717,8 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
     sources,
     narrative: {},
     input_sanity,
+    // v4 §2.1: the negotiation number. Additive — reads the finance model, changes nothing above.
+    value_modules: { rent_ceiling: computeRentCeiling({ cuisine: site.cuisine, finance, captured_monthly_usd: huff.captured_monthly_usd, asking_rent_usd: rentBlocked ? null : site.rent_usd }) },
   };
   const risks = computeRisks({ ...partial, dev_projects: bundle.dev?.data?.projects.length ?? 0 });
   const model = parseReportModel({ ...partial, risks });

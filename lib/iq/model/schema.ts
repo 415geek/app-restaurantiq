@@ -161,6 +161,33 @@ function backfillCounts(c: {
   };
 }
 
+/** v4 §2.1: the rent ceiling — see lib/iq/engines/rent-ceiling.ts. */
+export const rentCeilingSchema = z.object({
+  basis: z.enum(['pessimistic', 'base']),
+  demand_lo: z.number(),
+  target_ratio: z.number(),
+  contribution_margin: z.number(),
+  non_rent_fixed: z.number(),
+  safe: z.number(),
+  critical: z.number(),
+  stress: z.number(),
+  stress_drop: z.number(),
+  affordable: z.boolean().default(true),
+  base_safe: z.number().nullable().default(null),
+  base_critical: z.number().nullable().default(null),
+  asking: z.number().nullable(),
+  gap_monthly: z.number().nullable(),
+  gap_lease: z.number().nullable(),
+  lease_months: z.number(),
+  equivalents: z.array(
+    z.discriminatedUnion('type', [
+      z.object({ type: z.literal('free_rent_month'), value: z.number(), amortize_months: z.number() }),
+      z.object({ type: z.literal('ti_allowance'), unit_usd: z.number(), value: z.number(), amortize_months: z.number() }),
+      z.object({ type: z.literal('percentage_rent_cap'), threshold_monthly_sales: z.number() }),
+    ]),
+  ),
+});
+
 /** v4 §1.3: one flagged input and how it was resolved. */
 export const inputSanitySchema = z.object({
   field: z.enum(['rent_usd', 'sqft', 'ticket_in']),
@@ -480,6 +507,16 @@ const reportModelShape = z.object({
    * models and fixtures still parse.
    */
   input_sanity: z.array(inputSanitySchema).default([]),
+  /**
+   * v4 §2 价值层: additive modules computed from the model, consumed by their
+   * own pages. They never touch the six-dimension score or the conclusion
+   * (§4.1 加法式接入). `.default({})` keeps stored models and fixtures parsing.
+   */
+  value_modules: z
+    .object({
+      rent_ceiling: rentCeilingSchema.nullable().default(null),
+    })
+    .default({ rent_ceiling: null }),
 });
 
 export type ReportModel = z.infer<typeof reportModelShape>;
