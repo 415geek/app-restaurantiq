@@ -13,7 +13,7 @@ import type { RingId } from '../model/schema';
 import type { PageId } from '../narrative/templates';
 import type { ConceptCategory } from '../params';
 
-export type Verdict = 'GO' | 'CONDITIONAL_GO' | 'NO_GO';
+export type Verdict = 'GO' | 'CONDITIONAL_GO' | 'NO_GO' | 'INSUFFICIENT_DATA';
 type Level = 'low' | 'medium' | 'high';
 type SourceKind = 'official' | 'platform' | 'user' | 'model' | 'web';
 type SourceId = 'D1' | 'D2' | 'D3' | 'D4' | 'D5' | 'D6' | 'D7' | 'D8' | 'D9' | 'D10' | 'D11' | 'D12';
@@ -55,6 +55,7 @@ const EN = {
     GO: { label: 'GO', badge: 'GO', sub: 'Proceed' },
     CONDITIONAL_GO: { label: 'CONDITIONAL GO', badge: 'CONDITIONAL GO', sub: 'Proceed with conditions' },
     NO_GO: { label: 'NO GO', badge: 'NO GO', sub: 'Do not proceed' },
+    INSUFFICIENT_DATA: { label: 'INSUFFICIENT DATA', badge: 'INSUFFICIENT DATA', sub: 'No verdict issued' },
   } as Record<Verdict, { label: string; badge: string; sub: string }>,
   verdictRule: {
     go: 'GO: overall score ≥ 70 and no knock-out',
@@ -609,6 +610,7 @@ const ZH: ReportStrings = {
     GO: { label: '可做', badge: 'GO', sub: '可做' },
     CONDITIONAL_GO: { label: '有条件可做', badge: 'CONDITIONAL GO', sub: '有条件可做' },
     NO_GO: { label: '不建议', badge: 'NO GO', sub: '不建议' },
+    INSUFFICIENT_DATA: { label: '数据不足，不予判定', badge: 'INSUFFICIENT DATA', sub: '数据不足，不予判定' },
   },
   verdictRule: {
     go: 'GO 可做：综合 ≥ 70 分，且没有一票否决项',
@@ -1154,6 +1156,7 @@ const ES: ReportStrings = {
     GO: { label: 'VIABLE', badge: 'VIABLE', sub: 'Adelante' },
     CONDITIONAL_GO: { label: 'VIABLE CON CONDICIONES', badge: 'VIABLE CON CONDICIONES', sub: 'Adelante con condiciones' },
     NO_GO: { label: 'NO VIABLE', badge: 'NO VIABLE', sub: 'No recomendado' },
+    INSUFFICIENT_DATA: { label: 'DATOS INSUFICIENTES', badge: 'DATOS INSUFICIENTES', sub: 'Sin veredicto' },
   },
   verdictRule: {
     go: 'VIABLE: puntuación global ≥ 70 y sin criterio eliminatorio',

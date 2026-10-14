@@ -5,9 +5,10 @@
  */
 import { getPublicBaseUrl } from '@/lib/funnel/base-url';
 
-export async function kickReport360(reportId: string): Promise<void> {
+export async function kickReport360(reportId: string, opts: { pass?: 'pro' } = {}): Promise<void> {
   if ((process.env.IQ360_AUTO ?? '').trim().toLowerCase() === 'false') return;
-  const url = `${getPublicBaseUrl()}/api/iq/report360/${encodeURIComponent(reportId)}`;
+  // v4 §1.5: `pass=pro` asks for the professional narrative pass (evidence-backed prose) on an existing model.
+  const url = `${getPublicBaseUrl()}/api/iq/report360/${encodeURIComponent(reportId)}${opts.pass === 'pro' ? '?pass=pro' : ''}`;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
   if (bypass) headers['x-vercel-protection-bypass'] = bypass;

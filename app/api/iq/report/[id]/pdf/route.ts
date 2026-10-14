@@ -26,10 +26,17 @@ import {
 } from '@/lib/iq/conclusion/conclusion';
 import type { Browser } from 'puppeteer-core';
 import { isVercelServerless, launchPdfBrowser } from '@/lib/iq/render/chromium';
-import { renderReportPdf } from '@/lib/iq/render/pdf';
+import { PdfGlyphError, renderReportPdf } from '@/lib/iq/render/pdf';
 import { LOCALE_TAG, toLocale, type Locale } from '@/lib/i18n/locale';
 import { getPublicBaseUrl } from '@/lib/funnel/base-url';
 import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
+
+/** v4 §1.4: what the customer sees when the glyph gate refuses a render. Product language only. */
+const GLYPH_GATE_COPY: Record<string, string> = {
+  zh: 'PDF 版式校验未通过，本次未交付。请稍后再试一次；如仍失败，请打开打印版另存为 PDF。',
+  en: 'The PDF did not pass its layout check and was not delivered. Please try again in a moment; if it fails again, open the print edition and save it as PDF.',
+  es: 'El PDF no superó la verificación de maquetación y no se entregó. Inténtalo de nuevo en un momento; si vuelve a fallar, abre la edición para imprimir y guárdala como PDF.',
+};
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -1586,6 +1593,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     return pdfResponse(pdfBuffer, filename);
   } catch (error) {
+    // v4 §1.4: a PDF that failed its glyph gate is not delivered. Retryable:
+    // the usual cause is a font that had not settled, and the next render has it.
+    if (error instanceof PdfGlyphError) {
+      console.error('[api/iq/report/pdf] GLYPH GATE', { id, lang, ...error.check });
+      return NextResponse.json(
+        { error: 'pdf_glyph_check_failed', detail: GLYPH_GATE_COPY[lang] ?? GLYPH_GATE_COPY.en, check: error.check },
+        { status: 503, headers: { 'Retry-After': '10' } },
+      );
+    }
     const msg = error instanceof Error ? error.message : String(error);
     const stack = error instanceof Error ? error.stack : undefined;
     console.error('[api/iq/report/pdf] FAIL', {

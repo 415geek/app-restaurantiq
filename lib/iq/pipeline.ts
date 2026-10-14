@@ -34,6 +34,7 @@ import { computeConfidence, type SourceStatusMap } from './engines/confidence';
 import { buildConditions, dimensionRow, scoreDemandCoverage, scoreDimensions, scoreFinancialViability, totalScore, verdictFor, type ScoreInput } from './engines/cuisine-fit';
 import { computeConceptShare, type DemandBasis } from './engines/cuisine-share';
 import { computeHuff, lunchAudienceFor, type HuffCompetitor, type HuffResult } from './engines/demand-huff';
+import { checkInputSanity, inputBlocked } from './engines/input-sanity';
 import { computeFinance } from './engines/finance';
 import { computeRisks } from './engines/risk';
 import { computeTradeArea, primaryRingFor, RING_ORDER, type BlockGroupInput, type RingInput, type TradeAreaResult } from './engines/trade-area';
@@ -430,22 +431,39 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
     dayparts: cu.dayparts,
   });
 
-  // ── Finance (Phase 4.5) ─────────────────────────────────────────────────
-  const finance = computeFinance({
+  // ── Input sanity (v4 §1.3) ──────────────────────────────────────────────
+  // A rent or ticket that fails the plausibility check is NOT scored until the
+  // customer confirms it: the $400/month storefront that produced "occupancy
+  // 0.8% → financial viability 90 → GO" is exactly the case this stops.
+  const input_sanity = checkInputSanity({
     cuisine: site.cuisine,
     rent_usd: site.rent_usd,
     sqft: site.sqft,
+    ticket_in: site.ticket_in,
+    median_income: primary.median_income,
+    state: geo.geography.state_abbr,
+    rent_confirmation: site.rent_confirmation,
+  });
+  const rentBlocked = inputBlocked(input_sanity, 'rent_usd');
+  const ticketBlocked = inputBlocked(input_sanity, 'ticket_in');
+
+  // ── Finance (Phase 4.5) ─────────────────────────────────────────────────
+  const finance = computeFinance({
+    cuisine: site.cuisine,
+    rent_usd: rentBlocked ? null : site.rent_usd,
+    sqft: site.sqft,
     seats: site.seats,
     capex_usd: site.capex_usd,
-    ticket_in: site.ticket_in,
+    ticket_in: ticketBlocked ? null : site.ticket_in,
     ticket_delivery: site.ticket_delivery,
     delivery_ratio: site.delivery_ratio,
     median_income: primary.median_income,
     state: geo.geography.state_abbr,
     captured_monthly_usd: huff.captured_monthly_usd,
   });
-  // No rent entered → nothing may be inferred from it: verdicts are capped at CONDITIONAL_GO (§verdictFor).
-  const rentMissing = site.rent_usd == null;
+  // No rent entered (or none the customer has confirmed) → nothing may be
+  // inferred from it: verdicts are capped at CONDITIONAL_GO (§verdictFor).
+  const rentMissing = rentBlocked || site.rent_usd == null;
   const coverage_ratio = huff.captured_monthly_usd != null && finance.breakeven_monthly ? Math.round((huff.captured_monthly_usd / finance.breakeven_monthly) * 1000) / 1000 : null;
   competitors.cluster_score = clusterScoreFor(competitors.walk10_l1_l2_count, coverage_ratio);
   const captured_covers_day = huff.captured_monthly_usd != null ? Math.round(huff.captured_monthly_usd / ticketIn / d.finance.days_open_per_month) : null;
@@ -697,6 +715,7 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
     confidence,
     sources,
     narrative: {},
+    input_sanity,
   };
   const risks = computeRisks({ ...partial, dev_projects: bundle.dev?.data?.projects.length ?? 0 });
   const model = parseReportModel({ ...partial, risks });
@@ -704,6 +723,11 @@ export async function runReport360(raw: RawSiteInput, opts: Report360Options = {
   // standard report and the 360° PDF print this object — nothing re-derives a
   // verdict or a break-even anywhere else.
   model.conclusion = conclusionFromModel(model);
+  // v4 §1.2: the cover, the summary and the closing page print `score.verdict`.
+  // That used to be the raw score → verdict mapping with no evidence gate, and a
+  // report could call itself a preliminary edition on one page and GO on the
+  // cover. The conclusion is the only verdict there is.
+  model.score.verdict = model.conclusion.verdict;
   return { model, bundle, ctx, intermediates: { trade_area: tradeArea, competitors, huff, cuisine_share: share } };
 }
 

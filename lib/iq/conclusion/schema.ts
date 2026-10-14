@@ -7,7 +7,14 @@
  */
 import { z } from 'zod';
 
-export type Verdict = 'GO' | 'CONDITIONAL_GO' | 'NO_GO';
+/**
+ * v4 §1.2: a verdict is a claim about the world. When the evidence cannot carry
+ * one, the honest answer is INSUFFICIENT_DATA — "we cannot tell", never "don't
+ * do it" dressed up as NO_GO, and never a GO on a cover that elsewhere calls
+ * itself a preliminary edition.
+ */
+export type Verdict = 'GO' | 'CONDITIONAL_GO' | 'NO_GO' | 'INSUFFICIENT_DATA';
+export const VERDICTS: readonly Verdict[] = ['GO', 'CONDITIONAL_GO', 'NO_GO', 'INSUFFICIENT_DATA'];
 export type RevenueBasis = 'demand_capture' | 'seats_turns';
 
 export interface ConclusionDimension {
@@ -63,7 +70,7 @@ export const conclusionSchema: z.ZodType<Conclusion> = z.object({
   snapshot_id: z.string(),
   data_as_of: z.string(),
   overall: z.number(),
-  verdict: z.enum(['GO', 'CONDITIONAL_GO', 'NO_GO']),
+  verdict: z.enum(['GO', 'CONDITIONAL_GO', 'NO_GO', 'INSUFFICIENT_DATA']),
   dimensions: z.array(z.object({ id: z.string(), score: z.number(), weight: z.number(), weighted: z.number() })),
   breakeven_monthly: z.number().nullable(),
   safety_monthly: z.number().nullable(),

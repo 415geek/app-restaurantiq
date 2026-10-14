@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { after } from 'next/server';
 import { iqGetReport, iqHasReportModelColumn } from '@/lib/funnel/iq-repository';
-import { verifyWorkerSecret } from '@/lib/funnel/iq-report-job';
+import { markUpgrade, professionalEvidenceDigest, verifyWorkerSecret } from '@/lib/funnel/iq-report-job';
+import { toLocale } from '@/lib/i18n/locale';
 import { generateReport360ForRow, generateReport360Narratives, needsNarrativePass } from '@/lib/iq/generate';
 import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 
@@ -50,6 +51,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ tier: r.model.meta.tier, total: r.model.score.total, verdict: r.model.score.verdict, cost_usd: r.cost_usd, elapsed_ms: r.elapsed_ms, persisted: r.persisted, gates: r.gates.failures });
   }
   const force = url.searchParams.get('force') === '1';
+  // v4 §1.5: the professional narrative pass — prose rewritten around the SAME
+  // frozen numbers with the research the enrich stage gathered. Its outcome is
+  // recorded on the row so the report page can say ready / no change / failed.
+  if (url.searchParams.get('pass') === 'pro') {
+    if (!row.report_model_json) return NextResponse.json({ error: 'no_model' }, { status: 409 });
+    after(async () => {
+      try {
+        const language = toLocale(row.language);
+        const evidence = professionalEvidenceDigest(row, language);
+        const r = await generateReport360Narratives(id, { pass: 'llm-pro', evidence });
+        if (!r) await markUpgrade(id, 'failed', 'stored model could not be loaded');
+        else if (!r.persisted) await markUpgrade(id, 'failed', 'professional prose could not be persisted');
+        else await markUpgrade(id, r.changed ? 'ready' : 'no_change');
+        console.log(`[iq360] report ${id}: professional pass ${r ? `persisted=${r.persisted} changed=${r.changed}` : 'skipped'}`);
+      } catch (e) {
+        console.error('[iq360] professional pass failed', id, e);
+        await markUpgrade(id, 'failed', e instanceof Error ? e.message : String(e));
+      }
+    });
+    return NextResponse.json({ status: 'running', phase: 'narrative-pro' }, { status: 202 });
+  }
   // §4.1 单一结论源: the deterministic core already ran before the web draft, so a
   // stored model here needs PROSE only — never a second run that would recompute
   // the conclusion the customer has already been shown.

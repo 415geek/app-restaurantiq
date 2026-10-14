@@ -51,6 +51,9 @@ import { LOCALES, LOCALE_TAG, type Locale } from '@/lib/i18n/locale';
 import { withLang } from '@/lib/i18n/resolve';
 import { persistLocale, useLocale } from '@/lib/i18n/use-locale';
 import { tierPill, ui } from '@/components/iq/ui';
+import { InputSanityBar } from '@/components/iq/InputSanityBar';
+import { parseConclusion } from '@/lib/iq/conclusion/display';
+import { inputSanitySchema, type InputSanityFlag } from '@/lib/iq/model/schema';
 
 const LEAD_STORAGE_KEY = 'iq:lead:v1';
 const LEAD_DISMISSED_KEY = 'iq:lead:dismissed:v1';
@@ -116,7 +119,19 @@ export type AnalyzeResult = {
   paywall_teaser?: string;
   decision_tier?: string;
   risk_audit_preview?: RiskAuditPreview;
+  /** v4 §1.1: THE conclusion the numbers above are projected from (parsed at render). */
+  conclusion?: unknown;
+  projection?: unknown;
+  engine?: string;
 };
+
+/** §1.3 flags travel inside the projection; read them defensively — the row may predate v4. */
+function readInputSanity(projection: unknown): InputSanityFlag[] {
+  if (!projection || typeof projection !== 'object') return [];
+  const raw = (projection as { input_sanity?: unknown }).input_sanity;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((x) => inputSanitySchema.safeParse(x)).filter((r) => r.success).map((r) => r.data!);
+}
 
 /** What the canonical route needs to render without calling analyze. */
 export type StoredResultPayload = {
@@ -525,6 +540,9 @@ export function ResultClient(props: ResultClientProps) {
       paywall_teaser: stored.result.paywall_teaser,
       decision_tier: stored.result.decision_tier,
       risk_audit_preview: parseRiskAuditPreview(stored.result.risk_audit_preview),
+      conclusion: stored.result.conclusion,
+      projection: stored.result.projection,
+      engine: stored.result.engine,
     });
     setLoading(false);
   }, [isQuery, stored]);
@@ -575,6 +593,9 @@ export function ResultClient(props: ResultClientProps) {
           paywall_teaser: json?.paywall_teaser,
           decision_tier: json?.decision_tier,
           risk_audit_preview: parseRiskAuditPreview(json?.risk_audit_preview),
+          conclusion: json?.conclusion,
+          projection: json?.projection,
+          engine: typeof json?.engine === 'string' ? json.engine : undefined,
         };
         if (result.reportId) {
           const rentNum = Number(monthlyRentUsd);
@@ -593,6 +614,9 @@ export function ResultClient(props: ResultClientProps) {
               paywall_teaser: result.paywall_teaser,
               decision_tier: result.decision_tier,
               risk_audit_preview: json?.risk_audit_preview,
+              conclusion: json?.conclusion,
+              projection: json?.projection,
+              engine: typeof json?.engine === 'string' ? json.engine : undefined,
             },
             userInputs: {
               monthly_rent_usd: Number.isFinite(rentNum) && rentNum > 0 ? rentNum : null,
@@ -837,6 +861,10 @@ export function ResultClient(props: ResultClientProps) {
     );
   }
 
+  // §1.1 / §1.3: what the page prints is the conclusion; the flags come with it.
+  const conclusion = parseConclusion(data.conclusion);
+  const inputSanity = readInputSanity(data.projection);
+
   const shareUrl =
     typeof window !== 'undefined'
       ? data.reportId
@@ -882,6 +910,11 @@ export function ResultClient(props: ResultClientProps) {
           )}
         </section>
 
+        {/* v4 §1.3: an implausible input is asked about before anything else is read. */}
+        {inputSanity.some((x) => !x.confirmed) ? (
+          <InputSanityBar lang={locale} reportId={data.reportId || null} flags={inputSanity} onAnswered={(a) => { if (a === 'typo') focusRentInput(); }} />
+        ) : null}
+
         {data.risk_audit_preview && (
           <section className={`${ui.card} p-6`}>
             <h2 className={`mb-4 ${ui.kicker}`}>{t.riskAudit}</h2>
@@ -890,6 +923,8 @@ export function ResultClient(props: ResultClientProps) {
               lang={locale}
               businessType={businessType}
               compact
+              // §1.1: the paid conclusion drives the free scorecard — never the LLM's figures.
+              conclusion={conclusion}
             />
           </section>
         )}

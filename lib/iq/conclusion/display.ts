@@ -38,7 +38,29 @@ export const VERDICT_COPY: Record<Verdict, Record<Locale, { label: string; badge
     en: { label: 'NO GO', badge: 'NO GO' },
     es: { label: 'No viable', badge: 'NO VIABLE' },
   },
+  INSUFFICIENT_DATA: {
+    zh: { label: '数据不足，不予判定', badge: '数据不足 INSUFFICIENT DATA' },
+    en: { label: 'INSUFFICIENT DATA', badge: 'INSUFFICIENT DATA' },
+    es: { label: 'Datos insuficientes', badge: 'DATOS INSUFICIENTES' },
+  },
 };
+
+/** True when the conclusion declined to judge: pages must print known facts and data-gap guidance only. */
+export function isUndecided(verdict: Verdict): boolean {
+  return verdict === 'INSUFFICIENT_DATA';
+}
+
+/**
+ * v4 §1.2: what an undecided report says instead of a verdict paragraph. One
+ * sentence, no hedged "probably"; the facts pages still print.
+ */
+export function undecidedNote(lang: Locale): string {
+  return pick(lang, {
+    zh: '本次取数不足以支撑判定。下面只列已核实的事实与还缺什么；补齐后免费重跑即可得到判定。',
+    en: 'The data gathered is not enough to support a verdict. Only verified facts and what is missing follow; add the missing inputs and re-run for free to get one.',
+    es: 'Los datos obtenidos no bastan para emitir un veredicto. Solo se listan hechos verificados y lo que falta; completa los datos y vuelve a ejecutar gratis para obtenerlo.',
+  });
+}
 
 export function verdictLabelOf(verdict: Verdict, lang: Locale): string {
   return VERDICT_COPY[verdict][lang].label;
@@ -51,9 +73,9 @@ export function verdictLabelOf(verdict: Verdict, lang: Locale): string {
  */
 export function verdictRuleTextFor(t: { go: number; conditional: number }, lang: Locale): string {
   return pick(lang, {
-    zh: `综合 ≥ ${t.go} → 可做 GO；${t.conditional}–${t.go - 1} → 有条件可做 CONDITIONAL GO；< ${t.conditional} → 不建议 NO GO；未提供租金时最高只到「有条件可做」。`,
-    en: `Overall ≥ ${t.go} → GO; ${t.conditional}–${t.go - 1} → CONDITIONAL GO; < ${t.conditional} → NO GO; without a real rent the verdict is capped at CONDITIONAL GO.`,
-    es: `Puntuación ≥ ${t.go} → VIABLE; ${t.conditional}–${t.go - 1} → VIABLE CON CONDICIONES; < ${t.conditional} → NO VIABLE; sin una renta real el veredicto se limita a VIABLE CON CONDICIONES.`,
+    zh: `综合 ≥ ${t.go} → 可做 GO；${t.conditional}–${t.go - 1} → 有条件可做 CONDITIONAL GO；< ${t.conditional} → 不建议 NO GO；未提供租金时最高只到「有条件可做」；数据完整度不足 60 时最高只到「有条件可做」，不足 45 或竞品池质量过低时不予判定。`,
+    en: `Overall ≥ ${t.go} → GO; ${t.conditional}–${t.go - 1} → CONDITIONAL GO; < ${t.conditional} → NO GO; without a real rent the verdict is capped at CONDITIONAL GO; below 60 data completeness it is capped at CONDITIONAL GO, and below 45 (or with a thin competitor pool) no verdict is issued.`,
+    es: `Puntuación ≥ ${t.go} → VIABLE; ${t.conditional}–${t.go - 1} → VIABLE CON CONDICIONES; < ${t.conditional} → NO VIABLE; sin una renta real el veredicto se limita a VIABLE CON CONDICIONES; con integridad de datos < 60 se limita a VIABLE CON CONDICIONES, y < 45 (o con un pool de competidores escaso) no se emite veredicto.`,
   });
 }
 

@@ -36,6 +36,7 @@ import {
   X,
 } from 'lucide-react';
 import { LOCALE_TAG, toLocale, type Locale } from '@/lib/i18n/locale';
+import { isUndecided, undecidedNote } from '@/lib/iq/conclusion/display';
 import type { Competitor, ReportModel } from '../model/schema';
 import { PAGES, cuisineName, dimensionName, localizedField, plainText, segmentName, sensitivityName, templateNarrative, type PageId } from '../narrative/templates';
 import { SourceChips, type SourceKind } from './chips';
@@ -340,6 +341,7 @@ function Page1({ model, staticMaps, lang }: PageProps) {
             </div>
             <div className="cover-verdict">
               <VerdictBadge c={c} verdict={m.score.verdict} />
+              {isUndecided(m.score.verdict) ? <p className="verdict-undecided">{undecidedNote(c.lang)}</p> : null}
               <div className="cover-keys">
                 <KeyNumber label={S.p1.score} value={`${F.num(m.score.total, 1)} / 100`} />
                 <KeyNumber label={S.p1.completeness} value={`${F.int(m.confidence.total)} / 100`} sub={S.level[m.confidence.level]} />
@@ -402,7 +404,10 @@ function Page2({ model, lang }: PageProps) {
   return (
     <PageShell c={c} model={m} pageId="page_2" chips={<SourceChips model={m} ids={['D2', 'D5', 'D6', 'D12']} model_labels={[S.p2.chipHuff, S.p2.chipBreakeven]} lang={c.lang} />}>
       <div className="summary-top">
-        <VerdictBadge c={c} verdict={m.score.verdict} />
+        <div>
+          <VerdictBadge c={c} verdict={m.score.verdict} />
+          {isUndecided(m.score.verdict) ? <p className="verdict-undecided">{undecidedNote(c.lang)}</p> : null}
+        </div>
         <div className="summary-keys">
           <KeyNumber label={S.p2.score} value={`${F.num(m.score.total, 1)}`} sub={S.p2.scoreSub} />
           <KeyNumber label={`${S.p2.coverage}${xr}`} value={F.pct(m.demand.coverage_ratio)} sub={`${S.p2.coverageSub}${xr}`} />
@@ -749,15 +754,15 @@ function Page6({ model, lang }: PageProps) {
 const P7_REVIEW_DIST: Record<Locale, { title: string; note: string }> = {
   zh: {
     title: '同类竞品评论量分布',
-    note: '{method}，因此没有同类门店的营收区间；上图为 Google / Yelp 评论数原始值（前 8 家），只反映相对客流热度，不是营收。本址保本线见财务页。',
+    note: '{method}，因此没有同类门店的营收区间；上图为 Google / Yelp 评论数原始值（前 {n} 家），只反映相对客流热度，不是营收。本址保本线见财务页。',
   },
   en: {
     title: 'Layer-1 review-count distribution',
-    note: '{method}, so no peer revenue band is available; the bars are raw Google / Yelp review counts (top 8) — a relative traffic signal, not revenue. This site’s break-even is on the finance page.',
+    note: '{method}, so no peer revenue band is available; the bars are raw Google / Yelp review counts (top {n}) — a relative traffic signal, not revenue. This site’s break-even is on the finance page.',
   },
   es: {
     title: 'Distribución de reseñas de competidores directos',
-    note: '{method}, por lo que no hay un rango de ingresos de pares; las barras son conteos de reseñas de Google / Yelp (8 principales): una señal relativa de tráfico, no ingresos. El punto de equilibrio de este local está en la página financiera.',
+    note: '{method}, por lo que no hay un rango de ingresos de pares; las barras son conteos de reseñas de Google / Yelp ({n} principales): una señal relativa de tráfico, no ingresos. El punto de equilibrio de este local está en la página financiera.',
   },
 };
 
@@ -785,10 +790,6 @@ function Page7({ model, lang }: PageProps) {
   // distribution collapses entirely rather than printing a chart of 「未获取」 bars.
   const reviewCount = (x: Competitor) => (x.rating_count != null && x.rating_count > 0 ? x.rating_count : null);
   const l1Ranked = uniqueCompetitors([...m.competitors.l1].sort((a, b2) => (b2.rating_count ?? 0) - (a.rating_count ?? 0)));
-  const reviewRows = keepPopulated(l1Ranked.slice(0, 8), (x) => [reviewCount(x)]).map((x) => ({
-    label: (c.lang === 'zh' ? x.name_zh || x.name : x.name).slice(0, 22),
-    value: reviewCount(x),
-  }));
   // §4.6 (P1-d): with fewer than four same-cuisine peers the page has a hole where the
   // benchmark should be. The nearby Chinese restaurants are the honest stand-in — a
   // top-N by review count, every row complete, collapsed when it cannot be filled.
@@ -798,6 +799,16 @@ function Page7({ model, lang }: PageProps) {
     (x) => [x.rating, reviewCount(x), x.distance_mi],
     { minRows: 3 },
   );
+  // v4 §1.4: the band is a fixed 118 pt (92 pt in the Latin editions when the
+  // fallback table above it is present), and the chart used to be sized for a
+  // page, so the bottom bars were clipped mid-bar. Rows now fit the band and the
+  // note states the count instead of a hard-coded "8".
+  const fallbackShown = cards.length < 4 && otherChinese.length > 0;
+  const reviewRowsMax = c.lang === 'zh' || !fallbackShown ? 8 : 6;
+  const reviewRows = keepPopulated(l1Ranked.slice(0, reviewRowsMax), (x) => [reviewCount(x)]).map((x) => ({
+    label: (c.lang === 'zh' ? x.name_zh || x.name : x.name).slice(0, 22),
+    value: reviewCount(x),
+  }));
   // §4.2: the void claim is only shown when both Layer-1 keyword radii (800 / 1600 m) were searched (guard) — say so.
   const bothRadii = ['direct@800', 'direct@1600'].every((l) => (m.competitors.l1_layers_tried ?? []).includes(l));
   // §4.2 (P0-B): a gap may only be claimed when the text probe cleared the same-category stores too.
@@ -951,8 +962,8 @@ function Page7({ model, lang }: PageProps) {
           {reviewRows.length > 0 ? (
             <>
               <h2 className="h2">{P7_REVIEW_DIST[c.lang].title}</h2>
-              <HBars rows={reviewRows} valueLabel={(v) => F.int(v)} labelWidth={c.lang === 'zh' ? 110 : 150} valueWidth={60} height={11} gap={3} />
-              <p className="table-note">{fill(P7_REVIEW_DIST[c.lang].note, { method: S.bandMethod[b.method] ?? c.t(b.method) })}</p>
+              <HBars rows={reviewRows} valueLabel={(v) => F.int(v)} labelWidth={c.lang === 'zh' ? 150 : 210} valueWidth={70} height={10} gap={2} width={640} />
+              <p className="table-note">{fill(P7_REVIEW_DIST[c.lang].note, { method: S.bandMethod[b.method] ?? c.t(b.method), n: String(reviewRows.length) })}</p>
             </>
           ) : (
             <p className="table-note">
@@ -1709,7 +1720,10 @@ function Page15({ model, lang }: PageProps) {
   return (
     <PageShell c={c} model={m} pageId="page_15" chips={<SourceChips model={m} ids={['D2', 'D6', 'D12']} model_labels={[S.p15.chipScore, S.p15.chipHuff, S.p15.chipBreakeven]} lang={c.lang} />}>
       <div className="summary-top">
-        <VerdictBadge c={c} verdict={m.score.verdict} />
+        <div>
+          <VerdictBadge c={c} verdict={m.score.verdict} />
+          {isUndecided(m.score.verdict) ? <p className="verdict-undecided">{undecidedNote(c.lang)}</p> : null}
+        </div>
         <div className="summary-keys">
           <KeyNumber label={`${S.p15.coverage}${xr}`} value={F.pct(cov)} sub={`${S.p15.coverageSub}${xr}`} />
           {noRent ? <KeyNumber label={S.p15.maxRent} value={maxRent} sub={S.p15.maxRentSub} /> : <KeyNumber label={S.p15.occupancy} value={F.pct(occ, 1)} sub={S.p15.occupancySub} />}

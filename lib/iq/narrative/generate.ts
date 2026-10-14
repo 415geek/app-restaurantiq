@@ -50,6 +50,19 @@ export interface GenerateNarrativesOptions {
   timeoutMs?: number;
   /** Pool size for page-tier calls (default 4). */
   concurrency?: number;
+  /**
+   * v4 §1.5: the professional pass's visible increment. A digest of the deep /
+   * web research and competitor insights the enrich stage gathered, appended to
+   * every page prompt as extra evidence the prose may cite. The frozen numbers
+   * are untouched — this only changes what the paragraphs can say.
+   */
+  evidence?: string | null;
+}
+
+const EVIDENCE_HEAD: Record<NarrativeLanguage, string> = {
+  zh: '【补充证据（深度版）——以下为联网检索与评论分析摘要。可在相关段落引用并标注 [检索]；禁止据此改写任何已冻结数字；与 JSON 冲突时以 JSON 为准。】',
+  en: '[ADDITIONAL EVIDENCE (in-depth edition) — a digest of web research and review analysis. Cite it where relevant, tagged [search]; never alter a frozen figure on its basis; the JSON wins on any conflict.]',
+  es: '[EVIDENCIA ADICIONAL (edición a fondo): resumen de investigación web y análisis de reseñas. Cítala donde corresponda con la etiqueta [búsqueda]; nunca modifiques una cifra fija a partir de ella; el JSON prevalece ante cualquier conflicto.]',
 }
 
 /** Approximate per-call costs; Phase 7 refines them from token counts. */
@@ -495,7 +508,9 @@ export async function generateNarratives(model: ReportModel, opts: GenerateNarra
     } catch (e) {
       return fallback(pageId, `prompt_error:${e instanceof Error ? e.message : String(e)}`);
     }
-    const { system, user, tier } = prompts;
+    const { system, tier } = prompts;
+    const evidence = opts.evidence?.trim();
+    const user = evidence ? `${prompts.user}\n\n${EVIDENCE_HEAD[lang]}\n${evidence}` : prompts.user;
     const pageN = pageId.replace('page_', '');
     let feedback: string | null = null;
     let lastReason = 'unknown';

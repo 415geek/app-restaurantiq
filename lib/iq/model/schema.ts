@@ -161,6 +161,22 @@ function backfillCounts(c: {
   };
 }
 
+/** v4 §1.3: one flagged input and how it was resolved. */
+export const inputSanitySchema = z.object({
+  field: z.enum(['rent_usd', 'sqft', 'ticket_in']),
+  value: z.number(),
+  /** Why it was flagged. */
+  reason: z.enum(['below_floor', 'below_corridor', 'above_corridor', 'size_concept_mismatch', 'ticket_out_of_band']),
+  /** The benchmark the value was compared against, when one existed. */
+  benchmark: z.object({ value: z.number(), label: z.string(), source: z.string() }).nullable(),
+  /** The value is kept out of every score until the customer confirms it. */
+  blocks_scoring: z.boolean(),
+  /** Customer's answer from the confirmation bar; null until answered. */
+  confirmation: z.enum(['net', 'nnn_base', 'promo', 'typo']).nullable(),
+  confirmed: z.boolean(),
+});
+export type InputSanityFlag = z.infer<typeof inputSanitySchema>;
+
 /** The document shape. `reportModelSchema` below adds the single-conclusion guard. */
 const reportModelShape = z.object({
   meta: z.object({
@@ -182,7 +198,7 @@ const reportModelShape = z.object({
      * The 360° route uses it to run the prose pass exactly once, never recomputing
      * the frozen numbers.
      */
-    narrative_pass: z.enum(['template', 'llm']).optional(),
+    narrative_pass: z.enum(['template', 'llm', 'llm-pro']).optional(),
     precheck_reasons: z.array(z.string()),
     /** Declared fallbacks that keep the report deliverable (e.g. Overture not loaded → Google-only POI base). */
     degradations: z.array(z.string()),
@@ -391,7 +407,7 @@ const reportModelShape = z.object({
   }),
   score: z.object({
     total: z.number(),
-    verdict: z.enum(['GO', 'CONDITIONAL_GO', 'NO_GO']),
+    verdict: z.enum(['GO', 'CONDITIONAL_GO', 'NO_GO', 'INSUFFICIENT_DATA']),
     dimensions: z.array(
       z.object({
         id: z.enum([
@@ -457,6 +473,13 @@ const reportModelShape = z.object({
    * still parse.
    */
   conclusion: conclusionSchema.nullable().default(null),
+  /**
+   * v4 §1.3 异常输入阻断: inputs that failed the sanity check. A flagged input
+   * that the customer has not confirmed is NOT scored (its dimension reads
+   * 待确认) and locks the verdict at CONDITIONAL_GO. `.default([])` so stored
+   * models and fixtures still parse.
+   */
+  input_sanity: z.array(inputSanitySchema).default([]),
 });
 
 export type ReportModel = z.infer<typeof reportModelShape>;

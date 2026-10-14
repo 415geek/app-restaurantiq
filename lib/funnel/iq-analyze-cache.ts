@@ -105,6 +105,11 @@ export type StoredFreeResult = {
   paywall_teaser?: string;
   decision_tier?: string;
   risk_audit_preview?: Record<string, unknown>;
+  /** v4 §1.1: THE conclusion (lib/iq/conclusion) the free numbers are projected from; absent on the LLM-only fallback. */
+  conclusion?: Record<string, unknown>;
+  projection?: Record<string, unknown>;
+  /** 'core' = the paid deterministic engine ran; 'llm_fallback' = it did not and the page says so. */
+  engine?: 'core' | 'llm_fallback';
 };
 
 export function readStoredFreeResult(marketData: unknown): StoredFreeResult | null {
@@ -129,5 +134,8 @@ export function readStoredFreeResult(marketData: unknown): StoredFreeResult | nu
       o.risk_audit_preview && typeof o.risk_audit_preview === 'object' && !Array.isArray(o.risk_audit_preview)
         ? (o.risk_audit_preview as Record<string, unknown>)
         : undefined,
+    conclusion: o.conclusion && typeof o.conclusion === 'object' && !Array.isArray(o.conclusion) ? (o.conclusion as Record<string, unknown>) : undefined,
+    projection: o.projection && typeof o.projection === 'object' && !Array.isArray(o.projection) ? (o.projection as Record<string, unknown>) : undefined,
+    engine: o.engine === 'core' || o.engine === 'llm_fallback' ? o.engine : undefined,
   };
 }

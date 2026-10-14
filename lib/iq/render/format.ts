@@ -237,6 +237,7 @@ export const VERDICT_LABEL: Record<Verdict, { zh: string; en: string }> = {
   GO: { zh: '可做', en: 'GO' },
   CONDITIONAL_GO: { zh: '有条件可做', en: 'CONDITIONAL GO' },
   NO_GO: { zh: '不建议', en: 'NO GO' },
+  INSUFFICIENT_DATA: { zh: '数据不足，不予判定', en: 'INSUFFICIENT DATA' },
 };
 
 /** Verdict labels: `label` for tables, `badge` + `sub` for the verdict badge. Unknown verdicts pass through. */

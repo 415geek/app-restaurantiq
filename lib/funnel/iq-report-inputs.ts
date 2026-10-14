@@ -125,6 +125,8 @@ export const reportInputsSchema = z
       .unknown()
       .transform((v) => (typeof v === 'string' ? v.trim().slice(0, LIMITS.notes) : ''))
       .optional(),
+    /** v4 §1.3: the customer's answer to the rent confirmation bar. */
+    rent_confirmation: z.enum(['net', 'nnn_base', 'promo', 'typo']).optional(),
   })
   .strip();
 

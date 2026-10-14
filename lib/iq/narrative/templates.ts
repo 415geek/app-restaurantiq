@@ -79,11 +79,12 @@ export const VERDICT_ZH: Record<ReportModel['score']['verdict'], string> = {
   GO: VERDICT_COPY.GO.zh.label,
   CONDITIONAL_GO: VERDICT_COPY.CONDITIONAL_GO.zh.label,
   NO_GO: VERDICT_COPY.NO_GO.zh.label,
+  INSUFFICIENT_DATA: VERDICT_COPY.INSUFFICIENT_DATA.zh.label,
 };
 export const VERDICT_WORD: Record<Locale, Record<ReportModel['score']['verdict'], string>> = {
   zh: VERDICT_ZH,
-  en: { GO: 'GO', CONDITIONAL_GO: 'CONDITIONAL GO', NO_GO: 'NO GO' },
-  es: { GO: 'VIABLE', CONDITIONAL_GO: 'VIABLE CON CONDICIONES', NO_GO: 'NO VIABLE' },
+  en: { GO: 'GO', CONDITIONAL_GO: 'CONDITIONAL GO', NO_GO: 'NO GO', INSUFFICIENT_DATA: VERDICT_COPY.INSUFFICIENT_DATA.en.label },
+  es: { GO: 'VIABLE', CONDITIONAL_GO: 'VIABLE CON CONDICIONES', NO_GO: 'NO VIABLE', INSUFFICIENT_DATA: VERDICT_COPY.INSUFFICIENT_DATA.es.label },
 };
 
 /** Verdict as a sentence-level word ("viable" / "not recommended"). */

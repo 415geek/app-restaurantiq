@@ -35,10 +35,26 @@ export function verdictThresholds(): { go: number; conditional: number } {
   return { go: v.go, conditional: v.conditional };
 }
 
-/** 底层重构 §4.3: below this completeness a GO may not be issued at all. */
-export const GO_MIN_COMPLETENESS = 80;
-/** …and below this, nothing above the neutral tier may be. */
-export const CONDITIONAL_MIN_COMPLETENESS = 55;
+/**
+ * v4 §1.2 完整度 → 判定的硬联动. ONE threshold set, the same numbers the report
+ * prints on its methods page ("低于 60 分门槛"):
+ *
+ *   completeness < 60                → verdict capped at CONDITIONAL_GO, and the cover may not say GO
+ *   completeness < 45                → INSUFFICIENT_DATA: facts and data-gap guidance only
+ *   competitor pool quality < 0.4    → INSUFFICIENT_DATA (the report that prompted this had 0.24)
+ *
+ * The report that prompted this printed "数据完整度 49，低于 60 分门槛" and
+ * labelled itself a preliminary edition, and still carried GO 79.2 on the
+ * cover, the summary and the closing page: the gate existed, but nothing
+ * read it.
+ */
+export const GO_MIN_COMPLETENESS = 60;
+/** …and below this, no verdict is issued at all. */
+export const INSUFFICIENT_COMPLETENESS = 45;
+/** Kept as an alias for existing callers; the semantics moved to INSUFFICIENT_COMPLETENESS. */
+export const CONDITIONAL_MIN_COMPLETENESS = INSUFFICIENT_COMPLETENESS;
+/** Competitor component quality (0–1, from the confidence engine) below which the pool cannot carry a verdict. */
+export const MIN_POOL_QUALITY = 0.4;
 
 export interface VerdictCapInput {
   /** `confidence.total` — the weighted data completeness, 0–100. */
@@ -51,51 +67,55 @@ export interface VerdictCapInput {
   poolTruncated?: boolean;
   /** Any core source that came back degraded. */
   coreSourceDegraded?: boolean;
+  /** `confidence.components.competitors.quality` — 0, 0.5, 1, or the truncation-discounted value. */
+  poolQuality?: number | null;
+  /**
+   * v4 §1.3: an input (rent, size, ticket) failed the sanity check and is
+   * waiting for the user to confirm it. Until then the verdict is locked at
+   * CONDITIONAL_GO — the number that would have swung the score is not in it.
+   */
+  inputPendingConfirmation?: boolean;
 }
 
 /**
- * 底层重构 §4.3 完整度 → 判定的硬联动.
- *
- * A verdict is a claim about the world, and its strength cannot exceed the
- * strength of the evidence it rests on. The report that prompted this shipped
- * `completeness = 75` and a failed competitor basemap and still printed GO.
- *
  * Returns the strongest verdict the evidence permits, so callers clamp rather
- * than compute. `null` means the evidence does not support any verdict — the
- * caller must say so instead of guessing.
+ * than compute. `'INSUFFICIENT_DATA'` means the evidence does not support any
+ * verdict — the caller prints that, instead of guessing.
  */
-export function verdictCap(input: VerdictCapInput): Verdict | null {
+export function verdictCap(input: VerdictCapInput): Verdict {
   // Truncation is NOT capped separately: it already costs the competitor
   // component of `completeness` (zeroed when the pool is also thin, discounted
   // when it is substantive). Capping again on top double-counted it, and since
   // a dense Chinese trade area is truncated as a matter of course, that made GO
   // unreachable in precisely the markets this product is for.
+  if (input.poolQuality != null && input.poolQuality < MIN_POOL_QUALITY) return 'INSUFFICIENT_DATA';
   // Completeness omitted means the caller is not the one that knows the evidence
   // (the pure score → verdict path); only an explicit number can clamp.
-  if (input.completeness == null) return input.coreSourceDegraded ? 'CONDITIONAL_GO' : 'GO';
-  if (input.completeness < CONDITIONAL_MIN_COMPLETENESS) return null;
-  if (input.completeness < GO_MIN_COMPLETENESS || input.coreSourceDegraded) return 'CONDITIONAL_GO';
+  if (input.completeness != null) {
+    if (input.completeness < INSUFFICIENT_COMPLETENESS) return 'INSUFFICIENT_DATA';
+    if (input.completeness < GO_MIN_COMPLETENESS) return 'CONDITIONAL_GO';
+  }
+  if (input.coreSourceDegraded || input.inputPendingConfirmation) return 'CONDITIONAL_GO';
   return 'GO';
 }
 
-const VERDICT_RANK: Record<Verdict, number> = { NO_GO: 0, CONDITIONAL_GO: 1, GO: 2 };
+const VERDICT_RANK: Record<Verdict, number> = { INSUFFICIENT_DATA: -1, NO_GO: 0, CONDITIONAL_GO: 1, GO: 2 };
 
 /**
  * Score → verdict. The missing-rent cap stays: without a real rent the model has
- * no occupancy cost, so a GO is only ever a CONDITIONAL GO. The §4.3 evidence cap
- * applies on top: a weak-evidence run can be talked down but never up, and
- * NO_GO is never capped — "the numbers do not work" needs no extra evidence.
+ * no occupancy cost, so a GO is only ever a CONDITIONAL GO. The evidence cap
+ * applies on top: a weak-evidence run can be talked down but never up. NO_GO is
+ * not capped by thin-but-sufficient evidence — "the numbers do not work" needs
+ * no extra evidence — but when the evidence is INSUFFICIENT, even a NO_GO is
+ * withdrawn: a refusal is still a judgement, and "we cannot tell" is the truth.
  */
 export function verdictFromScore(total: number, opts: { rentMissing: boolean } & VerdictCapInput): Verdict {
+  const cap = verdictCap(opts);
+  if (cap === 'INSUFFICIENT_DATA') return cap;
   const t = verdictThresholds();
   let v: Verdict = total >= t.go ? 'GO' : total >= t.conditional ? 'CONDITIONAL_GO' : 'NO_GO';
   if (opts.rentMissing && v === 'GO') v = 'CONDITIONAL_GO';
-  const cap = verdictCap(opts);
-  // A null cap means "not enough evidence to judge". Until the report carries a
-  // fourth badge for that, the honest floor is the neutral tier plus the reason
-  // the conclusion already records — never a confident GO.
-  const capped: Verdict = cap ?? 'CONDITIONAL_GO';
-  return VERDICT_RANK[v] > VERDICT_RANK[capped] ? capped : v;
+  return VERDICT_RANK[v] > VERDICT_RANK[cap] ? cap : v;
 }
 
 /** The printed rule, generated from the ONE threshold set in defaults.yaml. */
@@ -125,11 +145,13 @@ export function conclusionFromModel(model: ReportModel): Conclusion {
     overall,
     verdict: verdictFromScore(overall, {
       rentMissing: rent_excluded,
-      // §4.3: the conclusion is the one place that sees both the score and the
-      // evidence behind it, so this is where the evidence cap belongs.
+      // v4 §1.2: the conclusion is the one place that sees both the score and the
+      // evidence behind it, so this is where the evidence gate belongs.
       completeness: model.confidence?.total ?? null,
       poolTruncated: model.competitors?.pool_truncated === true,
       coreSourceDegraded: model.competitors?.guard_passed === false,
+      poolQuality: model.confidence?.components?.competitors?.quality ?? null,
+      inputPendingConfirmation: model.input_sanity?.some((f) => f.blocks_scoring && !f.confirmed) === true,
     }),
     dimensions: model.score.dimensions.map((d) => ({ id: d.id, score: d.score, weight: d.weight, weighted: d.weighted })),
     breakeven_monthly: f.breakeven_monthly ?? null,

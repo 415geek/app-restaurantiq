@@ -1,17 +1,6 @@
-import * as pdfParseModule from 'pdf-parse';
 import { generateNovaCompletion } from '@/lib/server/aws-nova-client';
 import { runOpenAIJsonSchema } from '@/lib/server/openai-json';
-
-type PdfParseResult = {
-  text: string;
-};
-
-type PdfParseFn = (data: Buffer) => Promise<PdfParseResult>;
-
-const pdfParse: PdfParseFn = (
-  (pdfParseModule as unknown as { default?: PdfParseFn }).default ||
-  (pdfParseModule as unknown as PdfParseFn)
-);
+import { extractPdfText } from '@/lib/iq/render/pdf';
 
 export type ImportedMenuItem = {
   name: string;
@@ -175,8 +164,8 @@ TEXT:\n${text}`;
 }
 
 export async function parseMenuFromPdf(bytes: Uint8Array): Promise<{ items: ImportedMenuItem[]; warnings: string[] }> {
-  const result = await pdfParse(Buffer.from(bytes));
-  const text = sanitizeText(result.text || '');
+  // pdf-parse 2.x is a class, not a function; the shared helper knows the shape.
+  const text = sanitizeText((await extractPdfText(Buffer.from(bytes))) || '');
   if (!text.trim()) {
     return { items: [], warnings: ['pdf_text_empty'] };
   }

@@ -51,6 +51,14 @@ export const defaultsSchema = z.object({
     split: z.object({ utilities: z.number(), insurance: z.number(), pos: z.number(), marketing: z.number() }),
     concepts: z.record(z.string(), z.object({ other_fixed_usd: z.number(), headcount: z.number() })),
   }),
+  /** v4 §1.3: every input-sanity threshold, so the engine carries no literals. */
+  input_sanity: z.object({
+    rent_floor_usd: z.object({ hcol: z.number(), mcol: z.number(), lcol: z.number() }),
+    rent_psf_month: z.object({ min: z.number(), max: z.number() }),
+    corridor_tolerance: z.number(),
+    sqft: z.object({ min: z.number(), max: z.number() }),
+    ticket_multiple: z.object({ min: z.number(), max: z.number() }),
+  }),
   finance: z.object({
     safety_multiplier: z.number(),
     occupancy_cost_bands: z.array(band),
