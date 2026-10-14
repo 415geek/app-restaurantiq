@@ -1,11 +1,9 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- RestaurantIQ mark: a location pin holding a rising bar chart (site → data → verdict), forest green on white. -->
-  <rect width="128" height="128" rx="30" fill="#14452F"/>
+  <!-- RestaurantIQ mark: a white location pin on ink with one signal-green dot at its heart (site → verdict). -->
+  <rect width="128" height="128" rx="30" fill="#0C0F0E"/>
   <path
-    d="M64 22C45.2 22 30 37.2 30 56C30 80.5 64 108 64 108C64 108 98 80.5 98 56C98 37.2 82.8 22 64 22Z"
+    d="M64 24C46.3 24 32 38.3 32 56C32 79 64 105 64 105C64 105 96 79 96 56C96 38.3 81.7 24 64 24Z"
     fill="#FFFFFF"
   />
-  <rect x="47" y="56" width="8" height="12" rx="2" fill="#14452F"/>
-  <rect x="60" y="48" width="8" height="20" rx="2" fill="#14452F"/>
-  <rect x="73" y="40" width="8" height="28" rx="2" fill="#3FA56B"/>
+  <circle cx="64" cy="56" r="13" fill="#3DDC84"/>
 </svg>

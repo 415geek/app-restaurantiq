@@ -14,11 +14,12 @@
   --brand-ink: #0A0A0A;
   --brand-ink-raised: #141416;
   /* RestaurantIQ brand system: Midnight Navy · Signal Green · Warm White; 🟢 opportunity / 🟡 caution / 🔴 risk */
-  --brand-navy: #0B1220;
-  --brand-navy-soft: #1B2537; /* hover / pressed state of a navy action */
+  /* "navy" is the funnel ink: a neutral near-black so every /iq page matches the landing. */
+  --brand-navy: #0C0F0E;
+  --brand-navy-soft: #262B29; /* hover / pressed state of an ink action */
   --brand-green: #22C55E; /* dark surfaces only — see the status family below */
-  --brand-canvas: #F6F6F2; /* the one warm-white ground under every funnel page */
-  --brand-paper: #FAFAF8; /* inset inside a white card */
+  --brand-canvas: #F7F8F7; /* the one off-white ground under every funnel page */
+  --brand-paper: #FBFCFB; /* inset inside a white card */
   --brand-slate: #334155;
   --brand-amber: #F59E0B;
   --brand-red: #EF4444;
@@ -40,16 +41,17 @@
   --brand-clay: #98342B; /* no go · failure */
 
   /*
-   * IQ landing hero. White stays the brand ground; the address card sits on a
-   * sage tint deep enough to read as its own surface against white, and the
-   * primary action is a deep forest green from the same family as pine
-   * (Owner.com idiom). Landing dark surfaces use forest, not navy, so the page
-   * stays one green family plus neutrals.
+   * IQ landing: "Ink + Signal". White is the brand ground and near-black ink
+   * carries every structural action (Linear / Vercel idiom). One signal green
+   * is reserved for the single conversion moment: the address command bar is
+   * the only dark surface in the hero, and its CTA is the only bright button
+   * on the page. Signal-ink is the AA-safe green for small marks on white.
    */
-  --brand-forest: #14452F; /* landing primary action */
-  --brand-forest-hover: #0E3524;
-  --brand-mint: #DCEEE2; /* address card ground */
-  --brand-mist: #F3F7F4; /* alternating landing section ground */
+  --brand-signal: #3DDC84; /* the one bright action — on ink surfaces only */
+  --brand-signal-hover: #5BE79A;
+  --brand-signal-ink: #0E7A43; /* green text / ticks on white */
+  --brand-signal-soft: #E8F8EF; /* green tint ground (badges, step numbers) */
+  --brand-mist: #F6F8F7; /* alternating landing section ground */
 }
 
 @theme inline {
@@ -73,9 +75,10 @@
   --color-brand-ochre: var(--brand-ochre);
   --color-brand-sienna: var(--brand-sienna);
   --color-brand-clay: var(--brand-clay);
-  --color-brand-forest: var(--brand-forest);
-  --color-brand-forest-hover: var(--brand-forest-hover);
-  --color-brand-mint: var(--brand-mint);
+  --color-brand-signal: var(--brand-signal);
+  --color-brand-signal-hover: var(--brand-signal-hover);
+  --color-brand-signal-ink: var(--brand-signal-ink);
+  --color-brand-signal-soft: var(--brand-signal-soft);
   --color-brand-mist: var(--brand-mist);
   --font-cjk: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
   --font-cjk-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', 'Noto Serif CJK SC', serif;

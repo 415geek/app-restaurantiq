@@ -3,8 +3,9 @@
 /**
  * IQ funnel landing (app.restaurantiq.ai/).
  *
- * Light, product-led layout in the Owner.com / DoorDash idiom: a white canvas,
- * one bold headline, an address "search" card as the single hero action, then
+ * Light, product-led layout (Owner.com structure, Linear / Vercel finish): a
+ * white canvas and near-black ink, one bold sans headline, a dark address
+ * command bar whose signal-green CTA is the page's single bright action, then
  * how-it-works → what's inside → sample numbers → pricing → audiences → FAQ →
  * account footer. All copy is trilingual (English default, 中文, Español); the
  * sample block uses the golden Millbrae fixture (synthetic inputs, real public
@@ -381,7 +382,7 @@ function HeroTitle({ headlines }: { headlines: string[] }) {
   const { text, done } = useTypewriter(order, { type: 62, erase: 22, hold: 2600 });
   const longest = headlines.reduce((a, b) => (b.length > a.length ? b : a), '');
   return (
-    <h1 className="font-cjk-serif text-[clamp(1.6rem,4.6vw,3.15rem)] font-black leading-[1.25] text-zinc-900">
+    <h1 className="text-[clamp(1.75rem,5vw,3.5rem)] font-extrabold leading-[1.12] tracking-[-0.025em] text-zinc-950">
       <span className="sr-only">{headlines[0]}</span>
       {/* No whitespace-nowrap: long EN headlines must wrap. Parent section is
           overflow-hidden (glow clip), so nowrap was cutting "Know whether…" on both sides. */}
@@ -402,16 +403,18 @@ function Logo() {
   return (
     <span className="inline-flex items-center gap-2">
       <Image src="/restaurant-iq-logo-mark.svg" alt="" width={32} height={32} className="h-8 w-8" priority />
-      <span className="text-[17px] font-extrabold tracking-tight text-zinc-900">RestaurantIQ</span>
+      <span className="text-[17px] font-extrabold tracking-tight text-zinc-950">
+        Restaurant<span className="text-brand-signal-ink">IQ</span>
+      </span>
     </span>
   );
 }
 
-/** A tick means "included", so it is the one place green is allowed — muted on paper, white on the navy card. */
+/** A tick means "included": signal-ink on paper, bright signal on the ink card. */
 const CheckIcon = ({ onDark = false }: { onDark?: boolean }) => (
   <svg
     viewBox="0 0 20 20"
-    className={`mt-0.5 h-5 w-5 flex-none ${onDark ? 'text-white/70' : 'text-brand-pine'}`}
+    className={`mt-0.5 h-5 w-5 flex-none ${onDark ? 'text-brand-signal' : 'text-brand-signal-ink'}`}
     fill="none"
     stroke="currentColor"
     strokeWidth="2.2"
@@ -422,8 +425,8 @@ const CheckIcon = ({ onDark = false }: { onDark?: boolean }) => (
 );
 
 /**
- * Hero visual under the address card: a green gradient stage (deep forest →
- * pale mint) with a phone showing the sample verdict. Built from the sample
+ * Hero visual under the address card: a gradient stage (ink → signal green →
+ * pale tint) with a phone showing the sample verdict. Built from the sample
  * copy so it stays trilingual and never shows a real customer's numbers.
  */
 function HeroStage({ sample }: { sample: Copy['sample'] }) {
@@ -431,7 +434,7 @@ function HeroStage({ sample }: { sample: Copy['sample'] }) {
   const pct = Number.parseFloat(score?.value ?? '0') || 0;
   return (
     <div className="relative mx-auto mt-14 h-[380px] max-w-5xl overflow-hidden md:mt-16 md:h-[460px]" aria-hidden>
-      <div className="absolute inset-x-0 bottom-0 top-24 rounded-t-[2rem] bg-[linear-gradient(100deg,#14452F_0%,#2B7A50_34%,#8FCCA5_64%,#E3F4E9_100%)]">
+      <div className="absolute inset-x-0 bottom-0 top-24 rounded-t-[2rem] bg-[linear-gradient(100deg,#0C0F0E_0%,#11402A_30%,#3DDC84_68%,#E8F8EF_100%)]">
         <div className="absolute inset-0 rounded-t-[2rem] bg-[repeating-linear-gradient(125deg,rgba(255,255,255,0.07)_0_1px,transparent_1px_46px)]" />
       </div>
       <div className="relative z-10 mx-auto w-[280px] rounded-[2.6rem] border-[9px] border-zinc-900 bg-white shadow-[0_30px_60px_-20px_rgba(11,18,32,0.45)] md:w-[320px]">
@@ -522,7 +525,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             <Link href={loginHref} className="hidden rounded-full px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 sm:inline-flex">
               {t.nav.signIn}
             </Link>
-            <button type="button" onClick={() => scrollTo('top')} className="hidden rounded-full bg-brand-forest px-4 py-2 text-sm font-semibold text-white hover:bg-brand-forest-hover sm:inline-flex">
+            <button type="button" onClick={() => scrollTo('top')} className="hidden rounded-full bg-brand-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-navy-soft active:scale-[0.98] sm:inline-flex">
               {t.nav.cta}
             </button>
           </div>
@@ -530,27 +533,38 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       </header>
 
       {/* ── Hero ────────────────────────────────────────────────────────── */}
-      <section id="top" className="border-b border-zinc-200 bg-white text-zinc-900">
+      {/* White ground with a faint grid and one soft signal glow behind the headline — depth without decoration. */}
+      <section
+        id="top"
+        className="relative border-b border-zinc-200 bg-white text-zinc-900 [background-image:radial-gradient(ellipse_60%_40%_at_50%_0%,rgba(61,220,132,0.14),transparent_70%),linear-gradient(to_right,rgba(12,15,14,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(12,15,14,0.04)_1px,transparent_1px)] [background-size:100%_100%,56px_56px,56px_56px]"
+      >
         <div className="mx-auto max-w-6xl px-5 pt-14 md:pt-20">
           <div className="mx-auto max-w-5xl text-center">
-            <p className="mb-5 inline-flex rounded-full border border-brand-forest/15 bg-brand-mint px-3.5 py-1.5 text-xs font-semibold tracking-wide text-brand-forest">{t.hero.eyebrow}</p>
+            <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-semibold tracking-wide text-zinc-700 shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
+              <span className="relative flex h-2 w-2" aria-hidden>
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-signal opacity-60 motion-reduce:hidden" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-brand-signal" />
+              </span>
+              {t.hero.eyebrow}
+            </p>
             <div className="mx-auto flex justify-center">
               <HeroTitle headlines={t.hero.headlines} />
             </div>
             <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-zinc-600 md:text-lg">{t.hero.subtitle}</p>
           </div>
 
-          {/* address search card */}
+          {/* Address command bar: the only dark surface in the hero, so the one
+              action that converts is impossible to miss against the white page. */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSubmit();
             }}
-            className="mx-auto mt-9 max-w-3xl rounded-3xl bg-brand-mint p-3 text-zinc-900 ring-1 ring-inset ring-brand-forest/15 shadow-[0_0_0_6px_rgba(220,238,226,0.45),0_28px_70px_-30px_rgba(20,69,47,0.45)] sm:p-4"
+            className="mx-auto mt-10 max-w-3xl rounded-[1.75rem] bg-brand-navy p-2.5 text-zinc-900 ring-1 ring-white/10 shadow-[0_0_0_8px_rgba(61,220,132,0.10),0_30px_80px_-28px_rgba(12,15,14,0.55)] sm:p-3"
           >
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="flex items-center gap-3 rounded-2xl bg-white px-4 ring-1 ring-inset ring-brand-forest/15 focus-within:ring-2 focus-within:ring-brand-forest/40">
-                <svg viewBox="0 0 24 24" className="h-5 w-5 flex-none text-brand-pine" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <label className="flex items-center gap-3 rounded-2xl bg-white px-4 ring-2 ring-transparent transition focus-within:ring-brand-signal">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 flex-none text-zinc-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z" />
                   <circle cx="12" cy="10" r="2.5" />
                 </svg>
@@ -565,8 +579,8 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
                   className="h-14 w-full bg-transparent text-[15px] text-zinc-900 outline-none placeholder:text-zinc-400"
                 />
               </label>
-              <label className="flex items-center gap-3 rounded-2xl bg-white px-4 ring-1 ring-inset ring-brand-forest/15 focus-within:ring-2 focus-within:ring-brand-forest/40">
-                <svg viewBox="0 0 24 24" className="h-5 w-5 flex-none text-brand-pine" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <label className="flex items-center gap-3 rounded-2xl bg-white px-4 ring-2 ring-transparent transition focus-within:ring-brand-signal">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 flex-none text-zinc-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v16m0-7h4a3 3 0 003-3V4M16 4h4v6a3 3 0 01-3 3h-1zm3 9v7" />
                 </svg>
                 <input
@@ -581,17 +595,18 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             </div>
             {moreOpen ? (
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                <input type="text" inputMode="decimal" placeholder={t.hero.rent} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-zinc-900 outline-none ring-1 ring-inset ring-brand-forest/15 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-forest/40" />
-                <input type="text" inputMode="decimal" placeholder={t.hero.sqft} value={sqft} onChange={(e) => setSqft(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-zinc-900 outline-none ring-1 ring-inset ring-brand-forest/15 placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-forest/40" />
+                <input type="text" inputMode="decimal" placeholder={t.hero.rent} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-zinc-900 outline-none ring-2 ring-transparent transition placeholder:text-zinc-400 focus:ring-brand-signal" />
+                <input type="text" inputMode="decimal" placeholder={t.hero.sqft} value={sqft} onChange={(e) => setSqft(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-zinc-900 outline-none ring-2 ring-transparent transition placeholder:text-zinc-400 focus:ring-brand-signal" />
               </div>
             ) : null}
+            {/* Never rendered disabled: a dimmed hero CTA reads as broken. An empty
+                submit falls to the address field's native `required` prompt. */}
             <button
               type="submit"
-              disabled={!location.trim()}
-              className="group mt-2 inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-forest px-6 text-[15px] font-semibold text-white shadow-[0_1px_0_rgba(255,255,255,0.12)_inset,0_8px_20px_-10px_rgba(20,69,47,0.7)] transition hover:bg-brand-forest-hover active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+              className="group mt-2 inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-signal px-6 text-[15px] font-bold text-brand-navy shadow-[0_1px_0_rgba(255,255,255,0.35)_inset,0_10px_28px_-12px_rgba(61,220,132,0.75)] transition hover:bg-brand-signal-hover active:scale-[0.99]"
             >
               {t.hero.cta}
-              <svg viewBox="0 0 20 20" className="h-4 w-4 transition group-hover:translate-x-0.5 group-disabled:translate-x-0" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+              <svg viewBox="0 0 20 20" className="h-4 w-4 transition group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 10h12m-5-5l5 5-5 5" />
               </svg>
             </button>
@@ -603,17 +618,17 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               aria-expanded={moreOpen}
               className={`mt-2 flex h-12 w-full items-center justify-between gap-3 rounded-2xl border px-4 text-left text-sm font-semibold transition ${
                 moreOpen
-                  ? 'border-brand-forest/15 bg-white text-zinc-900 hover:bg-white/90'
-                  : 'border-dashed border-brand-forest/30 bg-white/40 text-brand-forest hover:border-brand-forest/50 hover:bg-white/70'
+                  ? 'border-white/15 bg-white/10 text-white hover:bg-white/15'
+                  : 'border-dashed border-white/25 bg-transparent text-white/80 hover:border-white/45 hover:bg-white/5 hover:text-white'
               }`}
             >
               <span className="inline-flex items-center gap-2.5">
-                <span className={`inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-base font-bold leading-none ${moreOpen ? 'bg-brand-mint text-brand-forest' : 'bg-brand-forest text-white'}`} aria-hidden>
+                <span className={`inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-base font-bold leading-none ${moreOpen ? 'bg-white/15 text-white' : 'bg-brand-signal text-brand-navy'}`} aria-hidden>
                   {moreOpen ? '−' : '+'}
                 </span>
                 {moreOpen ? t.hero.less : t.hero.more}
               </span>
-              <svg viewBox="0 0 20 20" className={`h-4 w-4 flex-none text-zinc-500 transition ${moreOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <svg viewBox="0 0 20 20" className={`h-4 w-4 flex-none text-white/50 transition ${moreOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 8l5 5 5-5" />
               </svg>
             </button>
@@ -622,7 +637,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
           <ul className="mx-auto mt-6 flex max-w-3xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-zinc-500">
             {t.hero.trust.map((s) => (
               <li key={s} className="inline-flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-brand-pine" aria-hidden />
+                <span className="h-1.5 w-1.5 rounded-full bg-brand-signal-ink" aria-hidden />
                 {s}
               </li>
             ))}
@@ -635,11 +650,11 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       {/* ── How it works ───────────────────────────────────────────────── */}
       <section className="bg-brand-mist text-zinc-900">
         <div className="mx-auto max-w-6xl px-5 py-16 md:py-24">
-          <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.how.title}</h2>
+          <h2 className="text-2xl font-extrabold tracking-tight md:text-4xl">{t.how.title}</h2>
           <ol className="mt-10 grid gap-5 md:grid-cols-3">
             {t.how.steps.map((s) => (
-              <li key={s.n} className="rounded-2xl border border-zinc-200 bg-white p-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-mint text-base font-bold text-brand-forest">{s.n}</div>
+              <li key={s.n} className="rounded-2xl border border-zinc-200 bg-white p-6 transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_-18px_rgba(12,15,14,0.35)] motion-reduce:hover:translate-y-0">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-navy text-base font-bold text-white">{s.n}</div>
                 <h3 className="mt-5 text-lg font-bold">{s.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-600">{s.body}</p>
               </li>
@@ -651,13 +666,13 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       {/* ── What's inside ──────────────────────────────────────────────── */}
       <section id="inside" className="mx-auto max-w-6xl px-5 py-16 md:py-24">
         <div className="max-w-2xl">
-          <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.inside.title}</h2>
+          <h2 className="text-2xl font-extrabold tracking-tight md:text-4xl">{t.inside.title}</h2>
           <p className="mt-3 text-zinc-600">{t.inside.sub}</p>
         </div>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {t.inside.items.map((f, i) => (
-            <div key={f.title} className="rounded-2xl border border-zinc-200 bg-white p-6 transition hover:border-brand-forest/40">
-              <div className="text-xs font-bold tabular-nums text-brand-pine">{String(i + 1).padStart(2, '0')}</div>
+            <div key={f.title} className="rounded-2xl border border-zinc-200 bg-white p-6 transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-[0_12px_30px_-18px_rgba(12,15,14,0.35)] motion-reduce:hover:translate-y-0">
+              <div className="text-xs font-bold tabular-nums text-brand-signal-ink">{String(i + 1).padStart(2, '0')}</div>
               <h3 className="mt-2 text-lg font-bold text-zinc-900">{f.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-zinc-600">{f.body}</p>
             </div>
@@ -670,7 +685,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
         <div className="mx-auto grid max-w-6xl gap-10 px-5 py-16 md:grid-cols-2 md:items-center md:py-24">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">{t.sample.eyebrow}</p>
-            <h2 className="font-cjk-serif mt-3 text-2xl font-black md:text-4xl">{t.sample.title}</h2>
+            <h2 className="mt-3 text-2xl font-extrabold tracking-tight md:text-4xl">{t.sample.title}</h2>
             <p className="mt-4 text-zinc-600">{t.sample.body}</p>
             <div className="mt-6 inline-flex items-center gap-3 rounded-2xl bg-brand-clay/10 px-5 py-3 text-brand-clay ring-1 ring-inset ring-brand-clay/20">
               <span className="h-2.5 w-2.5 rounded-full bg-brand-clay" aria-hidden />
@@ -697,7 +712,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       {/* ── Pricing ────────────────────────────────────────────────────── */}
       <section id="pricing" className="mx-auto max-w-6xl px-5 py-16 md:py-24">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.pricing.title}</h2>
+          <h2 className="text-2xl font-extrabold tracking-tight md:text-4xl">{t.pricing.title}</h2>
           <p className="mt-3 text-zinc-600">{t.pricing.sub}</p>
         </div>
         <div className="mx-auto mt-10 grid max-w-4xl gap-5 md:grid-cols-2">
@@ -712,8 +727,8 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             <button type="button" onClick={() => scrollTo('top')} className="mt-8 w-full rounded-2xl border border-zinc-300 px-5 py-3 text-sm font-bold text-zinc-900 hover:bg-zinc-50">{t.pricing.free.cta}</button>
           </div>
           {/* The paid tier is the one dark card on the page; contrast carries it, not a glow ring. */}
-          <div className="relative rounded-3xl bg-brand-forest p-7 text-white">
-            <span className="absolute -top-3 left-6 rounded-full bg-white px-3 py-1 text-xs font-bold text-brand-forest shadow-[0_1px_2px_rgba(16,24,40,0.12)]">{t.pricing.pro.badge}</span>
+          <div className="relative rounded-3xl bg-brand-navy p-7 text-white shadow-[0_30px_60px_-30px_rgba(12,15,14,0.6)]">
+            <span className="absolute -top-3 left-6 rounded-full bg-brand-signal px-3 py-1 text-xs font-bold text-brand-navy">{t.pricing.pro.badge}</span>
             <div className="text-sm font-bold text-white/60">{t.pricing.pro.name}</div>
             <div className="mt-2 flex items-baseline gap-1">
               <span className="text-4xl font-extrabold tracking-tight">{t.pricing.pro.price}</span>
@@ -724,7 +739,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
                 <li key={i} className="flex gap-2"><CheckIcon onDark />{i}</li>
               ))}
             </ul>
-            <button type="button" onClick={() => scrollTo('top')} className="mt-8 w-full rounded-2xl bg-white px-5 py-3 text-sm font-bold text-brand-forest transition hover:bg-brand-mint">{t.pricing.pro.cta}</button>
+            <button type="button" onClick={() => scrollTo('top')} className="mt-8 w-full rounded-2xl bg-brand-signal px-5 py-3 text-sm font-bold text-brand-navy transition hover:bg-brand-signal-hover active:scale-[0.99]">{t.pricing.pro.cta}</button>
           </div>
         </div>
       </section>
@@ -732,7 +747,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       {/* ── Audiences ──────────────────────────────────────────────────── */}
       <section className="border-y border-zinc-100 bg-brand-mist">
         <div className="mx-auto max-w-6xl px-5 py-16 md:py-20">
-          <h2 className="font-cjk-serif text-2xl font-black md:text-3xl">{t.audiences.title}</h2>
+          <h2 className="text-2xl font-extrabold tracking-tight md:text-3xl">{t.audiences.title}</h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {t.audiences.items.map((a) => (
               <div key={a.title} className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200">
@@ -746,7 +761,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
 
       {/* ── FAQ ────────────────────────────────────────────────────────── */}
       <section id="faq" className="mx-auto max-w-3xl px-5 py-16 md:py-24">
-        <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.faq.title}</h2>
+        <h2 className="text-2xl font-extrabold tracking-tight md:text-4xl">{t.faq.title}</h2>
         <div className="mt-8 divide-y divide-zinc-200 border-y border-zinc-200">
           {t.faq.items.map((f, i) => {
             const open = openFaq === i;
@@ -764,19 +779,19 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       </section>
 
       {/* ── Final CTA + account ─────────────────────────────────────────── */}
-      <section className="bg-brand-forest text-white">
+      <section className="bg-brand-navy text-white">
         <div className="mx-auto max-w-6xl px-5 py-16 md:py-20">
           <div className="grid gap-10 md:grid-cols-2 md:items-center">
             <div>
-              <h2 className="font-cjk-serif text-2xl font-black md:text-4xl">{t.hero.title}</h2>
-              <button type="button" onClick={() => scrollTo('top')} className="mt-6 rounded-2xl bg-white px-6 py-3.5 text-sm font-bold text-brand-forest transition hover:bg-brand-mint">{t.hero.cta}</button>
+              <h2 className="text-2xl font-extrabold tracking-tight md:text-4xl">{t.hero.title}</h2>
+              <button type="button" onClick={() => scrollTo('top')} className="mt-6 rounded-2xl bg-brand-signal px-6 py-3.5 text-sm font-bold text-brand-navy transition hover:bg-brand-signal-hover active:scale-[0.99]">{t.hero.cta}</button>
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
               <h3 className="text-lg font-bold">{t.account.title}</h3>
               <p className="mt-2 text-sm text-white/75">{t.account.body}</p>
               <div className="mt-5 flex flex-wrap gap-3">
                 <Link href={loginHref} className="rounded-2xl border border-white/20 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/10">{t.account.signIn}</Link>
-                <Link href={signUpHref} className="rounded-2xl bg-white px-5 py-2.5 text-sm font-semibold text-brand-forest hover:bg-brand-mint">{t.account.register}</Link>
+                <Link href={signUpHref} className="rounded-2xl bg-white px-5 py-2.5 text-sm font-semibold text-brand-navy hover:bg-zinc-100">{t.account.register}</Link>
               </div>
             </div>
           </div>
