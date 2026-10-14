@@ -4,8 +4,8 @@
  * IQ funnel landing (app.restaurantiq.ai/).
  *
  * Light, product-led layout (Owner.com structure, Linear / Vercel finish): a
- * white canvas and near-black ink, one bold sans headline, a dark address
- * command bar whose signal-green CTA is the page's single bright action, then
+ * white canvas and near-black ink, one bold sans headline, a mint address
+ * card whose forest-green CTA is the page's single coloured action, then
  * how-it-works → what's inside → sample numbers → pricing → audiences → FAQ →
  * account footer. All copy is trilingual (English default, 中文, Español); the
  * sample block uses the golden Millbrae fixture (synthetic inputs, real public
@@ -410,11 +410,11 @@ function Logo() {
   );
 }
 
-/** A tick means "included": signal-ink on paper, bright signal on the ink card. */
+/** A tick means "included": forest on paper, leaf on the ink card. */
 const CheckIcon = ({ onDark = false }: { onDark?: boolean }) => (
   <svg
     viewBox="0 0 20 20"
-    className={`mt-0.5 h-5 w-5 flex-none ${onDark ? 'text-brand-signal' : 'text-brand-signal-ink'}`}
+    className={`mt-0.5 h-5 w-5 flex-none ${onDark ? 'text-brand-leaf' : 'text-brand-signal-ink'}`}
     fill="none"
     stroke="currentColor"
     strokeWidth="2.2"
@@ -425,8 +425,8 @@ const CheckIcon = ({ onDark = false }: { onDark?: boolean }) => (
 );
 
 /**
- * Hero visual under the address card: a gradient stage (ink → signal green →
- * pale tint) with a phone showing the sample verdict. Built from the sample
+ * Hero visual under the address card: a gradient stage (deep forest → green →
+ * pale mint) with a phone showing the sample verdict. Built from the sample
  * copy so it stays trilingual and never shows a real customer's numbers.
  */
 function HeroStage({ sample }: { sample: Copy['sample'] }) {
@@ -434,7 +434,7 @@ function HeroStage({ sample }: { sample: Copy['sample'] }) {
   const pct = Number.parseFloat(score?.value ?? '0') || 0;
   return (
     <div className="relative mx-auto mt-14 h-[380px] max-w-5xl overflow-hidden md:mt-16 md:h-[460px]" aria-hidden>
-      <div className="absolute inset-x-0 bottom-0 top-24 rounded-t-[2rem] bg-[linear-gradient(100deg,#0C0F0E_0%,#11402A_30%,#3DDC84_68%,#E8F8EF_100%)]">
+      <div className="absolute inset-x-0 bottom-0 top-24 rounded-t-[2rem] bg-[linear-gradient(100deg,#0F3D25_0%,#1F6F43_30%,#5DB47F_60%,#CDEBD8_84%,#F1F8F3_100%)]">
         <div className="absolute inset-0 rounded-t-[2rem] bg-[repeating-linear-gradient(125deg,rgba(255,255,255,0.07)_0_1px,transparent_1px_46px)]" />
       </div>
       <div className="relative z-10 mx-auto w-[280px] rounded-[2.6rem] border-[9px] border-zinc-900 bg-white shadow-[0_30px_60px_-20px_rgba(11,18,32,0.45)] md:w-[320px]">
@@ -533,10 +533,10 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
       </header>
 
       {/* ── Hero ────────────────────────────────────────────────────────── */}
-      {/* White ground with a faint grid and one soft signal glow behind the headline — depth without decoration. */}
+      {/* White ground with a faint grid and one soft forest glow behind the headline — depth without decoration. */}
       <section
         id="top"
-        className="relative border-b border-zinc-200 bg-white text-zinc-900 [background-image:radial-gradient(ellipse_60%_40%_at_50%_0%,rgba(61,220,132,0.14),transparent_70%),linear-gradient(to_right,rgba(12,15,14,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(12,15,14,0.04)_1px,transparent_1px)] [background-size:100%_100%,56px_56px,56px_56px]"
+        className="relative border-b border-zinc-200 bg-white text-zinc-900 [background-image:radial-gradient(ellipse_60%_40%_at_50%_0%,rgba(31,111,67,0.07),transparent_70%),linear-gradient(to_right,rgba(12,15,14,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(12,15,14,0.04)_1px,transparent_1px)] [background-size:100%_100%,56px_56px,56px_56px]"
       >
         <div className="mx-auto max-w-6xl px-5 pt-14 md:pt-20">
           <div className="mx-auto max-w-5xl text-center">
@@ -553,17 +553,18 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-zinc-600 md:text-lg">{t.hero.subtitle}</p>
           </div>
 
-          {/* Address command bar: the only dark surface in the hero, so the one
-              action that converts is impossible to miss against the white page. */}
+          {/* Address card: the only tinted surface in the hero (mint ground, white
+              fields, forest halo), so the one action that converts separates from
+              the white page without a heavy dark block. */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSubmit();
             }}
-            className="mx-auto mt-10 max-w-3xl rounded-[1.75rem] bg-brand-navy p-2.5 text-zinc-900 ring-1 ring-white/10 shadow-[0_0_0_8px_rgba(61,220,132,0.10),0_30px_80px_-28px_rgba(12,15,14,0.55)] sm:p-3"
+            className="mx-auto mt-10 max-w-3xl rounded-[1.75rem] bg-brand-signal-soft p-2.5 text-zinc-900 ring-1 ring-brand-signal/15 shadow-[0_0_0_6px_#fff,0_0_70px_-12px_rgba(31,111,67,0.35),0_30px_60px_-34px_rgba(12,15,14,0.35)] sm:p-3"
           >
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="flex items-center gap-3 rounded-2xl bg-white px-4 ring-2 ring-transparent transition focus-within:ring-brand-signal">
+              <label className="flex items-center gap-3 rounded-2xl bg-white px-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] ring-1 ring-zinc-200 transition focus-within:ring-2 focus-within:ring-brand-signal">
                 <svg viewBox="0 0 24 24" className="h-5 w-5 flex-none text-zinc-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z" />
                   <circle cx="12" cy="10" r="2.5" />
@@ -579,7 +580,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
                   className="h-14 w-full bg-transparent text-[15px] text-zinc-900 outline-none placeholder:text-zinc-400"
                 />
               </label>
-              <label className="flex items-center gap-3 rounded-2xl bg-white px-4 ring-2 ring-transparent transition focus-within:ring-brand-signal">
+              <label className="flex items-center gap-3 rounded-2xl bg-white px-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] ring-1 ring-zinc-200 transition focus-within:ring-2 focus-within:ring-brand-signal">
                 <svg viewBox="0 0 24 24" className="h-5 w-5 flex-none text-zinc-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v16m0-7h4a3 3 0 003-3V4M16 4h4v6a3 3 0 01-3 3h-1zm3 9v7" />
                 </svg>
@@ -595,15 +596,15 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
             </div>
             {moreOpen ? (
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                <input type="text" inputMode="decimal" placeholder={t.hero.rent} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-zinc-900 outline-none ring-2 ring-transparent transition placeholder:text-zinc-400 focus:ring-brand-signal" />
-                <input type="text" inputMode="decimal" placeholder={t.hero.sqft} value={sqft} onChange={(e) => setSqft(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-zinc-900 outline-none ring-2 ring-transparent transition placeholder:text-zinc-400 focus:ring-brand-signal" />
+                <input type="text" inputMode="decimal" placeholder={t.hero.rent} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-zinc-900 outline-none ring-1 ring-zinc-200 transition placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-signal" />
+                <input type="text" inputMode="decimal" placeholder={t.hero.sqft} value={sqft} onChange={(e) => setSqft(e.target.value)} className="h-12 rounded-2xl bg-white px-4 text-[15px] text-zinc-900 outline-none ring-1 ring-zinc-200 transition placeholder:text-zinc-400 focus:ring-2 focus:ring-brand-signal" />
               </div>
             ) : null}
             {/* Never rendered disabled: a dimmed hero CTA reads as broken. An empty
                 submit falls to the address field's native `required` prompt. */}
             <button
               type="submit"
-              className="group mt-2 inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-signal px-6 text-[15px] font-bold text-brand-navy shadow-[0_1px_0_rgba(255,255,255,0.35)_inset,0_10px_28px_-12px_rgba(61,220,132,0.75)] transition hover:bg-brand-signal-hover active:scale-[0.99]"
+              className="group mt-2 inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-signal px-6 text-[15px] font-bold text-white shadow-[0_1px_0_rgba(255,255,255,0.18)_inset,0_10px_24px_-12px_rgba(31,111,67,0.7)] transition hover:bg-brand-signal-hover active:scale-[0.99]"
             >
               {t.hero.cta}
               <svg viewBox="0 0 20 20" className="h-4 w-4 transition group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
@@ -618,17 +619,17 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               aria-expanded={moreOpen}
               className={`mt-2 flex h-12 w-full items-center justify-between gap-3 rounded-2xl border px-4 text-left text-sm font-semibold transition ${
                 moreOpen
-                  ? 'border-white/15 bg-white/10 text-white hover:bg-white/15'
-                  : 'border-dashed border-white/25 bg-transparent text-white/80 hover:border-white/45 hover:bg-white/5 hover:text-white'
+                  ? 'border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50'
+                  : 'border-dashed border-brand-signal/30 bg-transparent text-brand-signal-ink hover:border-brand-signal/60 hover:bg-white/70'
               }`}
             >
               <span className="inline-flex items-center gap-2.5">
-                <span className={`inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-base font-bold leading-none ${moreOpen ? 'bg-white/15 text-white' : 'bg-brand-signal text-brand-navy'}`} aria-hidden>
+                <span className={`inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-base font-bold leading-none ${moreOpen ? 'bg-zinc-100 text-zinc-700' : 'bg-brand-signal text-white'}`} aria-hidden>
                   {moreOpen ? '−' : '+'}
                 </span>
                 {moreOpen ? t.hero.less : t.hero.more}
               </span>
-              <svg viewBox="0 0 20 20" className={`h-4 w-4 flex-none text-white/50 transition ${moreOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <svg viewBox="0 0 20 20" className={`h-4 w-4 flex-none text-zinc-400 transition ${moreOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 8l5 5 5-5" />
               </svg>
             </button>
@@ -728,7 +729,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
           </div>
           {/* The paid tier is the one dark card on the page; contrast carries it, not a glow ring. */}
           <div className="relative rounded-3xl bg-brand-navy p-7 text-white shadow-[0_30px_60px_-30px_rgba(12,15,14,0.6)]">
-            <span className="absolute -top-3 left-6 rounded-full bg-brand-signal px-3 py-1 text-xs font-bold text-brand-navy">{t.pricing.pro.badge}</span>
+            <span className="absolute -top-3 left-6 rounded-full bg-brand-signal px-3 py-1 text-xs font-bold text-white ring-2 ring-white">{t.pricing.pro.badge}</span>
             <div className="text-sm font-bold text-white/60">{t.pricing.pro.name}</div>
             <div className="mt-2 flex items-baseline gap-1">
               <span className="text-4xl font-extrabold tracking-tight">{t.pricing.pro.price}</span>
@@ -739,7 +740,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
                 <li key={i} className="flex gap-2"><CheckIcon onDark />{i}</li>
               ))}
             </ul>
-            <button type="button" onClick={() => scrollTo('top')} className="mt-8 w-full rounded-2xl bg-brand-signal px-5 py-3 text-sm font-bold text-brand-navy transition hover:bg-brand-signal-hover active:scale-[0.99]">{t.pricing.pro.cta}</button>
+            <button type="button" onClick={() => scrollTo('top')} className="mt-8 w-full rounded-2xl bg-brand-signal px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-signal-hover active:scale-[0.99]">{t.pricing.pro.cta}</button>
           </div>
         </div>
       </section>
@@ -784,7 +785,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
           <div className="grid gap-10 md:grid-cols-2 md:items-center">
             <div>
               <h2 className="text-2xl font-extrabold tracking-tight md:text-4xl">{t.hero.title}</h2>
-              <button type="button" onClick={() => scrollTo('top')} className="mt-6 rounded-2xl bg-brand-signal px-6 py-3.5 text-sm font-bold text-brand-navy transition hover:bg-brand-signal-hover active:scale-[0.99]">{t.hero.cta}</button>
+              <button type="button" onClick={() => scrollTo('top')} className="mt-6 rounded-2xl bg-brand-signal px-6 py-3.5 text-sm font-bold text-white transition hover:bg-brand-signal-hover active:scale-[0.99]">{t.hero.cta}</button>
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
               <h3 className="text-lg font-bold">{t.account.title}</h3>

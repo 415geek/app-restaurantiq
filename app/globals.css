@@ -41,17 +41,19 @@
   --brand-clay: #98342B; /* no go · failure */
 
   /*
-   * IQ landing: "Ink + Signal". White is the brand ground and near-black ink
-   * carries every structural action (Linear / Vercel idiom). One signal green
-   * is reserved for the single conversion moment: the address command bar is
-   * the only dark surface in the hero, and its CTA is the only bright button
-   * on the page. Signal-ink is the AA-safe green for small marks on white.
+   * IQ landing: "Paper + Forest". White is the brand ground and near-black ink
+   * carries structure (Linear / Vercel idiom). One deep forest green is the
+   * only action colour (Owner.com idiom) — no neon: a bright #3DDC84 next to
+   * black read as an "AI tool" accent. The address card sits on a pale mint
+   * ground so the conversion moment separates from the white page while the
+   * page stays white and quiet. Leaf is forest's light twin for marks on ink.
    */
-  --brand-signal: #3DDC84; /* the one bright action — on ink surfaces only */
-  --brand-signal-hover: #5BE79A;
-  --brand-signal-ink: #0E7A43; /* green text / ticks on white */
-  --brand-signal-soft: #E8F8EF; /* green tint ground (badges, step numbers) */
-  --brand-mist: #F6F8F7; /* alternating landing section ground */
+  --brand-signal: #1F6F43; /* the one action colour — white text on it */
+  --brand-signal-hover: #185A36;
+  --brand-signal-ink: #1F6F43; /* green text / ticks on white (AA) */
+  --brand-signal-soft: #EEF6F0; /* mint ground (address card, badges) */
+  --brand-leaf: #8EDBAB; /* green marks on ink surfaces */
+  --brand-mist: #F7F8F6; /* alternating landing section ground */
 }
 
 @theme inline {
@@ -78,6 +80,7 @@
   --color-brand-signal: var(--brand-signal);
   --color-brand-signal-hover: var(--brand-signal-hover);
   --color-brand-signal-ink: var(--brand-signal-ink);
+  --color-brand-leaf: var(--brand-leaf);
   --color-brand-signal-soft: var(--brand-signal-soft);
   --color-brand-mist: var(--brand-mist);
   --font-cjk: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
