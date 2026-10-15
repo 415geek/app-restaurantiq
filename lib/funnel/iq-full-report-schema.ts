@@ -419,7 +419,11 @@ export function localizeFinanceText(text: string, lang: Locale): string {
 
 /** Verdict → the five-tier product wording the web report renders. */
 export function decisionTierForVerdict(verdict: Conclusion['verdict']): DecisionTier {
-  return verdict === 'GO' ? 'strong_go' : verdict === 'CONDITIONAL_GO' ? 'go_with_conditions' : 'no_go';
+  if (verdict === 'GO') return 'strong_go';
+  if (verdict === 'CONDITIONAL_GO') return 'go_with_conditions';
+  // v4 §1.2: "we cannot tell" is its own tier, never a refusal.
+  if (verdict === 'INSUFFICIENT_DATA') return 'need_more_data';
+  return 'no_go';
 }
 
 const SCENARIO_NAME: Record<Conclusion['scenarios'][number]['id'], Record<Locale, string>> = {

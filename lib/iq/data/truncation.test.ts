@@ -94,13 +94,18 @@ test('§3.1 truncation costs in proportion to what was actually found', () => {
   assert.match(thin.components.competitors.note, /过少/);
 });
 
-test('§4.3 the evidence cap: completeness and truncation bound the verdict', () => {
+test('v4 §1.2 the evidence gate: completeness, pool quality and pending inputs bound the verdict', () => {
   assert.equal(verdictCap({ completeness: 90 }), 'GO');
-  assert.equal(verdictCap({ completeness: 80 }), 'GO');
-  // The report that prompted this: completeness 75 with a failed basemap, printed GO.
-  assert.equal(verdictCap({ completeness: 75 }), 'CONDITIONAL_GO');
+  assert.equal(verdictCap({ completeness: 60 }), 'GO', 'the gate the report prints (< 60) is the gate that binds');
+  // The report that prompted v4: completeness 49, labelled a preliminary edition, cover said GO.
+  assert.equal(verdictCap({ completeness: 49 }), 'CONDITIONAL_GO');
   assert.equal(verdictCap({ completeness: 90, coreSourceDegraded: true }), 'CONDITIONAL_GO');
-  assert.equal(verdictCap({ completeness: 54 }), null, 'below 55 no verdict is supported');
+  assert.equal(verdictCap({ completeness: 44 }), 'INSUFFICIENT_DATA', 'below 45 no verdict is issued');
+  // …and a competitor pool that cannot carry a verdict (the same report measured 0.24).
+  assert.equal(verdictCap({ completeness: 70, poolQuality: 0.24 }), 'INSUFFICIENT_DATA');
+  assert.equal(verdictCap({ completeness: 70, poolQuality: 0.4 }), 'GO');
+  // §1.3: a flagged, unconfirmed input locks the verdict at the neutral tier.
+  assert.equal(verdictCap({ completeness: 90, inputPendingConfirmation: true }), 'CONDITIONAL_GO');
   // Truncation is NOT a separate cap: it is already paid for inside completeness.
   // Capping again made GO unreachable in every dense Chinese trade area, which is
   // the market this product exists for.
@@ -109,10 +114,14 @@ test('§4.3 the evidence cap: completeness and truncation bound the verdict', ()
 
 test('§4.3 the cap clamps a verdict down and never lifts one up', () => {
   assert.equal(verdictFromScore(95, { rentMissing: false }), 'GO', 'no completeness given → the pure score path is unchanged');
-  assert.equal(verdictFromScore(95, { rentMissing: false, completeness: 75 }), 'CONDITIONAL_GO');
+  assert.equal(verdictFromScore(95, { rentMissing: false, completeness: 55 }), 'CONDITIONAL_GO');
+  // Insufficient evidence withdraws even a NO_GO: a refusal is still a judgement.
+  assert.equal(verdictFromScore(30, { rentMissing: false, completeness: 40 }), 'INSUFFICIENT_DATA');
+  assert.equal(verdictFromScore(30, { rentMissing: false, completeness: 50 }), 'NO_GO', 'thin-but-sufficient evidence does not soften a NO_GO');
   assert.equal(verdictFromScore(95, { rentMissing: false, completeness: 95, poolTruncated: true }), 'GO', 'a rich but unexhausted pool still supports a verdict');
   assert.equal(verdictFromScore(30, { rentMissing: false, completeness: 95 }), 'NO_GO', 'good data never rescues bad numbers');
-  assert.equal(verdictFromScore(30, { rentMissing: false, completeness: 20 }), 'NO_GO', 'and poor data never softens them either');
+  // v4 §1.2: below the evidence floor there is no verdict to soften — NO_GO is withdrawn too, because a refusal is still a judgement.
+  assert.equal(verdictFromScore(30, { rentMissing: false, completeness: 20 }), 'INSUFFICIENT_DATA', 'poor data withdraws the judgement rather than softening it');
 });
 
 test('§3.1 the per-call cap constant is what the request actually asks for', () => {

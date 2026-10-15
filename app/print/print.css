@@ -24,7 +24,10 @@
   --muted: #475569;
   --green-ink: #15803d;
   --amber-ink: #b45309;
-  --font-latin: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* v4 §1.4: the Latin stack MUST end in the embedded CJK face. Vercel's Chromium
+     ships Open Sans and nothing else, so a 分钟 / 未获取 / 预检版 inside a Latin-styled
+     cell had no font at all and printed as boxes — 893 of them in one report. */
+  --font-latin: 'Inter', 'Noto Sans SC', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   /* Professional-report typography: 思源宋体 (Noto Serif SC) for titles, 思源黑体 (Noto Sans SC) for body, Inter for numerals. */
   --font-cjk: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', 'WenQuanYi Zen Hei', sans-serif;
   --font-cjk-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', 'Noto Serif CJK SC', 'WenQuanYi Zen Hei', serif;
@@ -815,6 +818,14 @@ strong {
 .cover-verdict {
   margin: 8pt 0 6pt;
 }
+/* v4 §1.2: an undecided report says so right under the badge, on every page that carries one. */
+.verdict-undecided {
+  margin: 4pt 0 0;
+  max-width: 300pt;
+  font-size: 8.5pt;
+  line-height: 1.4;
+  color: var(--muted, #52525b);
+}
 .cover-keys {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -939,8 +950,8 @@ strong {
   margin-bottom: 8pt;
 }
 /* page 6: nine-row group table + cluster curve just exceed the box with wrapped 说明 cells */
-.page-6 .data-table th,
-.page-6 .data-table td {
+.page[data-page-id='page_6'] .data-table th,
+.page[data-page-id='page_6'] .data-table td {
   padding: 2.5pt 5pt;
 }
 /* page 7 (§4.8): benchmark band / review-count block + its footnote live in a fixed-height area
@@ -959,7 +970,7 @@ strong {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.page-7 .page-body {
+.page[data-page-id='page_7'] .page-body {
   overflow: hidden;
 }
 .cards-grid .void-panel {
@@ -1135,12 +1146,12 @@ strong {
 }
 /* §4.6 (P1-c): page 13 carries two panels and the 90-day plan; in the Latin editions the
    checklist lines wrap wider, so that page (and only that page) sets one step tighter. */
-.report[data-lang='en'] .page-13 .panel,
-.report[data-lang='es'] .page-13 .panel {
+.report[data-lang='en'] .page[data-page-id='page_13'] .panel,
+.report[data-lang='es'] .page[data-page-id='page_13'] .panel {
   padding: 5pt 6pt;
 }
-.report[data-lang='en'] .page-13 .check-list,
-.report[data-lang='es'] .page-13 .check-list {
+.report[data-lang='en'] .page[data-page-id='page_13'] .check-list,
+.report[data-lang='es'] .page[data-page-id='page_13'] .check-list {
   font-size: 8.5pt;
 }
 .report[data-lang='en'] .map-facts .key-label,
@@ -1165,8 +1176,8 @@ strong {
 .report[data-lang='es'] .disclaimer {
   font-size: 7.5pt;
 }
-.report[data-lang='en'] .page-14 .chip,
-.report[data-lang='es'] .page-14 .chip {
+.report[data-lang='en'] .page[data-page-id='page_14'] .chip,
+.report[data-lang='es'] .page[data-page-id='page_14'] .chip {
   font-size: 7pt;
   padding: 2pt 4pt;
 }
@@ -1183,25 +1194,25 @@ strong {
   font-size: 8pt;
 }
 
-.report[data-lang='en'] .page-6 .data-table,
-.report[data-lang='es'] .page-6 .data-table {
+.report[data-lang='en'] .page[data-page-id='page_6'] .data-table,
+.report[data-lang='es'] .page[data-page-id='page_6'] .data-table {
   font-size: 8pt;
 }
-.report[data-lang='en'] .page-6 .data-table th,
-.report[data-lang='en'] .page-6 .data-table td,
-.report[data-lang='es'] .page-6 .data-table th,
-.report[data-lang='es'] .page-6 .data-table td {
+.report[data-lang='en'] .page[data-page-id='page_6'] .data-table th,
+.report[data-lang='en'] .page[data-page-id='page_6'] .data-table td,
+.report[data-lang='es'] .page[data-page-id='page_6'] .data-table th,
+.report[data-lang='es'] .page[data-page-id='page_6'] .data-table td {
   padding: 2pt 4pt;
 }
-.report[data-lang='en'] .page-2 .tight-list,
-.report[data-lang='es'] .page-2 .tight-list {
+.report[data-lang='en'] .page[data-page-id='page_2'] .tight-list,
+.report[data-lang='es'] .page[data-page-id='page_2'] .tight-list {
   font-size: 8.5pt;
 }
 /* Page 2's three panels are as tall as their longest list, and in the Latin editions
    that list wraps onto enough extra lines to push the page past its box. The row
    padding is the only lever that scales with the item count. */
-.report[data-lang='en'] .page-2 .tight-list li,
-.report[data-lang='es'] .page-2 .tight-list li {
+.report[data-lang='en'] .page[data-page-id='page_2'] .tight-list li,
+.report[data-lang='es'] .page[data-page-id='page_2'] .tight-list li {
   padding: 1.25pt 0;
 }
 .report[data-lang='en'] .waterfall-wrap,
@@ -1226,8 +1237,8 @@ strong {
 .report[data-lang='es'] .cell-formula {
   font-size: 7pt;
 }
-.report[data-lang='en'] .page-6 .page-body > svg,
-.report[data-lang='es'] .page-6 .page-body > svg {
+.report[data-lang='en'] .page[data-page-id='page_6'] .page-body > svg,
+.report[data-lang='es'] .page[data-page-id='page_6'] .page-body > svg {
   display: block;
   max-width: 140mm;
   margin: 0 auto;
@@ -1235,20 +1246,20 @@ strong {
 /* Spanish sets widest of the three, so page 6 carries both a taller ring table and a
    taller trend chart than the English edition. The chart is scaled by width (its
    viewBox keeps the aspect), and the table gives up a little row padding. */
-.report[data-lang='es'] .page-6 .page-body > svg {
+.report[data-lang='es'] .page[data-page-id='page_6'] .page-body > svg {
   max-width: 115mm;
 }
-.report[data-lang='es'] .page-6 .data-table th,
-.report[data-lang='es'] .page-6 .data-table td {
+.report[data-lang='es'] .page[data-page-id='page_6'] .data-table th,
+.report[data-lang='es'] .page[data-page-id='page_6'] .data-table td {
   padding: 1.5pt 3.5pt;
 }
 
 /* Page 14's lineage table wraps five of its thirteen rows onto a second line in
    Spanish; the per-row padding and the panel padding below it cover the difference. */
-.report[data-lang='es'] .page-14 .lineage-table td {
+.report[data-lang='es'] .page[data-page-id='page_14'] .lineage-table td {
   padding: 0.75pt 2.5pt;
 }
-.report[data-lang='es'] .page-14 .sources-panels .panel {
+.report[data-lang='es'] .page[data-page-id='page_14'] .sources-panels .panel {
   padding: 4pt 6pt;
 }
 
@@ -1301,4 +1312,53 @@ strong {
   .report-viewer-chrome {
     display: none !important;
   }
+}
+
+/* v4 §2.1 rent ceiling page */
+.rent-table th:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+.rent-table tr.rent-safe td,
+.rent-table tr.rent-safe th {
+  font-weight: 700;
+  background: var(--panel);
+}
+.rent-callout {
+  margin: 8pt 0 6pt;
+}
+.rent-callout.rent-over {
+  border-left: 3px solid var(--coral);
+}
+.rent-lead {
+  margin: 0;
+  font-size: 11pt;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.rent-sub {
+  margin: 3pt 0 0;
+  font-size: 9.5pt;
+}
+.rent-equiv li {
+  margin-bottom: 2pt;
+}
+/* v4 §3 "what this report did for you" — compact, two columns, sits under the verdict row */
+.value-block {
+  margin: 0 0 6pt;
+  padding: 5pt 8pt;
+  border: 1px solid var(--rule);
+  background: var(--panel);
+}
+.value-list {
+  margin: 2pt 0 0;
+  padding: 0 0 0 12pt;
+  columns: 2;
+  column-gap: 14pt;
+  font-size: 8.5pt;
+  line-height: 1.35;
+}
+.value-list li {
+  break-inside: avoid;
+  margin-bottom: 1.5pt;
 }

@@ -92,7 +92,7 @@ export function tickerMessages(lang: Locale, location: string): string[][] {
       ],
       [
         `正在复核每个数字的数据来源…`,
-        `正在排版报告（封面 + 15 页）…`,
+        `正在排版报告（封面 + 16 页）…`,
         `正在生成地图与图表…`,
         `正在检查报告里的数字是否前后一致…`,
         `正在做最后一遍通读与校对…`,
@@ -152,7 +152,7 @@ export function tickerMessages(lang: Locale, location: string): string[][] {
       ],
       [
         `Verificando la fuente de cada cifra…`,
-        `Maquetando el informe (portada + 15 páginas)…`,
+        `Maquetando el informe (portada + 16 páginas)…`,
         `Generando el mapa y las gráficas…`,
         `Comprobando que las cifras del informe sean consistentes…`,
         `Haciendo la última lectura y corrección…`,
@@ -211,7 +211,7 @@ export function tickerMessages(lang: Locale, location: string): string[][] {
     ],
     [
       `Verifying the source of every number…`,
-      `Laying out the report (cover + 15 pages)…`,
+      `Laying out the report (cover + 16 pages)…`,
       `Rendering the map and charts…`,
       `Checking that every figure in the report agrees with the others…`,
       `Doing a final read-through and proof…`,

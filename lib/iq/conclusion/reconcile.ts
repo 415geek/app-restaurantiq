@@ -34,7 +34,7 @@ export interface ConclusionCarrier {
     revenue_basis: 'seats_turns' | 'demand_capture';
     scenarios: Array<{ id: 'pessimistic' | 'base' | 'optimistic'; monthly_revenue: number; vs_breakeven: number | null }>;
   };
-  score: { total: number; verdict: 'GO' | 'CONDITIONAL_GO' | 'NO_GO' };
+  score: { total: number; verdict: 'GO' | 'CONDITIONAL_GO' | 'NO_GO' | 'INSUFFICIENT_DATA' };
   confidence: { total: number };
 }
 

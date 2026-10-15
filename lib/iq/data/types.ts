@@ -91,6 +91,8 @@ export interface SiteInput {
   listing_urls: string[];
   /** Direct competitors the user named (≤ 10). Drive extra D6 Text Searches and L1 pre-classification. */
   known_competitors: string[];
+  /** v4 §1.3: the customer's answer when the rent was flagged (null until asked / answered). */
+  rent_confirmation: 'net' | 'nnn_base' | 'promo' | 'typo' | null;
 }
 
 export interface CostEntry {

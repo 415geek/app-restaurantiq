@@ -22,6 +22,7 @@ import { IqFullReportGenerating } from '@/components/iq/IqFullReportGenerating';
 import { Report360Document } from '@/components/iq/Report360Document';
 import { Report360Footer } from '@/components/iq/Report360Footer';
 import { ReportAccountBlock } from '@/components/iq/ReportAccountBlock';
+import { UpgradeWatch } from '@/components/iq/UpgradeWatch';
 import { LOCALE_TAG, type Locale } from '@/lib/i18n/locale';
 import { withLang } from '@/lib/i18n/resolve';
 import { resolveServerLocale } from '@/lib/i18n/server-locale';
@@ -79,7 +80,8 @@ function Report360View({
           <ReportDocument model={model} staticMaps={staticMaps} lang={lang} />
         </div>
       </Report360Document>
-      <Report360Footer reportId={reportId} lang={lang} location={location} pageHref={pageHref} isLinkedToUser={Boolean(userId)} previewOnly={previewOnly} />
+      {!previewOnly ? <UpgradeWatch reportId={reportId} lang={lang} narrativePass={model.meta.narrative_pass ?? null} /> : null}
+      <Report360Footer reportId={reportId} lang={lang} location={location} pageHref={pageHref} isLinkedToUser={Boolean(userId)} previewOnly={previewOnly} inputSanity={model.input_sanity} />
       {!previewOnly ? (
         <div className="report-viewer-chrome mx-auto mt-6 w-full max-w-[203.9mm]">
           <ReportAccountBlock reportId={reportId} serverUserId={userId} lang={lang} hideWhenLinked />

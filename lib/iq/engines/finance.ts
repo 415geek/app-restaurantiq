@@ -123,7 +123,7 @@ export function archetypeFor(cuisine: string | CuisineDef): Archetype {
 }
 
 /** @deprecated kept as a named export for callers; resolution lives in cost-scale.ts. */
-function tierFor(income: number | null, state: string | null): CostTier {
+export function tierFor(income: number | null, state: string | null): CostTier {
   return costTierFor(income, state);
 }
 

@@ -9,6 +9,7 @@ export type IqLocale = Locale;
 
 const LOCKED_ITEMS: Record<Locale, string[]> = {
   en: [
+    'Your rent ceiling: the most this site can carry, and how far the asking rent is above it',
     'Break-even monthly sales + 3 revenue scenarios (turns/ticket math shown)',
     'Named competitors within ~1 mi + threat tiers + whitespace map',
     '10+ pre-lease checklist items (hood, gas, ADA, grease trap, etc.)',
@@ -17,6 +18,7 @@ const LOCKED_ITEMS: Record<Locale, string[]> = {
     'PDF export + full six-layer risk audit & 90-day action plan',
   ],
   zh: [
+    '租金上限：这个铺位最多该出多少租金，房东要价高出多少',
     '保本营业额与三场景月营收（含翻台/客单价假设，可核对公式）',
     '1 英里内真店名竞对 + 威胁等级 + 空白地图',
     '签租前 10+ 项合规清单（排 hood / 燃气 / ADA 等致命项）',
@@ -25,6 +27,7 @@ const LOCKED_ITEMS: Record<Locale, string[]> = {
     'PDF 导出 + 完整六层风险审计与 90 天作战图',
   ],
   es: [
+    'Tu tope de alquiler: lo máximo que soporta este local y cuánto lo supera el alquiler pedido',
     'Ventas mensuales de equilibrio + 3 escenarios de ingresos (cálculo de rotaciones/ticket visible)',
     'Competidores con nombre real a ~1 milla + niveles de amenaza + mapa de espacios en blanco',
     'Más de 10 puntos de verificación previos al contrato (campana, gas, ADA, trampa de grasa, etc.)',

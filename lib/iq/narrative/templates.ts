@@ -19,24 +19,26 @@ import { localizedField, plainEn, plainEs, plainZh } from './plain';
 
 export { hasCjk, localizedField, plainEn, plainEs, plainText, plainZh } from './plain';
 
-export type PageId = `page_${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15}`;
+export type PageId = `page_${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15}` | 'page_rent';
 
 export const PAGES: Array<{ id: PageId; n: number; zh: string; en: string; es: string; fragment: string[] }> = [
   { id: 'page_1', n: 1, zh: '报告概览', en: 'At a Glance', es: 'Resumen rápido', fragment: ['meta', 'input', 'score.total', 'score.verdict', 'confidence.total'] },
-  { id: 'page_2', n: 2, zh: '执行摘要', en: 'Executive Summary', es: 'Resumen ejecutivo', fragment: ['score', 'demand', 'finance.breakeven_monthly', 'finance.safety_monthly', 'finance.rent_excluded', 'risks', 'competitors.l1', 'competitors.l2_count', 'trade_area.primary_ring'] },
-  { id: 'page_3', n: 3, zh: '商圈地图', en: 'Trade Area Map', es: 'Mapa del área comercial', fragment: ['trade_area.primary_ring', 'trade_area.rings', 'competitors.l1', 'competitors.l2_count', 'competitors.l4', 'access.transit'] },
-  { id: 'page_4', n: 4, zh: '商圈需求', en: 'Demand Coverage', es: 'Demanda del área', fragment: ['trade_area', 'demand.cuisine_share'] },
-  { id: 'page_5', n: 5, zh: '客群画像', en: 'Audience', es: 'Perfil de clientes', fragment: ['audience', 'trade_area.rings', 'demand.lunch_usd', 'demand.dinner_usd', 'demand.dayparts'] },
-  { id: 'page_6', n: 6, zh: '竞争格局', en: 'Competitive Landscape', es: 'Panorama competitivo', fragment: ['competitors'] },
-  { id: 'page_7', n: 7, zh: '直接竞品对标', en: 'Direct Competitors', es: 'Competidores directos', fragment: ['competitors.l1', 'competitors.benchmark_revenue_band', 'finance.breakeven_monthly', 'finance.rent_excluded', 'competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'competitors.guard_passed', 'competitors.l1_search_radius_m', 'competitors.l1_layers_tried', 'competitors.brand_anchors'] },
-  { id: 'page_8', n: 8, zh: '品类缺口与替代菜系', en: 'Category Gap & Alternatives', es: 'Hueco de categoría y alternativas', fragment: ['competitors.void', 'competitors.density_per_10k_chinese', 'score.alternatives', 'score.user_cuisine_rank'] },
-  { id: 'page_9', n: 9, zh: '需求捕获模型', en: 'Demand Capture', es: 'Captura de demanda', fragment: ['demand', 'finance.breakeven_monthly', 'finance.rent_excluded'] },
-  { id: 'page_10', n: 10, zh: '财务模型', en: 'Financial Model', es: 'Modelo financiero', fragment: ['finance', 'input.rent_usd', 'input.seats'] },
-  { id: 'page_11', n: 11, zh: '菜系匹配评分', en: 'Cuisine Fit Score', es: 'Puntuación de encaje', fragment: ['score.total', 'score.verdict', 'score.dimensions', 'score.conditions'] },
-  { id: 'page_12', n: 12, zh: '风险登记', en: 'Risk Register', es: 'Registro de riesgos', fragment: ['risks', 'finance.occupancy_cost_ratio', 'finance.rent_excluded', 'demand.coverage_ratio', 'finance.scenarios', 'finance.safety_monthly', 'finance.breakeven_monthly', 'finance.sensitivity'] },
-  { id: 'page_13', n: 13, zh: '签约核查与 90 天计划', en: 'Pre-lease Checklist & 90-day Plan', es: 'Lista previa al contrato y plan de 90 días', fragment: ['score.conditions', 'finance.inputs_missing', 'input'] },
-  { id: 'page_14', n: 14, zh: '方法与数据来源', en: 'Method & Sources', es: 'Método y fuentes', fragment: ['sources', 'meta', 'confidence', 'demand.cuisine_share_method', 'finance.method'] },
-  { id: 'page_15', n: 15, zh: '总结与建议', en: 'Summary', es: 'Conclusiones y recomendaciones', fragment: ['score', 'demand.coverage_ratio', 'demand.captured_monthly_usd', 'finance.breakeven_monthly', 'finance.occupancy_cost_ratio', 'finance.rent_excluded', 'finance.max_rent_for_10pct_usd', 'finance.inputs_missing', 'risks', 'input'] },
+  // v4 §2.1: the negotiation number sits right after the overview — the first thing a customer can take to a landlord.
+  { id: 'page_rent', n: 2, zh: '租金上限', en: 'Rent Ceiling', es: 'Tope de alquiler', fragment: ['value_modules.rent_ceiling', 'finance.breakeven_monthly', 'finance.rent_excluded', 'input.rent_usd'] },
+  { id: 'page_2', n: 3, zh: '执行摘要', en: 'Executive Summary', es: 'Resumen ejecutivo', fragment: ['score', 'demand', 'finance.breakeven_monthly', 'finance.safety_monthly', 'finance.rent_excluded', 'risks', 'competitors.l1', 'competitors.l2_count', 'trade_area.primary_ring'] },
+  { id: 'page_3', n: 4, zh: '商圈地图', en: 'Trade Area Map', es: 'Mapa del área comercial', fragment: ['trade_area.primary_ring', 'trade_area.rings', 'competitors.l1', 'competitors.l2_count', 'competitors.l4', 'access.transit'] },
+  { id: 'page_4', n: 5, zh: '商圈需求', en: 'Demand Coverage', es: 'Demanda del área', fragment: ['trade_area', 'demand.cuisine_share'] },
+  { id: 'page_5', n: 6, zh: '客群画像', en: 'Audience', es: 'Perfil de clientes', fragment: ['audience', 'trade_area.rings', 'demand.lunch_usd', 'demand.dinner_usd', 'demand.dayparts'] },
+  { id: 'page_6', n: 7, zh: '竞争格局', en: 'Competitive Landscape', es: 'Panorama competitivo', fragment: ['competitors'] },
+  { id: 'page_7', n: 8, zh: '直接竞品对标', en: 'Direct Competitors', es: 'Competidores directos', fragment: ['competitors.l1', 'competitors.benchmark_revenue_band', 'finance.breakeven_monthly', 'finance.rent_excluded', 'competitors.pool_radius_mi', 'competitors.l1_nearest_outside_pool', 'competitors.guard_passed', 'competitors.l1_search_radius_m', 'competitors.l1_layers_tried', 'competitors.brand_anchors'] },
+  { id: 'page_8', n: 9, zh: '品类缺口与替代菜系', en: 'Category Gap & Alternatives', es: 'Hueco de categoría y alternativas', fragment: ['competitors.void', 'competitors.density_per_10k_chinese', 'score.alternatives', 'score.user_cuisine_rank'] },
+  { id: 'page_9', n: 10, zh: '需求捕获模型', en: 'Demand Capture', es: 'Captura de demanda', fragment: ['demand', 'finance.breakeven_monthly', 'finance.rent_excluded'] },
+  { id: 'page_10', n: 11, zh: '财务模型', en: 'Financial Model', es: 'Modelo financiero', fragment: ['finance', 'input.rent_usd', 'input.seats'] },
+  { id: 'page_11', n: 12, zh: '菜系匹配评分', en: 'Cuisine Fit Score', es: 'Puntuación de encaje', fragment: ['score.total', 'score.verdict', 'score.dimensions', 'score.conditions'] },
+  { id: 'page_12', n: 13, zh: '风险登记', en: 'Risk Register', es: 'Registro de riesgos', fragment: ['risks', 'finance.occupancy_cost_ratio', 'finance.rent_excluded', 'demand.coverage_ratio', 'finance.scenarios', 'finance.safety_monthly', 'finance.breakeven_monthly', 'finance.sensitivity'] },
+  { id: 'page_13', n: 14, zh: '签约核查与 90 天计划', en: 'Pre-lease Checklist & 90-day Plan', es: 'Lista previa al contrato y plan de 90 días', fragment: ['score.conditions', 'finance.inputs_missing', 'input'] },
+  { id: 'page_14', n: 15, zh: '方法与数据来源', en: 'Method & Sources', es: 'Método y fuentes', fragment: ['sources', 'meta', 'confidence', 'demand.cuisine_share_method', 'finance.method'] },
+  { id: 'page_15', n: 16, zh: '总结与建议', en: 'Summary', es: 'Conclusiones y recomendaciones', fragment: ['score', 'demand.coverage_ratio', 'demand.captured_monthly_usd', 'finance.breakeven_monthly', 'finance.occupancy_cost_ratio', 'finance.rent_excluded', 'finance.max_rent_for_10pct_usd', 'finance.inputs_missing', 'risks', 'input'] },
 ];
 
 /** Occupancy-cost warning line (rent ÷ revenue) the conditions and summaries quote as "10%". */
@@ -79,11 +81,12 @@ export const VERDICT_ZH: Record<ReportModel['score']['verdict'], string> = {
   GO: VERDICT_COPY.GO.zh.label,
   CONDITIONAL_GO: VERDICT_COPY.CONDITIONAL_GO.zh.label,
   NO_GO: VERDICT_COPY.NO_GO.zh.label,
+  INSUFFICIENT_DATA: VERDICT_COPY.INSUFFICIENT_DATA.zh.label,
 };
 export const VERDICT_WORD: Record<Locale, Record<ReportModel['score']['verdict'], string>> = {
   zh: VERDICT_ZH,
-  en: { GO: 'GO', CONDITIONAL_GO: 'CONDITIONAL GO', NO_GO: 'NO GO' },
-  es: { GO: 'VIABLE', CONDITIONAL_GO: 'VIABLE CON CONDICIONES', NO_GO: 'NO VIABLE' },
+  en: { GO: 'GO', CONDITIONAL_GO: 'CONDITIONAL GO', NO_GO: 'NO GO', INSUFFICIENT_DATA: VERDICT_COPY.INSUFFICIENT_DATA.en.label },
+  es: { GO: 'VIABLE', CONDITIONAL_GO: 'VIABLE CON CONDICIONES', NO_GO: 'NO VIABLE', INSUFFICIENT_DATA: VERDICT_COPY.INSUFFICIENT_DATA.es.label },
 };
 
 /** Verdict as a sentence-level word ("viable" / "not recommended"). */
@@ -287,6 +290,28 @@ function templateZh(m: ReportModel, page: PageId): Narrative {
   const condsZh = m.score.conditions.map((c) => c.text_zh).join('；') || '无';
   const xr = f.rentExcluded ? EX_RENT.zh : '';
   switch (page) {
+    case 'page_rent': {
+      const r = m.value_modules?.rent_ceiling ?? null;
+      if (!r) return { title: '租金上限暂无法计算', body: '财务模型没有可用的营收情景，租金上限不显示 [src:value_modules.rent_ceiling]。', refs: ['value_modules.rent_ceiling'] };
+      const over = r.asking != null && r.gap_monthly != null && r.gap_monthly > 0;
+      const asking = r.asking == null
+        ? '未填写月租：请把建议上限当作谈判目标。'
+        : over
+          ? `你填的月租 ${fmtUsd(r.asking)} [src:value_modules.rent_ceiling.asking]，高出建议上限 ${fmtUsd(r.gap_monthly)}/月 [src:value_modules.rent_ceiling.gap_monthly]，${r.lease_months} 个月租期合计 ${fmtUsd(r.gap_lease)} [src:value_modules.rent_ceiling.gap_lease]。`
+          : `你填的月租 ${fmtUsd(r.asking)} [src:value_modules.rent_ceiling.asking] 在建议上限之内。`;
+      if (!r.affordable) {
+        return {
+          title: '按保守情景，这个铺位在任何租金下都无法保本',
+          body: `保守口径月需求 ${fmtUsd(r.demand_lo)} [src:value_modules.rent_ceiling.demand_lo] 的贡献毛利盖不住不含租金的固定成本 ${fmtUsd(r.non_rent_fixed)} [src:value_modules.rent_ceiling.non_rent_fixed]，临界租金为 ${fmtUsd(r.critical)} [src:value_modules.rent_ceiling.critical]；占用成本比目标对应的租金 ${fmtUsd(r.safe)} [src:value_modules.rent_ceiling.safe] 只是目标数，不是这个铺位承受得起的数。${r.asking != null ? `要承受你填的 ${fmtUsd(r.asking)} [src:value_modules.rent_ceiling.asking]，月营收需达到保本线 ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly]。` : '未填写租金。'}`,
+          refs: ['value_modules.rent_ceiling'],
+        };
+      }
+      return {
+        title: over ? `房东要价比建议上限高出 ${fmtUsd(r.gap_monthly)}/月` : `这个铺位你最多该出 ${fmtUsd(r.safe)}/月`,
+        body: `建议租金上限 ${fmtUsd(r.safe)}/月 [src:value_modules.rent_ceiling.safe]，临界点（超过即亏）${fmtUsd(r.critical)}/月 [src:value_modules.rent_ceiling.critical]，压力情景（客流下滑）上限 ${fmtUsd(r.stress)}/月 [src:value_modules.rent_ceiling.stress]；按保守情景月营收 ${fmtUsd(r.demand_lo)} [src:value_modules.rent_ceiling.demand_lo] 与目标占用成本比计算。${asking}`,
+        refs: ['value_modules.rent_ceiling'],
+      };
+    }
     case 'page_1':
       return { title: `${cuisine}：${verdictZh}`, body: `综合评分 ${m.score.total} 分 [src:score.total]，数据完整度 ${m.confidence.total} 分 [src:confidence.total]。`, refs: ['score.total', 'confidence.total'] };
     case 'page_2': {
@@ -453,6 +478,28 @@ function templateEn(m: ReportModel, page: PageId): Narrative {
   const xr = f.rentExcluded ? EX_RENT.en : '';
   const capEn = f.maxRent != null ? `; at ${OCCUPANCY_WARNING_PCT}% occupancy cost the rent ceiling is ${fmtUsd(f.maxRent)} [src:finance.max_rent_for_10pct_usd]` : '';
   switch (page) {
+    case 'page_rent': {
+      const r = m.value_modules?.rent_ceiling ?? null;
+      if (!r) return { title: 'Rent ceiling not computable', body: 'The finance model carries no revenue scenario, so no rent ceiling is shown [src:value_modules.rent_ceiling].', refs: ['value_modules.rent_ceiling'] };
+      const over = r.asking != null && r.gap_monthly != null && r.gap_monthly > 0;
+      const asking = r.asking == null
+        ? 'No rent was entered: treat the suggested ceiling as your negotiation target.'
+        : over
+          ? `The rent you entered, ${fmtUsd(r.asking)} [src:value_modules.rent_ceiling.asking], is ${fmtUsd(r.gap_monthly)}/mo above the suggested ceiling [src:value_modules.rent_ceiling.gap_monthly] — ${fmtUsd(r.gap_lease)} over a ${r.lease_months}-month lease [src:value_modules.rent_ceiling.gap_lease].`
+          : `The rent you entered, ${fmtUsd(r.asking)} [src:value_modules.rent_ceiling.asking], is within the suggested ceiling.`;
+      if (!r.affordable) {
+        return {
+          title: 'In the conservative scenario no rent is affordable at this site',
+          body: `Conservative demand of ${fmtUsd(r.demand_lo)}/mo [src:value_modules.rent_ceiling.demand_lo] does not cover the non-rent fixed cost of ${fmtUsd(r.non_rent_fixed)}/mo [src:value_modules.rent_ceiling.non_rent_fixed]; the critical rent is ${fmtUsd(r.critical)} [src:value_modules.rent_ceiling.critical], and the target-occupancy rent of ${fmtUsd(r.safe)} [src:value_modules.rent_ceiling.safe] is a target, not what the site can carry. ${r.asking != null ? `To carry the ${fmtUsd(r.asking)} you entered [src:value_modules.rent_ceiling.asking], monthly sales would have to reach the break-even line of ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly].` : 'No rent was entered.'}`,
+          refs: ['value_modules.rent_ceiling'],
+        };
+      }
+      return {
+        title: over ? `The asking rent is ${fmtUsd(r.gap_monthly)}/mo above what this site can carry` : `The most you should pay here: ${fmtUsd(r.safe)}/mo`,
+        body: `Suggested ceiling ${fmtUsd(r.safe)}/mo [src:value_modules.rent_ceiling.safe]; critical point (loss above it) ${fmtUsd(r.critical)}/mo [src:value_modules.rent_ceiling.critical]; stress-case ceiling (traffic down) ${fmtUsd(r.stress)}/mo [src:value_modules.rent_ceiling.stress]; computed from the conservative revenue scenario ${fmtUsd(r.demand_lo)}/mo [src:value_modules.rent_ceiling.demand_lo] and the target occupancy ratio. ${asking}`,
+        refs: ['value_modules.rent_ceiling'],
+      };
+    }
     case 'page_1':
       return { title: `${cuisine}: ${verdict}`, body: `Overall score ${m.score.total} [src:score.total]; data completeness ${m.confidence.total} [src:confidence.total].`, refs: ['score.total', 'confidence.total'] };
     case 'page_2': {
@@ -623,6 +670,28 @@ function templateEs(m: ReportModel, page: PageId): Narrative {
   const xr = f.rentExcluded ? EX_RENT.es : '';
   const capEs = f.maxRent != null ? `; con un costo de ocupación del ${OCCUPANCY_WARNING_PCT}%, el tope de alquiler es ${fmtUsd(f.maxRent)} [src:finance.max_rent_for_10pct_usd]` : '';
   switch (page) {
+    case 'page_rent': {
+      const r = m.value_modules?.rent_ceiling ?? null;
+      if (!r) return { title: 'Tope de alquiler no calculable', body: 'El modelo financiero no tiene un escenario de ingresos, así que no se muestra tope de alquiler [src:value_modules.rent_ceiling].', refs: ['value_modules.rent_ceiling'] };
+      const over = r.asking != null && r.gap_monthly != null && r.gap_monthly > 0;
+      const asking = r.asking == null
+        ? 'No se ingresó alquiler: usa el tope sugerido como objetivo de negociación.'
+        : over
+          ? `El alquiler que ingresaste, ${fmtUsd(r.asking)} [src:value_modules.rent_ceiling.asking], supera el tope sugerido en ${fmtUsd(r.gap_monthly)}/mes [src:value_modules.rent_ceiling.gap_monthly]: ${fmtUsd(r.gap_lease)} en un contrato de ${r.lease_months} meses [src:value_modules.rent_ceiling.gap_lease].`
+          : `El alquiler que ingresaste, ${fmtUsd(r.asking)} [src:value_modules.rent_ceiling.asking], está dentro del tope sugerido.`;
+      if (!r.affordable) {
+        return {
+          title: 'En el escenario conservador ningún alquiler es asumible en este local',
+          body: `La demanda conservadora de ${fmtUsd(r.demand_lo)}/mes [src:value_modules.rent_ceiling.demand_lo] no cubre el costo fijo sin alquiler de ${fmtUsd(r.non_rent_fixed)}/mes [src:value_modules.rent_ceiling.non_rent_fixed]; el alquiler crítico es ${fmtUsd(r.critical)} [src:value_modules.rent_ceiling.critical], y el alquiler objetivo de ${fmtUsd(r.safe)} [src:value_modules.rent_ceiling.safe] es un objetivo, no lo que el local soporta. ${r.asking != null ? `Para soportar los ${fmtUsd(r.asking)} que ingresaste [src:value_modules.rent_ceiling.asking], las ventas mensuales tendrían que llegar a la línea de equilibrio de ${fmtUsd(m.finance.breakeven_monthly)} [src:finance.breakeven_monthly].` : 'No se ingresó alquiler.'}`,
+          refs: ['value_modules.rent_ceiling'],
+        };
+      }
+      return {
+        title: over ? `El alquiler pedido supera en ${fmtUsd(r.gap_monthly)}/mes lo que este local soporta` : `Lo máximo que deberías pagar aquí: ${fmtUsd(r.safe)}/mes`,
+        body: `Tope sugerido ${fmtUsd(r.safe)}/mes [src:value_modules.rent_ceiling.safe]; punto crítico (pérdida por encima) ${fmtUsd(r.critical)}/mes [src:value_modules.rent_ceiling.critical]; tope en escenario de estrés (menos tráfico) ${fmtUsd(r.stress)}/mes [src:value_modules.rent_ceiling.stress]; calculado con el escenario conservador de ingresos ${fmtUsd(r.demand_lo)}/mes [src:value_modules.rent_ceiling.demand_lo] y el ratio objetivo de ocupación. ${asking}`,
+        refs: ['value_modules.rent_ceiling'],
+      };
+    }
     case 'page_1':
       return { title: `${cuisine}: ${verdict}`, body: `Puntuación global ${m.score.total} [src:score.total]; integridad de datos ${m.confidence.total} [src:confidence.total].`, refs: ['score.total', 'confidence.total'] };
     case 'page_2': {

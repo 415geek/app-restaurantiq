@@ -49,9 +49,9 @@ function assertSpanish(s: string, label: string) {
   assert.ok(SPANISH_MARKERS.test(s), `${label}: does not read as Spanish: ${s.slice(0, 80)}`);
 }
 
-test('paywall locked items: every locale gets its own six lines, Spanish is not English or Chinese', () => {
+test('paywall locked items: every locale gets its own seven lines (v4 adds the rent ceiling), Spanish is not English or Chinese', () => {
   for (const lang of LOCALES) {
-    assert.equal(getIqPaywallLockedItems(lang).length, 6, lang);
+    assert.equal(getIqPaywallLockedItems(lang).length, 7, lang);
   }
   const en = getIqPaywallLockedItems('en');
   const es = getIqPaywallLockedItems('es');

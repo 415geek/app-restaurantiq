@@ -150,11 +150,11 @@ export function SvgTradeAreaMap({ model, compact = false, lang = DEFAULT_LOCALE 
       </g>
       <g>
         <rect x={12} y={MAP_H - 22} width={p.scalePx} height={4} fill={PALETTE.navy} />
-        <text x={12} y={MAP_H - 26} fontSize={9} fill={PALETTE.navy} fontFamily="'Inter',sans-serif">
+        <text x={12} y={MAP_H - 26} fontSize={9} fill={PALETTE.navy} fontFamily="'Inter','Noto Sans SC',sans-serif">
           {p.scaleLabel}
         </text>
       </g>
-      <text x={MAP_W - 8} y={MAP_H - 8} fontSize={8} textAnchor="end" fill={PALETTE.muted} fontFamily="'Inter',sans-serif">
+      <text x={MAP_W - 8} y={MAP_H - 8} fontSize={8} textAnchor="end" fill={PALETTE.muted} fontFamily="'Inter','Noto Sans SC',sans-serif">
         Overture Maps · Mapbox isochrone · equirectangular
       </text>
     </svg>

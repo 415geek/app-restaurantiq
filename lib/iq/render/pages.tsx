@@ -36,6 +36,7 @@ import {
   X,
 } from 'lucide-react';
 import { LOCALE_TAG, toLocale, type Locale } from '@/lib/i18n/locale';
+import { isUndecided, undecidedNote } from '@/lib/iq/conclusion/display';
 import type { Competitor, ReportModel } from '../model/schema';
 import { PAGES, cuisineName, dimensionName, localizedField, plainText, segmentName, sensitivityName, templateNarrative, type PageId } from '../narrative/templates';
 import { SourceChips, type SourceKind } from './chips';
@@ -94,6 +95,7 @@ function ctxOf(model: ReportModel, lang?: Locale): Ctx {
 
 const PAGE_ICON: Record<PageId, IconType> = {
   page_1: FileText,
+  page_rent: Calculator,
   page_2: ClipboardCheck,
   page_3: MapPin,
   page_4: Users,
@@ -113,6 +115,7 @@ const PAGE_ICON: Record<PageId, IconType> = {
 /** Chinese edition keeps a one-line English subtitle under the title; en / es render in one language only. */
 const SUBTITLE_EN: Record<PageId, string> = {
   page_1: '360° site-selection report for a restaurant concept',
+  page_rent: 'Rent Ceiling · the most this site can carry, the critical point, and what the asking rent costs over the lease',
   page_2: 'Executive Summary · verdict, evidence, risks and pre-lease conditions',
   page_3: 'Trade Area Map · reach rings, competitors, anchors and rail access',
   page_4: 'Demand Coverage · four-ring profile against the county benchmark',
@@ -158,7 +161,7 @@ function PageShell({ c, model, pageId, chips, children, tail }: { c: Ctx; model:
   const kicker = c.S.pages[pageId];
   const zh = c.lang === 'zh';
   return (
-    <section className={`page page-${spec.n}`} data-page={spec.n} aria-label={zh ? `${kicker} · ${spec.en}` : kicker}>
+    <section className={`page page-${spec.n}`} data-page={spec.n} data-page-id={pageId} aria-label={zh ? `${kicker} · ${spec.en}` : kicker}>
       <header className="page-head">
         <div className="kicker">
           <Icon size={12} strokeWidth={1.75} aria-hidden />
@@ -340,6 +343,7 @@ function Page1({ model, staticMaps, lang }: PageProps) {
             </div>
             <div className="cover-verdict">
               <VerdictBadge c={c} verdict={m.score.verdict} />
+              {isUndecided(m.score.verdict) ? <p className="verdict-undecided">{undecidedNote(c.lang)}</p> : null}
               <div className="cover-keys">
                 <KeyNumber label={S.p1.score} value={`${F.num(m.score.total, 1)} / 100`} />
                 <KeyNumber label={S.p1.completeness} value={`${F.int(m.confidence.total)} / 100`} sub={S.level[m.confidence.level]} />
@@ -386,6 +390,97 @@ function Page1({ model, staticMaps, lang }: PageProps) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 2 · Rent ceiling (v4 §2.1)                                           */
+/* ------------------------------------------------------------------ */
+function PageRent({ model, lang }: PageProps) {
+  const c = ctxOf(model, lang);
+  const { S, F } = c;
+  const m = model;
+  const T = S.pRent;
+  const r = m.value_modules?.rent_ceiling ?? null;
+  const pct = (v: number) => F.pct(v, 1);
+  const over = r != null && r.asking != null && r.gap_monthly != null && r.gap_monthly > 0;
+  return (
+    <PageShell c={c} model={m} pageId="page_rent" chips={<SourceChips model={m} ids={['D12']} model_labels={[T.chip]} lang={c.lang} />}>
+      {!r ? (
+        <div className="panel">{T.unavailable}</div>
+      ) : (
+        <>
+          {!r.affordable ? (
+            <div className="panel rent-callout rent-over">
+              <p className="rent-lead">{fill(T.unaffordable, { demand: F.usd(r.demand_lo), fixed: F.usd(r.non_rent_fixed) })}</p>
+              {r.asking != null && m.finance.breakeven_monthly != null ? <p className="rent-sub">{fill(T.unaffordableAsking, { asking: F.usd(r.asking), breakeven: F.usd(m.finance.breakeven_monthly) })}</p> : null}
+            </div>
+          ) : null}
+          <table className="data-table rent-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th className="num">{T.colMonthly}</th>
+                <th className="num">{T.colAnnual}</th>
+                <th className="num">{T.colOcc}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="rent-safe">
+                <th>{T.rowSafe}</th>
+                <td className="num">{F.usd(r.safe)}</td>
+                <td className="num">{F.usd(r.safe * 12)}</td>
+                <td className="num">{pct(r.safe / r.demand_lo)}</td>
+              </tr>
+              <tr>
+                <th>{T.rowCritical}</th>
+                <td className="num">{F.usd(r.critical)}</td>
+                <td className="num">{F.usd(r.critical * 12)}</td>
+                <td className="num">{pct(r.critical / r.demand_lo)}</td>
+              </tr>
+              <tr>
+                <th>{fill(T.rowStress, { drop: String(Math.round(r.stress_drop * 100)) })}</th>
+                <td className="num">{F.usd(r.stress)}</td>
+                <td className="num">{F.usd(r.stress * 12)}</td>
+                <td className="num">{pct(r.stress / (r.demand_lo * (1 - r.stress_drop)))}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div className={`panel rent-callout${over ? ' rent-over' : ''}`}>
+            <p className="rent-lead">
+              {r.asking == null
+                ? T.askingNone
+                : over
+                  ? fill(T.askingOver, { asking: F.usd(r.asking), gap: F.usd(r.gap_monthly) })
+                  : fill(T.askingWithin, { asking: F.usd(r.asking) })}
+            </p>
+            {over && r.gap_lease != null ? <p className="rent-sub">{fill(T.leaseSaving, { total: F.usd(r.gap_lease), months: String(r.lease_months) })}</p> : null}
+          </div>
+          {r.equivalents.length > 0 ? (
+            <>
+              <h2 className="h2">{fill(T.equivHead, { safe: F.usd(r.safe) })}</h2>
+              <ul className="tight-list rent-equiv">
+                {r.equivalents.map((e) => (
+                  <li key={e.type}>
+                    <span className="li-body">
+                      {e.type === 'free_rent_month'
+                        ? fill(T.equivFree, { v: F.usd(e.value), months: String(e.amortize_months) })
+                        : e.type === 'ti_allowance'
+                          ? fill(T.equivTi, { unit: F.usd(e.unit_usd), v: F.usd(e.value), months: String(e.amortize_months) })
+                          : fill(T.equivPct, { threshold: F.usd(e.threshold_monthly_sales) })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          <p className="table-note">
+            {fill(T.method, { demand: F.usd(r.demand_lo), cm: pct(r.contribution_margin), fixed: F.usd(r.non_rent_fixed), target: pct(r.target_ratio) })}
+          </p>
+          <XRef>{T.xref}</XRef>
+        </>
+      )}
+    </PageShell>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* 2 · Executive summary                                                 */
 /* ------------------------------------------------------------------ */
 function Page2({ model, lang }: PageProps) {
@@ -399,16 +494,42 @@ function Page2({ model, lang }: PageProps) {
   // No rent provided → break-even and coverage are ex-rent and every label says so.
   const noRent = m.finance.rent_excluded;
   const xr = noRent ? S.exRent : '';
+  // v4 §3 价值可见: only lines the model can back; never a hole, never a price for nothing.
+  const valueLines: string[] = [];
+  const nearest = [...m.competitors.l1].filter((x) => x.rating_count != null && x.rating_count > 0).sort((a, b2) => a.distance_mi - b2.distance_mi)[0];
+  if (nearest) valueLines.push(fill(S.pRent.valueCompetitor, { name: c.lang === 'zh' ? nearest.name_zh || nearest.name : nearest.name, mi: F.num(nearest.distance_mi, 2), n: F.int(nearest.rating_count) }));
+  const rc = m.value_modules?.rent_ceiling ?? null;
+  if (rc) {
+    const gap = rc.gap_monthly != null && rc.gap_monthly > 0 && rc.gap_lease != null ? fill(S.pRent.valueRentGap, { gap: F.usd(rc.gap_monthly), total: F.usd(rc.gap_lease) }) : '';
+    valueLines.push(fill(S.pRent.valueRent, { safe: F.usd(rc.safe) }) + gap);
+  }
+  if (conds[0]) valueLines.push(fill(S.pRent.valueCondition, { text: c.field(conds[0].text_zh, conds[0].text_en) }));
+  else if (risks[0]) valueLines.push(fill(S.pRent.valueRisk, { text: c.field(risks[0].risk_zh, risks[0].risk_en) }));
+  if (valueLines.length > 0) valueLines.push(fill(S.pRent.valuePrice, { price: `$${process.env.NEXT_PUBLIC_STRIPE_PRICE_USD?.trim() || '19'}` }));
   return (
     <PageShell c={c} model={m} pageId="page_2" chips={<SourceChips model={m} ids={['D2', 'D5', 'D6', 'D12']} model_labels={[S.p2.chipHuff, S.p2.chipBreakeven]} lang={c.lang} />}>
       <div className="summary-top">
-        <VerdictBadge c={c} verdict={m.score.verdict} />
+        <div>
+          <VerdictBadge c={c} verdict={m.score.verdict} />
+          {isUndecided(m.score.verdict) ? <p className="verdict-undecided">{undecidedNote(c.lang)}</p> : null}
+        </div>
         <div className="summary-keys">
           <KeyNumber label={S.p2.score} value={`${F.num(m.score.total, 1)}`} sub={S.p2.scoreSub} />
           <KeyNumber label={`${S.p2.coverage}${xr}`} value={F.pct(m.demand.coverage_ratio)} sub={`${S.p2.coverageSub}${xr}`} />
           <KeyNumber label={S.p2.completeness} value={`${F.int(m.confidence.total)}`} sub={fill(S.p2.completenessSub, { level: S.level[m.confidence.level] })} />
         </div>
       </div>
+      {/* v4 §3: the report says what it did, in the customer's money, before any chart. */}
+      {valueLines.length > 0 ? (
+        <div className="value-block">
+          <div className="panel-title">{S.pRent.valueTitle}</div>
+          <ul className="value-list">
+            {valueLines.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div className="twin-wrap">
         <h2 className="h2">{S.p2.chart}</h2>
         <TwinBars breakeven={m.finance.breakeven_monthly} captured={m.demand.captured_monthly_usd} safety={m.finance.safety_monthly} lang={c.lang} exRent={noRent} />
@@ -749,15 +870,15 @@ function Page6({ model, lang }: PageProps) {
 const P7_REVIEW_DIST: Record<Locale, { title: string; note: string }> = {
   zh: {
     title: '同类竞品评论量分布',
-    note: '{method}，因此没有同类门店的营收区间；上图为 Google / Yelp 评论数原始值（前 8 家），只反映相对客流热度，不是营收。本址保本线见财务页。',
+    note: '{method}，因此没有同类门店的营收区间；上图为 Google / Yelp 评论数原始值（前 {n} 家），只反映相对客流热度，不是营收。本址保本线见财务页。',
   },
   en: {
     title: 'Layer-1 review-count distribution',
-    note: '{method}, so no peer revenue band is available; the bars are raw Google / Yelp review counts (top 8) — a relative traffic signal, not revenue. This site’s break-even is on the finance page.',
+    note: '{method}, so no peer revenue band is available; the bars are raw Google / Yelp review counts (top {n}) — a relative traffic signal, not revenue. This site’s break-even is on the finance page.',
   },
   es: {
     title: 'Distribución de reseñas de competidores directos',
-    note: '{method}, por lo que no hay un rango de ingresos de pares; las barras son conteos de reseñas de Google / Yelp (8 principales): una señal relativa de tráfico, no ingresos. El punto de equilibrio de este local está en la página financiera.',
+    note: '{method}, por lo que no hay un rango de ingresos de pares; las barras son conteos de reseñas de Google / Yelp ({n} principales): una señal relativa de tráfico, no ingresos. El punto de equilibrio de este local está en la página financiera.',
   },
 };
 
@@ -785,10 +906,6 @@ function Page7({ model, lang }: PageProps) {
   // distribution collapses entirely rather than printing a chart of 「未获取」 bars.
   const reviewCount = (x: Competitor) => (x.rating_count != null && x.rating_count > 0 ? x.rating_count : null);
   const l1Ranked = uniqueCompetitors([...m.competitors.l1].sort((a, b2) => (b2.rating_count ?? 0) - (a.rating_count ?? 0)));
-  const reviewRows = keepPopulated(l1Ranked.slice(0, 8), (x) => [reviewCount(x)]).map((x) => ({
-    label: (c.lang === 'zh' ? x.name_zh || x.name : x.name).slice(0, 22),
-    value: reviewCount(x),
-  }));
   // §4.6 (P1-d): with fewer than four same-cuisine peers the page has a hole where the
   // benchmark should be. The nearby Chinese restaurants are the honest stand-in — a
   // top-N by review count, every row complete, collapsed when it cannot be filled.
@@ -798,6 +915,16 @@ function Page7({ model, lang }: PageProps) {
     (x) => [x.rating, reviewCount(x), x.distance_mi],
     { minRows: 3 },
   );
+  // v4 §1.4: the band is a fixed 118 pt (92 pt in the Latin editions when the
+  // fallback table above it is present), and the chart used to be sized for a
+  // page, so the bottom bars were clipped mid-bar. Rows now fit the band and the
+  // note states the count instead of a hard-coded "8".
+  const fallbackShown = cards.length < 4 && otherChinese.length > 0;
+  const reviewRowsMax = c.lang === 'zh' || !fallbackShown ? 8 : 6;
+  const reviewRows = keepPopulated(l1Ranked.slice(0, reviewRowsMax), (x) => [reviewCount(x)]).map((x) => ({
+    label: (c.lang === 'zh' ? x.name_zh || x.name : x.name).slice(0, 22),
+    value: reviewCount(x),
+  }));
   // §4.2: the void claim is only shown when both Layer-1 keyword radii (800 / 1600 m) were searched (guard) — say so.
   const bothRadii = ['direct@800', 'direct@1600'].every((l) => (m.competitors.l1_layers_tried ?? []).includes(l));
   // §4.2 (P0-B): a gap may only be claimed when the text probe cleared the same-category stores too.
@@ -951,8 +1078,8 @@ function Page7({ model, lang }: PageProps) {
           {reviewRows.length > 0 ? (
             <>
               <h2 className="h2">{P7_REVIEW_DIST[c.lang].title}</h2>
-              <HBars rows={reviewRows} valueLabel={(v) => F.int(v)} labelWidth={c.lang === 'zh' ? 110 : 150} valueWidth={60} height={11} gap={3} />
-              <p className="table-note">{fill(P7_REVIEW_DIST[c.lang].note, { method: S.bandMethod[b.method] ?? c.t(b.method) })}</p>
+              <HBars rows={reviewRows} valueLabel={(v) => F.int(v)} labelWidth={c.lang === 'zh' ? 150 : 210} valueWidth={70} height={10} gap={2} width={640} />
+              <p className="table-note">{fill(P7_REVIEW_DIST[c.lang].note, { method: S.bandMethod[b.method] ?? c.t(b.method), n: String(reviewRows.length) })}</p>
             </>
           ) : (
             <p className="table-note">
@@ -1709,7 +1836,10 @@ function Page15({ model, lang }: PageProps) {
   return (
     <PageShell c={c} model={m} pageId="page_15" chips={<SourceChips model={m} ids={['D2', 'D6', 'D12']} model_labels={[S.p15.chipScore, S.p15.chipHuff, S.p15.chipBreakeven]} lang={c.lang} />}>
       <div className="summary-top">
-        <VerdictBadge c={c} verdict={m.score.verdict} />
+        <div>
+          <VerdictBadge c={c} verdict={m.score.verdict} />
+          {isUndecided(m.score.verdict) ? <p className="verdict-undecided">{undecidedNote(c.lang)}</p> : null}
+        </div>
         <div className="summary-keys">
           <KeyNumber label={`${S.p15.coverage}${xr}`} value={F.pct(cov)} sub={`${S.p15.coverageSub}${xr}`} />
           {noRent ? <KeyNumber label={S.p15.maxRent} value={maxRent} sub={S.p15.maxRentSub} /> : <KeyNumber label={S.p15.occupancy} value={F.pct(occ, 1)} sub={S.p15.occupancySub} />}
@@ -1798,6 +1928,7 @@ function Page15({ model, lang }: PageProps) {
 
 export const PAGE_COMPONENTS: Record<PageId, ComponentType<PageProps>> = {
   page_1: Page1,
+  page_rent: PageRent,
   page_2: Page2,
   page_3: Page3,
   page_4: Page4,

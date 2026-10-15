@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
-import { iqFindRecentReportByAnalyzeKey, iqInsertReport } from '@/lib/funnel/iq-repository';
+import { randomUUID } from 'node:crypto';
+import { iqFindRecentReportByAnalyzeKey, iqInsertReport, iqSetReportModel, isMissingColumnError } from '@/lib/funnel/iq-repository';
+import { applyProjectionToFreeResult, projectFreeResult, type FreeProjection } from '@/lib/funnel/iq-free-projection';
+import { conclusionFromModel, formatConclusionForAnchors } from '@/lib/iq/conclusion/conclusion';
+import { createFetchContext } from '@/lib/iq/data/context';
+import { runReport360, type Report360Result } from '@/lib/iq/pipeline';
+import { runQaGates } from '@/lib/iq/qa/gates';
+import { PAGES, templateNarrative } from '@/lib/iq/narrative/templates';
 import { resolveMarketDataForIqReport } from '@/lib/funnel/iq-market-data-resolve';
 import { buildFreeTierMarketBrief } from '@/lib/funnel/iq-premium-anchors';
 import { computeSiteMetrics, formatMetricsDigest } from '@/lib/funnel/agents/metrics';
@@ -15,6 +22,7 @@ import { analyzeWithN8n, getAnalyzeWebhookUrl } from '@/lib/n8n';
 import { unknownErrorMessage } from '@/lib/unknown-error-message';
 import { ensureRuntimeConfig } from '@/lib/server/runtime-config';
 import { toLocale, type Locale } from '@/lib/i18n/locale';
+import { decisionTierToVerdict, type RiskAuditPreview } from '@/lib/funnel/iq-risk-audit-model';
 import type { WebResearchPack } from '@/lib/funnel/iq-web-research';
 
 export const runtime = 'nodejs';
@@ -27,6 +35,14 @@ export const maxDuration = 180;
  * without it and the paid report fetches it then.
  */
 const WEB_RESEARCH_GRACE_MS = 5_000;
+
+/**
+ * v4 §1.1: the deterministic 360° core (data → engines → conclusion, no prose)
+ * runs BEFORE the free prose is written, and its conclusion is what the free
+ * page prints. This is its wall-clock budget; past it the free result is an
+ * honest "insufficient data" rather than a second, LLM-written set of numbers.
+ */
+const FREE_CORE_BUDGET_MS = 75_000;
 
 const MOCK_COPY: Record<Locale, { headline: string; subheadline: string; snapshot: string[]; risk: string; teaser: string }> = {
   en: {
@@ -260,8 +276,42 @@ export async function POST(req: Request) {
       }
     }
 
+    // ── v4 §1.1 免费层 = 付费层同引擎 ───────────────────────────────────────
+    // The same `runReport360` core the paid report is built on, minus the
+    // alternative-cuisine ranking and the LLM sub-cuisine classifier (neither
+    // changes the verdict). Its conclusion is THE conclusion: the free page
+    // prints it, the prose below is written around it, and the model is stored
+    // on the row so the paid job reuses it instead of recomputing.
+    const pendingId = randomUUID();
+    let core: Report360Result | null = null;
+    let coreError: string | null = null;
+    try {
+      const coreCtx = createFetchContext({ budgetMs: FREE_CORE_BUDGET_MS - 10_000 });
+      const run = runReport360(
+        {
+          report_id: pendingId,
+          address: location,
+          cuisine_text: businessType || null,
+          concept_id: concept?.id ?? null,
+          language,
+          rent_usd: rentOk ? monthlyRentUsd : null,
+          sqft: sqftOk ? sqft : null,
+        },
+        { ctx: coreCtx, skipAlternatives: true, llmClassify: null },
+      );
+      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), FREE_CORE_BUDGET_MS).unref?.());
+      core = await Promise.race([run, timeout]);
+      if (!core) coreError = `core did not land in ${FREE_CORE_BUDGET_MS / 1000}s`;
+    } catch (coreErr) {
+      coreError = unknownErrorMessage(coreErr, 300);
+    }
+    if (coreError) console.error('[funnel/analyze] 360° core unavailable — free result will say insufficient data:', coreError);
+    mark('core');
+    const projection: FreeProjection | null = core?.model.conclusion ? projectFreeResult(core.model) : null;
+
     // One market prefetch per request (it used to run twice: before the LLM
-    // and again as a "merge" afterwards).
+    // and again as a "merge" afterwards). With the core already run the Places
+    // cache is warm, so this is mostly cache hits plus the funnel-side ACS pull.
     let prefetchedMarket: Record<string, unknown> | null = null;
     // Web research is not part of the free brief, so it keeps running while the
     // LLM writes and is merged into the stored row afterwards.
@@ -289,7 +339,10 @@ export async function POST(req: Request) {
       businessType: conceptLabel || businessType || 'restaurant',
     });
     const metricsDigest = formatMetricsDigest(siteMetrics, language);
-    const freeBrief = [buildFreeTierMarketBrief(prefetchedMarket, language), metricsDigest]
+    // §1.1: the frozen conclusion goes into the prompt as hard rules, so the
+    // headline and the snapshot cannot quote a second score or revenue.
+    const conclusionAnchors = core?.model.conclusion ? formatConclusionForAnchors(core.model.conclusion, language) : '';
+    const freeBrief = [buildFreeTierMarketBrief(prefetchedMarket, language), metricsDigest, conclusionAnchors]
       .filter(Boolean)
       .join('\n\n');
 
@@ -303,7 +356,10 @@ export async function POST(req: Request) {
       sqft: sqftOk ? sqft : undefined,
     };
 
-    let parsed: Awaited<ReturnType<typeof analyzeWithN8n>>;
+    // The provider output plus the two fields the free scorecard reads; §1.1
+    // overwrites every number in them from the projection.
+    type FreeLlmOutput = Awaited<ReturnType<typeof analyzeWithN8n>> & { decision_tier?: string; risk_audit_preview?: RiskAuditPreview };
+    let parsed: FreeLlmOutput;
     try {
       if (hasN8nWebhook) {
         parsed = await analyzeWithN8n({
@@ -337,6 +393,15 @@ export async function POST(req: Request) {
 
     mark('llm');
 
+    // §1.1: every number the model wrote is replaced by the projection; without
+    // a core there is no score to print, and the tier says "need more data".
+    if (projection) {
+      parsed = applyProjectionToFreeResult(parsed, projection, language);
+      parsed.verdict = decisionTierToVerdict(projection.decision_tier);
+    } else {
+      parsed = { ...parsed, decision_tier: 'need_more_data', verdict: 'caution', risk_audit_preview: { ...(parsed.risk_audit_preview ?? {}), decision_tier: 'need_more_data', overall_score: undefined, data_confidence_pct: undefined, layers: [], radar: {} } };
+    }
+
     const verdict = String(parsed.verdict ?? '').trim();
     const headline = String(parsed.headline ?? '').trim();
     const subheadline = String(parsed.subheadline ?? '').trim();
@@ -363,6 +428,9 @@ export async function POST(req: Request) {
       paywall_teaser: paywallTeaser,
       ...(decisionTier ? { decision_tier: decisionTier } : {}),
       ...(riskAuditPreview && typeof riskAuditPreview === 'object' ? { risk_audit_preview: riskAuditPreview } : {}),
+      engine: projection ? 'core' : 'llm_fallback',
+      ...(core?.model.conclusion ? { conclusion: core.model.conclusion as unknown as Record<string, unknown> } : {}),
+      ...(projection ? { projection: projection as unknown as Record<string, unknown> } : {}),
     };
 
     // Market seed: the prefetch (already enriched + finance model) merged with
@@ -423,8 +491,42 @@ export async function POST(req: Request) {
         throw err;
       }
     }
+    // §1.1: store the core's model on the row (template prose, same QA gates the
+    // paid run applies) so the paid job reuses this exact conclusion.
+    if (reportId && core) {
+      try {
+        const model = core.model;
+        model.meta.report_id = reportId;
+        model.conclusion = conclusionFromModel(model);
+        model.score.verdict = model.conclusion.verdict;
+        for (const pg of PAGES) model.narrative[pg.id] = templateNarrative(model, pg.id, language);
+        model.meta.narrative_pass = 'template';
+        model.meta.language = language;
+        model.meta.narrative_language = language;
+        const gates = runQaGates(model);
+        if (!gates.passed) {
+          model.meta.tier = 'precheck';
+          model.meta.precheck_reasons = [...new Set([...model.meta.precheck_reasons, ...gates.failures])];
+        }
+        model.meta.cost_usd = core.ctx.cost.total();
+        model.meta.cost_breakdown = core.ctx.cost.bySource();
+        const { narrative, ...rest } = model;
+        await iqSetReportModel({
+          reportId,
+          reportModelJson: rest as unknown as Record<string, unknown>,
+          narrativeJson: { ...narrative, __lang: language },
+          tier: model.meta.tier,
+          costUsd: model.meta.cost_usd,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!isMissingColumnError(err) && !message.includes('Supabase admin env is not configured')) {
+          console.error('[funnel/analyze] could not store the 360° model on the row (non-fatal):', message);
+        }
+      }
+    }
     mark('insert');
-    console.info('[funnel/analyze] timings', { ...marks, total: Date.now() - t0, cached: false });
+    console.info('[funnel/analyze] timings', { ...marks, total: Date.now() - t0, cached: false, engine: projection ? 'core' : 'llm_fallback' });
 
     return NextResponse.json({
       reportId,

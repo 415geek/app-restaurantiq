@@ -20,6 +20,7 @@
  */
 
 import { kickReport360 } from '@/lib/iq/kick';
+import { summarizeDeepResearchForAnchors, summarizeWebResearchForAnchors, type DeepResearchPack, type WebResearchPack } from '@/lib/funnel/iq-web-research';
 import { generateReport360ForRow } from '@/lib/iq/generate';
 import { parseConclusion, verdictRuleText, type Conclusion } from '@/lib/iq/conclusion/conclusion';
 import type { CompetitorCounts } from '@/lib/iq/model/schema';
@@ -78,6 +79,8 @@ export const STAGE_BUDGET_MS = 250_000;
 export const STALE_CLAIM_MS = 6 * 60_000;
 const MAX_STAGE_ATTEMPTS = 2;
 
+export type UpgradeState = 'scheduled' | 'running' | 'ready' | 'no_change' | 'failed';
+
 export type GenerationState = {
   v: 1;
   mode: GenerationMode;
@@ -93,6 +96,14 @@ export type GenerationState = {
   steps?: StepTimes;
   /** The standard-tier run already scheduled its professional upgrade (once per row). */
   autoUpgradeKicked?: boolean;
+  /**
+   * v4 §1.5: what became of the professional pass. The customer is told the
+   * truth at every step instead of "it will replace this automatically":
+   *   scheduled → the pass was kicked; running → its job is running;
+   *   ready → the 360° prose was rewritten with the extra evidence (reload);
+   *   no_change → it ran and changed nothing; failed → it did not complete.
+   */
+  upgrade?: UpgradeState;
   /** §4.1 单一结论源: the deterministic core did not land before the draft — the body is marked preliminary. */
   conclusionPending?: boolean;
   /** §4.7 stage-stall: stages the job gave up on and walked past instead of failing the run. */
@@ -118,6 +129,8 @@ export type GenerationStatusView = {
   etaSource: EtaSource;
   /** A standard-tier body is already stored (the professional pass replaces it later). */
   standardReady: boolean;
+  /** v4 §1.5: the professional pass's real state; `null` when none was ever scheduled. */
+  upgrade: UpgradeState | null;
   updatedAt: string | null;
   startedAt: string | null;
   error: string | null;
@@ -158,6 +171,68 @@ function storedTier(row: IqReportRow): string | null {
   if (!hasStoredReport(row)) return null;
   const t = (row.full_report_json as Record<string, unknown>).generation_tier;
   return typeof t === 'string' ? t : null;
+}
+
+/** v4 §1.5: the narrative pass that wrote the stored 360° prose ('llm-pro' = the professional pass landed). */
+function storedNarrativePass(row: IqReportRow): string | null {
+  const m = row.report_model_json as { meta?: { narrative_pass?: unknown } } | null | undefined;
+  const p = m?.meta?.narrative_pass;
+  return typeof p === 'string' ? p : null;
+}
+
+function upgradeStateOf(row: IqReportRow, state: GenerationState | null, status: GenerationStatusView['status']): UpgradeState | null {
+  if (storedNarrativePass(row) === 'llm-pro') return 'ready';
+  if (state?.upgrade) {
+    if (state.upgrade === 'scheduled' && status === 'running' && state.mode === 'professional') return 'running';
+    return state.upgrade;
+  }
+  return null;
+}
+
+/**
+ * Record what the professional pass did, from whichever invocation learns it
+ * (the job, or the narrative route it hands off to). Never throws.
+ */
+export async function markUpgrade(reportId: string, upgrade: UpgradeState, note?: string): Promise<void> {
+  try {
+    const row = await iqGetReport(reportId);
+    if (!row) return;
+    const state = readState(row);
+    if (!state) return;
+    state.upgrade = upgrade;
+    pushLog(state, `upgrade: ${upgrade}${note ? ` — ${note.slice(0, 160)}` : ''}`);
+    await iqUpdateReportGeneration(reportId, { stateJson: state });
+  } catch (e) {
+    console.warn(`[iq-report-job] ${reportId}: could not record upgrade=${upgrade}:`, shortErr(e));
+  }
+}
+
+/**
+ * v4 §1.5: the evidence the professional pass adds to the 360° prose — the
+ * deep / web research and the competitor insights the enrich stage gathered.
+ * Empty when there is nothing beyond what the standard pass already had.
+ */
+export function professionalEvidenceDigest(row: IqReportRow, language: Locale): string {
+  const md = (row.market_data_json ?? {}) as Record<string, unknown>;
+  const parts: string[] = [];
+  const dr = md.deep_research;
+  if (dr && typeof dr === 'object') {
+    const d = summarizeDeepResearchForAnchors(dr as DeepResearchPack, language);
+    if (d) parts.push(d);
+  }
+  const wr = md.web_research;
+  if (wr && typeof wr === 'object') {
+    const w = summarizeWebResearchForAnchors(wr as WebResearchPack);
+    if (w) parts.push(w);
+  }
+  const ci = md.competitor_insights as { cluster_summary_zh?: unknown; cluster_summary_en?: unknown; cluster_summary_es?: unknown; gaps_and_openings_zh?: unknown; gaps_and_openings_en?: unknown; gaps_and_openings_es?: unknown } | undefined;
+  if (ci && typeof ci === 'object') {
+    const pickL = (zh: unknown, en: unknown, es: unknown) => (language === 'zh' ? zh : language === 'es' ? es : en);
+    for (const v of [pickL(ci.cluster_summary_zh, ci.cluster_summary_en, ci.cluster_summary_es), pickL(ci.gaps_and_openings_zh, ci.gaps_and_openings_en, ci.gaps_and_openings_es)]) {
+      if (typeof v === 'string' && v.trim()) parts.push(v.trim());
+    }
+  }
+  return parts.join('\n\n').slice(0, 6_000);
 }
 
 const RESOLVE_STEP_TO_UI: Record<MarketResolveStep, UiStageId> = {
@@ -568,7 +643,22 @@ async function stageFinalize(ctx: StageCtx): Promise<void> {
   pushLog(state, `finalized (${clean.generation_tier}${conclusion ? `, conclusion ${conclusion.snapshot_id}` : ', conclusion pending'})`);
   // The 360° pass now only writes the page narratives around the frozen numbers
   // (idempotent server-side: an existing model is never recomputed).
-  await kickReport360(row.id);
+  if (professional) {
+    // v4 §1.5: the professional pass used to rewrite only `full_report_json`;
+    // the 360° document — what the customer reads and prints — never changed
+    // byte for byte. Its visible increment is the prose rewritten with the
+    // research the enrich stage gathered; the route records ready / no_change /
+    // failed so the page can say which.
+    const evidence = professionalEvidenceDigest(row, ctx.language);
+    if (!evidence) {
+      await markUpgrade(row.id, 'no_change', 'no additional evidence was gathered for this address');
+    } else {
+      await markUpgrade(row.id, 'running');
+      await kickReport360(row.id, { pass: 'pro' });
+    }
+  } else {
+    await kickReport360(row.id);
+  }
 }
 
 /**
@@ -584,6 +674,7 @@ async function maybeKickAutoUpgrade(reportId: string, state: GenerationState): P
   if (!fresh || !fresh.paid) return;
   if (storedTier(fresh) === 'professional') return;
   state.autoUpgradeKicked = true;
+  state.upgrade = 'scheduled';
   pushLog(state, 'auto-upgrade: scheduling professional pass');
   await iqUpdateReportGeneration(reportId, { stateJson: state });
   try {
@@ -595,8 +686,11 @@ async function maybeKickAutoUpgrade(reportId: string, state: GenerationState): P
       trigger: 'auto-upgrade',
     });
     console.log(`[iq-report-job] ${reportId}: auto-upgrade → ${started.kind}`);
+    // v4 §1.5: a kick that did not start a run is a failed upgrade, not a log line.
+    if (started.kind !== 'running') await markUpgrade(reportId, 'failed', `auto-upgrade kick → ${started.kind}`);
   } catch (e) {
     console.error(`[iq-report-job] ${reportId}: auto-upgrade kick failed:`, shortErr(e));
+    await markUpgrade(reportId, 'failed', shortErr(e));
   }
 }
 
@@ -837,6 +931,7 @@ export async function getReportGenerationStatus(
     etaSeconds: eta.seconds,
     etaSource: eta.source,
     standardReady: tier === 'standard',
+    upgrade: upgradeStateOf(row, state, status),
     updatedAt,
     startedAt: row.generation_started_at ?? null,
     error: status === 'failed' ? row.generation_error ?? null : null,

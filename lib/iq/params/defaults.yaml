@@ -44,6 +44,21 @@ cost_scale:
     asian_casual:  { other_fixed_usd: 7800, headcount: 11 }
     casual_dining: { other_fixed_usd: 9000, headcount: 16 }
     fine_dining:   { other_fixed_usd: 14000, headcount: 25 }
+# v4 §2.1 租金上限引擎：谈判时手里那个数。全部输入财务模型已有，这里只放常数。
+rent_ceiling:
+  target_ratio: { default: 0.10, bakery_dessert: 0.08, beverage: 0.08, boba: 0.08 }   # 目标占用成本比（租金 ÷ 保守营收），烘焙与饮品 8%，正餐 10%
+  stress_drop: 0.25                 # 压力情景：客流 −25%
+  lease_months: 36                  # 「三年租期合计」
+  free_rent_amortize_months: 12     # 免租期折算：每多 1 个月 ≈ 要价 ÷ 12 / 月
+  ti_unit_usd: 10000                # TI 补贴折算单位
+  ti_amortize_months: 36            # TI 折算期：每 $10,000 ≈ ÷ 36 / 月
+# v4 §1.3 异常输入阻断：命中任一条，该输入不进入评分，等用户确认；阈值只在这里。
+input_sanity:
+  rent_floor_usd: { hcol: 1200, mcol: 800, lcol: 600 }   # 任何沿街铺位的月租下限（按成本档）——$400 的唐人街铺位就是这条拦下的
+  rent_psf_month: { min: 0.5, max: 25 }                   # 已知面积时 $/sqft/月 的合理区间
+  corridor_tolerance: 0.6                                  # 有走廊中位数时允许的偏离 ±60%
+  sqft: { min: 150, max: 25000 }
+  ticket_multiple: { min: 0.4, max: 2.5 }                  # 客单价相对业态默认值的合理倍数
 finance:
   safety_multiplier: 1.28
   occupancy_cost_bands: [[0, 0.08, 90], [0.08, 0.10, 70], [0.10, 0.12, 50], [0.12, 1, 25]]

@@ -79,6 +79,8 @@ type Copy = {
   langSwitchError: (name: string) => string;
   langSwitchTimeout: (name: string) => string;
   upgrading: string;
+  upgradeFailed: string;
+  upgradeNoChange: string;
   scenarioBasis: string;
   corridorTextOnly: string;
   overallScore: string;
@@ -169,7 +171,9 @@ const translations: Record<Locale, Copy> = {
     generatingVersion: (n) => `Generating the ${n} version…`,
     langSwitchError: (n) => `Could not generate the ${n} version. Please try again in a moment.`,
     langSwitchTimeout: (n) => `The ${n} version timed out. Please try again.`,
-    upgrading: 'You are viewing the standard edition. The in-depth edition will replace this automatically once it is ready — no action needed.',
+    upgrading: 'You are viewing the standard edition. An in-depth pass is running; this page reloads if it changes the report, and says so here if it does not.',
+    upgradeFailed: 'The in-depth edition could not be generated; this standard edition is final and the numbers are unaffected.',
+    upgradeNoChange: 'The in-depth pass found no additional evidence for this address — this edition is final.',
     scenarioBasis: 'The three scenarios are seats × turns per day × average ticket; the 360° report models demand capture instead, so the two figures use different bases.',
     corridorTextOnly: 'No verified listing (LoopNet / Crexi) for this corridor — size and rent are not shown. Verify on site or with a broker.',
     overallScore: 'Overall',
@@ -257,7 +261,9 @@ const translations: Record<Locale, Copy> = {
     generatingVersion: (n) => `正在生成${n}版…`,
     langSwitchError: (n) => `无法生成${n}版，请稍后重试。`,
     langSwitchTimeout: (n) => `生成${n}版超时，请稍后重试。`,
-    upgrading: '当前为标准版报告；深度版稍后自动替换，无需任何操作。',
+    upgrading: '当前为标准版。深度版正在生成：如果它改变了报告，本页会自动刷新；如果没有，这里会说明。',
+    upgradeFailed: '深度版生成失败，当前标准版即为最终版；数字不受影响。',
+    upgradeNoChange: '深度版没有为这个地址拿到额外证据，当前版本即为最终版。',
     scenarioBasis: '三场景按座位 × 翻台 × 客单价测算；360° 报告按需求捕获测算，口径不同。',
     corridorTextOnly: '该走廊暂无经核实的在租房源（LoopNet / Crexi），不展示面积与租金；请踩盘或向经纪核实。',
     overallScore: '综合分',
@@ -345,7 +351,9 @@ const translations: Record<Locale, Copy> = {
     generatingVersion: (n) => `Generando la versión en ${n}…`,
     langSwitchError: (n) => `No se pudo generar la versión en ${n}. Inténtalo de nuevo en un momento.`,
     langSwitchTimeout: (n) => `La versión en ${n} tardó demasiado. Inténtalo de nuevo.`,
-    upgrading: 'Estás viendo la edición estándar. La edición a fondo la reemplazará automáticamente cuando esté lista; no tienes que hacer nada.',
+    upgrading: 'Estás viendo la edición estándar. Una pasada a fondo está en curso; esta página se recarga si cambia el informe y lo indica aquí si no.',
+    upgradeFailed: 'No se pudo generar la edición a fondo; esta edición estándar es la definitiva y las cifras no cambian.',
+    upgradeNoChange: 'La pasada a fondo no encontró evidencia adicional para esta dirección; esta edición es la definitiva.',
     scenarioBasis: 'Los tres escenarios se calculan como asientos × rotaciones por día × ticket promedio; el informe 360° modela la captura de demanda, así que las dos cifras usan bases distintas.',
     corridorTextOnly: 'No hay un anuncio verificado (LoopNet / Crexi) para este corredor; no se muestran superficie ni renta. Verifícalo en sitio o con un corredor.',
     overallScore: 'General',
@@ -484,6 +492,7 @@ export function ReportContent({
   // watches the status endpoint and reloads when the tier flips.
   const generationTier = typeof full.generation_tier === 'string' ? full.generation_tier : null;
   const [upgrading, setUpgrading] = useState(generationTier === 'standard');
+  const [upgradeNote, setUpgradeNote] = useState<'failed' | 'no_change' | null>(null);
   const upgradeWatchStarted = useRef(false);
   useEffect(() => {
     if (generationTier !== 'standard' || upgradeWatchStarted.current) return;
@@ -500,9 +509,15 @@ export function ReportContent({
           .catch(() => null);
         if (cancelled) return;
         if (s) {
-          if (s.generationTier === 'professional') {
+          // v4 §1.5: reload only when the in-depth pass actually changed the
+          // report; otherwise say what happened and stop promising.
+          if (s.upgrade === 'ready') {
             window.location.reload();
             return;
+          }
+          if (s.upgrade === 'failed' || s.upgrade === 'no_change') {
+            setUpgradeNote(s.upgrade);
+            break;
           }
           if (s.legacy || s.status === 'failed') break;
           // Nothing running and nothing scheduled (auto-upgrade disabled or already attempted): stop watching.
@@ -696,7 +711,11 @@ export function ReportContent({
           {langSwitchError}
         </div>
       ) : null}
-      {upgrading ? (
+      {upgradeNote ? (
+        <div className="no-print mb-4 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300" role="status">
+          {upgradeNote === 'failed' ? t.upgradeFailed : t.upgradeNoChange}
+        </div>
+      ) : upgrading ? (
         <div className="no-print mb-4 flex items-center gap-2 rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
           {t.upgrading}

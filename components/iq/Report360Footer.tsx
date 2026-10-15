@@ -16,6 +16,8 @@ import { LOCALES, LOCALE_LABEL, type Locale } from '@/lib/i18n/locale';
 import { withLang } from '@/lib/i18n/resolve';
 import { persistLocale } from '@/lib/i18n/use-locale';
 import { ui } from '@/components/iq/ui';
+import { InputSanityBar } from '@/components/iq/InputSanityBar';
+import type { InputSanityFlag } from '@/lib/iq/model/schema';
 
 type Copy = {
   kicker: string;
@@ -46,7 +48,7 @@ const T: Record<Locale, Copy> = {
   en: {
     kicker: '360° REPORT',
     title: 'Download or share this report',
-    desc: 'The PDF is the same 16-page document you just read — cover + 15 pages, US Letter, ready to print or forward.',
+    desc: 'The PDF is the same 17-page document you just read — cover + 16 pages, US Letter, ready to print or forward.',
     download: 'Download the 360° PDF',
     downloading: 'Preparing the PDF…',
     preview: 'Print edition',
@@ -70,7 +72,7 @@ const T: Record<Locale, Copy> = {
   zh: {
     kicker: '360° 报告',
     title: '下载或分享这份报告',
-    desc: 'PDF 与你刚读完的 16 页文档完全一致——封面 + 15 页，US Letter 尺寸，可直接打印或转发。',
+    desc: 'PDF 与你刚读完的 17 页文档完全一致——封面 + 16 页，US Letter 尺寸，可直接打印或转发。',
     download: '下载 360° PDF',
     downloading: '正在准备 PDF…',
     preview: '打印版',
@@ -94,7 +96,7 @@ const T: Record<Locale, Copy> = {
   es: {
     kicker: 'INFORME 360°',
     title: 'Descarga o comparte este informe',
-    desc: 'El PDF es el mismo documento de 16 páginas que acabas de leer: portada + 15 páginas, tamaño carta, listo para imprimir o reenviar.',
+    desc: 'El PDF es el mismo documento de 17 páginas que acabas de leer: portada + 16 páginas, tamaño carta, listo para imprimir o reenviar.',
     download: 'Descargar PDF 360°',
     downloading: 'Preparando el PDF…',
     preview: 'Edición para imprimir',
@@ -148,9 +150,11 @@ type Props = {
   isLinkedToUser: boolean;
   /** Fixture preview (non-production): the row does not exist, so regeneration is hidden. */
   previewOnly?: boolean;
+  /** v4 §1.3: flags the model carries; an unconfirmed one shows the confirmation bar here. */
+  inputSanity?: InputSanityFlag[];
 };
 
-export function Report360Footer({ reportId, lang, location, pageHref, isLinkedToUser, previewOnly = false }: Props) {
+export function Report360Footer({ reportId, lang, location, pageHref, isLinkedToUser, previewOnly = false, inputSanity = [] }: Props) {
   const t = T[lang];
   const [isDownloading, setIsDownloading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -208,6 +212,9 @@ export function Report360Footer({ reportId, lang, location, pageHref, isLinkedTo
 
   return (
     <footer className="report-viewer-footer mx-auto mt-8 w-full max-w-[203.9mm]" data-report-footer="">
+      {inputSanity.some((f) => !f.confirmed) ? (
+        <InputSanityBar lang={lang} reportId={previewOnly ? null : reportId} flags={inputSanity} className="mb-4" onAnswered={() => { if (!previewOnly) setFormOpen(true); }} />
+      ) : null}
       <div className={`${ui.card} p-5 sm:p-6`}>
         <div className={ui.kicker}>{t.kicker}</div>
         <h2 className="mt-1 text-xl font-semibold tracking-tight text-brand-navy">{t.title}</h2>

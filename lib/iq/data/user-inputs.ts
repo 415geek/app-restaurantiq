@@ -37,7 +37,14 @@ export type RawSiteInput = {
   ticket_delivery?: unknown;
   delivery_ratio?: unknown;
   parking_spaces?: unknown;
+  /** v4 §1.3: 'net' | 'nnn_base' | 'promo' | 'typo' from the confirmation bar. */
+  rent_confirmation?: unknown;
 };
+
+const RENT_CONFIRMATIONS = new Set(['net', 'nnn_base', 'promo', 'typo']);
+export function coerceRentConfirmation(v: unknown): SiteInput['rent_confirmation'] {
+  return typeof v === 'string' && RENT_CONFIRMATIONS.has(v) ? (v as SiteInput['rent_confirmation']) : null;
+}
 
 /** "$12,000" → 12000; "" / "abc" / ≤ 0 → null. */
 export function coercePositiveNumber(v: unknown): number | null {
@@ -183,6 +190,7 @@ export function normalizeUserInputs(raw: RawSiteInput): { input: SiteInput; resu
     existing_stores: coerceExistingStores(raw.existing_stores),
     listing_urls: coerceListingUrls(raw.listing_urls),
     known_competitors: coerceKnownCompetitors(raw.known_competitors),
+    rent_confirmation: coerceRentConfirmation(raw.rent_confirmation),
   };
 
   const provided = FIELD_LABELS.filter(([k]) => input[k] != null).map(([, label]) => label);

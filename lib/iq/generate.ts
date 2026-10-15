@@ -102,8 +102,8 @@ export async function generateReport360(
  */
 export async function generateReport360Narratives(
   reportId: string,
-  opts: { ctx?: FetchContext } = {},
-): Promise<{ model: ReportModel; persisted: boolean } | null> {
+  opts: { ctx?: FetchContext; pass?: 'llm' | 'llm-pro'; evidence?: string | null } = {},
+): Promise<{ model: ReportModel; persisted: boolean; changed: boolean } | null> {
   const row = await iqGetReport(reportId);
   if (!row?.report_model_json) return null;
   const parsed = reportModelSchema.safeParse(row.report_model_json);
@@ -114,11 +114,14 @@ export async function generateReport360Narratives(
   const model = parsed.data;
   const ctx = opts.ctx ?? createFetchContext({ budgetMs: 120_000 });
   const language = toLocale(row.language, model.meta.language);
-  const { narrative, stats } = await generateNarratives(model, { cost: ctx.cost, env: ctx.env, language });
+  const before = JSON.stringify(model.narrative ?? {});
+  const { narrative, stats } = await generateNarratives(model, { cost: ctx.cost, env: ctx.env, language, evidence: opts.evidence ?? null });
+  // v4 §1.5: a pass that changed nothing is reported as such, never as an upgrade.
+  const changed = JSON.stringify(narrative) !== before;
   model.narrative = narrative;
   model.meta.language = language;
   model.meta.narrative_language = language;
-  model.meta.narrative_pass = 'llm';
+  model.meta.narrative_pass = opts.pass ?? 'llm';
   ctx.log(`[iq360] narrative-only: llm=${stats.llm_pages} template=${stats.template_pages} regen=${stats.regenerated}`);
   const { narrative: n, ...rest } = model;
   let persisted = false;
@@ -134,7 +137,7 @@ export async function generateReport360Narratives(
   } catch (e) {
     console.warn('[iq360] narrative-only persist failed', e);
   }
-  return { model, persisted };
+  return { model, persisted, changed };
 }
 
 /** True when the stored model carries the frozen conclusion but its prose is still the template pass. */
@@ -164,6 +167,7 @@ export async function generateReport360ForRow(reportId: string, opts: Report360O
       existing_stores?: unknown;
       listing_urls?: unknown;
       known_competitors?: unknown;
+      rent_confirmation?: unknown;
     };
   };
   const u = md.user_inputs ?? {};
@@ -185,6 +189,7 @@ export async function generateReport360ForRow(reportId: string, opts: Report360O
         existing_stores: u.existing_stores ?? [],
         listing_urls: u.listing_urls ?? [],
         known_competitors: u.known_competitors ?? [],
+        rent_confirmation: u.rent_confirmation ?? null,
       },
     },
     opts,

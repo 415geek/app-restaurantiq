@@ -30,7 +30,7 @@ type Copy = {
 const T: Record<Locale, Copy> = {
   zh: {
     title: '360° 专业版报告',
-    desc: '步行与开车四个范围的商圈 · 需求分流测算 · 四层竞争关系 · 自洽财务模型 · 六维评分 · 真实地图 · 老板总结。浅色打印版 15 页，每个数字都可追溯到公开数据来源。',
+    desc: '步行与开车四个范围的商圈 · 需求分流测算 · 四层竞争关系 · 自洽财务模型 · 六维评分 · 真实地图 · 老板总结。浅色打印版 16 页，每个数字都可追溯到公开数据来源。',
     generating: '正在生成（约 1–3 分钟，可离开页面稍后回来）…生成完成后本页会自动刷新。',
     migration: '数据库尚未升级（迁移 0009）。请在 Vercel 设置 DATABASE_URL 后重新生成，系统会自动完成迁移。',
     ready: '已生成',
@@ -41,7 +41,7 @@ const T: Record<Locale, Copy> = {
   },
   en: {
     title: '360° Professional Report',
-    desc: 'Four-ring trade area · demand capture · four competitive layers · reconciled finance model · six-dimension score · real map · owner summary. 15 print-ready pages; every number traces back to a public source.',
+    desc: 'Four-ring trade area · demand capture · four competitive layers · reconciled finance model · six-dimension score · real map · owner summary. 16 print-ready pages; every number traces back to a public source.',
     generating: 'Generating (1–3 min; you can leave and come back)… this page refreshes automatically when it is ready.',
     migration: 'Database not upgraded yet (migration 0009). Set DATABASE_URL on Vercel and regenerate — the migration runs automatically.',
     ready: 'Ready',
@@ -52,7 +52,7 @@ const T: Record<Locale, Copy> = {
   },
   es: {
     title: 'Informe profesional 360°',
-    desc: 'Área comercial de cuatro anillos · captura de demanda · cuatro capas competitivas · modelo financiero conciliado · puntuación en seis dimensiones · mapa real · resumen para el dueño. 15 páginas listas para imprimir; cada cifra se rastrea hasta una fuente pública.',
+    desc: 'Área comercial de cuatro anillos · captura de demanda · cuatro capas competitivas · modelo financiero conciliado · puntuación en seis dimensiones · mapa real · resumen para el dueño. 16 páginas listas para imprimir; cada cifra se rastrea hasta una fuente pública.',
     generating: 'Generando (1–3 min; puedes salir y volver después)… esta página se actualiza sola cuando esté listo.',
     migration: 'La base de datos aún no está actualizada (migración 0009). Configura DATABASE_URL en Vercel y vuelve a generar; la migración se ejecuta automáticamente.',
     ready: 'Listo',

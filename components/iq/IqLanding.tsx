@@ -68,7 +68,7 @@ const COPY: Record<Locale, Copy> = {
       steps: [
         { n: '1', title: 'Enter an address and cuisine', body: 'Rent, size, and seats are optional; adding them sharpens the finance pages.' },
         { n: '2', title: 'Read the free summary', body: 'Overall score, verdict (GO / conditional / NO GO), and the three insights that matter — in one to two minutes.' },
-        { n: '3', title: 'Unlock the full report when you need it', body: '16-page professional edition: trade area, competitors, demand, break-even, risks, and the pre-lease checklist — as a printable PDF.' },
+        { n: '3', title: 'Unlock the full report when you need it', body: '17-page professional edition: trade area, competitors, demand, break-even, risks, and the pre-lease checklist — as a printable PDF.' },
       ],
     },
     inside: {
@@ -107,7 +107,7 @@ const COPY: Record<Locale, Copy> = {
         price: `$${PRICE_USD}`,
         unit: '/ report',
         badge: 'Most popular',
-        items: ['Cover + 15 light pages, printable PDF', 'Four-ring trade area on a real map', 'Same-cuisine competitors, one by one', 'Demand model + break-even + three revenue scenarios', 'Risk register + pre-lease checklist + 90-day plan', 'Free re-run after you add seats, tickets, or known competitors'],
+        items: ['Cover + 16 light pages, printable PDF', 'Four-ring trade area on a real map', 'Same-cuisine competitors, one by one', 'Demand model + break-even + three revenue scenarios', 'Risk register + pre-lease checklist + 90-day plan', 'Free re-run after you add seats, tickets, or known competitors'],
         cta: 'Check my location first',
       },
     },
@@ -161,7 +161,7 @@ const COPY: Record<Locale, Copy> = {
       steps: [
         { n: '1', title: '输入地址和菜系', body: '租金、面积、座位数可以先不填；填了财务部分会更准。' },
         { n: '2', title: '免费看结论摘要', body: '综合评分、判定（可做 / 有条件 / 不建议）和最要紧的三条洞察，1–2 分钟内给出。' },
-        { n: '3', title: '需要时解锁完整报告', body: '16 页专业版：商圈、竞品、需求、保本线、风险与签约清单，PDF 可下载可打印。' },
+        { n: '3', title: '需要时解锁完整报告', body: '17 页专业版：商圈、竞品、需求、保本线、风险与签约清单，PDF 可下载可打印。' },
       ],
     },
     inside: {
@@ -200,7 +200,7 @@ const COPY: Record<Locale, Copy> = {
         price: `$${PRICE_USD}`,
         unit: '/ 份',
         badge: '最常选',
-        items: ['封面 + 15 页浅色 PDF，可打印', '真实地图四圈层商圈', '同菜系竞品逐家对标', '需求分流模型 + 保本线 + 三档营收', '风险登记 + 签约前清单 + 90 天计划', '补充座位、客单价、你知道的竞品后可免费重算'],
+        items: ['封面 + 16 页浅色 PDF，可打印', '真实地图四圈层商圈', '同菜系竞品逐家对标', '需求分流模型 + 保本线 + 三档营收', '风险登记 + 签约前清单 + 90 天计划', '补充座位、客单价、你知道的竞品后可免费重算'],
         cta: '先免费测算，再决定',
       },
     },
@@ -254,7 +254,7 @@ const COPY: Record<Locale, Copy> = {
       steps: [
         { n: '1', title: 'Ingresa la dirección y el tipo de cocina', body: 'La renta, el tamaño y los asientos son opcionales; agregarlos afina las páginas financieras.' },
         { n: '2', title: 'Lee el resumen gratuito', body: 'Puntuación general, veredicto (ADELANTE / condicional / NO RECOMENDADO) y las tres observaciones que importan, en uno o dos minutos.' },
-        { n: '3', title: 'Desbloquea el informe completo cuando lo necesites', body: 'Edición profesional de 16 páginas: área comercial, competidores, demanda, punto de equilibrio, riesgos y la lista previa al contrato, en PDF imprimible.' },
+        { n: '3', title: 'Desbloquea el informe completo cuando lo necesites', body: 'Edición profesional de 17 páginas: área comercial, competidores, demanda, punto de equilibrio, riesgos y la lista previa al contrato, en PDF imprimible.' },
       ],
     },
     inside: {
@@ -293,7 +293,7 @@ const COPY: Record<Locale, Copy> = {
         price: `$${PRICE_USD}`,
         unit: '/ informe',
         badge: 'El más elegido',
-        items: ['Portada + 15 páginas claras, PDF imprimible', 'Área comercial de cuatro anillos en un mapa real', 'Competidores del mismo tipo de cocina, uno por uno', 'Modelo de demanda + punto de equilibrio + tres escenarios de ingresos', 'Registro de riesgos + lista previa al contrato + plan de 90 días', 'Nueva ejecución gratis después de agregar asientos, tickets o competidores conocidos'],
+        items: ['Portada + 16 páginas claras, PDF imprimible', 'Área comercial de cuatro anillos en un mapa real', 'Competidores del mismo tipo de cocina, uno por uno', 'Modelo de demanda + punto de equilibrio + tres escenarios de ingresos', 'Registro de riesgos + lista previa al contrato + plan de 90 días', 'Nueva ejecución gratis después de agregar asientos, tickets o competidores conocidos'],
         cta: 'Primero evaluar mi ubicación',
       },
     },

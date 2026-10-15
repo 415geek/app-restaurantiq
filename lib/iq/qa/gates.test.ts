@@ -27,12 +27,13 @@ test('healthy model passes schema / reconciliation / number guard / wording', ()
   assert.equal(byId.wording.passed, true, byId.wording.details.join('; '));
 });
 
-test('page count: the gates cover all 15 pages, including 总结与建议 (page_15)', () => {
-  assert.equal(PAGES.length, 15);
-  assert.equal(PAGES[14].id, 'page_15');
-  assert.equal(PAGES[13].id, 'page_14');
+test('page count: the gates cover all 16 pages (v4 §2.1 adds the rent ceiling as page 2), including 总结与建议 (page_15)', () => {
+  assert.equal(PAGES.length, 16);
+  assert.equal(PAGES[1].id, 'page_rent');
+  assert.equal(PAGES[15].id, 'page_15');
+  assert.equal(PAGES[14].id, 'page_14');
   const m = loadModel();
-  assert.equal(Object.keys(m.narrative).length, 15);
+  assert.equal(Object.keys(m.narrative).length, 16);
   assert.equal(runQaGates(m).passed, true);
   delete m.narrative.page_15;
   const r = runQaGates(m);

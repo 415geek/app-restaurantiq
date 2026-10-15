@@ -25,8 +25,9 @@ const loadModel = (): ReportModel => parseReportModel(JSON.parse(readFileSync(FI
 /** Decode the handful of entities react-dom/server emits so assertions can match plain text. */
 const decode = (html: string) => html.replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&amp;/g, '&');
 const render = (model: ReportModel, lang: Locale) => decode(renderToStaticMarkup(createElement(ReportDocument, { model, lang })));
+/** Pages are addressed by id (`page_10` is the finance page whatever its number): v4 inserted the rent ceiling as page 2. */
 const pageOf = (html: string, n: number) => {
-  const m = new RegExp(`<section class="page page-${n}"[\\s\\S]*?</section>`).exec(html);
+  const m = new RegExp(`<section class="page page-\\d+" data-page="\\d+" data-page-id="page_${n}"[\\s\\S]*?</section>`).exec(html);
   assert.ok(m, `page ${n} rendered`);
   return m[0];
 };

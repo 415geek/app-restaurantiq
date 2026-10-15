@@ -376,3 +376,46 @@ test('costBreakdownFromConclusion prints exactly the conclusion, localized', () 
   assert.equal(rows[0].item, '租金（NNN）');
   assert.equal(costBreakdownFromConclusion(c, 'en')[0].item, 'Rent (NNN)');
 });
+
+/* -------------------------------------------------------------------------- */
+/* v4 §1.2 / §1.3 — the gate reaches the cover; flagged inputs do not score    */
+/* -------------------------------------------------------------------------- */
+
+test('v4 §1.2: a preliminary-edition model cannot carry GO on its cover (report f7409141)', () => {
+  const m = loadModel();
+  // The fixture scores well; starve its evidence the way the real report was starved.
+  const starved: ReportModel = { ...m, confidence: { ...m.confidence, total: 49 }, conclusion: null };
+  const c = conclusionFromModel(starved);
+  assert.notEqual(c.verdict, 'GO', 'completeness 49 < 60 caps the verdict');
+  assert.equal(c.data_confidence_pct, 49);
+  // What every surface prints is the conclusion, so score.verdict must agree after the guard.
+  const printed = reconcileModelToConclusion({ ...starved, conclusion: c });
+  assert.equal(printed.score.verdict, c.verdict);
+});
+
+test('v4 §1.2: below 45 completeness the conclusion declines to judge, and the tier is need_more_data', () => {
+  const m = loadModel();
+  const c = conclusionFromModel({ ...m, confidence: { ...m.confidence, total: 30 }, conclusion: null });
+  assert.equal(c.verdict, 'INSUFFICIENT_DATA');
+  assert.equal(decisionTierForVerdict(c.verdict), 'need_more_data');
+  assert.equal(parseConclusion(JSON.parse(JSON.stringify(c)))?.verdict, 'INSUFFICIENT_DATA', 'the fourth verdict round-trips through the stored schema');
+  for (const lang of ['zh', 'en', 'es'] as const) {
+    assert.ok(strings(lang).verdict.INSUFFICIENT_DATA.label.length > 0, `${lang} PDF label exists`);
+  }
+});
+
+test('v4 §1.2: a thin competitor pool (quality 0.24) withdraws the verdict even with a good score', () => {
+  const m = loadModel();
+  const comps = { ...m.confidence.components, competitors: { ...m.confidence.components.competitors, quality: 0.24 } };
+  const c = conclusionFromModel({ ...m, confidence: { ...m.confidence, total: 70, components: comps }, conclusion: null });
+  assert.equal(c.verdict, 'INSUFFICIENT_DATA');
+});
+
+test('v4 §1.3: an unconfirmed rent flag locks the verdict at CONDITIONAL_GO; a confirmation releases it', () => {
+  const m = loadModel();
+  const flag = { field: 'rent_usd' as const, value: 400, reason: 'below_floor' as const, benchmark: { value: 1200, label: 'tier_floor_hcol', source: 'defaults.yaml' }, blocks_scoring: true, confirmation: null, confirmed: false };
+  const pending = conclusionFromModel({ ...m, confidence: { ...m.confidence, total: 95 }, conclusion: null, input_sanity: [flag] });
+  assert.notEqual(pending.verdict, 'GO');
+  const released = conclusionFromModel({ ...m, confidence: { ...m.confidence, total: 95 }, conclusion: null, input_sanity: [{ ...flag, blocks_scoring: false, confirmation: 'net', confirmed: true }] });
+  assert.equal(released.verdict, verdictFromScore(released.overall, { rentMissing: released.rent_excluded, completeness: 95 }));
+});
