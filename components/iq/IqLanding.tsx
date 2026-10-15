@@ -15,7 +15,7 @@
  * Accept-Language > en) so there is no flash; the switcher here persists the
  * choice and keeps `?lang=` on the URL and on every outgoing link.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -481,6 +481,16 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const router = useRouter();
   const t = COPY[locale];
+  // Mobile dock: once the address card scrolls out of view, keep the one action one tap away.
+  const formRef = useRef<HTMLFormElement>(null);
+  const [showDock, setShowDock] = useState(false);
+  useEffect(() => {
+    const el = formRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([entry]) => setShowDock(!entry.isIntersecting && entry.boundingClientRect.top < 0));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   function handleSubmit() {
     if (!location.trim()) return;
@@ -557,6 +567,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               fields, forest halo), so the one action that converts separates from
               the white page without a heavy dark block. */}
           <form
+            ref={formRef}
             onSubmit={(e) => {
               e.preventDefault();
               handleSubmit();
@@ -604,7 +615,7 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
                 submit falls to the address field's native `required` prompt. */}
             <button
               type="submit"
-              className="group mt-2 inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-signal px-6 text-[15px] font-bold text-white shadow-[0_1px_0_rgba(255,255,255,0.18)_inset,0_10px_24px_-12px_rgba(31,111,67,0.7)] transition hover:bg-brand-signal-hover active:scale-[0.99]"
+              className="group mt-2 inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-signal px-6 text-[15px] font-bold text-white shadow-[0_1px_0_rgba(255,255,255,0.18)_inset,0_10px_24px_-12px_rgba(31,111,67,0.7)] transition hover:bg-brand-signal-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-signal focus-visible:ring-offset-2 focus-visible:ring-offset-brand-signal-soft active:scale-[0.99]"
             >
               {t.hero.cta}
               <svg viewBox="0 0 20 20" className="h-4 w-4 transition group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
@@ -796,11 +807,29 @@ export function IqLanding({ initialLocale }: { initialLocale: Locale }) {
               </div>
             </div>
           </div>
-          <footer className="mt-12 border-t border-white/15 pt-6 text-xs text-white/60">
+          <footer className="mt-12 border-t border-white/15 pb-20 pt-6 text-xs text-white/60 sm:pb-0">
             <span>{t.footer.disclaimer}</span>
           </footer>
         </div>
       </section>
+
+      {/* Mobile-only CTA dock; slides in after the address card leaves the viewport. */}
+      <div
+        className={`fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur transition-transform duration-300 motion-reduce:transition-none sm:hidden ${showDock ? 'translate-y-0' : 'pointer-events-none translate-y-full'}`}
+        aria-hidden={!showDock}
+      >
+        <button
+          type="button"
+          tabIndex={showDock ? 0 : -1}
+          onClick={() => {
+            scrollTo('top');
+            formRef.current?.querySelector<HTMLInputElement>('input[name="location"]')?.focus({ preventScroll: true });
+          }}
+          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-signal text-[15px] font-bold text-white transition hover:bg-brand-signal-hover active:scale-[0.99]"
+        >
+          {t.hero.cta}
+        </button>
+      </div>
     </main>
   );
 }

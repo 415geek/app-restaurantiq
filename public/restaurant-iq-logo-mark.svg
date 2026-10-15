@@ -1,9 +1,9 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- RestaurantIQ mark: a white location pin on forest green with a mint dot at its heart (site → verdict). -->
+  <!-- RestaurantIQ mark: a white location pin on forest green carrying a forest tick (this address → a clear verdict). -->
   <rect width="128" height="128" rx="30" fill="#1F6F43"/>
   <path
-    d="M64 24C46.3 24 32 38.3 32 56C32 79 64 105 64 105C64 105 96 79 96 56C96 38.3 81.7 24 64 24Z"
+    d="M64 22C45.8 22 31 36.8 31 55C31 79 64 106 64 106C64 106 97 79 97 55C97 36.8 82.2 22 64 22Z"
     fill="#FFFFFF"
   />
-  <circle cx="64" cy="56" r="13" fill="#8EDBAB"/>
+  <path d="M50 55.5L59.5 65L78 46.5" stroke="#1F6F43" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
